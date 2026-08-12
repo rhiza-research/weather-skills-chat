@@ -68,8 +68,6 @@
 	let navElement;
 	let search = '';
 
-	let shiftKey = false;
-
 	let selectedChatId = null;
 	let showDropdown = false;
 	let showPinnedChat = true;
@@ -407,24 +405,11 @@
 		checkDirection();
 	};
 
-	const onKeyDown = (e) => {
-		if (e.key === 'Shift') {
-			shiftKey = true;
-		}
-	};
-
-	const onKeyUp = (e) => {
-		if (e.key === 'Shift') {
-			shiftKey = false;
-		}
-	};
-
 	const onFocus = () => {
 		softRefreshChatList();
 	};
 
 	const onBlur = () => {
-		shiftKey = false;
 		selectedChatId = null;
 	};
 
@@ -478,9 +463,6 @@
 		await initChatList();
 		startChatListPoll();
 
-		window.addEventListener('keydown', onKeyDown);
-		window.addEventListener('keyup', onKeyUp);
-
 		window.addEventListener('touchstart', onTouchStart);
 		window.addEventListener('touchend', onTouchEnd);
 
@@ -497,8 +479,6 @@
 
 	onDestroy(() => {
 		stopChatListPoll();
-		window.removeEventListener('keydown', onKeyDown);
-		window.removeEventListener('keyup', onKeyUp);
 
 		window.removeEventListener('touchstart', onTouchStart);
 		window.removeEventListener('touchend', onTouchEnd);
@@ -894,7 +874,6 @@
 										className=""
 										id={chat.id}
 										title={chat.title}
-										{shiftKey}
 										selected={selectedChatId === chat.id}
 										on:select={() => {
 											selectedChatId = chat.id;
@@ -969,7 +948,6 @@
 									className=""
 									id={chat.id}
 									title={chat.title}
-									{shiftKey}
 									selected={selectedChatId === chat.id}
 									on:select={() => {
 										selectedChatId = chat.id;
@@ -1041,7 +1019,6 @@
 									ownerName={chat.owner_name}
 									isMine={true}
 									teamId={team.id}
-									{shiftKey}
 									selected={selectedChatId === chat.id}
 									on:select={() => {
 										selectedChatId = chat.id;
@@ -1075,7 +1052,6 @@
 									ownerName={chat.owner_name}
 									isMine={false}
 									teamId={team.id}
-									{shiftKey}
 									selected={selectedChatId === chat.id}
 									on:select={() => {
 										selectedChatId = chat.id;

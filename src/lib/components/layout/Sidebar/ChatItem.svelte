@@ -31,9 +31,7 @@
 	import ChatMenu from './ChatMenu.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import ShareChatModal from '$lib/components/chat/ShareChatModal.svelte';
-	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
 	import DragGhost from '$lib/components/common/DragGhost.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -48,7 +46,6 @@
 	export let teamId = null;
 
 	export let selected = false;
-	export let shiftKey = false;
 
 	let chat = null;
 
@@ -297,8 +294,14 @@
 			on:focus={(e) => {}}
 			draggable="false"
 		>
-			<div class=" flex self-center flex-1 w-full">
-				<div dir="auto" class="text-left self-center overflow-hidden w-full {ownerName && !isMine ? 'h-[32px]' : 'h-[20px]'}">
+			<div class=" flex self-center flex-1 w-full min-w-0">
+				<div
+					dir="auto"
+					class="text-left self-center overflow-hidden w-full min-w-0 {ownerName && !isMine
+						? 'h-[32px]'
+						: 'h-[20px]'}"
+					title={title}
+				>
 					<div class="truncate">{title}</div>
 					{#if ownerName && !isMine}
 						<div class="text-[10px] text-gray-500 truncate">{ownerName}</div>
@@ -354,32 +357,6 @@
 						}}
 					>
 						<XMark strokeWidth="2.5" />
-					</button>
-				</Tooltip>
-			</div>
-		{:else if shiftKey && mouseOver && isMine}
-			<div class=" flex items-center self-center space-x-1.5">
-				<Tooltip content={$i18n.t('Archive')} className="flex items-center">
-					<button
-						class=" self-center dark:hover:text-white transition"
-						on:click={() => {
-							archiveChatHandler(id);
-						}}
-						type="button"
-					>
-						<ArchiveBox className="size-4  translate-y-[0.5px]" strokeWidth="2" />
-					</button>
-				</Tooltip>
-
-				<Tooltip content={$i18n.t('Delete')}>
-					<button
-						class=" self-center dark:hover:text-white transition"
-						on:click={() => {
-							deleteChatHandler(id);
-						}}
-						type="button"
-					>
-						<GarbageBin strokeWidth="2" />
 					</button>
 				</Tooltip>
 			</div>
