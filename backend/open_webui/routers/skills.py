@@ -15,6 +15,7 @@ from open_webui.utils.skills import (
     delete_skill_pack,
     install_skill_pack,
     pack_to_response,
+    resync_all_skill_pack_tools,
     set_pack_access_control,
     update_skill_pack,
 )
@@ -31,6 +32,18 @@ async def list_skill_packs(user=Depends(get_verified_user)):
     # Non-admins still see pack metadata for tools they can access;
     # tool ACL remains the gate for use.
     return [pack_to_response(p) for p in packs]
+
+
+@router.post("/resync")
+async def resync_skill_tools(request: Request, user=Depends(get_admin_user)):
+    """Regenerate skill tool wrappers from on-disk packs (no git pull)."""
+    try:
+        return resync_all_skill_pack_tools(request.app.state.TOOLS)
+    except Exception as e:
+        log.exception("Skill pack resync failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
 
 
 @router.get("/{pack_id}")

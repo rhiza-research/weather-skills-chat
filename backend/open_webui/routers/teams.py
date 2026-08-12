@@ -2,6 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
+from open_webui.models.chats import Chats
 from open_webui.models.teams import (
     TeamForm,
     TeamMemberAddForm,
@@ -173,4 +174,16 @@ async def delete_team(id: str, user=Depends(get_verified_user)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+
+    chat_count = Chats.count_chats_by_team_id(id, include_archived=True)
+    if chat_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Cannot delete this team while it still has {chat_count} chat"
+                f"{'' if chat_count == 1 else 's'}. "
+                "Delete every team chat (including archived) first, then try again."
+            ),
+        )
+
     return Teams.delete_team(id)

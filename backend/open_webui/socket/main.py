@@ -362,10 +362,47 @@ def get_event_emitter(request_info, update_db=True):
                     },
                 )
 
+            # Headless/automation runs have no browser owning the stream;
+            # persist chat:completion content so open/refreshed chats show
+            # live progress (tool calls, text) without ENABLE_REALTIME_CHAT_SAVE.
+            if (
+                request_info.get("headless")
+                and event_data.get("type") == "chat:completion"
+            ):
+                data = event_data.get("data") or {}
+                patch = {}
+                if "content" in data and data["content"] is not None:
+                    patch["content"] = data["content"]
+                if data.get("done"):
+                    patch["done"] = True
+                if data.get("error"):
+                    patch["error"] = data["error"]
+                if patch:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        request_info["chat_id"],
+                        request_info["message_id"],
+                        patch,
+                    )
+
     return __event_emitter__
 
 
 def get_event_call(request_info):
+    # Headless / automation runs have no browser session. Server-side tools
+    # still execute via callables; client-only tools (tool servers, pyodide)
+    # are unavailable.
+    if request_info.get("headless"):
+
+        async def __headless_event_caller__(event_data):
+            return {
+                "error": (
+                    "Client-side execution is unavailable in headless/"
+                    "automation mode"
+                )
+            }
+
+        return __headless_event_caller__
+
     async def __event_caller__(event_data):
         response = await sio.call(
             "chat-events",

@@ -194,6 +194,9 @@ def secret_usage_hint(user: UserModel) -> str:
         "call create_secret with a name and the value. After it is saved, never "
         "repeat the raw value in your reply or in later tool arguments — use "
         "{{secret:NAME}} instead; the server substitutes it before the tool runs. "
+        "For skill tools that read credentials from the environment, pass "
+        'env_secrets=["NAME"] so the secret is injected as an env var with the '
+        "same name (preferred over putting placeholders in argv). "
         "If a personal secret and a team secret share a name, the personal value is used."
     )
     if names:

@@ -180,6 +180,56 @@
 		teamChats = next;
 	};
 
+	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
+	const softRefreshChatList = async () => {
+		try {
+			await loadTeamChats();
+			if (search) {
+				return;
+			}
+			const latest = await getChatList(localStorage.token, 1);
+			if (!Array.isArray(latest)) return;
+
+			const existing = $chats ?? [];
+			if (!existing.length) {
+				await chats.set(latest);
+				currentChatPage.set(1);
+				allChatsLoaded = false;
+				scrollPaginationEnabled.set(true);
+				return;
+			}
+
+			const existingIds = new Set(existing.map((c) => c.id));
+			const newcomers = latest.filter((c) => c?.id && !existingIds.has(c.id));
+			const latestById = Object.fromEntries(latest.map((c) => [c.id, c]));
+			const merged = [
+				...newcomers,
+				...existing.map((c) => (latestById[c.id] ? { ...c, ...latestById[c.id] } : c))
+			];
+			if (newcomers.length > 0 || merged.some((c, i) => c !== existing[i])) {
+				await chats.set(merged);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	};
+
+	let chatListPollId = null;
+
+	const startChatListPoll = () => {
+		if (chatListPollId != null) return;
+		chatListPollId = setInterval(() => {
+			softRefreshChatList();
+		}, 15000);
+	};
+
+	const stopChatListPoll = () => {
+		if (chatListPollId != null) {
+			clearInterval(chatListPollId);
+			chatListPollId = null;
+		}
+	};
+
 	const startTeamChat = async (teamId) => {
 		pendingTeamId.set(teamId);
 		selectedChatId = null;
@@ -369,11 +419,19 @@
 		}
 	};
 
-	const onFocus = () => {};
+	const onFocus = () => {
+		softRefreshChatList();
+	};
 
 	const onBlur = () => {
 		shiftKey = false;
 		selectedChatId = null;
+	};
+
+	const onVisibilityChange = () => {
+		if (document.visibilityState === 'visible') {
+			softRefreshChatList();
+		}
 	};
 
 	onMount(async () => {
@@ -418,6 +476,7 @@
 
 		await initChannels();
 		await initChatList();
+		startChatListPoll();
 
 		window.addEventListener('keydown', onKeyDown);
 		window.addEventListener('keyup', onKeyUp);
@@ -427,6 +486,7 @@
 
 		window.addEventListener('focus', onFocus);
 		window.addEventListener('blur-sm', onBlur);
+		document.addEventListener('visibilitychange', onVisibilityChange);
 
 		const dropZone = document.getElementById('sidebar');
 
@@ -436,6 +496,7 @@
 	});
 
 	onDestroy(() => {
+		stopChatListPoll();
 		window.removeEventListener('keydown', onKeyDown);
 		window.removeEventListener('keyup', onKeyUp);
 
@@ -444,6 +505,7 @@
 
 		window.removeEventListener('focus', onFocus);
 		window.removeEventListener('blur-sm', onBlur);
+		document.removeEventListener('visibilitychange', onVisibilityChange);
 
 		const dropZone = document.getElementById('sidebar');
 

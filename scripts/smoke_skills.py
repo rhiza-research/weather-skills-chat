@@ -77,7 +77,9 @@ uv run --script ${CLAUDE_SKILL_DIR}/scripts/hello.py --message hi --output out.t
     module, _ = load_tool_module_by_id("skill_hello_skill_smoke", content=content)
     specs = get_tool_specs(module)
     assert specs and specs[0]["name"] == "hello_skill", specs
-    print("specs-ok", specs[0]["name"], list(specs[0]["parameters"]["properties"]))
+    props = specs[0]["parameters"]["properties"]
+    assert "argv" in props and "script" in props and "env_secrets" in props, props
+    print("specs-ok", specs[0]["name"], list(props))
 
     pack_dir = SKILLS_DIR / "fixture_hello__main"
     if pack_dir.exists():
@@ -129,6 +131,17 @@ uv run --script ${CLAUDE_SKILL_DIR}/scripts/hello.py --message hi --output out.t
     assert out.exists() and out.read_text().strip() == "weather-skills", out
     print("run-skill-ok", out)
 
+    bad = asyncio.run(
+        run_skill(
+            skill_dir,
+            argv=["--message", "x", "--output", "bad.txt"],
+            env_secrets=["not-a-valid-name!"],
+            __metadata__={"chat_id": chat_id},
+        )
+    )
+    assert bad.get("ok") is False and "Invalid env_secrets" in (bad.get("stderr") or ""), bad
+    print("env-secrets-reject-ok")
+
     try:
         validate_public_git_url("git@github.com:x/y.git")
         raise SystemExit("expected https-only failure")
@@ -139,6 +152,7 @@ uv run --script ${CLAUDE_SKILL_DIR}/scripts/hello.py --message hi --output out.t
     callable_result = asyncio.run(
         module.hello_skill(
             argv=["--message", "via-tool", "--output", "via-tool.txt"],
+            env_secrets=[],
             __metadata__={"chat_id": chat_id},
         )
     )

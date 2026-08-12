@@ -254,6 +254,11 @@
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
 
+		if (type === 'chat:list' || type === 'chat:title') {
+			currentChatPage.set(1);
+			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		}
+
 		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isFocused) {
 			if (type === 'chat:completion') {
 				const { done, content, title } = data;
@@ -281,8 +286,7 @@
 					});
 				}
 			} else if (type === 'chat:title') {
-				currentChatPage.set(1);
-				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				// List refresh handled above.
 			} else if (type === 'chat:tags') {
 				tags.set(await getAllTags(localStorage.token));
 			}

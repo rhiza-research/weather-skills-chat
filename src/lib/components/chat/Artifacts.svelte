@@ -4,7 +4,7 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	import { chatId, settings, showArtifacts, showControls } from '$lib/stores';
+	import { chatId, settings, showArtifacts, showControls, artifactsRefresh } from '$lib/stores';
 	import {
 		createZarrView,
 		getArtifactContentUrl,
@@ -20,7 +20,7 @@
 	import SvgPanZoom from '../common/SVGPanZoom.svelte';
 	import ArrowLeft from '../icons/ArrowLeft.svelte';
 	import ImagePreview from '../common/ImagePreview.svelte';
-	import ProvenanceTree from './ProvenanceTree.svelte';
+	import ArtifactBrowser from './ArtifactBrowser.svelte';
 
 	export let history;
 	let messages = [];
@@ -41,15 +41,16 @@
 	let zarrMeta = null;
 	let uploading = false;
 	let fileInput: HTMLInputElement;
+	let pollId: ReturnType<typeof setInterval> | null = null;
+	let loadingFiles = false;
+	let loadQueued = false;
 
-	$: zarrStores = files.filter((file) => file.kind === 'zarr');
-	$: orphanViews = files.filter(
-		(file) =>
-			file.kind === 'zarr_view' && !zarrStores.some((store) => store.path === file.zarr)
-	);
-	$: otherFiles = files.filter((file) => file.kind !== 'zarr' && file.kind !== 'zarr_view');
-	const viewsFor = (zarrPath) =>
-		files.filter((file) => file.kind === 'zarr_view' && file.zarr === zarrPath);
+	const clearPoll = () => {
+		if (pollId != null) {
+			clearInterval(pollId);
+			pollId = null;
+		}
+	};
 
 	const revokePreview = () => {
 		if (previewUrl) {
@@ -112,27 +113,27 @@
 		dispatch('close');
 	};
 
-	const provenanceLabel = (file) => {
-		const crumbs = file?.provenance_detail?.crumbs ?? file?.provenance;
-		if (!Array.isArray(crumbs) || crumbs.length === 0) return '';
-		return crumbs.join(' → ');
-	};
-
-	const provenanceBranches = (file) => {
-		const branches = file?.provenance_detail?.branches;
-		return Array.isArray(branches) ? branches : [];
-	};
-
 	const loadFiles = async () => {
 		if (!$chatId || $chatId === 'local') {
 			files = [];
 			return;
 		}
+		if (loadingFiles) {
+			loadQueued = true;
+			return;
+		}
+		loadingFiles = true;
 		try {
 			files = await getChatArtifacts(localStorage.token, $chatId);
 		} catch (e) {
 			files = [];
 			console.error(e);
+		} finally {
+			loadingFiles = false;
+			if (loadQueued) {
+				loadQueued = false;
+				await loadFiles();
+			}
 		}
 	};
 
@@ -162,8 +163,19 @@
 		}
 	};
 
-	$: if ($chatId) {
-		loadFiles();
+	// Reload when the panel opens / chat changes / an explicit refresh is requested,
+	// and keep polling while open so skill writes show up without collapsing the pane.
+	$: {
+		clearPoll();
+		if ($showArtifacts && $chatId && $chatId !== 'local') {
+			void $artifactsRefresh;
+			loadFiles();
+			pollId = setInterval(() => {
+				loadFiles();
+			}, 2000);
+		} else if (!$chatId || $chatId === 'local') {
+			files = [];
+		}
 	}
 
 	$: if (history) {
@@ -305,6 +317,7 @@
 	};
 
 	onDestroy(() => {
+		clearPoll();
 		revokePreview();
 	});
 </script>
@@ -315,10 +328,10 @@
 	alt={modalAlt}
 />
 
-<div class="w-full h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0">
+<div class="w-full h-full max-h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0 overflow-hidden">
 	{#if hasPreview}
 		<div
-			class="flex flex-col min-h-0 {contents.length > 0
+			class="flex flex-col min-h-0 shrink-0 {contents.length > 0
 				? 'h-[38%]'
 				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
 		>
@@ -390,126 +403,22 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto px-3 pb-3">
-				{#each zarrStores as store}
-					<div class="flex flex-col gap-0.5 px-1 py-0.5">
-						<div class="flex items-center justify-between text-xs">
-							<div class="truncate flex items-center gap-1">
-								<span>{store.path}</span>
-								<span class="text-gray-400">zarr</span>
-							</div>
-							<button
-								type="button"
-								class="underline shrink-0"
-								on:click={async () => {
-									viewForm.zarr = store.path;
-									showViewForm = true;
-									clearPreview();
-									zarrMeta = await getZarrMeta(localStorage.token, $chatId, store.path).catch(
-										() => null
-									);
-								}}>{$i18n.t('New view')}</button
-							>
-						</div>
-						{#if provenanceBranches(store).length}
-							<ProvenanceTree branches={provenanceBranches(store)} />
-						{:else if provenanceLabel(store)}
-							<div
-								class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate pl-0.5"
-								title={provenanceLabel(store)}
-							>
-								{provenanceLabel(store)}
-							</div>
-						{/if}
-					</div>
-					{#each viewsFor(store.path) as file}
-						<div
-							class="flex flex-col gap-0.5 px-1 py-0.5 pl-4 rounded-md {selectedView === file.path
-								? 'bg-black/5 dark:bg-white/5'
-								: ''}"
-						>
-							<div class="flex items-center justify-between text-xs">
-								<div class="truncate flex items-center gap-1">
-									{#if file.missing_zarr}
-										<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
-									{/if}
-									<span>{file.title || file.path}</span>
-									<span class="text-gray-400">view</span>
-								</div>
-								{#if !file.missing_zarr}
-									<button
-										type="button"
-										class="underline shrink-0"
-										on:click={() => openView(file.path, file.title || file.path)}
-										>{$i18n.t('View')}</button
-									>
-								{/if}
-							</div>
-						</div>
-					{/each}
-				{/each}
-				{#each orphanViews as file}
-					<div class="flex items-center justify-between text-xs px-1 py-0.5">
-						<div class="truncate flex items-center gap-1">
-							<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
-							<span>{file.title || file.path}</span>
-							<span class="text-gray-400">view</span>
-						</div>
-					</div>
-				{/each}
-				{#each otherFiles as file}
-					<div
-						class="flex flex-col gap-0.5 px-1 py-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 {selectedImage ===
-						file.path
-							? 'bg-black/5 dark:bg-white/5'
-							: ''}"
-					>
-						<div class="flex items-center justify-between text-xs gap-2">
-							{#if file.kind === 'image'}
-								<button
-									type="button"
-									class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
-									on:click={() => openImage(file.path)}
-								>
-									<span class="truncate">{file.path}</span>
-									<span class="text-gray-400 shrink-0">{file.kind}</span>
-								</button>
-							{:else}
-								<div class="truncate flex items-center gap-1 min-w-0">
-									<span class="truncate">{file.path}</span>
-									<span class="text-gray-400 shrink-0">{file.kind}</span>
-								</div>
-							{/if}
-							<div class="flex gap-1 shrink-0">
-								{#if file.kind === 'image'}
-									<button type="button" class="underline" on:click={() => openImage(file.path)}
-										>{$i18n.t('Open')}</button
-									>
-								{:else if !file.is_dir}
-									<a
-										class="underline"
-										href={getArtifactContentUrl($chatId, file.path)}
-										target="_blank"
-										rel="noreferrer">{$i18n.t('Download')}</a
-									>
-								{/if}
-							</div>
-						</div>
-						{#if provenanceBranches(file).length}
-							<ProvenanceTree branches={provenanceBranches(file)} />
-						{:else if provenanceLabel(file)}
-							<div
-								class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate pl-0.5"
-								title={provenanceLabel(file)}
-							>
-								{provenanceLabel(file)}
-							</div>
-						{/if}
-					</div>
-				{/each}
-			{#if files.length === 0}
-				<div class="text-[11px] text-gray-400">{$i18n.t('No files in this chat yet.')}</div>
-			{/if}
+		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
+			<ArtifactBrowser
+				{files}
+				{selectedImage}
+				{selectedView}
+				on:openImage={(e) => openImage(e.detail.path)}
+				on:openView={(e) => openView(e.detail.path, e.detail.title)}
+				on:newView={async (e) => {
+					viewForm.zarr = e.detail.path;
+					showViewForm = true;
+					clearPreview();
+					zarrMeta = await getZarrMeta(localStorage.token, $chatId, e.detail.path).catch(
+						() => null
+					);
+				}}
+			/>
 
 			{#if showViewForm}
 				<form

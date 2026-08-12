@@ -121,7 +121,9 @@ async def run_automation(request: Request, id: str, user=Depends(get_verified_us
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
     try:
-        return await execute_automation(request, id, user.id)
+        # Return as soon as the chat exists so the UI can open it and
+        # receive live streaming socket events (same as a normal chat).
+        return await execute_automation(request, id, user.id, wait=False)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)

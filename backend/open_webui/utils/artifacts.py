@@ -120,6 +120,35 @@ def resolve_in_sandbox(chat_id: str, relpath: str) -> Path:
     return target
 
 
+def create_folder(chat_id: str, path: str) -> dict:
+    """Create a directory (and parents) inside the chat artifact sandbox."""
+    rel = (path or "").strip().lstrip("/")
+    if not rel or rel in (".",):
+        raise ValueError("Provide a relative folder path under the chat sandbox")
+    if "\x00" in rel:
+        raise ValueError("Invalid path")
+
+    root = chat_sandbox(chat_id)
+    target = resolve_in_sandbox(chat_id, rel)
+    if target == root:
+        raise ValueError("Cannot create the sandbox root itself")
+
+    if target.exists() and not target.is_dir():
+        raise FileExistsError(
+            f"A non-directory already exists at `{target.relative_to(root).as_posix()}`"
+        )
+
+    created = not target.exists()
+    target.mkdir(parents=True, exist_ok=True)
+    rel_out = target.relative_to(root).as_posix()
+    return {
+        "ok": True,
+        "path": rel_out,
+        "created": created,
+        "existed": not created,
+    }
+
+
 def is_zarr_store(path: Path) -> bool:
     if not path.is_dir():
         return path.suffix == ".zarr"
@@ -390,13 +419,6 @@ def list_artifacts(chat_id: str) -> list[dict]:
 
     def walk(directory: Path):
         for path in sorted(directory.iterdir()):
-            # Scratch space for tool pipelines — not user-facing output.
-            if (
-                directory == root
-                and path.is_dir()
-                and path.name == INTERMEDIATE_RESULTS_DIRNAME
-            ):
-                continue
             rel = path.relative_to(root).as_posix()
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:

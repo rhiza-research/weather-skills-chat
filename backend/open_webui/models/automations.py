@@ -4,7 +4,7 @@ import uuid
 from typing import Optional
 
 from open_webui.env import SRC_LOG_LEVELS
-from open_webui.internal.db import Base, get_db
+from open_webui.internal.db import Base, JSONField, get_db
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Boolean, Column, Text, or_
 
@@ -24,6 +24,8 @@ class Automation(Base):
     user_id = Column(Text, nullable=False)
     team_id = Column(Text, nullable=True)
     source_chat_id = Column(Text, nullable=True)
+    tool_ids = Column(JSONField, nullable=True)
+    features = Column(JSONField, nullable=True)
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
 
@@ -53,6 +55,8 @@ class AutomationModel(BaseModel):
     user_id: str
     team_id: Optional[str] = None
     source_chat_id: Optional[str] = None
+    tool_ids: Optional[list[str]] = None
+    features: Optional[dict] = None
     created_at: int
     updated_at: int
 
@@ -79,6 +83,8 @@ class AutomationForm(BaseModel):
     enabled: bool = True
     team_id: Optional[str] = None
     source_chat_id: Optional[str] = None
+    tool_ids: Optional[list[str]] = None
+    features: Optional[dict] = None
 
 
 class AutomationUpdateForm(BaseModel):
@@ -88,6 +94,8 @@ class AutomationUpdateForm(BaseModel):
     cron: Optional[str] = None
     enabled: Optional[bool] = None
     team_id: Optional[str] = None
+    tool_ids: Optional[list[str]] = None
+    features: Optional[dict] = None
 
 
 class AutomationTable:
@@ -106,6 +114,8 @@ class AutomationTable:
                 user_id=user_id,
                 team_id=form_data.team_id,
                 source_chat_id=form_data.source_chat_id,
+                tool_ids=form_data.tool_ids,
+                features=form_data.features,
                 created_at=now,
                 updated_at=now,
             )
@@ -192,6 +202,11 @@ class AutomationRunTable:
             db.refresh(run)
             return AutomationRunModel.model_validate(run)
 
+    def get_run_by_id(self, id: str) -> Optional[AutomationRunModel]:
+        with get_db() as db:
+            row = db.query(AutomationRun).filter_by(id=id).first()
+            return AutomationRunModel.model_validate(row) if row else None
+
     def update_run(
         self,
         id: str,
@@ -210,8 +225,9 @@ class AutomationRunTable:
         if finished:
             updates["finished_at"] = int(time.time())
         with get_db() as db:
-            db.query(AutomationRun).filter_by(id=id).update(updates)
-            db.commit()
+            if updates:
+                db.query(AutomationRun).filter_by(id=id).update(updates)
+                db.commit()
             row = db.query(AutomationRun).filter_by(id=id).first()
             return AutomationRunModel.model_validate(row) if row else None
 

@@ -17,6 +17,7 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
+SAFE_ENV_SECRET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def pick_primary_script(scripts_dir: Path) -> str:
@@ -54,10 +55,70 @@ def _error_result(message: str, **extra: Any) -> dict:
     }
 
 
+def normalize_env_secret_names(env_secrets: Optional[list] = None) -> list[str]:
+    """Strip, drop empties, dedupe (order preserved). Raises ValueError on bad names."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw in env_secrets or []:
+        if raw is None:
+            continue
+        name = str(raw).strip()
+        if not name:
+            continue
+        if not SAFE_ENV_SECRET_RE.match(name):
+            raise ValueError(
+                f"Invalid env_secrets name {name!r}: use letters, digits, and "
+                "underscores only (must start with a letter or underscore)."
+            )
+        if name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
+def resolve_env_secrets_for_user(
+    names: list[str],
+    __user__: Optional[dict] = None,
+) -> dict[str, str]:
+    """Resolve secret names to plaintext for the calling user.
+
+    Returns a mapping suitable for subprocess env injection.
+    Raises ValueError when the user is missing or a secret cannot be used.
+    """
+    if not names:
+        return {}
+
+    from open_webui.models.users import Users
+    from open_webui.utils.secrets import resolve_secret_value
+
+    user_id = (__user__ or {}).get("id")
+    if not user_id:
+        raise ValueError("Cannot inject env_secrets without an authenticated user.")
+    user = Users.get_user_by_id(user_id)
+    if not user:
+        raise ValueError("Cannot inject env_secrets: user not found.")
+
+    resolved: dict[str, str] = {}
+    for name in names:
+        resolved[name] = resolve_secret_value(user, name)
+    return resolved
+
+
+def _redact_skill_result(result: dict, used_secrets: dict[str, str]) -> dict:
+    if not used_secrets:
+        return result
+    from open_webui.utils.secrets import redact_secrets
+
+    return redact_secrets(result, used_secrets)
+
+
 async def run_skill(
     skill_dir: str | Path,
     argv: Optional[list] = None,
     script: Optional[str] = None,
+    env_secrets: Optional[list] = None,
+    __user__: Optional[dict] = None,
     __metadata__: Optional[dict] = None,
     timeout: Optional[int] = None,
 ) -> dict:
@@ -72,6 +133,17 @@ async def run_skill(
         return _error_result(f"Skill script error: {e}")
 
     args = [str(a) for a in (argv or [])]
+
+    try:
+        secret_names = normalize_env_secret_names(env_secrets)
+        used_secrets = resolve_env_secrets_for_user(secret_names, __user__)
+    except ValueError as e:
+        return _error_result(
+            str(e),
+            script=script_path.name,
+            argv=args,
+            env_secrets=[str(x) for x in (env_secrets or []) if x is not None],
+        )
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
@@ -90,9 +162,16 @@ async def run_skill(
     env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
     env["WEATHER_INTERMEDIATE_DIR"] = str(intermediate)
     env["INTERMEDIATE_RESULTS_DIR"] = str(intermediate)
+    for name, value in used_secrets.items():
+        env[name] = value
 
     cmd = ["uv", "run", "--script", str(script_path), *args]
-    log.info("Running skill script: %s (cwd=%s)", " ".join(cmd), cwd)
+    log.info(
+        "Running skill script: %s (cwd=%s, env_secrets=%s)",
+        " ".join(cmd),
+        cwd,
+        list(used_secrets.keys()),
+    )
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -118,12 +197,15 @@ async def run_skill(
             proc.kill()
         except ProcessLookupError:
             pass
-        return _error_result(
-            f"Skill timed out after {limit}s: {script_path.name}",
-            exit_code=-1,
-            script=script_path.name,
-            cwd=str(cwd),
-            argv=args,
+        return _redact_skill_result(
+            _error_result(
+                f"Skill timed out after {limit}s: {script_path.name}",
+                exit_code=-1,
+                script=script_path.name,
+                cwd=str(cwd),
+                argv=args,
+            ),
+            used_secrets,
         )
 
     stdout = (stdout_b or b"").decode("utf-8", errors="replace").strip()
@@ -133,7 +215,7 @@ async def run_skill(
     if code != 0 and not stderr and not stdout:
         stderr = "Skill failed with no output."
 
-    return {
+    result = {
         "ok": code == 0,
         "exit_code": code,
         "script": script_path.name,
@@ -142,3 +224,6 @@ async def run_skill(
         "stdout": stdout,
         "stderr": stderr,
     }
+    if used_secrets:
+        result["env_secrets"] = list(used_secrets.keys())
+    return _redact_skill_result(result, used_secrets)

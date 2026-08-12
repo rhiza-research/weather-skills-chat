@@ -524,6 +524,14 @@ class ChatTable:
                 for chat in query.all()
             ]
 
+    def count_chats_by_team_id(self, team_id: str, include_archived: bool = True) -> int:
+        """Count chats belonging to a team (archived included by default)."""
+        with get_db() as db:
+            query = db.query(Chat).filter_by(team_id=team_id)
+            if not include_archived:
+                query = query.filter_by(archived=False)
+            return query.count()
+
     def update_chat_team_id(self, id: str, team_id: Optional[str]) -> Optional[ChatModel]:
         try:
             with get_db() as db:

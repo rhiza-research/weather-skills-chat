@@ -146,7 +146,14 @@
 	};
 
 	const destroy = async () => {
-		if (!confirm($i18n.t('Delete this team?'))) return;
+		if (
+			!confirm(
+				$i18n.t(
+					'Delete this team? All team chats (including archived) must be deleted first.'
+				)
+			)
+		)
+			return;
 		try {
 			await deleteTeamById(localStorage.token, id);
 			teams.set(await getTeams(localStorage.token));

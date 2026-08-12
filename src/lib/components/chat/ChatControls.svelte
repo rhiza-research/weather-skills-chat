@@ -172,7 +172,9 @@
 							/>
 						</div>
 					{:else if $showArtifacts}
-						<Artifacts {history} />
+						<div class="h-full max-h-[100dvh] min-h-0 overflow-hidden">
+							<Artifacts {history} />
+						</div>
 					{:else if $showOverview}
 						<Overview
 							{history}
@@ -224,14 +226,14 @@
 				showArtifacts.set(false);
 			}}
 			collapsible={true}
-			class="z-10 bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800"
+			class="z-10 h-full min-h-0 bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800"
 		>
 			{#if $showControls}
-				<div class="flex max-h-full min-h-full w-full overflow-hidden">
+				<div class="flex h-full max-h-full min-h-0 w-full overflow-hidden">
 					<div
-						class="w-full h-full {($showOverview || $showArtifacts) && !$showCallOverlay
-							? ''
-							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850 border border-gray-100 dark:border-gray-850'} z-40 pointer-events-auto overflow-y-auto scrollbar-hidden"
+						class="w-full h-full min-h-0 {($showOverview || $showArtifacts) && !$showCallOverlay
+							? 'overflow-hidden'
+							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850 border border-gray-100 dark:border-gray-850 overflow-y-auto scrollbar-hidden'} z-40 pointer-events-auto"
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">
@@ -248,7 +250,9 @@
 								/>
 							</div>
 						{:else if $showArtifacts}
-							<Artifacts {history} />
+							<div class="h-full max-h-full min-h-0 overflow-hidden">
+								<Artifacts {history} />
+							</div>
 						{:else if $showOverview}
 							<Overview
 								{history}

@@ -35,6 +35,7 @@
 		showOverview,
 		chatTitle,
 		showArtifacts,
+		artifactsRefresh,
 		tools,
 		toolServers,
 		pendingTeamId
@@ -116,6 +117,7 @@
 	let eventCallback = null;
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
+	let artifactsBumpTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let selectedModels = [''];
 	let atSelectedModel: Model | undefined;
@@ -300,20 +302,33 @@
 				const type = event?.data?.type ?? null;
 				const data = event?.data?.data ?? null;
 
+				const bumpArtifactsSoon = () => {
+					if (!$showArtifacts) return;
+					if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
+					artifactsBumpTimer = setTimeout(() => {
+						artifactsRefresh.update((n) => n + 1);
+						artifactsBumpTimer = null;
+					}, 300);
+				};
+
 				if (type === 'status') {
 					if (message?.statusHistory) {
 						message.statusHistory.push(data);
 					} else {
 						message.statusHistory = [data];
 					}
+					if (data?.done) bumpArtifactsSoon();
 				} else if (type === 'chat:completion') {
 					chatCompletionEventHandler(data, message, event.chat_id);
+					bumpArtifactsSoon();
 				} else if (type === 'chat:message:delta' || type === 'message') {
 					message.content += data.content;
 				} else if (type === 'chat:message' || type === 'replace') {
 					message.content = data.content;
+					bumpArtifactsSoon();
 				} else if (type === 'chat:message:files' || type === 'files') {
 					message.files = data.files;
+					bumpArtifactsSoon();
 				} else if (type === 'chat:title') {
 					chatTitle.set(data);
 					currentChatPage.set(1);
@@ -506,6 +521,7 @@
 
 	onDestroy(() => {
 		chatIdUnsubscriber?.();
+		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		window.removeEventListener('message', onMessageHandler);
 		$socket?.off('chat-events', chatEventHandler);
 	});

@@ -71,6 +71,17 @@ async def create_automation(
         models = chat.chat.get("models") or []
         model_id = models[0] if models else None
 
+    # Capture the same tools/features enabled on this chat request so
+    # scheduled runs replay with the same skill/tool set.
+    tool_ids = metadata.get("tool_ids")
+    if isinstance(tool_ids, list):
+        tool_ids = [str(t) for t in tool_ids if t]
+    else:
+        tool_ids = None
+    features = metadata.get("features")
+    if features is not None and not isinstance(features, dict):
+        features = None
+
     automation = Automations.insert_new_automation(
         user.id,
         AutomationForm(
@@ -81,15 +92,22 @@ async def create_automation(
             enabled=True,
             team_id=scope_team_id,
             source_chat_id=chat_id,
+            tool_ids=tool_ids,
+            features=features,
         ),
     )
     if not automation:
         return "Failed to create the automation."
     sync_automation_job(automation)
     scope = f"team `{scope_team_id}`" if scope_team_id else "your private automations"
+    tool_note = (
+        f" Tools/skills captured: {len(tool_ids)}."
+        if tool_ids
+        else " Built-in tools only (no chat skills selected)."
+    )
     return (
-        f"Created automation **{automation.name}** ({cron}) under {scope}. "
-        f"Open /automations to manage it."
+        f"Created automation **{automation.name}** ({cron}) under {scope}."
+        f"{tool_note} Open /automations to manage it."
     )
 
 
@@ -350,11 +368,12 @@ async def copy_intermediate_result(
 COPY_INTERMEDIATE_RESULT_SPEC = {
     "name": "copy_intermediate_result",
     "description": (
-        "Copy a file or folder between the chat sandbox and intermediate_results. "
-        "Use direction=in to stash a sandbox path under intermediate_results "
-        "(not shown to the user). Use direction=out to promote something from "
-        "intermediate_results into the user-visible sandbox. Paths are relative; "
-        "do not include intermediate_results/ in path."
+        "Copy a file or folder between the chat sandbox root area and the "
+        "intermediate_results folder (useful scratch space for skill pipelines). "
+        "Use direction=in to move a sandbox path under intermediate_results. "
+        "Use direction=out to promote something from intermediate_results back "
+        "to the sandbox root area. Paths are relative; do not include "
+        "intermediate_results/ in path."
     ),
     "parameters": {
         "type": "object",
@@ -383,6 +402,58 @@ COPY_INTERMEDIATE_RESULT_SPEC = {
             },
         },
         "required": ["path", "direction"],
+    },
+}
+
+
+async def create_folder(
+    path: str,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """Create a folder (and parents) in the current chat artifact sandbox."""
+    from open_webui.utils.artifacts import create_folder as _mkdir
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot create folders in a temporary chat."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_write_chat(user, chat):
+        return "You do not have write access to this chat."
+
+    try:
+        result = _mkdir(chat_id, path)
+    except Exception as e:
+        return f"Create folder failed: {e}"
+
+    if result.get("existed"):
+        return f"Folder already exists: `{result['path']}`."
+    return f"Created folder: `{result['path']}`."
+
+
+CREATE_FOLDER_SPEC = {
+    "name": "create_folder",
+    "description": (
+        "Create a folder (including parent folders) in the current chat artifact "
+        "sandbox so skill outputs can be organized. Pass a relative path such as "
+        "`plots/weekly` or `intermediate_results/scratch/run1`. Idempotent: if the "
+        "folder already exists, succeeds without error."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Relative folder path under the chat sandbox "
+                    "(e.g. `plots`, `runs/2024-01`, `intermediate_results/tmp`)."
+                ),
+            },
+        },
+        "required": ["path"],
     },
 }
 
@@ -544,6 +615,13 @@ async def list_available_tools(
         _tool_summary_line(
             "copy_intermediate_result",
             "Copy a file/folder into or out of intermediate_results.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "create_folder",
+            "Create a folder in the chat artifact sandbox for organizing outputs.",
             kind="builtin",
         )
     )
@@ -717,5 +795,6 @@ def get_builtin_tools(extra_params: dict) -> dict:
         "copy_intermediate_result": _tool(
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),
+        "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
     }

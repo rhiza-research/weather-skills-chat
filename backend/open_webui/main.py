@@ -444,6 +444,17 @@ async def lifespan(app: FastAPI):
     )
 
     start_scheduler(app)
+    try:
+        from open_webui.utils.skills import resync_all_skill_pack_tools
+
+        result = resync_all_skill_pack_tools(app.state.TOOLS)
+        log.info(
+            "Skill pack tool resync on startup: synced=%s errors=%s",
+            len(result.get("synced") or []),
+            len(result.get("errors") or []),
+        )
+    except Exception:
+        log.exception("Skill pack tool resync on startup failed")
     yield
     shutdown_scheduler()
 

@@ -242,6 +242,12 @@ def generate_tool_content(
         "",
         "Usage / CLI flags (pass as argv list of strings):",
         usage.strip(),
+        "",
+        "Credentials: when this skill needs API keys or tokens from the environment, "
+        'pass their secret names via env_secrets (e.g. env_secrets=["ECMWF_API_KEY"]). '
+        "Each name is injected as an environment variable with the same name. "
+        "Prefer env_secrets over putting {{secret:NAME}} placeholders in argv when "
+        "the skill reads os.environ / getenv.",
     ]
     doc = _escape_triple_quotes("\n".join(doc_lines))
     skill_dir_literal = repr(str(skill_dir.resolve()))
@@ -264,6 +270,7 @@ class Tools:
         self,
         argv: list[str] = [],
         script: str = "",
+        env_secrets: list[str] = [],
         __user__: dict = {},
         __metadata__: dict = {},
     ) -> dict:
@@ -272,12 +279,15 @@ __DOC__
 
         :param argv: CLI arguments after the script path, e.g. ["--start", "2024-01-01", "--output", "out.zarr"]
         :param script: Optional scripts/ basename when the skill has multiple scripts
+        :param env_secrets: Secret names to inject into the process environment (same name as the secret). Example: ["ECMWF_API_KEY"]. Only request secrets this skill needs.
         :return: Structured skill result with exit_code, stdout, and stderr
         """
         return await run_skill(
             self.skill_dir,
             argv=argv or [],
             script=script or None,
+            env_secrets=env_secrets or [],
+            __user__=__user__,
             __metadata__=__metadata__,
         )
 '''
@@ -436,6 +446,25 @@ def sync_pack_tools(
         },
     )
     return updated or SkillPacks.get_by_id(pack.id)
+
+
+def resync_all_skill_pack_tools(request_app_tools: dict) -> dict:
+    """Regenerate tool wrappers for every installed pack (no git fetch).
+
+    Used on startup / admin resync so schema changes (e.g. env_secrets) land on
+    existing installs without requiring a pack update.
+    """
+    packs = SkillPacks.get_all()
+    ok: list[str] = []
+    errors: list[dict] = []
+    for pack in packs:
+        try:
+            sync_pack_tools(pack, request_app_tools, user_id=pack.user_id)
+            ok.append(pack.id)
+        except Exception as e:
+            log.exception("Failed to resync skill pack %s", pack.id)
+            errors.append({"pack_id": pack.id, "error": str(e)})
+    return {"synced": ok, "errors": errors}
 
 
 def install_skill_pack(

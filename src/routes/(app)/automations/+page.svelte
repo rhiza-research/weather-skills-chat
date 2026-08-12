@@ -32,8 +32,29 @@
 			cron: 'every day at noon',
 			enabled: true,
 			team_id: '',
-			source_chat_id: null
+			source_chat_id: null,
+			tool_ids: null,
+			features: null
 		};
+	}
+
+	function toolSettingsFromChatInput(chatId: string) {
+		try {
+			const raw = localStorage.getItem(`chat-input-${chatId}`);
+			if (!raw) return { tool_ids: null, features: null };
+			const input = JSON.parse(raw);
+			const tool_ids = Array.isArray(input.selectedToolIds)
+				? input.selectedToolIds.filter(Boolean)
+				: null;
+			const features = {
+				web_search: !!input.webSearchEnabled,
+				image_generation: !!input.imageGenerationEnabled,
+				code_interpreter: !!input.codeInterpreterEnabled
+			};
+			return { tool_ids, features };
+		} catch {
+			return { tool_ids: null, features: null };
+		}
 	}
 
 	$: sections = [
@@ -66,6 +87,7 @@
 			.filter((m) => m.role === 'user')
 			.map((m) => m.content)
 			.filter(Boolean);
+		const tools = toolSettingsFromChatInput(chatId);
 		form = {
 			name: chat?.title || 'Scheduled chat',
 			prompt: userTurns.join('\n\n') || chat?.title || '',
@@ -73,7 +95,9 @@
 			cron: 'every day at noon',
 			enabled: true,
 			team_id: chat?.team_id || '',
-			source_chat_id: chatId
+			source_chat_id: chatId,
+			tool_ids: tools.tool_ids,
+			features: tools.features
 		};
 		editingId = null;
 		showForm = true;
@@ -93,7 +117,9 @@
 			cron: automation.cron || '',
 			enabled: automation.enabled,
 			team_id: automation.team_id || '',
-			source_chat_id: automation.source_chat_id
+			source_chat_id: automation.source_chat_id,
+			tool_ids: automation.tool_ids ?? null,
+			features: automation.features ?? null
 		};
 		showForm = true;
 	};
@@ -111,7 +137,9 @@
 				prompt: form.prompt,
 				model: form.model || null,
 				cron: form.cron || '',
-				team_id: form.team_id || null
+				team_id: form.team_id || null,
+				tool_ids: form.tool_ids,
+				features: form.features
 			};
 			if (editingId) {
 				await updateAutomationById(localStorage.token, editingId, payload);
@@ -258,6 +286,13 @@
 						>{$i18n.t('Cancel')}</button
 					>
 				</div>
+				{#if form.tool_ids?.length}
+					<div class="text-xs text-gray-500">
+						{$i18n.t('Will run with')}
+						{form.tool_ids.length}
+						{$i18n.t('enabled tools/skills from the source chat.')}
+					</div>
+				{/if}
 			</form>
 		{/if}
 
