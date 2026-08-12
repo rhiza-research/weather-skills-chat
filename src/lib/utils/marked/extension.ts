@@ -60,7 +60,8 @@ function detailsTokenizer(src: string) {
 }
 
 function detailsStart(src: string) {
-	return src.match(/^<details>/) ? 0 : -1;
+	const match = src.match(/<details(?:\s|>)/);
+	return match ? match.index : -1;
 }
 
 function detailsRenderer(token: any) {

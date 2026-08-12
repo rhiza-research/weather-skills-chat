@@ -62,6 +62,13 @@
 				return null;
 			});
 
+			if (tool?.meta?.manifest?.kind === 'skill') {
+				toast.info($i18n.t('Manage skill packs under Workspace → Skills'));
+				goto('/workspace/skills');
+				tool = null;
+				return;
+			}
+
 			console.log(tool);
 		}
 	});

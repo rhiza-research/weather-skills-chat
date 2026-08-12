@@ -70,6 +70,7 @@ from open_webui.routers import (
     automations,
     artifacts,
     secrets,
+    skills,
     files,
     functions,
     memories,
@@ -981,6 +982,7 @@ app.include_router(
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(functions.router, prefix="/api/v1/functions", tags=["functions"])
 app.include_router(

@@ -242,6 +242,13 @@ ARTIFACTS_DIR = Path(
 ).resolve()
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
+SKILLS_DIR = Path(os.getenv("SKILLS_DIR", Path(DATA_DIR) / "skills")).resolve()
+SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+
+UV_CACHE_DIR = Path(os.getenv("UV_CACHE_DIR", Path(DATA_DIR) / "uv-cache")).resolve()
+UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("UV_CACHE_DIR", str(UV_CACHE_DIR))
+
 STATIC_DIR = Path(os.getenv("STATIC_DIR", OPEN_WEBUI_DIR / "static"))
 
 FONTS_DIR = Path(os.getenv("FONTS_DIR", OPEN_WEBUI_DIR / "static" / "fonts"))

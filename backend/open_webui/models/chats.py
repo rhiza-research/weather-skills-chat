@@ -135,6 +135,13 @@ class ChatTable:
             db.add(result)
             db.commit()
             db.refresh(result)
+            if result:
+                try:
+                    from open_webui.utils.artifacts import chat_sandbox
+
+                    chat_sandbox(result.id)
+                except Exception:
+                    pass
             return ChatModel.model_validate(result) if result else None
 
     def import_chat(
@@ -165,6 +172,13 @@ class ChatTable:
             db.add(result)
             db.commit()
             db.refresh(result)
+            if result:
+                try:
+                    from open_webui.utils.artifacts import chat_sandbox
+
+                    chat_sandbox(result.id)
+                except Exception:
+                    pass
             return ChatModel.model_validate(result) if result else None
 
     def update_chat_by_id(self, id: str, chat: dict) -> Optional[ChatModel]:

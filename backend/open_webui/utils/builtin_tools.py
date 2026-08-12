@@ -304,6 +304,305 @@ CREATE_ZARR_VIEW_SPEC = {
 }
 
 
+async def copy_intermediate_result(
+    path: str,
+    direction: str,
+    destination: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """Copy a file or folder between the chat sandbox and intermediate_results."""
+    from open_webui.utils.artifacts import copy_intermediate_result as _copy
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot copy intermediate results in a temporary chat."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_write_chat(user, chat):
+        return "You do not have write access to this chat."
+
+    try:
+        result = _copy(
+            chat_id,
+            path=path,
+            direction=direction,
+            destination=destination,
+        )
+    except Exception as e:
+        return f"Copy failed: {e}"
+
+    arrow = "→"
+    action = (
+        "into intermediate_results"
+        if result["direction"] == "in"
+        else "out of intermediate_results"
+    )
+    return (
+        f"Copied {result['kind']} {action}: "
+        f"`{result['source']}` {arrow} `{result['destination']}`."
+    )
+
+
+COPY_INTERMEDIATE_RESULT_SPEC = {
+    "name": "copy_intermediate_result",
+    "description": (
+        "Copy a file or folder between the chat sandbox and intermediate_results. "
+        "Use direction=in to stash a sandbox path under intermediate_results "
+        "(not shown to the user). Use direction=out to promote something from "
+        "intermediate_results into the user-visible sandbox. Paths are relative; "
+        "do not include intermediate_results/ in path."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Relative path to copy. For direction=in, path is under the "
+                    "sandbox root. For direction=out, path is under intermediate_results."
+                ),
+            },
+            "direction": {
+                "type": "string",
+                "enum": ["in", "out"],
+                "description": (
+                    "in = sandbox → intermediate_results; "
+                    "out = intermediate_results → sandbox"
+                ),
+            },
+            "destination": {
+                "type": "string",
+                "description": (
+                    "Optional destination relative path within the target area. "
+                    "Defaults to the source basename."
+                ),
+            },
+        },
+        "required": ["path", "direction"],
+    },
+}
+
+
+def _tool_summary_line(name: str, description: str = "", kind: str = "tool", tool_id: str = "") -> str:
+    desc = (description or "").strip().split("\n")[0].strip()
+    if len(desc) > 160:
+        desc = desc[:157] + "..."
+    bits = [f"- `{name}`"]
+    if kind and kind != "tool":
+        bits.append(f"[{kind}]")
+    if tool_id and tool_id != name:
+        bits.append(f"(id: {tool_id})")
+    if desc:
+        bits.append(f"— {desc}")
+    return " ".join(bits)
+
+
+async def list_available_tools(
+    scope: str = "chat",
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """List tools and skills available to the model for this chat (or all the user can access).
+
+    Call this when the user asks what tools/skills are available, or before choosing
+    which skill to run.
+    """
+    from open_webui.models.tools import Tools
+    from open_webui.utils.access_control import has_access
+
+    metadata = __metadata__ or {}
+    user = Users.get_user_by_id(__user__.get("id"))
+    if not user:
+        return "User not found."
+
+    scope = (scope or "chat").strip().lower()
+    if scope not in ("chat", "all"):
+        scope = "chat"
+
+    lines = []
+
+    # Builtins are always on for every chat turn.
+    lines.append("## Built-in tools (always available)")
+    lines.append(
+        _tool_summary_line(
+            "list_available_tools",
+            "List tools/skills available in this chat, or all tools you can access.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "create_automation",
+            "Create a scheduled automation from the current chat.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "create_secret",
+            "Encrypt and store a credential for later {{secret:NAME}} use.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "create_zarr_view",
+            "Create a zarr view JSON in the chat artifact folder.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "copy_intermediate_result",
+            "Copy a file/folder into or out of intermediate_results.",
+            kind="builtin",
+        )
+    )
+
+    selected_ids = list(metadata.get("tool_ids") or [])
+    all_tools = Tools.get_tools()
+
+    def _visible(tool) -> bool:
+        if user.role == "admin" or tool.user_id == user.id:
+            return True
+        return has_access(user.id, "read", tool.access_control)
+
+    if scope == "chat":
+        lines.append("")
+        lines.append("## Enabled for this chat")
+        if not selected_ids:
+            lines.append(
+                "(None selected.) Enable tools/skills in the chat tools menu, "
+                "or ask with scope=`all` to see everything you can access."
+            )
+        else:
+            by_id = {t.id: t for t in all_tools}
+            for tid in selected_ids:
+                tool = by_id.get(tid)
+                if not tool:
+                    lines.append(f"- `{tid}` (missing or unloaded)")
+                    continue
+                if not _visible(tool):
+                    continue
+                manifest = (tool.meta.manifest if tool.meta else None) or {}
+                kind = "skill" if manifest.get("kind") == "skill" else "tool"
+                # Prefer callable names from specs
+                if tool.specs:
+                    for spec in tool.specs:
+                        lines.append(
+                            _tool_summary_line(
+                                spec.get("name") or tid,
+                                spec.get("description")
+                                or (tool.meta.description if tool.meta else "")
+                                or "",
+                                kind=kind,
+                                tool_id=tid,
+                            )
+                        )
+                else:
+                    lines.append(
+                        _tool_summary_line(
+                            tool.name or tid,
+                            (tool.meta.description if tool.meta else "") or "",
+                            kind=kind,
+                            tool_id=tid,
+                        )
+                    )
+    else:
+        lines.append("")
+        lines.append("## All tools/skills you can access")
+        accessible = [t for t in all_tools if _visible(t)]
+        if not accessible:
+            lines.append("(No workspace tools or skills.)")
+        else:
+            skills = [
+                t
+                for t in accessible
+                if ((t.meta.manifest if t.meta else None) or {}).get("kind") == "skill"
+            ]
+            plain = [
+                t
+                for t in accessible
+                if ((t.meta.manifest if t.meta else None) or {}).get("kind") != "skill"
+            ]
+            if plain:
+                lines.append("### Tools")
+                for tool in plain:
+                    desc = (tool.meta.description if tool.meta else "") or ""
+                    if tool.specs:
+                        for spec in tool.specs:
+                            lines.append(
+                                _tool_summary_line(
+                                    spec.get("name") or tool.id,
+                                    spec.get("description") or desc,
+                                    kind="tool",
+                                    tool_id=tool.id,
+                                )
+                            )
+                    else:
+                        lines.append(
+                            _tool_summary_line(tool.name or tool.id, desc, tool_id=tool.id)
+                        )
+            if skills:
+                lines.append("### Skills")
+                for tool in skills:
+                    desc = (tool.meta.description if tool.meta else "") or ""
+                    if tool.specs:
+                        for spec in tool.specs:
+                            lines.append(
+                                _tool_summary_line(
+                                    spec.get("name") or tool.id,
+                                    spec.get("description") or desc,
+                                    kind="skill",
+                                    tool_id=tool.id,
+                                )
+                            )
+                    else:
+                        lines.append(
+                            _tool_summary_line(
+                                tool.name or tool.id, desc, kind="skill", tool_id=tool.id
+                            )
+                        )
+            enabled = set(selected_ids)
+            not_enabled = [t.id for t in accessible if t.id not in enabled]
+            if not_enabled:
+                lines.append("")
+                lines.append(
+                    f"Note: {len(not_enabled)} accessible tool(s)/skill(s) are not enabled "
+                    "for this chat. Enable them in the tools menu to call them."
+                )
+
+    return "\n".join(lines)
+
+
+LIST_AVAILABLE_TOOLS_SPEC = {
+    "name": "list_available_tools",
+    "description": (
+        "List tools and skills available to you. Use when the user asks what tools "
+        "or skills you have, what you can do, or which skill to use. "
+        "Default scope is this chat's enabled tools; use scope=all for everything "
+        "the user can access (including skills not yet enabled in this chat)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "scope": {
+                "type": "string",
+                "enum": ["chat", "all"],
+                "description": (
+                    "chat = tools/skills enabled for this chat turn (default). "
+                    "all = every tool/skill the user can access."
+                ),
+            },
+        },
+        "required": [],
+    },
+}
+
+
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
@@ -318,7 +617,11 @@ def get_builtin_tools(extra_params: dict) -> dict:
         }
 
     return {
+        "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
         "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
         "create_secret": _tool(create_secret, CREATE_SECRET_SPEC),
         "create_zarr_view": _tool(create_zarr_view, CREATE_ZARR_VIEW_SPEC),
+        "copy_intermediate_result": _tool(
+            copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
+        ),
     }

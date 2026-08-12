@@ -906,16 +906,41 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             try:
                 from open_webui.utils.secrets import secret_usage_hint
 
+                hints = []
                 hint = secret_usage_hint(user)
                 if hint:
+                    hints.append(hint)
+                # Help the model answer "what tools do you have?" without guessing.
+                tool_names = [
+                    (tool.get("spec") or {}).get("name")
+                    for tool in tools_dict.values()
+                    if (tool.get("spec") or {}).get("name")
+                ]
+                if tool_names:
+                    shown = ", ".join(f"`{n}`" for n in tool_names[:40])
+                    more = (
+                        f" (+{len(tool_names) - 40} more)"
+                        if len(tool_names) > 40
+                        else ""
+                    )
+                    hints.append(
+                        "Tools/skills enabled for this chat: "
+                        + shown
+                        + more
+                        + ". If the user asks what you can use, call "
+                        "`list_available_tools` (scope=`chat` for this chat, "
+                        "scope=`all` for everything they can access)."
+                    )
+                if hints:
+                    combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []
                     if messages and messages[0].get("role") == "system":
                         messages[0]["content"] = (
-                            (messages[0].get("content") or "") + "\n\n" + hint
+                            (messages[0].get("content") or "") + "\n\n" + combined
                         )
                     else:
                         form_data["messages"] = [
-                            {"role": "system", "content": hint},
+                            {"role": "system", "content": combined},
                             *messages,
                         ]
             except Exception:

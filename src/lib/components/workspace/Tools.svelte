@@ -54,9 +54,10 @@
 
 	$: filteredItems = tools.filter(
 		(t) =>
-			query === '' ||
-			t.name.toLowerCase().includes(query.toLowerCase()) ||
-			t.id.toLowerCase().includes(query.toLowerCase())
+			t?.meta?.manifest?.kind !== 'skill' &&
+			(query === '' ||
+				t.name.toLowerCase().includes(query.toLowerCase()) ||
+				t.id.toLowerCase().includes(query.toLowerCase()))
 	);
 
 	const shareHandler = async (tool) => {
@@ -216,17 +217,33 @@
 						<div class=" flex-1 self-center">
 							<Tooltip content={tool?.meta?.description ?? ''} placement="top-start">
 								<div class=" font-semibold flex items-center gap-1.5">
-									<div
-										class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
-									>
-										TOOL
-									</div>
+									{#if tool?.meta?.manifest?.kind === 'skill'}
+										<div
+											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-amber-500/20 text-amber-800 dark:text-amber-200"
+										>
+											SKILL
+										</div>
+									{:else}
+										<div
+											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+										>
+											TOOL
+										</div>
+									{/if}
 
 									{#if tool?.meta?.manifest?.version}
 										<div
 											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
 										>
 											v{tool?.meta?.manifest?.version ?? ''}
+										</div>
+									{/if}
+
+									{#if tool?.meta?.manifest?.git_ref}
+										<div
+											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200 font-mono"
+										>
+											@{tool.meta.manifest.git_ref}
 										</div>
 									{/if}
 

@@ -4,12 +4,112 @@ from pathlib import Path
 from open_webui.env import ARTIFACTS_DIR
 
 ZARR_MARKERS = (".zgroup", ".zarray", "zarr.json")
+INTERMEDIATE_RESULTS_DIRNAME = "intermediate_results"
 
 
 def chat_sandbox(chat_id: str) -> Path:
     root = (ARTIFACTS_DIR / chat_id).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    (root / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
     return root
+
+
+def intermediate_results_dir(chat_id: str) -> Path:
+    return chat_sandbox(chat_id) / INTERMEDIATE_RESULTS_DIRNAME
+
+
+def _assert_within(root: Path, target: Path) -> Path:
+    target = target.resolve()
+    if target != root and root not in target.parents:
+        raise ValueError("Path escapes the allowed directory")
+    return target
+
+
+def copy_intermediate_result(
+    chat_id: str,
+    path: str,
+    direction: str,
+    destination: str | None = None,
+) -> dict:
+    """Copy a file/dir between the chat sandbox and intermediate_results.
+
+    direction:
+      - "in":  sandbox → intermediate_results
+      - "out": intermediate_results → sandbox
+    """
+    root = chat_sandbox(chat_id)
+    intermediate = intermediate_results_dir(chat_id)
+    direction = (direction or "").strip().lower()
+    if direction not in ("in", "out"):
+        raise ValueError("direction must be 'in' or 'out'")
+
+    rel = (path or "").strip().lstrip("/")
+    if not rel or rel in (".", INTERMEDIATE_RESULTS_DIRNAME):
+        raise ValueError("Provide a relative file or folder path")
+    if rel == INTERMEDIATE_RESULTS_DIRNAME or rel.startswith(
+        INTERMEDIATE_RESULTS_DIRNAME + "/"
+    ):
+        raise ValueError(
+            f"Do not include '{INTERMEDIATE_RESULTS_DIRNAME}/' in path; "
+            "use direction instead"
+        )
+
+    dest_rel = (destination or "").strip().lstrip("/") if destination else None
+    if dest_rel and (
+        dest_rel == INTERMEDIATE_RESULTS_DIRNAME
+        or dest_rel.startswith(INTERMEDIATE_RESULTS_DIRNAME + "/")
+    ):
+        raise ValueError(
+            f"Do not include '{INTERMEDIATE_RESULTS_DIRNAME}/' in destination"
+        )
+
+    if direction == "in":
+        src = _assert_within(root, root / rel)
+        if src == intermediate or intermediate in src.parents:
+            raise ValueError("Source is already inside intermediate_results")
+        dest_name = dest_rel or Path(rel).name
+        dest = _assert_within(intermediate, intermediate / dest_name)
+    else:
+        src = _assert_within(intermediate, intermediate / rel)
+        dest_name = dest_rel or Path(rel).name
+        dest = _assert_within(root, root / dest_name)
+        if dest == intermediate or intermediate in dest.parents:
+            raise ValueError("Destination must be outside intermediate_results")
+
+    if not src.exists():
+        raise FileNotFoundError(f"Source not found: {rel}")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():
+        if dest.is_dir():
+            shutil.rmtree(dest)
+        else:
+            dest.unlink()
+
+    if src.is_dir():
+        shutil.copytree(src, dest)
+        kind = "directory"
+    else:
+        shutil.copy2(src, dest)
+        kind = "file"
+
+    src_label = (
+        rel
+        if direction == "in"
+        else f"{INTERMEDIATE_RESULTS_DIRNAME}/{rel}"
+    )
+    dest_label = (
+        f"{INTERMEDIATE_RESULTS_DIRNAME}/{dest.relative_to(intermediate).as_posix()}"
+        if direction == "in"
+        else dest.relative_to(root).as_posix()
+    )
+    return {
+        "ok": True,
+        "direction": direction,
+        "kind": kind,
+        "source": src_label,
+        "destination": dest_label,
+    }
 
 
 def resolve_in_sandbox(chat_id: str, relpath: str) -> Path:
@@ -65,6 +165,13 @@ def list_artifacts(chat_id: str) -> list[dict]:
 
     def walk(directory: Path):
         for path in sorted(directory.iterdir()):
+            # Scratch space for tool pipelines — not user-facing output.
+            if (
+                directory == root
+                and path.is_dir()
+                and path.name == INTERMEDIATE_RESULTS_DIRNAME
+            ):
+                continue
             rel = path.relative_to(root).as_posix()
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
@@ -100,6 +207,8 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
     dest = chat_sandbox(dest_chat_id)
     if src.exists() and src.is_dir():
         shutil.copytree(src, dest, dirs_exist_ok=True)
+        # Ensure the scratch folder exists even if the source predated it.
+        (dest / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
 
 
 def delete_sandbox(chat_id: str) -> None:

@@ -89,6 +89,10 @@ ENV HF_HOME="/app/backend/data/cache/embedding/models"
 
 #### Other models ##########################################################
 
+# Skill pack installs (git clone cache + uv script cache)
+ENV UV_CACHE_DIR="/app/backend/data/uv-cache" \
+    SKILLS_DIR="/app/backend/data/skills"
+
 WORKDIR /app/backend
 
 ENV HOME=/root

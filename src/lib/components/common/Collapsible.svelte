@@ -35,9 +35,8 @@
 	import ChevronUp from '../icons/ChevronUp.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
-	import CodeBlock from '../chat/Messages/CodeBlock.svelte';
-	import Markdown from '../chat/Messages/Markdown.svelte';
 	import Image from './Image.svelte';
+	import ToolCallDetails from './ToolCallDetails.svelte';
 
 	export let open = false;
 
@@ -57,29 +56,190 @@
 
 	const collapsibleId = uuidv4();
 
-	function parseJSONString(str) {
+	function unwrapJSON(value: any): any {
+		if (typeof value !== 'string') {
+			return value;
+		}
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return value;
+		}
 		try {
-			return parseJSONString(JSON.parse(str));
+			return unwrapJSON(JSON.parse(trimmed));
 		} catch (e) {
-			return str;
+			return value;
 		}
 	}
 
-	function formatJSONString(str) {
-		try {
-			const parsed = parseJSONString(str);
-			// If parsed is an object/array, then it's valid JSON
-			if (typeof parsed === 'object') {
-				return JSON.stringify(parsed, null, 2);
-			} else {
-				// It's a primitive value like a number, boolean, etc.
-				return `${JSON.stringify(String(parsed))}`;
+	function formatArgValue(value: any): string {
+		if (value === null || value === undefined) {
+			return 'null';
+		}
+		if (typeof value === 'string') {
+			if (value === '') {
+				return '""';
 			}
+			if (/[\s"'\\]/.test(value)) {
+				return JSON.stringify(value);
+			}
+			return value;
+		}
+		if (typeof value === 'number' || typeof value === 'boolean') {
+			return String(value);
+		}
+		try {
+			return JSON.stringify(value);
 		} catch (e) {
-			// Not valid JSON, return as-is
-			return str;
+			return String(value);
 		}
 	}
+
+	function formatToolCallSignature(name: string, argsRaw: string): string {
+		const toolName = name || 'tool';
+		const args = unwrapJSON(argsRaw);
+
+		if (args && typeof args === 'object' && !Array.isArray(args) && Array.isArray(args.argv)) {
+			const parts = [toolName];
+			if (args.script) {
+				parts.push(formatArgValue(args.script));
+			}
+			for (const arg of args.argv) {
+				parts.push(formatArgValue(arg));
+			}
+			return parts.join(' ');
+		}
+
+		if (Array.isArray(args)) {
+			if (args.length === 0) {
+				return `${toolName}()`;
+			}
+			return [toolName, ...args.map(formatArgValue)].join(' ');
+		}
+
+		if (args && typeof args === 'object') {
+			const entries = Object.entries(args);
+			if (entries.length === 0) {
+				return `${toolName}()`;
+			}
+			const inner = entries.map(([key, value]) => `${key}=${formatArgValue(value)}`).join(', ');
+			return `${toolName}(${inner})`;
+		}
+
+		if (args === null || args === undefined || args === '') {
+			return `${toolName}()`;
+		}
+
+		return `${toolName}(${formatArgValue(args)})`;
+	}
+
+	function parseLegacySkillOutput(text: string) {
+		const sections: { stdout?: string; stderr?: string; meta: string[] } = { meta: [] };
+		const lines = text.split(/\r?\n/);
+		let mode: 'meta' | 'stdout' | 'stderr' = 'meta';
+		const buckets = { stdout: [] as string[], stderr: [] as string[] };
+
+		for (const line of lines) {
+			if (/^stdout:\s*$/i.test(line)) {
+				mode = 'stdout';
+				continue;
+			}
+			if (/^stderr:\s*$/i.test(line)) {
+				mode = 'stderr';
+				continue;
+			}
+			if (mode === 'stdout') {
+				buckets.stdout.push(line);
+			} else if (mode === 'stderr') {
+				buckets.stderr.push(line);
+			} else if (line.trim()) {
+				sections.meta.push(line);
+			}
+		}
+
+		const stdout = buckets.stdout.join('\n').trim();
+		const stderr = buckets.stderr.join('\n').trim();
+		if (!stdout && !stderr) {
+			return null;
+		}
+
+		const meta: Record<string, any> = {};
+		for (const line of sections.meta) {
+			const match = line.match(/^([a-zA-Z_]+)=(.*)$/);
+			if (match) {
+				meta[match[1]] = match[2];
+			}
+		}
+
+		return {
+			exit_code: meta.exit_code !== undefined ? Number(meta.exit_code) : undefined,
+			script: meta.script,
+			cwd: meta.cwd,
+			stdout,
+			stderr
+		};
+	}
+
+	function parseToolResult(raw: string) {
+		const parsed = unwrapJSON(raw);
+		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+			const hasStreams =
+				'stdout' in parsed || 'stderr' in parsed || 'exit_code' in parsed || 'ok' in parsed;
+			if (hasStreams) {
+				return {
+					kind: 'structured' as const,
+					exit_code: parsed.exit_code,
+					ok: parsed.ok,
+					script: parsed.script,
+					cwd: parsed.cwd,
+					stdout: typeof parsed.stdout === 'string' ? parsed.stdout : '',
+					stderr: typeof parsed.stderr === 'string' ? parsed.stderr : '',
+					extra: parsed
+				};
+			}
+		}
+
+		if (typeof parsed === 'string') {
+			const legacy = parseLegacySkillOutput(parsed);
+			if (legacy) {
+				return {
+					kind: 'structured' as const,
+					exit_code: legacy.exit_code,
+					ok: legacy.exit_code === 0,
+					script: legacy.script,
+					cwd: legacy.cwd,
+					stdout: legacy.stdout || '',
+					stderr: legacy.stderr || '',
+					extra: null
+				};
+			}
+			return { kind: 'text' as const, text: parsed };
+		}
+
+		if (parsed === null || parsed === undefined || parsed === '') {
+			return { kind: 'empty' as const };
+		}
+
+		return {
+			kind: 'json' as const,
+			text: typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)
+		};
+	}
+
+	$: toolArgsRaw = attributes?.type === 'tool_calls' ? decode(attributes?.arguments ?? '') : '';
+	$: toolCallSignature =
+		attributes?.type === 'tool_calls'
+			? formatToolCallSignature(attributes?.name ?? '', toolArgsRaw)
+			: '';
+	$: toolResultRaw = attributes?.type === 'tool_calls' ? decode(attributes?.result ?? '') : '';
+	$: toolResult = attributes?.type === 'tool_calls' ? parseToolResult(toolResultRaw) : null;
+	$: toolFailed =
+		toolResult?.kind === 'structured' &&
+		((toolResult.exit_code !== undefined &&
+			toolResult.exit_code !== null &&
+			toolResult.exit_code !== 0) ||
+			toolResult.ok === false);
+	$: toolFiles =
+		attributes?.type === 'tool_calls' ? unwrapJSON(decode(attributes?.files ?? '')) : null;
 </script>
 
 <div {id} class={className}>
@@ -129,21 +289,18 @@
 							{$i18n.t('Analyzing...')}
 						{/if}
 					{:else if attributes?.type === 'tool_calls'}
-						{#if attributes?.done === 'true'}
-							<Markdown
-								id={`${collapsibleId}-tool-calls-${attributes?.id}`}
-								content={$i18n.t('View Result from **{{NAME}}**', {
-									NAME: attributes.name
-								})}
-							/>
-						{:else}
-							<Markdown
-								id={`${collapsibleId}-tool-calls-${attributes?.id}-executing`}
-								content={$i18n.t('Executing **{{NAME}}**...', {
-									NAME: attributes.name
-								})}
-							/>
-						{/if}
+						<span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+							{#if attributes?.done === 'true'}
+								{attributes.name}
+								{#if toolFailed}
+									<span class="ml-2 text-xs font-normal text-red-600 dark:text-red-400"
+										>{$i18n.t('failed')}</span
+									>
+								{/if}
+							{:else}
+								{$i18n.t('Running')} {attributes.name}…
+							{/if}
+						</span>
 					{:else}
 						{title}
 					{/if}
@@ -201,40 +358,26 @@
 	{/if}
 
 	{#if attributes?.type === 'tool_calls'}
-		{@const args = decode(attributes?.arguments)}
-		{@const result = decode(attributes?.result ?? '')}
-		{@const files = parseJSONString(decode(attributes?.files ?? ''))}
-
 		{#if !grow}
 			{#if open && !hide}
-				<div transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}>
-					{#if attributes?.type === 'tool_calls'}
-						{#if attributes?.done === 'true'}
-							<Markdown
-								id={`${collapsibleId}-tool-calls-${attributes?.id}-result`}
-								content={`> \`\`\`json
-> ${formatJSONString(args)}
-> ${formatJSONString(result)}
-> \`\`\``}
-							/>
-						{:else}
-							<Markdown
-								id={`${collapsibleId}-tool-calls-${attributes?.id}-result`}
-								content={`> \`\`\`json
-> ${formatJSONString(args)}
-> \`\`\``}
-							/>
-						{/if}
-					{:else}
-						<slot name="content" />
-					{/if}
+				<div
+					class="mt-1.5 ml-1 border-l border-gray-200 pl-3 dark:border-gray-700"
+					transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
+					on:pointerup={(e) => e.stopPropagation()}
+				>
+					<ToolCallDetails
+						callSignature={toolCallSignature}
+						done={attributes?.done === 'true'}
+						result={toolResult}
+						failed={toolFailed}
+					/>
 				</div>
 			{/if}
 
 			{#if attributes?.done === 'true'}
-				{#if typeof files === 'object'}
-					{#each files ?? [] as file, idx}
-						{#if file.startsWith('data:image/')}
+				{#if typeof toolFiles === 'object' && Array.isArray(toolFiles)}
+					{#each toolFiles ?? [] as file, idx}
+						{#if typeof file === 'string' && file.startsWith('data:image/')}
 							<Image
 								id={`${collapsibleId}-tool-calls-${attributes?.id}-result-${idx}`}
 								src={file}
