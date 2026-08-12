@@ -90,10 +90,12 @@
 	import Placeholder from './Placeholder.svelte';
 	import NotificationToast from '../NotificationToast.svelte';
 	import Spinner from '../common/Spinner.svelte';
+	import DocumentChartBar from '../icons/DocumentChartBar.svelte';
 
 	export let chatIdProp = '';
 
 	let loading = false;
+	let loadingChatId = null; // guards against re-entrant chat loads
 
 	const eventTarget = new EventTarget();
 	let controlPane;
@@ -144,40 +146,77 @@
 	let files = [];
 	let params = {};
 
-	$: if (chatIdProp) {
-		(async () => {
-			loading = true;
-			console.log(chatIdProp);
+	const openArtifactsPanel = async () => {
+		const stored = parseInt(localStorage.chatControlsSize);
+		if (!stored || stored < 20 || stored > 45) {
+			localStorage.chatControlsSize = '30';
+		}
+		await showOverview.set(false);
+		await showCallOverlay.set(false);
+		await showArtifacts.set(true);
+		await showControls.set(true);
+		await tick();
+		controlPaneComponent?.openPane?.();
+		await tick();
+		controlPaneComponent?.openPane?.();
+	};
 
-			prompt = '';
-			files = [];
-			selectedToolIds = [];
-			webSearchEnabled = false;
-			imageGenerationEnabled = false;
+	const loadChatForProp = async (id: string) => {
+		if (!id || loadingChatId === id) {
+			return;
+		}
+		loadingChatId = id;
+		loading = true;
 
-			if (chatIdProp && (await loadChat())) {
-				await tick();
-				loading = false;
+		prompt = '';
+		files = [];
+		selectedToolIds = [];
+		webSearchEnabled = false;
+		imageGenerationEnabled = false;
 
-				if (localStorage.getItem(`chat-input-${chatIdProp}`)) {
-					try {
-						const input = JSON.parse(localStorage.getItem(`chat-input-${chatIdProp}`));
-
-						prompt = input.prompt;
-						files = input.files;
-						selectedToolIds = input.selectedToolIds;
-						webSearchEnabled = input.webSearchEnabled;
-						imageGenerationEnabled = input.imageGenerationEnabled;
-					} catch (e) {}
-				}
-
-				window.setTimeout(() => scrollToBottom(), 0);
-				const chatInput = document.getElementById('chat-input');
-				chatInput?.focus();
-			} else {
-				await goto('/');
+		try {
+			const ok = await loadChat(id);
+			// A newer navigation superseded this load.
+			if (loadingChatId !== id) {
+				return;
 			}
-		})();
+			if (!ok) {
+				loading = false;
+				loadingChatId = null;
+				await goto('/');
+				return;
+			}
+
+			loading = false;
+			await tick();
+			await openArtifactsPanel();
+
+			if (localStorage.getItem(`chat-input-${id}`)) {
+				try {
+					const input = JSON.parse(localStorage.getItem(`chat-input-${id}`));
+					prompt = input.prompt;
+					files = input.files;
+					selectedToolIds = input.selectedToolIds;
+					webSearchEnabled = input.webSearchEnabled;
+					imageGenerationEnabled = input.imageGenerationEnabled;
+				} catch (e) {}
+			}
+
+			window.setTimeout(() => scrollToBottom(), 0);
+			document.getElementById('chat-input')?.focus();
+		} catch (e) {
+			console.error(e);
+			if (loadingChatId === id) {
+				loading = false;
+				loadingChatId = null;
+			}
+		}
+	};
+
+	$: if (chatIdProp) {
+		loadChatForProp(chatIdProp);
+	} else {
+		loadingChatId = null;
 	}
 
 	$: if (selectedModels && chatIdProp !== '') {
@@ -437,9 +476,12 @@
 		}
 
 		showControls.subscribe(async (value) => {
-			if (controlPane && !$mobile) {
+			await tick();
+			if (controlPane && controlPaneComponent && !$mobile) {
 				try {
 					if (value) {
+						controlPaneComponent.openPane();
+						await tick();
 						controlPaneComponent.openPane();
 					} else {
 						controlPane.collapse();
@@ -783,9 +825,9 @@
 		setTimeout(() => chatInput?.focus(), 0);
 	};
 
-	const loadChat = async () => {
-		chatId.set(chatIdProp);
-		chat = await getChatById(localStorage.token, $chatId).catch(async (error) => {
+	const loadChat = async (id: string) => {
+		chatId.set(id);
+		chat = await getChatById(localStorage.token, id).catch(async (error) => {
 			await goto('/');
 			return null;
 		});
@@ -798,7 +840,7 @@
 			} else {
 				chatOwnerName = $user?.name ?? '';
 			}
-			tags = await getTagsById(localStorage.token, $chatId).catch(async (error) => {
+			tags = await getTagsById(localStorage.token, id).catch(async (error) => {
 				return [];
 			});
 
@@ -840,7 +882,7 @@
 					}
 				}
 
-				const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch((error) => {
+				const taskRes = await getTaskIdsByChatId(localStorage.token, id).catch((error) => {
 					return null;
 				});
 
@@ -1911,6 +1953,7 @@
 			currentChatPage.set(1);
 
 			window.history.replaceState(history.state, '', `/c/${_chatId}`);
+			await openArtifactsPanel();
 		} else {
 			_chatId = 'local';
 			await chatId.set('local');
@@ -1969,7 +2012,7 @@
 <div
 	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? '  md:max-w-[calc(100%-260px)]'
-		: ' '} w-full max-w-full flex flex-col"
+		: ' '} w-full max-w-full flex flex-col relative"
 	id="chat-container"
 >
 	{#if !loading}
@@ -2186,6 +2229,23 @@
 				{eventTarget}
 			/>
 		</PaneGroup>
+
+		{#if $chatId && $chatId !== 'local' && !($showControls && $showArtifacts)}
+			<button
+				type="button"
+				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750"
+				on:click={openArtifactsPanel}
+				aria-label="Open artifacts"
+			>
+				<DocumentChartBar className="size-4" />
+				<span
+					class="text-[10px] font-semibold tracking-wide"
+					style="writing-mode: vertical-rl; text-orientation: mixed;"
+				>
+					{$i18n.t('Artifacts')}
+				</span>
+			</button>
+		{/if}
 	{:else if loading}
 		<div class=" flex items-center justify-center h-full w-full">
 			<div class="m-auto">

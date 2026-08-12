@@ -16,6 +16,7 @@
 		showOverview,
 		showControls,
 		showArtifacts,
+		showCallOverlay,
 		mobile,
 		temporaryChatEnabled,
 		theme
@@ -253,9 +254,11 @@
 				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 				id="chat-overview-button"
 				on:click={async () => {
-					await showControls.set(true);
-					await showArtifacts.set(true);
+					localStorage.artifactsPanelOpen = 'true';
 					await showOverview.set(false);
+					await showCallOverlay.set(false);
+					await showArtifacts.set(true);
+					await showControls.set(true);
 				}}
 			>
 				<Cube className=" size-4" strokeWidth="1.5" />

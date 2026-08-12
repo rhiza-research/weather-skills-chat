@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount, onDestroy, getContext, createEventDispatcher } from 'svelte';
+	import { onDestroy, getContext, createEventDispatcher } from 'svelte';
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
@@ -19,8 +19,9 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import SvgPanZoom from '../common/SVGPanZoom.svelte';
 	import ArrowLeft from '../icons/ArrowLeft.svelte';
+	import ImagePreview from '../common/ImagePreview.svelte';
+	import ProvenanceTree from './ProvenanceTree.svelte';
 
-	export let overlay = false;
 	export let history;
 	let messages = [];
 
@@ -33,18 +34,20 @@
 	let selectedView = null;
 	let selectedImage = null;
 	let previewUrl = null;
+	let showImageModal = false;
+	let modalAlt = '';
 	let showViewForm = false;
 	let viewForm = { zarr: '', title: '', variable: '', style: 'heatmap', colormap: 'viridis' };
 	let zarrMeta = null;
+	let uploading = false;
+	let fileInput: HTMLInputElement;
 
 	$: zarrStores = files.filter((file) => file.kind === 'zarr');
 	$: orphanViews = files.filter(
 		(file) =>
 			file.kind === 'zarr_view' && !zarrStores.some((store) => store.path === file.zarr)
 	);
-	$: otherFiles = files.filter(
-		(file) => file.kind !== 'zarr' && file.kind !== 'zarr_view'
-	);
+	$: otherFiles = files.filter((file) => file.kind !== 'zarr' && file.kind !== 'zarr_view');
 	const viewsFor = (zarrPath) =>
 		files.filter((file) => file.kind === 'zarr_view' && file.zarr === zarrPath);
 
@@ -62,9 +65,62 @@
 		});
 		if (!res.ok) {
 			toast.error($i18n.t('Could not load preview'));
-			return;
+			return null;
 		}
 		previewUrl = URL.createObjectURL(await res.blob());
+		return previewUrl;
+	};
+
+	const openImage = async (path: string) => {
+		selectedImage = path;
+		selectedView = null;
+		showImageModal = false;
+		const url = await loadPreview(getArtifactContentUrl($chatId, path));
+		if (!url) return;
+		modalAlt = path;
+	};
+
+	const openView = async (path: string, title: string = '') => {
+		selectedView = path;
+		selectedImage = null;
+		showImageModal = false;
+		const url = await loadPreview(getZarrRenderUrl($chatId, path));
+		if (!url) return;
+		modalAlt = title || path;
+	};
+
+	const clearPreview = () => {
+		selectedImage = null;
+		selectedView = null;
+		modalAlt = '';
+		showImageModal = false;
+		revokePreview();
+	};
+
+	const expandPreview = () => {
+		if (previewUrl) {
+			showImageModal = true;
+		}
+	};
+
+	$: previewTitle = selectedView || selectedImage || modalAlt || '';
+	$: hasPreview = !!previewUrl;
+
+	const closePanel = () => {
+		showArtifacts.set(false);
+		showControls.set(false);
+		dispatch('close');
+	};
+
+	const provenanceLabel = (file) => {
+		const crumbs = file?.provenance_detail?.crumbs ?? file?.provenance;
+		if (!Array.isArray(crumbs) || crumbs.length === 0) return '';
+		return crumbs.join(' → ');
+	};
+
+	const provenanceBranches = (file) => {
+		const branches = file?.provenance_detail?.branches;
+		return Array.isArray(branches) ? branches : [];
 	};
 
 	const loadFiles = async () => {
@@ -76,6 +132,33 @@
 			files = await getChatArtifacts(localStorage.token, $chatId);
 		} catch (e) {
 			files = [];
+			console.error(e);
+		}
+	};
+
+	const onUpload = async (e: Event) => {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		if (!$chatId || $chatId === 'local') {
+			toast.error($i18n.t('Save the chat before uploading artifacts.'));
+			input.value = '';
+			return;
+		}
+		uploading = true;
+		try {
+			await uploadChatArtifact(localStorage.token, $chatId, file.name, file);
+			await loadFiles();
+			toast.success($i18n.t('Uploaded {{NAME}}', { NAME: file.name }));
+			if (/\.(png|jpe?g|gif|webp)$/i.test(file.name)) {
+				await openImage(file.name);
+			}
+		} catch (err) {
+			console.error(err);
+			toast.error(`${err?.detail ?? err ?? 'Upload failed'}`);
+		} finally {
+			uploading = false;
+			input.value = '';
 		}
 	};
 
@@ -128,19 +211,19 @@
 
 				if (inlineHtml) {
 					inlineHtml.forEach((block) => {
-						const content = block.replace(/<\/?html>/gi, ''); // Remove <html> tags
+						const content = block.replace(/<\/?html>/gi, '');
 						htmlContent += content + '\n';
 					});
 				}
 				if (inlineCss) {
 					inlineCss.forEach((block) => {
-						const content = block.replace(/<\/?style>/gi, ''); // Remove <style> tags
+						const content = block.replace(/<\/?style>/gi, '');
 						cssContent += content + '\n';
 					});
 				}
 				if (inlineJs) {
 					inlineJs.forEach((block) => {
-						const content = block.replace(/<\/?script>/gi, ''); // Remove <script> tags
+						const content = block.replace(/<\/?script>/gi, '');
 						jsContent += content + '\n';
 					});
 				}
@@ -154,7 +237,7 @@
                             <meta name="viewport" content="width=device-width, initial-scale=1.0">
 							<${''}style>
 								body {
-									background-color: white; /* Ensure the iframe has a white background */
+									background-color: white;
 								}
 
 								${cssContent}
@@ -163,40 +246,31 @@
                         <body>
                             ${htmlContent}
 
-							<${''}script>
-                            	${jsContent}
-							</${''}script>
+                            <${''}script>
+                                ${jsContent}
+                            </${''}script>
                         </body>
                         </html>
                     `;
 					contents = [...contents, { type: 'iframe', content: renderedContent }];
-				} else {
-					// Check for SVG content
-					for (const block of codeBlocks) {
-						if (block.lang === 'svg' || (block.lang === 'xml' && block.code.includes('<svg'))) {
-							contents = [...contents, { type: 'svg', content: block.code }];
-						}
-					}
 				}
+
+				codeBlocks.forEach((block) => {
+					if (block.lang === 'svg' || (block.lang === 'xml' && block.code.includes('<svg'))) {
+						contents = [...contents, { type: 'svg', content: block.code }];
+					}
+				});
 			}
 		});
-
-		if (contents.length === 0 && files.length === 0) {
-			// Keep the panel open so filesystem artifacts can still be managed.
-		}
 
 		selectedContentIdx = contents ? contents.length - 1 : 0;
 	};
 
 	function navigateContent(direction: 'prev' | 'next') {
-		console.log(selectedContentIdx);
-
 		selectedContentIdx =
 			direction === 'prev'
 				? Math.max(selectedContentIdx - 1, 0)
 				: Math.min(selectedContentIdx + 1, contents.length - 1);
-
-		console.log(selectedContentIdx);
 	}
 
 	const iframeLoadHandler = () => {
@@ -213,21 +287,11 @@
 							'',
 							url.pathname + url.search + url.hash
 						);
-					} else {
-						console.log('External navigation blocked:', url.href);
 					}
 				}
 			},
 			true
 		);
-
-		// Cancel drag when hovering over iframe
-		iframeElement.contentWindow.addEventListener('mouseenter', function (e) {
-			e.preventDefault();
-			iframeElement.contentWindow.addEventListener('dragstart', (event) => {
-				event.preventDefault();
-			});
-		});
 	};
 
 	const showFullScreen = () => {
@@ -240,68 +304,147 @@
 		}
 	};
 
-	onMount(() => {});
-	onDestroy(revokePreview);
+	onDestroy(() => {
+		revokePreview();
+	});
 </script>
 
-<div class=" w-full h-full relative flex flex-col bg-gray-50 dark:bg-gray-850">
-	<div class="w-full h-full flex flex-col flex-1 relative overflow-y-auto">
-		<div class="p-3 border-b border-gray-100 dark:border-gray-800">
-			<div class="flex items-center justify-between mb-2">
-				<div class="text-xs font-medium">{$i18n.t('Files')}</div>
-				<label class="text-xs text-gray-500 cursor-pointer">
-					{$i18n.t('Upload')}
-					<input
-						type="file"
-						class="hidden"
-						on:change={async (e) => {
-							const file = e.currentTarget.files?.[0];
-							if (!file || !$chatId) return;
-							await uploadChatArtifact(localStorage.token, $chatId, file.name, file);
-							await loadFiles();
-							e.currentTarget.value = '';
-						}}
-					/>
-				</label>
-			</div>
-			<div class="flex flex-col gap-1 max-h-48 overflow-y-auto">
-				{#each zarrStores as store}
-					<div class="flex items-center justify-between text-xs px-1 py-0.5">
-						<div class="truncate flex items-center gap-1">
-							<span>{store.path}</span>
-							<span class="text-gray-400">zarr</span>
-						</div>
+<ImagePreview
+	bind:show={showImageModal}
+	src={previewUrl || ''}
+	alt={modalAlt}
+/>
+
+<div class="w-full h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0">
+	{#if hasPreview}
+		<div
+			class="flex flex-col min-h-0 {contents.length > 0
+				? 'h-[38%]'
+				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
+		>
+			<div class="flex items-center justify-between gap-2 px-2.5 py-1.5 shrink-0">
+				<div class="text-[11px] text-gray-600 dark:text-gray-300 truncate min-w-0" title={previewTitle}>
+					{previewTitle}
+				</div>
+				<div class="flex items-center gap-0.5 shrink-0">
+					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
-							class="underline shrink-0"
-							on:click={async () => {
-								viewForm.zarr = store.path;
-								showViewForm = true;
-								selectedImage = null;
-								zarrMeta = await getZarrMeta(localStorage.token, $chatId, store.path).catch(
-									() => null
-								);
-							}}>{$i18n.t('New view')}</button
+							type="button"
+							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							on:click={expandPreview}
+							aria-label="Expand image"
 						>
+							<ArrowsPointingOut className="size-3.5" />
+						</button>
+					</Tooltip>
+					<button
+						type="button"
+						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+						on:click={clearPreview}
+						aria-label="Close preview"
+					>
+						<XMark className="size-3.5" />
+					</button>
+				</div>
+			</div>
+			<button
+				type="button"
+				class="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden px-2 pb-2 cursor-zoom-in"
+				on:click={expandPreview}
+			>
+				<img
+					class="max-w-full max-h-full object-contain rounded border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+					src={previewUrl}
+					alt={previewTitle || 'preview'}
+				/>
+			</button>
+		</div>
+	{/if}
+
+	<div class="flex flex-col min-h-0 flex-1 overflow-hidden">
+		<div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+			<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
+			<div class="flex items-center gap-2">
+				<button
+					type="button"
+					class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+					disabled={uploading || !$chatId || $chatId === 'local'}
+					on:click={() => fileInput?.click()}
+				>
+					{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
+				</button>
+				<input
+					bind:this={fileInput}
+					type="file"
+					class="hidden"
+					on:change={onUpload}
+				/>
+				<button
+					type="button"
+					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+					on:click={closePanel}
+					aria-label="Close artifacts"
+				>
+					<XMark className="size-3.5" />
+				</button>
+			</div>
+		</div>
+
+		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+				{#each zarrStores as store}
+					<div class="flex flex-col gap-0.5 px-1 py-0.5">
+						<div class="flex items-center justify-between text-xs">
+							<div class="truncate flex items-center gap-1">
+								<span>{store.path}</span>
+								<span class="text-gray-400">zarr</span>
+							</div>
+							<button
+								type="button"
+								class="underline shrink-0"
+								on:click={async () => {
+									viewForm.zarr = store.path;
+									showViewForm = true;
+									clearPreview();
+									zarrMeta = await getZarrMeta(localStorage.token, $chatId, store.path).catch(
+										() => null
+									);
+								}}>{$i18n.t('New view')}</button
+							>
+						</div>
+						{#if provenanceBranches(store).length}
+							<ProvenanceTree branches={provenanceBranches(store)} />
+						{:else if provenanceLabel(store)}
+							<div
+								class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate pl-0.5"
+								title={provenanceLabel(store)}
+							>
+								{provenanceLabel(store)}
+							</div>
+						{/if}
 					</div>
 					{#each viewsFor(store.path) as file}
-						<div class="flex items-center justify-between text-xs px-1 py-0.5 pl-4">
-							<div class="truncate flex items-center gap-1">
-								{#if file.missing_zarr}
-									<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
+						<div
+							class="flex flex-col gap-0.5 px-1 py-0.5 pl-4 rounded-md {selectedView === file.path
+								? 'bg-black/5 dark:bg-white/5'
+								: ''}"
+						>
+							<div class="flex items-center justify-between text-xs">
+								<div class="truncate flex items-center gap-1">
+									{#if file.missing_zarr}
+										<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
+									{/if}
+									<span>{file.title || file.path}</span>
+									<span class="text-gray-400">view</span>
+								</div>
+								{#if !file.missing_zarr}
+									<button
+										type="button"
+										class="underline shrink-0"
+										on:click={() => openView(file.path, file.title || file.path)}
+										>{$i18n.t('View')}</button
+									>
 								{/if}
-								<span>{file.title || file.path}</span>
-								<span class="text-gray-400">view</span>
 							</div>
-							{#if !file.missing_zarr}
-								<button
-									class="underline shrink-0"
-									on:click={async () => {
-										selectedView = file.path;
-										selectedImage = null;
-										await loadPreview(getZarrRenderUrl($chatId, file.path));
-									}}>{$i18n.t('View')}</button
-								>
-							{/if}
 						</div>
 					{/each}
 				{/each}
@@ -315,38 +458,62 @@
 					</div>
 				{/each}
 				{#each otherFiles as file}
-					<div class="flex items-center justify-between text-xs px-1 py-0.5">
-						<div class="truncate flex items-center gap-1">
-							<span>{file.path}</span>
-							<span class="text-gray-400">{file.kind}</span>
-						</div>
-						<div class="flex gap-1 shrink-0">
+					<div
+						class="flex flex-col gap-0.5 px-1 py-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 {selectedImage ===
+						file.path
+							? 'bg-black/5 dark:bg-white/5'
+							: ''}"
+					>
+						<div class="flex items-center justify-between text-xs gap-2">
 							{#if file.kind === 'image'}
 								<button
-									class="underline"
-									on:click={async () => {
-										selectedImage = file.path;
-										selectedView = null;
-										await loadPreview(getArtifactContentUrl($chatId, file.path));
-									}}>{$i18n.t('Preview')}</button
+									type="button"
+									class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
+									on:click={() => openImage(file.path)}
 								>
-							{:else if !file.is_dir}
-								<a
-									class="underline"
-									href={getArtifactContentUrl($chatId, file.path)}
-									target="_blank">{$i18n.t('Download')}</a
-								>
+									<span class="truncate">{file.path}</span>
+									<span class="text-gray-400 shrink-0">{file.kind}</span>
+								</button>
+							{:else}
+								<div class="truncate flex items-center gap-1 min-w-0">
+									<span class="truncate">{file.path}</span>
+									<span class="text-gray-400 shrink-0">{file.kind}</span>
+								</div>
 							{/if}
+							<div class="flex gap-1 shrink-0">
+								{#if file.kind === 'image'}
+									<button type="button" class="underline" on:click={() => openImage(file.path)}
+										>{$i18n.t('Open')}</button
+									>
+								{:else if !file.is_dir}
+									<a
+										class="underline"
+										href={getArtifactContentUrl($chatId, file.path)}
+										target="_blank"
+										rel="noreferrer">{$i18n.t('Download')}</a
+									>
+								{/if}
+							</div>
 						</div>
+						{#if provenanceBranches(file).length}
+							<ProvenanceTree branches={provenanceBranches(file)} />
+						{:else if provenanceLabel(file)}
+							<div
+								class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate pl-0.5"
+								title={provenanceLabel(file)}
+							>
+								{provenanceLabel(file)}
+							</div>
+						{/if}
 					</div>
 				{/each}
-				{#if files.length === 0}
-					<div class="text-[11px] text-gray-400">{$i18n.t('No files in this chat yet.')}</div>
-				{/if}
-			</div>
+			{#if files.length === 0}
+				<div class="text-[11px] text-gray-400">{$i18n.t('No files in this chat yet.')}</div>
+			{/if}
+
 			{#if showViewForm}
 				<form
-					class="mt-2 flex flex-col gap-1"
+					class="mt-2 flex flex-col gap-1 shrink-0"
 					on:submit|preventDefault={async () => {
 						await createZarrView(localStorage.token, $chatId, viewForm);
 						showViewForm = false;
@@ -358,7 +525,10 @@
 						placeholder={$i18n.t('View title')}
 						bind:value={viewForm.title}
 					/>
-					<select class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs" bind:value={viewForm.variable}>
+					<select
+						class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs"
+						bind:value={viewForm.variable}
+					>
 						<option value="">{$i18n.t('First variable')}</option>
 						{#if zarrMeta}
 							{#each Object.keys(zarrMeta.variables || {}) as name}
@@ -377,25 +547,22 @@
 					/>
 					<div class="flex gap-1">
 						<button class="text-xs underline" type="submit">{$i18n.t('Save view')}</button>
-						<button class="text-xs text-gray-400" type="button" on:click={() => (showViewForm = false)}
-							>{$i18n.t('Cancel')}</button
+						<button
+							class="text-xs text-gray-400"
+							type="button"
+							on:click={() => (showViewForm = false)}>{$i18n.t('Cancel')}</button
 						>
 					</div>
 				</form>
 			{/if}
-			{#if previewUrl}
-				<img
-					class="mt-2 w-full rounded border border-gray-100 dark:border-gray-800"
-					src={previewUrl}
-					alt={selectedView || selectedImage}
-				/>
-			{/if}
 		</div>
+
 		{#if contents.length > 0}
 			<div
-				class="pointer-events-auto z-20 flex justify-between items-center p-2.5 font-primar text-gray-900 dark:text-white"
+				class="pointer-events-auto z-20 flex justify-between items-center p-2.5 font-primar text-gray-900 dark:text-white shrink-0"
 			>
 				<button
+					type="button"
 					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
 					on:click={() => {
 						showArtifacts.set(false);
@@ -408,6 +575,7 @@
 					<div class="flex items-center space-x-2">
 						<div class="flex items-center gap-0.5 self-center min-w-fit" dir="ltr">
 							<button
+								type="button"
 								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
 								on:click={() => navigateContent('prev')}
 								disabled={contents.length <= 1}
@@ -436,6 +604,7 @@
 							</div>
 
 							<button
+								type="button"
 								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
@@ -460,11 +629,11 @@
 
 					<div class="flex items-center gap-1">
 						<button
+							type="button"
 							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
 							on:click={() => {
 								copyToClipboard(contents[selectedContentIdx].content);
 								copied = true;
-
 								setTimeout(() => {
 									copied = false;
 								}, 2000);
@@ -474,6 +643,7 @@
 						{#if contents[selectedContentIdx].type === 'iframe'}
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
+									type="button"
 									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md p-0.5"
 									on:click={showFullScreen}
 								>
@@ -485,52 +655,35 @@
 				</div>
 
 				<button
+					type="button"
 					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
-					on:click={() => {
-						dispatch('close');
-						showControls.set(false);
-						showArtifacts.set(false);
-					}}
+					on:click={closePanel}
 				>
 					<XMark className="size-3.5 text-gray-900 dark:text-white" />
 				</button>
 			</div>
-		{/if}
 
-		{#if overlay}
-			<div class=" absolute top-0 left-0 right-0 bottom-0 z-10"></div>
-		{/if}
-
-		<div class="flex-1 w-full h-full">
-			<div class=" h-full flex flex-col">
-				{#if contents.length > 0}
-					<div class="max-w-full w-full h-full">
-						{#if contents[selectedContentIdx].type === 'iframe'}
-							<iframe
-								bind:this={iframeElement}
-								title="Content"
-								srcdoc={contents[selectedContentIdx].content}
-								class="w-full border-0 h-full rounded-none"
-								sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
-									? ' allow-forms'
-									: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)
-									? ' allow-same-origin'
-									: ''}"
-								on:load={iframeLoadHandler}
-							></iframe>
-						{:else if contents[selectedContentIdx].type === 'svg'}
-							<SvgPanZoom
-								className=" w-full h-full max-h-full overflow-hidden"
-								svg={contents[selectedContentIdx].content}
-							/>
-						{/if}
-					</div>
-				{:else}
-					<div class="m-auto font-medium text-xs text-gray-900 dark:text-white">
-						{$i18n.t('No HTML, CSS, or JavaScript content found.')}
-					</div>
+			<div class="flex-1 w-full min-h-0 {hasPreview ? 'max-h-[30%]' : ''}">
+				{#if contents[selectedContentIdx].type === 'iframe'}
+					<iframe
+						bind:this={iframeElement}
+						title="Content"
+						srcdoc={contents[selectedContentIdx].content}
+						class="w-full border-0 h-full rounded-none"
+						sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
+							? ' allow-forms'
+							: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)
+							? ' allow-same-origin'
+							: ''}"
+						on:load={iframeLoadHandler}
+					></iframe>
+				{:else if contents[selectedContentIdx].type === 'svg'}
+					<SvgPanZoom
+						className=" w-full h-full max-h-full overflow-hidden"
+						svg={contents[selectedContentIdx].content}
+					/>
 				{/if}
 			</div>
-		</div>
+		{/if}
 	</div>
 </div>

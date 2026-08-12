@@ -10,7 +10,10 @@
 		mobile,
 		settings,
 		showArchivedChats,
+		showArtifacts,
+		showCallOverlay,
 		showControls,
+		showOverview,
 		showSidebar,
 		temporaryChatEnabled,
 		user
@@ -26,6 +29,7 @@
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
 	import MenuLines from '../icons/MenuLines.svelte';
 	import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
+	import DocumentChartBar from '../icons/DocumentChartBar.svelte';
 
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Banner from '../common/Banner.svelte';
@@ -43,6 +47,24 @@
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+
+	$: artifactsPanelOpen = $showControls && $showArtifacts;
+
+	const toggleArtifactsPanel = async () => {
+		if (artifactsPanelOpen) {
+			await showArtifacts.set(false);
+			await showControls.set(false);
+			return;
+		}
+		const stored = parseInt(localStorage.chatControlsSize);
+		if (!stored || stored < 20 || stored > 45) {
+			localStorage.chatControlsSize = '30';
+		}
+		await showOverview.set(false);
+		await showCallOverlay.set(false);
+		await showArtifacts.set(true);
+		await showControls.set(true);
+	};
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
@@ -120,6 +142,23 @@
 							</button>
 						</Menu>
 					{/if}
+
+					<Tooltip content={artifactsPanelOpen ? $i18n.t('Hide artifacts') : $i18n.t('Show artifacts')}>
+						<button
+							class="flex cursor-pointer items-center gap-1.5 rounded-xl transition {artifactsPanelOpen
+								? 'px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850'
+								: 'px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 font-medium'}"
+							on:click={toggleArtifactsPanel}
+							aria-label="Artifacts"
+							aria-pressed={artifactsPanelOpen}
+							id="artifacts-toggle-button"
+						>
+							<DocumentChartBar className="size-5 shrink-0" />
+							{#if !artifactsPanelOpen}
+								<span class="text-xs whitespace-nowrap">{$i18n.t('Artifacts')}</span>
+							{/if}
+						</button>
+					</Tooltip>
 
 					<Tooltip content={$i18n.t('Controls')}>
 						<button

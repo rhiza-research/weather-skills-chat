@@ -1,19 +1,16 @@
 <script lang="ts">
 	import { SvelteFlowProvider } from '@xyflow/svelte';
-	import { slide } from 'svelte/transition';
 	import { Pane, PaneResizer } from 'paneforge';
 
 	import { onDestroy, onMount, tick } from 'svelte';
-	import { mobile, showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
+	import { showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
-	import Modal from '../common/Modal.svelte';
 	import Controls from './Controls/Controls.svelte';
 	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
 	import Overview from './Overview.svelte';
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
 	import Artifacts from './Artifacts.svelte';
-	import { min } from '@floating-ui/utils';
 
 	export let history;
 	export let models = [];
@@ -33,105 +30,113 @@
 	export let pane;
 
 	let mediaQuery;
-	let largeScreen = false;
-	let dragged = false;
+	let largeScreen =
+		typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true;
 
-	let minSize = 0;
+	let minSize = 25;
+	const DEFAULT_SIZE = 30;
+	const MAX_SIZE = 45;
+
+	const readStoredSize = () => {
+		const stored = parseInt(localStorage?.chatControlsSize);
+		if (!stored || Number.isNaN(stored) || stored < minSize || stored > MAX_SIZE) {
+			return DEFAULT_SIZE;
+		}
+		return stored;
+	};
 
 	export const openPane = () => {
-		if (parseInt(localStorage?.chatControlsSize)) {
-			pane.resize(parseInt(localStorage?.chatControlsSize));
-		} else {
-			pane.resize(minSize);
+		if (!pane) return;
+		try {
+			const size = readStoredSize();
+			pane.resize(Math.max(minSize, Math.min(MAX_SIZE, size)));
+		} catch (e) {
+			// Pane may not be ready yet.
 		}
 	};
 
 	const handleMediaQuery = async (e) => {
-		if (e.matches) {
-			largeScreen = true;
+		const wasLarge = largeScreen;
+		largeScreen = e.matches;
 
-			if ($showCallOverlay) {
-				showCallOverlay.set(false);
-				await tick();
-				showCallOverlay.set(true);
-			}
-		} else {
-			largeScreen = false;
+		if ($showCallOverlay) {
+			showCallOverlay.set(false);
+			await tick();
+			showCallOverlay.set(true);
+		}
 
-			if ($showCallOverlay) {
-				showCallOverlay.set(false);
-				await tick();
-				showCallOverlay.set(true);
-			}
+		if (!wasLarge && largeScreen && $showControls) {
+			await tick();
+			openPane();
+		}
+
+		if (!largeScreen) {
 			pane = null;
 		}
 	};
 
-	const onMouseDown = (event) => {
-		dragged = true;
-	};
-
-	const onMouseUp = (event) => {
-		dragged = false;
-	};
-
 	onMount(() => {
-		// listen to resize 1024px
-		mediaQuery = window.matchMedia('(min-width: 1024px)');
-
+		mediaQuery = window.matchMedia('(min-width: 768px)');
 		mediaQuery.addEventListener('change', handleMediaQuery);
-		handleMediaQuery(mediaQuery);
+		largeScreen = mediaQuery.matches;
 
-		// Select the container element you want to observe
 		const container = document.getElementById('chat-container');
+		if (container?.clientWidth) {
+			minSize = Math.min(
+				DEFAULT_SIZE,
+				Math.max(20, Math.floor((320 / container.clientWidth) * 100))
+			);
+		}
 
-		// initialize the minSize based on the container width
-		minSize = Math.floor((350 / container.clientWidth) * 100);
-
-		// Create a new ResizeObserver instance
 		const resizeObserver = new ResizeObserver((entries) => {
 			for (let entry of entries) {
 				const width = entry.contentRect.width;
-				// calculate the percentage of 200px
-				const percentage = (350 / width) * 100;
-				// set the minSize to the percentage, must be an integer
-				minSize = Math.floor(percentage);
+				if (!width) continue;
+				minSize = Math.min(
+					DEFAULT_SIZE,
+					Math.max(20, Math.floor((320 / width) * 100))
+				);
 
-				if ($showControls) {
-					if (pane && pane.isExpanded() && pane.getSize() < minSize) {
+				if ($showControls && pane && typeof pane.isExpanded === 'function' && pane.isExpanded()) {
+					const size = pane.getSize?.() ?? 0;
+					if (size > 0 && size < minSize) {
 						pane.resize(minSize);
 					}
 				}
 			}
 		});
 
-		// Start observing the container's size changes
-		resizeObserver.observe(container);
+		if (container) {
+			resizeObserver.observe(container);
+		}
 
-		document.addEventListener('mousedown', onMouseDown);
-		document.addEventListener('mouseup', onMouseUp);
+		if (largeScreen && $showControls) {
+			tick().then(() => openPane());
+		}
+
+		return () => {
+			resizeObserver.disconnect();
+		};
 	});
 
 	onDestroy(() => {
-		showControls.set(false);
-
-		mediaQuery.removeEventListener('change', handleMediaQuery);
-		document.removeEventListener('mousedown', onMouseDown);
-		document.removeEventListener('mouseup', onMouseUp);
+		// Do not clear showControls/showArtifacts here — destroying/remounting
+		// the pane during chat load was wiping state and fighting openArtifactsPanel.
+		mediaQuery?.removeEventListener('change', handleMediaQuery);
 	});
 
-	const closeHandler = () => {
+	const clearPanelFlags = () => {
 		showControls.set(false);
 		showOverview.set(false);
 		showArtifacts.set(false);
-
 		if ($showCallOverlay) {
 			showCallOverlay.set(false);
 		}
 	};
 
+	// When chat id is cleared, hide the panel.
 	$: if (!chatId) {
-		closeHandler();
+		clearPanelFlags();
 	}
 </script>
 
@@ -142,6 +147,7 @@
 				show={$showControls}
 				on:close={() => {
 					showControls.set(false);
+					showArtifacts.set(false);
 				}}
 			>
 				<div
@@ -191,8 +197,6 @@
 			</Drawer>
 		{/if}
 	{:else}
-		<!-- if $showControls -->
-
 		{#if $showControls}
 			<PaneResizer class="relative flex w-2 items-center justify-center bg-background group">
 				<div class="z-10 flex h-7 w-5 items-center justify-center rounded-xs">
@@ -203,34 +207,31 @@
 
 		<Pane
 			bind:pane
-			defaultSize={0}
+			defaultSize={$showControls ? DEFAULT_SIZE : 0}
+			minSize={minSize}
+			maxSize={MAX_SIZE}
 			onResize={(size) => {
-				console.log('size', size, minSize);
-
-				if ($showControls && pane.isExpanded()) {
-					if (size < minSize) {
-						pane.resize(minSize);
-					}
-
-					if (size < minSize) {
-						localStorage.chatControlsSize = 0;
-					} else {
+				if ($showControls && pane?.isExpanded?.()) {
+					if (size >= minSize && size <= MAX_SIZE) {
 						localStorage.chatControlsSize = size;
 					}
 				}
 			}}
 			onCollapse={() => {
+				// User dragged the pane closed — sync UI only.
+				// Preference is written by the navbar/close button.
 				showControls.set(false);
+				showArtifacts.set(false);
 			}}
 			collapsible={true}
-			class=" z-10 "
+			class="z-10 bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800"
 		>
 			{#if $showControls}
-				<div class="flex max-h-full min-h-full">
+				<div class="flex max-h-full min-h-full w-full overflow-hidden">
 					<div
-						class="w-full {($showOverview || $showArtifacts) && !$showCallOverlay
-							? ' '
-							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850  border border-gray-100 dark:border-gray-850'} z-40 pointer-events-auto overflow-y-auto scrollbar-hidden"
+						class="w-full h-full {($showOverview || $showArtifacts) && !$showCallOverlay
+							? ''
+							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850 border border-gray-100 dark:border-gray-850'} z-40 pointer-events-auto overflow-y-auto scrollbar-hidden"
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">
@@ -247,7 +248,7 @@
 								/>
 							</div>
 						{:else if $showArtifacts}
-							<Artifacts {history} overlay={dragged} />
+							<Artifacts {history} />
 						{:else if $showOverview}
 							<Overview
 								{history}

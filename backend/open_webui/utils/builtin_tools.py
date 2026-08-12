@@ -1,4 +1,5 @@
 from typing import Optional
+from pathlib import Path
 
 from open_webui.models.automations import AutomationForm, Automations
 from open_webui.models.chats import Chats
@@ -386,6 +387,91 @@ COPY_INTERMEDIATE_RESULT_SPEC = {
 }
 
 
+DISPLAY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+DISPLAY_IMAGE_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+
+
+async def display_image(
+    path: str,
+    __user__: dict = {},
+    __metadata__: dict = None,
+):
+    """Load a sandbox image and return it for inline display in the chat."""
+    import base64
+
+    from open_webui.utils.artifacts import INTERMEDIATE_RESULTS_DIRNAME, resolve_in_sandbox
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot display an image in a temporary chat."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_read_chat(user, chat):
+        return "You do not have access to this chat."
+
+    rel = (path or "").strip().lstrip("/")
+    if not rel:
+        return "Provide a relative path to an image in the chat sandbox."
+
+    try:
+        target = resolve_in_sandbox(chat_id, rel)
+    except Exception as e:
+        return f"Invalid path: {e}"
+
+    if not target.is_file():
+        return f"Image not found: `{rel}`"
+
+    mime = DISPLAY_IMAGE_TYPES.get(target.suffix.lower())
+    if not mime:
+        return (
+            "Unsupported image type. Use a .png, .jpg, .jpeg, .gif, or .webp "
+            f"file (got `{target.suffix or 'no extension'}`)."
+        )
+
+    size = target.stat().st_size
+    if size > DISPLAY_IMAGE_MAX_BYTES:
+        return (
+            f"Image `{rel}` is too large to display inline "
+            f"({size} bytes; max {DISPLAY_IMAGE_MAX_BYTES})."
+        )
+
+    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    data_url = f"data:{mime};base64,{encoded}"
+    note = f"Showing `{rel}`."
+    if INTERMEDIATE_RESULTS_DIRNAME in Path(rel).parts:
+        note = f"Showing `{rel}` (from intermediate_results)."
+    return [note, data_url]
+
+
+DISPLAY_IMAGE_SPEC = {
+    "name": "display_image",
+    "description": (
+        "Display a PNG (or jpeg/gif/webp) from the current chat sandbox inline "
+        "in the chat. Pass a relative path such as `plot.png` or "
+        "`intermediate_results/step.png`. Use after a skill writes an image "
+        "you want the user to see in the conversation."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to an image file in the chat sandbox",
+            },
+        },
+        "required": ["path"],
+    },
+}
+
+
 def _tool_summary_line(name: str, description: str = "", kind: str = "tool", tool_id: str = "") -> str:
     desc = (description or "").strip().split("\n")[0].strip()
     if len(desc) > 160:
@@ -458,6 +544,13 @@ async def list_available_tools(
         _tool_summary_line(
             "copy_intermediate_result",
             "Copy a file/folder into or out of intermediate_results.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "display_image",
+            "Show a sandbox PNG/JPEG/GIF/WebP inline in the chat.",
             kind="builtin",
         )
     )
@@ -624,4 +717,5 @@ def get_builtin_tools(extra_params: dict) -> dict:
         "copy_intermediate_result": _tool(
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),
+        "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
     }
