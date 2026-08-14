@@ -9,13 +9,15 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from open_webui.env import SRC_LOG_LEVELS, UV_CACHE_DIR
+from open_webui.env import SRC_LOG_LEVELS, SKILLS_DIR, UV_CACHE_DIR
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
+# Chat-sandboxed skills are Landlock-confined via sandlock when available.
+SKILL_SANDLOCK = os.getenv("SKILL_SANDLOCK", "true").lower() in ("1", "true", "yes")
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
 SAFE_ENV_SECRET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -147,7 +149,8 @@ async def run_skill(
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
-    if chat_id and chat_id != "local":
+    use_chat_sandbox = bool(chat_id and chat_id != "local")
+    if use_chat_sandbox:
         cwd = chat_sandbox(str(chat_id))
         intermediate = intermediate_results_dir(str(chat_id))
     else:
@@ -159,24 +162,68 @@ async def run_skill(
     env = os.environ.copy()
     env["CLAUDE_SKILL_DIR"] = str(skill_path)
     env["WEATHER_SKILL_DIR"] = str(skill_path)
-    env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
     env["WEATHER_INTERMEDIATE_DIR"] = str(intermediate)
     env["INTERMEDIATE_RESULTS_DIR"] = str(intermediate)
+    env["TMPDIR"] = "/tmp"
+    env["HOME"] = str(cwd)
     for name, value in used_secrets.items():
         env[name] = value
 
-    cmd = ["uv", "run", "--script", str(script_path), *args]
+    sandboxed = False
+    if use_chat_sandbox and SKILL_SANDLOCK:
+        from open_webui.utils.skill_sandlock import (
+            default_readable_paths,
+            default_writable_paths,
+            launcher_command,
+            sandlock_available,
+            skill_pack_readable_roots,
+        )
+
+        if not sandlock_available():
+            return _error_result(
+                "Skill Landlock sandbox (sandlock) is required for chat "
+                "sandboxes but is unavailable on this host.",
+                script=script_path.name,
+                cwd=str(cwd),
+                argv=args,
+            )
+
+        # Keep uv's cache inside the writable sandbox (not the shared host cache).
+        uv_cache = cwd / ".uv-cache"
+        uv_cache.mkdir(parents=True, exist_ok=True)
+        env["UV_CACHE_DIR"] = str(uv_cache)
+
+        # Per-skill dir + pack root(s) with pyproject.toml (uv walks parents).
+        readable_extra = [
+            skill_path,
+            *skill_pack_readable_roots(skill_path, skills_root=SKILLS_DIR),
+        ]
+        inner_cmd = ["uv", "run", "--script", str(script_path), *args]
+        cmd = launcher_command(
+            writable=default_writable_paths(cwd, "/tmp"),
+            readable=default_readable_paths(extra=readable_extra),
+            cwd=cwd,
+            argv=inner_cmd,
+        )
+        sandboxed = True
+        spawn_cwd = None
+    else:
+        env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
+        cmd = ["uv", "run", "--script", str(script_path), *args]
+        spawn_cwd = str(cwd)
+
     log.info(
-        "Running skill script: %s (cwd=%s, env_secrets=%s)",
-        " ".join(cmd),
+        "Running skill script: %s (cwd=%s, sandlock=%s, env_secrets=%s)",
+        " ".join(["uv", "run", "--script", script_path.name, *args]),
         cwd,
+        sandboxed,
         list(used_secrets.keys()),
     )
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
-            cwd=str(cwd),
+            cwd=spawn_cwd,
             env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -204,6 +251,7 @@ async def run_skill(
                 script=script_path.name,
                 cwd=str(cwd),
                 argv=args,
+                sandlock=sandboxed,
             ),
             used_secrets,
         )
@@ -223,6 +271,7 @@ async def run_skill(
         "argv": args,
         "stdout": stdout,
         "stderr": stderr,
+        "sandlock": sandboxed,
     }
     if used_secrets:
         result["env_secrets"] = list(used_secrets.keys())

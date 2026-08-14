@@ -419,6 +419,9 @@ def list_artifacts(chat_id: str) -> list[dict]:
 
     def walk(directory: Path):
         for path in sorted(directory.iterdir()):
+            # Hide dotfiles/dirs (uv cache, HOME scratch under Landlock, etc.)
+            if path.name.startswith("."):
+                continue
             rel = path.relative_to(root).as_posix()
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:

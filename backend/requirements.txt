@@ -31,6 +31,7 @@ argon2-cffi==23.1.0
 APScheduler==3.10.4
 
 RestrictedPython==8.0
+sandlock>=0.8.6
 
 loguru==0.7.2
 asgiref==3.8.1
