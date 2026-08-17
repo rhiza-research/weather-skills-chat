@@ -1,0 +1,23 @@
+1. Create a Kubernetes Secret with at least WEBUI_SECRET_KEY (see README).
+2. Install:
+
+   helm install {{ .Release.Name }} charts/weather-skills-chat \
+     --set secretName={{ include "weather-skills-chat.secretName" . }}
+
+3. The UI listens on port {{ .Values.service.port }} (container {{ .Values.service.containerPort }}).
+
+{{- if .Values.ingress.enabled }}
+   Ingress host: {{ .Values.ingress.host }}
+{{- else }}
+   Ingress is disabled. Port-forward with:
+
+   kubectl port-forward svc/{{ include "weather-skills-chat.fullname" . }} 3000:{{ .Values.service.port }}
+{{- end }}
+
+SQLite lives on the data PVC at {{ .Values.persistence.mountPath }} (empty DATABASE_URL).
+Whisper and embedding models stay in the image at {{ .Values.modelCache.dir }} — they are not on the PVC.
+{{- if .Values.sandbox.gcs.enabled }}
+Skill artifacts (ARTIFACTS_DIR) are on GCS bucket {{ .Values.sandbox.gcs.bucket }} mounted at {{ .Values.sandbox.gcs.mountPath }}.
+{{- else }}
+Skill artifacts default to {{ .Values.persistence.mountPath }}/artifacts on the data PVC.
+{{- end }}

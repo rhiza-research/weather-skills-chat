@@ -1,0 +1,166 @@
+# Default values for weather-skills-chat.
+# Never put real secret values here. Create a Kubernetes Secret externally
+# (e.g. gcloud Secret Manager + kubectl) and set secretName to its name.
+
+replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
+
+# REQUIRED. Name of a Kubernetes Secret you create out-of-band.
+# Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
+#   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY
+secretName: ""
+
+# Override Secret data key names if your Secret uses different field names.
+secretKeys:
+  webuiSecretKey: WEBUI_SECRET_KEY
+  databaseUrl: DATABASE_URL
+  langfusePublicKey: LANGFUSE_PUBLIC_KEY
+  langfuseSecretKey: LANGFUSE_SECRET_KEY
+  openaiApiKey: OPENAI_API_KEY
+
+image:
+  repository: ghcr.io/rhiza-research/weather-skills-chat
+  # Empty uses Chart.appVersion (currently "main").
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # GKE Workload Identity, e.g.:
+  #   iam.gke.io/gcp-service-account: weather-skills@PROJECT.iam.gserviceaccount.com
+
+service:
+  type: ClusterIP
+  port: 80
+  containerPort: 8080
+  annotations: {}
+  labels: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tls: []
+  #  - secretName: weather-skills-chat-tls
+  #    hosts:
+  #      - chat.example.com
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+persistence:
+  enabled: true
+  # Mount an existing PVC by name (chart creates neither PV nor PVC).
+  existingClaim: ""
+  # Name of a pre-provisioned GCE persistent disk (pdName). The chart creates a
+  # static PV + PVC bound to that disk — use for disks with backup/snapshot policy.
+  # Mutually exclusive with existingClaim. When empty, a dynamically provisioned
+  # PVC is created instead (via storageClass).
+  volumeName: ""
+  gcePersistentDisk:
+    fsType: ext4
+  # Retain keeps the GCE disk if the PV is released (recommended for static disks).
+  reclaimPolicy: Retain
+  size: 20Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  mountPath: /app/backend/data
+  annotations: {}
+  keep: false
+
+# Empty url → SQLite at {DATA_DIR}/webui.db on the PVC.
+# Postgres: put the full URL (including password) in the Secret as DATABASE_URL.
+database:
+  url: ""
+
+langfuse:
+  enabled: false
+  host: ""
+
+sandbox:
+  # Empty → app default {DATA_DIR}/artifacts
+  artifactsDir: ""
+  gcs:
+    enabled: false
+    bucket: ""
+    mountPath: /mnt/gcs-artifacts
+    # GKE GCS FUSE CSI. Separate volume, not nested on the data PVC.
+    driver: gcsfuse.csi.storage.gke.io
+    mountOptions: "implicit-dirs"
+    # Extra CSI volumeAttributes (fileCacheCapacity, gid, uid, ...).
+    volumeAttributes: {}
+    # Sidecar resource annotations (GKE injects the FUSE sidecar).
+    sidecar:
+      cpuLimit: ""
+      memoryLimit: ""
+      ephemeralStorageLimit: ""
+
+openai:
+  enabled: true
+  apiBaseUrl: ""
+
+ollama:
+  enabled: false
+
+webui:
+  name: Weather Skills
+  url: ""
+  enableSignup: true
+
+otel:
+  enabled: false
+  exporterEndpoint: ""
+  serviceName: weather-skills-chat
+
+# Baked Whisper / embedding / tiktoken weights live in the image, not on the PVC.
+modelCache:
+  dir: /app/backend/cache
+
+# Do not copy image data onto the PVC. Whisper/embeddings are no longer under DATA_DIR.
+copyAppData:
+  enabled: false
+
+extraEnv: []
+# - name: SKILL_RUN_TIMEOUT
+#   value: "600"
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+hostAliases: []
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health/db
+    port: http
+  periodSeconds: 10
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  periodSeconds: 5
+  failureThreshold: 30

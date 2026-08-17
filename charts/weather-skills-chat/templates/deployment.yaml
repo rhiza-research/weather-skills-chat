@@ -1,0 +1,223 @@
+{{- if and .Values.sandbox.gcs.enabled (not .Values.sandbox.gcs.bucket) }}
+{{- fail "sandbox.gcs.bucket is required when sandbox.gcs.enabled is true" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "weather-skills-chat.fullname" . }}
+  labels:
+    {{- include "weather-skills-chat.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "weather-skills-chat.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "weather-skills-chat.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.sandbox.gcs.enabled .Values.podAnnotations }}
+      annotations:
+        {{- if .Values.sandbox.gcs.enabled }}
+        gke-gcsfuse/volumes: "true"
+        {{- with .Values.sandbox.gcs.sidecar.cpuLimit }}
+        gke-gcsfuse/cpu-limit: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.sandbox.gcs.sidecar.memoryLimit }}
+        gke-gcsfuse/memory-limit: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.sandbox.gcs.sidecar.ephemeralStorageLimit }}
+        gke-gcsfuse/ephemeral-storage-limit: {{ . | quote }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "weather-skills-chat.serviceAccountName" . }}
+      {{- with .Values.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: weather-skills-chat
+          image: {{ include "weather-skills-chat.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.containerPort }}
+              protocol: TCP
+          env:
+            - name: ENV
+              value: "prod"
+            - name: PORT
+              value: {{ .Values.service.containerPort | quote }}
+            - name: DATA_DIR
+              value: {{ .Values.persistence.mountPath | quote }}
+            - name: MODEL_CACHE_DIR
+              value: {{ .Values.modelCache.dir | quote }}
+            - name: WHISPER_MODEL_DIR
+              value: {{ printf "%s/whisper/models" .Values.modelCache.dir | quote }}
+            - name: SENTENCE_TRANSFORMERS_HOME
+              value: {{ printf "%s/embedding/models" .Values.modelCache.dir | quote }}
+            - name: HF_HOME
+              value: {{ printf "%s/embedding/models" .Values.modelCache.dir | quote }}
+            - name: TRANSFORMERS_CACHE
+              value: {{ printf "%s/embedding/models" .Values.modelCache.dir | quote }}
+            - name: TIKTOKEN_CACHE_DIR
+              value: {{ printf "%s/tiktoken" .Values.modelCache.dir | quote }}
+            - name: WEBUI_NAME
+              value: {{ .Values.webui.name | quote }}
+            - name: ENABLE_SIGNUP
+              value: {{ .Values.webui.enableSignup | quote }}
+            - name: ENABLE_OLLAMA_API
+              value: {{ .Values.ollama.enabled | quote }}
+            - name: ENABLE_OPENAI_API
+              value: {{ .Values.openai.enabled | quote }}
+            - name: ENABLE_OTEL
+              value: {{ .Values.otel.enabled | quote }}
+            - name: WEBUI_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.webuiSecretKey | quote }}
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.openaiApiKey | quote }}
+                  optional: true
+            {{- with .Values.webui.url }}
+            - name: WEBUI_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.openai.apiBaseUrl }}
+            - name: OPENAI_API_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.otel.exporterEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.otel.serviceName }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- $artifactsDir := include "weather-skills-chat.artifactsDir" . }}
+            {{- if $artifactsDir }}
+            - name: ARTIFACTS_DIR
+              value: {{ $artifactsDir | quote }}
+            {{- end }}
+            - name: LANGFUSE_ENABLED
+              value: {{ .Values.langfuse.enabled | quote }}
+            {{- with .Values.langfuse.host }}
+            - name: LANGFUSE_HOST
+              value: {{ . | quote }}
+            - name: LANGFUSE_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.langfuse.enabled }}
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.langfusePublicKey | quote }}
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.langfuseSecretKey | quote }}
+            {{- else }}
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.langfusePublicKey | quote }}
+                  optional: true
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.langfuseSecretKey | quote }}
+                  optional: true
+            {{- end }}
+            {{- if .Values.database.url }}
+            - name: DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+            {{- else }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.databaseUrl | quote }}
+                  optional: true
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.sandbox.gcs.enabled }}
+            - name: gcs-artifacts
+              mountPath: {{ .Values.sandbox.gcs.mountPath }}
+            {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "weather-skills-chat.pvcName" . }}
+        {{- end }}
+        {{- if .Values.sandbox.gcs.enabled }}
+        - name: gcs-artifacts
+          csi:
+            driver: {{ .Values.sandbox.gcs.driver | quote }}
+            volumeAttributes:
+              bucketName: {{ .Values.sandbox.gcs.bucket | quote }}
+              {{- with .Values.sandbox.gcs.mountOptions }}
+              mountOptions: {{ . | quote }}
+              {{- end }}
+              {{- with .Values.sandbox.gcs.volumeAttributes }}
+              {{- toYaml . | nindent 14 }}
+              {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

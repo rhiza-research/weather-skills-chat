@@ -18,6 +18,7 @@ from open_webui.env import (
     DATA_DIR,
     DATABASE_URL,
     ENV,
+    MODEL_CACHE_DIR,
     REDIS_URL,
     REDIS_SENTINEL_HOSTS,
     REDIS_SENTINEL_PORT,
@@ -746,6 +747,8 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # Cache DIR
 ####################################
 
+# Writable runtime cache (speech, generated images, tools). Stays on DATA_DIR
+# so it persists on the PVC. Baked model weights use MODEL_CACHE_DIR instead.
 CACHE_DIR = DATA_DIR / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1882,7 +1885,9 @@ RAG_TEXT_SPLITTER = PersistentConfig(
 )
 
 
-TIKTOKEN_CACHE_DIR = os.environ.get("TIKTOKEN_CACHE_DIR", f"{CACHE_DIR}/tiktoken")
+TIKTOKEN_CACHE_DIR = os.environ.get(
+    "TIKTOKEN_CACHE_DIR", f"{MODEL_CACHE_DIR}/tiktoken"
+)
 TIKTOKEN_ENCODING_NAME = PersistentConfig(
     "TIKTOKEN_ENCODING_NAME",
     "rag.tiktoken_encoding_name",
@@ -2460,7 +2465,9 @@ WHISPER_MODEL = PersistentConfig(
     os.getenv("WHISPER_MODEL", "base"),
 )
 
-WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", f"{CACHE_DIR}/whisper/models")
+WHISPER_MODEL_DIR = os.getenv(
+    "WHISPER_MODEL_DIR", f"{MODEL_CACHE_DIR}/whisper/models"
+)
 WHISPER_MODEL_AUTO_UPDATE = (
     not OFFLINE_MODE
     and os.environ.get("WHISPER_MODEL_AUTO_UPDATE", "").lower() == "true"

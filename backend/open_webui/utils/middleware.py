@@ -77,6 +77,12 @@ from open_webui.utils.filter import (
 from open_webui.utils.code_interpreter import execute_code_jupyter
 
 from open_webui.tasks import create_task
+from open_webui.utils.langfuse_tracing import (
+    end_chat_trace,
+    end_tool_observation,
+    observe_stream_and_end_trace,
+    start_tool_observation,
+)
 
 from open_webui.config import (
     CACHE_DIR,
@@ -241,9 +247,17 @@ async def chat_completion_tools_handler(
                             }
                         )
                     else:
-                        tool_function = tool["callable"]
-                        tool_result = await tool_function(**exec_params)
-                        tool_result = redact_secrets(tool_result, used_secrets)
+                        lf_tool = start_tool_observation(
+                            tool_function_name, tool_function_params
+                        )
+                        try:
+                            tool_function = tool["callable"]
+                            tool_result = await tool_function(**exec_params)
+                            tool_result = redact_secrets(tool_result, used_secrets)
+                            end_tool_observation(lf_tool, output=tool_result)
+                        except Exception as tool_exc:
+                            end_tool_observation(lf_tool, error=tool_exc)
+                            raise
 
                 except Exception as e:
                     tool_result = redact_secrets(str(e), used_secrets) if "used_secrets" in locals() else str(e)
@@ -1230,8 +1244,12 @@ async def process_chat_response(
 
                     await background_tasks_handler()
 
+            end_chat_trace(
+                output=(response.get("choices", [{}])[0].get("message") if isinstance(response, dict) else None)
+            )
             return response
         else:
+            end_chat_trace()
             return response
 
     # Non standard response
@@ -1239,6 +1257,7 @@ async def process_chat_response(
         content_type in response.headers["Content-Type"]
         for content_type in ["text/event-stream", "application/x-ndjson"]
     ):
+        end_chat_trace()
         return response
 
     extra_params = {
@@ -2040,11 +2059,19 @@ async def process_chat_response(
                                     )
 
                                 else:
-                                    tool_function = tool["callable"]
-                                    tool_result = await tool_function(**exec_params)
-                                    tool_result = redact_secrets(
-                                        tool_result, used_secrets
+                                    lf_tool = start_tool_observation(
+                                        tool_name, tool_function_params
                                     )
+                                    try:
+                                        tool_function = tool["callable"]
+                                        tool_result = await tool_function(**exec_params)
+                                        tool_result = redact_secrets(
+                                            tool_result, used_secrets
+                                        )
+                                        end_tool_observation(lf_tool, output=tool_result)
+                                    except Exception as tool_exc:
+                                        end_tool_observation(lf_tool, error=tool_exc)
+                                        raise
 
                             except Exception as e:
                                 tool_result = (
@@ -2341,9 +2368,11 @@ async def process_chat_response(
                 )
 
                 await background_tasks_handler()
+                end_chat_trace(output=data)
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
                 await event_emitter({"type": "task-cancelled"})
+                end_chat_trace(error="cancelled")
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     # Save message in the database
@@ -2395,7 +2424,9 @@ async def process_chat_response(
                     yield data
 
         return StreamingResponse(
-            stream_wrapper(response.body_iterator, events),
+            observe_stream_and_end_trace(
+                stream_wrapper(response.body_iterator, events)
+            ),
             headers=dict(response.headers),
             background=response.background,
         )

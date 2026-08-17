@@ -1,0 +1,27 @@
+{{- if and .Values.persistence.enabled .Values.persistence.volumeName (not .Values.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "weather-skills-chat.pvName" . }}
+  labels:
+    {{- include "weather-skills-chat.labels" . | nindent 4 }}
+  {{- if .Values.persistence.keep }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.size }}
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  persistentVolumeReclaimPolicy: {{ .Values.persistence.reclaimPolicy }}
+  storageClassName: ""
+  gcePersistentDisk:
+    pdName: {{ .Values.persistence.volumeName | quote }}
+    fsType: {{ .Values.persistence.gcePersistentDisk.fsType | quote }}
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: {{ include "weather-skills-chat.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

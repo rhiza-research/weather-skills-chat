@@ -47,6 +47,7 @@ from open_webui.utils.response import (
     convert_response_ollama_to_openai,
     convert_streaming_response_ollama_to_openai,
 )
+from open_webui.utils.langfuse_tracing import observe_generation
 from open_webui.utils.filter import (
     get_sorted_filter_ids,
     process_filter_functions,
@@ -156,6 +157,18 @@ async def generate_direct_chat_completion(
 
 
 async def generate_chat_completion(
+    request: Request,
+    form_data: dict,
+    user: Any,
+    bypass_filter: bool = False,
+):
+    return await observe_generation(
+        form_data,
+        _generate_chat_completion(request, form_data, user, bypass_filter),
+    )
+
+
+async def _generate_chat_completion(
     request: Request,
     form_data: dict,
     user: Any,

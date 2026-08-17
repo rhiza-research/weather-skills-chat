@@ -249,6 +249,15 @@ UV_CACHE_DIR = Path(os.getenv("UV_CACHE_DIR", Path(DATA_DIR) / "uv-cache")).reso
 UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("UV_CACHE_DIR", str(UV_CACHE_DIR))
 
+# Baked Whisper / embedding / tiktoken weights. Kept off DATA_DIR so a PVC
+# mounted at /app/backend/data does not hide image-local models.
+MODEL_CACHE_DIR = Path(os.getenv("MODEL_CACHE_DIR", BACKEND_DIR / "cache")).resolve()
+MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_embedding_home = str(MODEL_CACHE_DIR / "embedding" / "models")
+os.environ.setdefault("HF_HOME", _embedding_home)
+os.environ.setdefault("TRANSFORMERS_CACHE", _embedding_home)
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", _embedding_home)
+
 STATIC_DIR = Path(os.getenv("STATIC_DIR", OPEN_WEBUI_DIR / "static"))
 
 FONTS_DIR = Path(os.getenv("FONTS_DIR", OPEN_WEBUI_DIR / "static" / "fonts"))
@@ -496,6 +505,27 @@ OTEL_RESOURCE_ATTRIBUTES = os.environ.get(
 OTEL_TRACES_SAMPLER = os.environ.get(
     "OTEL_TRACES_SAMPLER", "parentbased_always_on"
 ).lower()
+
+####################################
+# LANGFUSE
+####################################
+
+LANGFUSE_PUBLIC_KEY = (os.environ.get("LANGFUSE_PUBLIC_KEY") or "").strip()
+LANGFUSE_SECRET_KEY = (os.environ.get("LANGFUSE_SECRET_KEY") or "").strip()
+LANGFUSE_HOST = (
+    os.environ.get("LANGFUSE_BASE_URL")
+    or os.environ.get("LANGFUSE_HOST")
+    or "https://cloud.langfuse.com"
+).strip()
+_langfuse_flag = os.environ.get("LANGFUSE_ENABLED") or os.environ.get(
+    "LANGFUSE_TRACING_ENABLED"
+)
+if _langfuse_flag is None:
+    LANGFUSE_ENABLED = bool(LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY)
+else:
+    LANGFUSE_ENABLED = _langfuse_flag.lower() == "true" and bool(
+        LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
+    )
 
 ####################################
 # TOOLS/FUNCTIONS PIP OPTIONS

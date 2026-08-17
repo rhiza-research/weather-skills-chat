@@ -366,6 +366,12 @@ from open_webui.utils.chat import (
     chat_action as chat_action_handler,
 )
 from open_webui.utils.middleware import process_chat_payload, process_chat_response
+from open_webui.utils.langfuse_tracing import (
+    end_chat_trace,
+    shutdown_langfuse,
+    start_chat_trace,
+)
+from open_webui.env import LANGFUSE_ENABLED
 from open_webui.utils.access_control import has_access
 
 from open_webui.utils.auth import (
@@ -456,6 +462,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         log.exception("Skill pack tool resync on startup failed")
     yield
+    shutdown_langfuse()
     shutdown_scheduler()
 
 
@@ -1178,6 +1185,9 @@ async def chat_completion(
             detail=str(e),
         )
 
+    if LANGFUSE_ENABLED:
+        start_chat_trace(user=user, metadata=metadata, form_data=form_data)
+
     try:
         response = await chat_completion_handler(request, form_data, user)
 
@@ -1185,6 +1195,8 @@ async def chat_completion(
             request, response, form_data, user, metadata, model, events, tasks
         )
     except Exception as e:
+        if LANGFUSE_ENABLED:
+            end_chat_trace(error=e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),

@@ -1,0 +1,53 @@
+# Version control and CI
+.git
+.github
+
+# Frontend dependencies and build output (rebuilt in image)
+node_modules
+build
+.svelte-kit
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv
+venv
+.env
+.env.*
+*.db
+.ipynb_checkpoints
+
+# Local/dev tooling
+.cursor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Deployment manifests (not needed in app image)
+charts
+kubernetes
+docker-compose*.yaml
+docker-compose*.yml
+
+# Tests and docs (not needed for production build)
+cypress
+test
+docs
+
+# Backend local/runtime data (mirrors backend/.dockerignore)
+backend/_old
+backend/_test
+backend/uploads
+backend/cache
+backend/open_webui/data
+!backend/data
+backend/data/*
+!backend/data/litellm
+backend/data/litellm/*
+!backend/data/litellm/config.yaml
+!backend/data/config.json
