@@ -80,6 +80,8 @@ spec:
               value: {{ .Values.webui.name | quote }}
             - name: ENABLE_SIGNUP
               value: {{ .Values.webui.enableSignup | quote }}
+            - name: DEFAULT_USER_ROLE
+              value: {{ .Values.webui.defaultUserRole | quote }}
             - name: ENABLE_OLLAMA_API
               value: {{ .Values.ollama.enabled | quote }}
             - name: ENABLE_OPENAI_API
@@ -97,6 +99,19 @@ spec:
                   name: {{ include "weather-skills-chat.secretName" . }}
                   key: {{ .Values.secretKeys.openaiApiKey | quote }}
                   optional: true
+            {{- if .Values.bootstrapAdmin.enabled }}
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              value: {{ .Values.bootstrapAdmin.email | quote }}
+            - name: BOOTSTRAP_ADMIN_NAME
+              value: {{ .Values.bootstrapAdmin.name | quote }}
+            - name: ADMIN_EMAIL
+              value: {{ .Values.bootstrapAdmin.email | quote }}
+            - name: BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.bootstrapAdminPassword | quote }}
+            {{- end }}
             {{- with .Values.webui.url }}
             - name: WEBUI_URL
               value: {{ . | quote }}

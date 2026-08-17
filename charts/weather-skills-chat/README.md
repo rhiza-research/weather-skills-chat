@@ -51,7 +51,8 @@ Optional keys on the **same** Secret:
 | `WEBUI_SECRET_KEY` | Always (required) |
 | `DATABASE_URL` | Postgres; omit for SQLite on the PVC. Password belongs in this URL, not in values.yaml |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | `langfuse.enabled: true` (required then; optional otherwise) |
-| `OPENAI_API_KEY` | Optional; can also be set in the UI (stored in SQLite) |
+| `OPENAI_API_KEY` | OpenAI-compatible API key (e.g. Anthropic); pair with `openai.apiBaseUrl` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Initial admin password when `bootstrapAdmin.enabled` is true |
 
 If your Secret uses different field names, override `secretKeys` in values.yaml.
 
@@ -152,6 +153,29 @@ sandbox:
 ```
 
 The chart sets `ARTIFACTS_DIR=/mnt/gcs-artifacts` and annotates the pod with `gke-gcsfuse/volumes: "true"`.
+
+## OpenAI-compatible API (Anthropic, OpenAI, …)
+
+```yaml
+openai:
+  enabled: true
+  apiBaseUrl: https://api.anthropic.com/v1
+```
+
+Put the matching API key in the Secret as `OPENAI_API_KEY`.
+
+## Bootstrap admin
+
+On a fresh install, create the first admin from env vars (does not disable signup):
+
+```yaml
+bootstrapAdmin:
+  enabled: true
+  email: admin@admin.local
+  name: admin
+```
+
+Add `BOOTSTRAP_ADMIN_PASSWORD` to the Secret. New signups get `webui.defaultUserRole` (`pending` by default) until an admin approves them.
 
 ## Langfuse
 

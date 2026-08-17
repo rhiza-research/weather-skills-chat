@@ -440,6 +440,10 @@ async def lifespan(app: FastAPI):
     if RESET_CONFIG_ON_START:
         reset_config()
 
+    from open_webui.utils.bootstrap import bootstrap_admin_user
+
+    bootstrap_admin_user()
+
     if LICENSE_KEY:
         get_license_data(app, LICENSE_KEY)
 

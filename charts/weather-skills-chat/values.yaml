@@ -6,7 +6,8 @@ replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
 
 # REQUIRED. Name of a Kubernetes Secret you create out-of-band.
 # Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
-#   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY
+#   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
+#   BOOTSTRAP_ADMIN_PASSWORD
 secretName: ""
 
 # Override Secret data key names if your Secret uses different field names.
@@ -16,6 +17,7 @@ secretKeys:
   langfusePublicKey: LANGFUSE_PUBLIC_KEY
   langfuseSecretKey: LANGFUSE_SECRET_KEY
   openaiApiKey: OPENAI_API_KEY
+  bootstrapAdminPassword: BOOTSTRAP_ADMIN_PASSWORD
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
@@ -108,9 +110,16 @@ sandbox:
       memoryLimit: ""
       ephemeralStorageLimit: ""
 
+# OpenAI-compatible API connection (Anthropic, OpenAI, etc.).
+# Set apiBaseUrl and put the matching API key in the Secret as OPENAI_API_KEY.
 openai:
   enabled: true
   apiBaseUrl: ""
+
+bootstrapAdmin:
+  enabled: false
+  email: admin@admin.local
+  name: admin
 
 ollama:
   enabled: false
@@ -119,6 +128,7 @@ webui:
   name: Weather Skills
   url: ""
   enableSignup: true
+  defaultUserRole: pending
 
 otel:
   enabled: false
