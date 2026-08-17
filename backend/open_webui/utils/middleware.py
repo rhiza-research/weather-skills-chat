@@ -870,6 +870,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     }
 
     if tool_ids:
+        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+        from open_webui.utils.tools import accessible_skill_records
+
+        tool_ids = resolve_tool_ids_by_skill_version(
+            list(tool_ids), accessible_skill_records(user)
+        )
+        metadata["tool_ids"] = tool_ids
         tools_dict = get_tools(
             request,
             tool_ids,

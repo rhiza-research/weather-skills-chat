@@ -35,7 +35,13 @@ from langchain_core.utils.function_calling import (
 
 from open_webui.models.tools import Tools
 from open_webui.models.users import UserModel
+from open_webui.utils.access_control import has_access
 from open_webui.utils.plugin import load_tool_module_by_id
+from open_webui.utils.skill_version import (
+    register_tool_by_function_name,
+    resolve_tool_ids_by_skill_version,
+    tool_version_from_record,
+)
 from open_webui.env import AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA
 
 import copy
@@ -62,10 +68,39 @@ def get_async_tool_function_and_apply_extra_params(
         return new_function
 
 
+def accessible_skill_records(user: UserModel) -> list[dict]:
+    """Skill tools the user can read, for version-preference substitution."""
+    records = []
+    for tool in Tools.get_tools():
+        if not (
+            user.role == "admin"
+            or tool.user_id == user.id
+            or has_access(user.id, "read", tool.access_control)
+        ):
+            continue
+        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        if manifest.get("kind") != "skill":
+            continue
+        name = manifest.get("skill_name")
+        if not name:
+            continue
+        records.append(
+            {
+                "id": tool.id,
+                "skill_name": name,
+                "version": manifest.get("version"),
+            }
+        )
+    return records
+
+
 def get_tools(
     request: Request, tool_ids: list[str], user: UserModel, extra_params: dict
 ) -> dict[str, dict]:
     tools_dict = {}
+    tool_ids = resolve_tool_ids_by_skill_version(
+        list(tool_ids), accessible_skill_records(user)
+    )
 
     for tool_id in tool_ids:
         tool = Tools.get_tool_by_id(tool_id)
@@ -120,16 +155,9 @@ def get_tools(
                         "tool_id": tool_id,
                         "callable": callable,
                         "spec": spec,
+                        "version": None,
                     }
-
-                    # TODO: if collision, prepend toolkit name
-                    if function_name in tools_dict:
-                        log.warning(
-                            f"Tool {function_name} already exists in another tools!"
-                        )
-                        log.warning(f"Discarding {tool_id}.{function_name}")
-                    else:
-                        tools_dict[function_name] = tool_dict
+                    register_tool_by_function_name(tools_dict, function_name, tool_dict)
             else:
                 continue
         else:
@@ -181,6 +209,7 @@ def get_tools(
                     "tool_id": tool_id,
                     "callable": callable,
                     "spec": spec,
+                    "version": tool_version_from_record(tool),
                     # Misc info
                     "metadata": {
                         "file_handler": hasattr(module, "file_handler")
@@ -188,15 +217,7 @@ def get_tools(
                         "citation": hasattr(module, "citation") and module.citation,
                     },
                 }
-
-                # TODO: if collision, prepend toolkit name
-                if function_name in tools_dict:
-                    log.warning(
-                        f"Tool {function_name} already exists in another tools!"
-                    )
-                    log.warning(f"Discarding {tool_id}.{function_name}")
-                else:
-                    tools_dict[function_name] = tool_dict
+                register_tool_by_function_name(tools_dict, function_name, tool_dict)
 
     return tools_dict
 

@@ -569,6 +569,8 @@ async def list_available_tools(
     """
     from open_webui.models.tools import Tools
     from open_webui.utils.access_control import has_access
+    from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+    from open_webui.utils.tools import accessible_skill_records
 
     metadata = __metadata__ or {}
     user = Users.get_user_by_id(__user__.get("id"))
@@ -634,6 +636,10 @@ async def list_available_tools(
     )
 
     selected_ids = list(metadata.get("tool_ids") or [])
+    if selected_ids:
+        selected_ids = resolve_tool_ids_by_skill_version(
+            selected_ids, accessible_skill_records(user)
+        )
     all_tools = Tools.get_tools()
 
     def _visible(tool) -> bool:
