@@ -95,6 +95,8 @@ langfuse:
 sandbox:
   # Empty → app default {DATA_DIR}/artifacts
   artifactsDir: ""
+  # Landlock confinement for skill subprocesses; requires host Landlock (not GKE pods).
+  skillSandlock: false
   gcs:
     enabled: false
     bucket: ""

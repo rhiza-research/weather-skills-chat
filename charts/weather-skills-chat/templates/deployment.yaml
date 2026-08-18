@@ -133,6 +133,8 @@ spec:
             - name: ARTIFACTS_DIR
               value: {{ $artifactsDir | quote }}
             {{- end }}
+            - name: SKILL_SANDLOCK
+              value: {{ .Values.sandbox.skillSandlock | quote }}
             - name: LANGFUSE_ENABLED
               value: {{ .Values.langfuse.enabled | quote }}
             {{- with .Values.langfuse.host }}
