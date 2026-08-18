@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
-# Chat-sandboxed skills are Landlock-confined via sandlock when available.
+# Chat-sandboxed skills are Landlock-confined when available (sandlock or landlock_only).
 SKILL_SANDLOCK = os.getenv("SKILL_SANDLOCK", "true").lower() in ("1", "true", "yes")
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
 SAFE_ENV_SECRET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -170,19 +170,22 @@ async def run_skill(
         env[name] = value
 
     sandboxed = False
+    landlock_backend: str | None = None
     if use_chat_sandbox and SKILL_SANDLOCK:
         from open_webui.utils.skill_sandlock import (
             default_readable_paths,
             default_writable_paths,
+            landlock_confinement_available,
             launcher_command,
-            sandlock_available,
+            select_landlock_backend,
             skill_pack_readable_roots,
         )
 
-        if not sandlock_available():
+        landlock_backend = select_landlock_backend()
+        if landlock_backend is None:
             return _error_result(
-                "Skill Landlock sandbox (sandlock) is required for chat "
-                "sandboxes but is unavailable on this host.",
+                "Skill Landlock sandbox is required for chat sandboxes but "
+                "Landlock is unavailable on this host.",
                 script=script_path.name,
                 cwd=str(cwd),
                 argv=args,
@@ -204,6 +207,7 @@ async def run_skill(
             readable=default_readable_paths(extra=readable_extra),
             cwd=cwd,
             argv=inner_cmd,
+            backend=landlock_backend,
         )
         sandboxed = True
         spawn_cwd = None
@@ -213,10 +217,11 @@ async def run_skill(
         spawn_cwd = str(cwd)
 
     log.info(
-        "Running skill script: %s (cwd=%s, sandlock=%s, env_secrets=%s)",
+        "Running skill script: %s (cwd=%s, sandlock=%s, landlock_backend=%s, env_secrets=%s)",
         " ".join(["uv", "run", "--script", script_path.name, *args]),
         cwd,
         sandboxed,
+        landlock_backend,
         list(used_secrets.keys()),
     )
 
@@ -252,6 +257,7 @@ async def run_skill(
                 cwd=str(cwd),
                 argv=args,
                 sandlock=sandboxed,
+                landlock_backend=landlock_backend,
             ),
             used_secrets,
         )
@@ -272,6 +278,7 @@ async def run_skill(
         "stdout": stdout,
         "stderr": stderr,
         "sandlock": sandboxed,
+        "landlock_backend": landlock_backend,
     }
     if used_secrets:
         result["env_secrets"] = list(used_secrets.keys())

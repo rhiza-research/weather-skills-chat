@@ -1,9 +1,9 @@
-"""Landlock confinement for skill subprocesses via the sandlock library.
+"""Landlock confinement for skill subprocesses.
 
-Full ``Sandbox.run()`` (seccomp supervisor) is not relied on here — in some
-container environments ``sandlock_create`` fails without extra privileges.
-Instead we apply Landlock FS rules with ``sandlock.confine()`` in a child
-process, then ``exec`` the skill command. Network is left unrestricted.
+Prefer the sandlock library when the host Landlock ABI meets sandlock's minimum
+(currently ABI 6). Otherwise fall back to landlock_only (direct Landlock
+syscalls, filesystem rules only). Full ``Sandbox.run()`` (seccomp supervisor)
+is not used here.
 """
 
 from __future__ import annotations
@@ -14,9 +14,11 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Literal, Optional, Sequence
 
 log = logging.getLogger(__name__)
+
+LandlockBackend = Literal["sandlock", "landlock_only"]
 
 # Host paths skills typically need to read (binaries, certs, resolvers, devices).
 DEFAULT_READABLE = (
@@ -40,14 +42,53 @@ DEFAULT_WRITABLE_DEVICES = (
 )
 
 
-def sandlock_available() -> bool:
+def query_landlock_abi() -> int:
+    """Return host Landlock ABI version, or -1 when unavailable."""
     try:
-        from sandlock import LandlockUnavailableError, landlock_abi_version
+        from sandlock import landlock_abi_version
 
-        landlock_abi_version()
-        return True
+        return int(landlock_abi_version())
     except Exception:
-        return False
+        pass
+
+    from open_webui.utils.skill_landlock import query_landlock_abi as raw_query
+
+    return raw_query()
+
+
+def sandlock_min_abi() -> int:
+    try:
+        import sandlock
+
+        if hasattr(sandlock, "min_landlock_abi"):
+            return int(sandlock.min_landlock_abi())
+    except Exception:
+        pass
+    return 6
+
+
+def sandlock_usable() -> bool:
+    """True when the sandlock library can apply its full Landlock policy."""
+    return query_landlock_abi() >= sandlock_min_abi()
+
+
+def landlock_confinement_available() -> bool:
+    """True when either sandlock or landlock_only confinement can run."""
+    return query_landlock_abi() >= 1
+
+
+def sandlock_available() -> bool:
+    """Backward-compatible alias for ``landlock_confinement_available``."""
+    return landlock_confinement_available()
+
+
+def select_landlock_backend() -> LandlockBackend | None:
+    """Choose sandlock or landlock_only for the current host."""
+    if not landlock_confinement_available():
+        return None
+    if sandlock_usable():
+        return "sandlock"
+    return "landlock_only"
 
 
 def build_sandbox(
@@ -83,10 +124,40 @@ def confine_current_process(
     *,
     writable: Sequence[str | Path],
     readable: Sequence[str | Path],
-) -> None:
-    from sandlock import confine
+    backend: LandlockBackend | None = None,
+) -> LandlockBackend:
+    """Apply Landlock confinement in-process. Returns backend used."""
+    chosen = backend or select_landlock_backend()
+    if chosen is None:
+        raise RuntimeError("Landlock confinement is unavailable on this host")
 
-    confine(build_sandbox(writable=writable, readable=readable))
+    if chosen == "sandlock":
+        from sandlock import confine
+
+        try:
+            confine(build_sandbox(writable=writable, readable=readable))
+            return "sandlock"
+        except Exception as exc:
+            if not landlock_only_available():
+                raise
+            log.warning(
+                "sandlock confine failed (%s); falling back to landlock_only",
+                exc,
+            )
+            chosen = "landlock_only"
+
+    from open_webui.utils.skill_landlock import (
+        confine_current_process as landlock_only_confine,
+    )
+
+    landlock_only_confine(writable=writable, readable=readable)
+    return "landlock_only"
+
+
+def landlock_only_available() -> bool:
+    from open_webui.utils.skill_landlock import landlock_only_available as _available
+
+    return _available()
 
 
 def launcher_command(
@@ -95,6 +166,7 @@ def launcher_command(
     readable: Sequence[str | Path],
     cwd: str | Path,
     argv: Sequence[str],
+    backend: LandlockBackend | None = None,
 ) -> list[str]:
     """``python -m … --writable … --readable … --cwd … -- cmd``."""
     cmd = [
@@ -104,6 +176,8 @@ def launcher_command(
         "--cwd",
         str(Path(cwd).resolve()),
     ]
+    if backend is not None:
+        cmd.extend(["--backend", backend])
     for path in writable:
         cmd.extend(["--writable", str(Path(path).resolve())])
     for path in readable:
@@ -196,6 +270,12 @@ def _cli_main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--writable", action="append", default=[])
     parser.add_argument("--readable", action="append", default=[])
     parser.add_argument("--cwd", required=True)
+    parser.add_argument(
+        "--backend",
+        choices=("auto", "sandlock", "landlock_only"),
+        default="auto",
+        help="Landlock backend (default: auto)",
+    )
     parser.add_argument("cmd", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
 
@@ -209,9 +289,15 @@ def _cli_main(argv: Optional[list[str]] = None) -> int:
     cwd = Path(args.cwd).resolve()
     writable = list(args.writable) or default_writable_paths(cwd, "/tmp")
     readable = list(args.readable) or default_readable_paths()
+    backend = None if args.backend == "auto" else args.backend
 
     try:
-        confine_current_process(writable=writable, readable=readable)
+        used = confine_current_process(
+            writable=writable,
+            readable=readable,
+            backend=backend,
+        )
+        print(f"skill_sandlock: confined via {used}", file=sys.stderr)
     except Exception as e:
         print(f"skill_sandlock: failed to confine: {e}", file=sys.stderr)
         return 126

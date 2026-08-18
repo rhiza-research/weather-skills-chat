@@ -9,12 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.skill_runtime import run_skill
-from open_webui.utils.skill_sandlock import sandlock_available
+from open_webui.utils.skill_sandlock import landlock_confinement_available
 
 
-def _skip_unless_sandlock():
-    if not sandlock_available():
-        raise unittest.SkipTest("sandlock/Landlock unavailable on this host")
+def _skip_unless_landlock():
+    if not landlock_confinement_available():
+        raise unittest.SkipTest("Landlock confinement unavailable on this host")
 
 
 SECRET_VALUE = "TOP-SECRET-SIBLING"
@@ -70,7 +70,7 @@ sys.exit(11 if escaped else 0)
 
 class SkillSandlockBreakoutTest(unittest.TestCase):
     def test_blocks_sibling_sandbox_but_injects_secrets(self):
-        _skip_unless_sandlock()
+        _skip_unless_landlock()
 
         # Artifacts must not live under /tmp — /tmp is intentionally writable
         # inside the sandbox policy.
@@ -150,6 +150,84 @@ class SkillSandlockBreakoutTest(unittest.TestCase):
                 own_file.read_text(encoding="utf-8"), "wrote-inside-own-sandbox"
             )
             self.assertEqual(secret_path.read_text(encoding="utf-8"), SECRET_VALUE)
+            self.assertFalse((sandbox_b / "pwned_by_breakout.txt").exists())
+
+    def test_blocks_sibling_sandbox_landlock_only_backend(self):
+        _skip_unless_landlock()
+
+        base = Path("/app/backend/data")
+        if not base.is_dir():
+            raise unittest.SkipTest("/app/backend/data missing; run inside container")
+
+        with tempfile.TemporaryDirectory(prefix="landlock-only-test-", dir=str(base)) as tmp:
+            tmp_path = Path(tmp)
+            artifacts = tmp_path / "artifacts"
+            artifacts.mkdir()
+
+            chat_a = "chat-attacker"
+            chat_b = "chat-victim"
+            sandbox_a = artifacts / chat_a
+            sandbox_b = artifacts / chat_b
+            sandbox_a.mkdir()
+            (sandbox_a / "intermediate_results").mkdir()
+            sandbox_b.mkdir()
+            (sandbox_b / "intermediate_results").mkdir()
+
+            secret_name = "secret.txt"
+            secret_path = sandbox_b / secret_name
+            secret_path.write_text(SECRET_VALUE, encoding="utf-8")
+
+            skill = tmp_path / "skill"
+            scripts = skill / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "breakout.py").write_text(BREAKOUT_SCRIPT, encoding="utf-8")
+
+            def _sandbox(cid: str) -> Path:
+                root = artifacts / cid
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "intermediate_results").mkdir(parents=True, exist_ok=True)
+                return root
+
+            with (
+                patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
+                patch(
+                    "open_webui.utils.skill_runtime.chat_sandbox",
+                    side_effect=_sandbox,
+                ),
+                patch(
+                    "open_webui.utils.skill_runtime.intermediate_results_dir",
+                    side_effect=lambda cid: artifacts / cid / "intermediate_results",
+                ),
+                patch(
+                    "open_webui.utils.skill_runtime.resolve_env_secrets_for_user",
+                    return_value={"SMOKE_TOKEN": "injected-secret-value"},
+                ),
+                patch(
+                    "open_webui.utils.skill_sandlock.select_landlock_backend",
+                    return_value="landlock_only",
+                ),
+            ):
+                result = asyncio.run(
+                    run_skill(
+                        skill,
+                        script="breakout.py",
+                        argv=[str(sandbox_b), secret_name],
+                        env_secrets=["SMOKE_TOKEN"],
+                        __user__={"id": "u1"},
+                        __metadata__={"chat_id": chat_a},
+                        timeout=120,
+                    )
+                )
+
+            self.assertTrue(result.get("sandlock"), result)
+            self.assertEqual(result.get("landlock_backend"), "landlock_only", result)
+            self.assertTrue(result.get("ok"), result)
+            stdout = result.get("stdout") or ""
+            self.assertIn("SECRET_OK", stdout)
+            self.assertIn("OWN_OK", stdout)
+            self.assertNotIn("READ_OK:", stdout)
+            self.assertNotIn(SECRET_VALUE, stdout)
+            self.assertNotIn("injected-secret-value", stdout)
             self.assertFalse((sandbox_b / "pwned_by_breakout.txt").exists())
 
 
