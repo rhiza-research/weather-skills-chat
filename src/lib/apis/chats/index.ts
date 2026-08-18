@@ -1,5 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
-import { getTimeRange } from '$lib/utils';
+import { copyToClipboard, getTimeRange } from '$lib/utils';
 
 export const createNewChat = async (token: string, chat: object, teamId: string | null = null) => {
 	let error = null;
@@ -749,6 +749,29 @@ export const shareChatById = async (token: string, id: string) => {
 	}
 
 	return res;
+};
+
+export const copyChatShareLink = async (token: string, id: string) => {
+	const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+	const getShareUrl = async () => {
+		const sharedChat = await shareChatById(token, id);
+		if (!sharedChat?.id) {
+			throw new Error('Failed to create share link');
+		}
+		return `${window.location.origin}/s/${sharedChat.id}`;
+	};
+
+	if (isSafari) {
+		await navigator.clipboard.write([
+			new ClipboardItem({
+				'text/plain': getShareUrl().then((url) => new Blob([url], { type: 'text/plain' }))
+			})
+		]);
+		return;
+	}
+
+	await copyToClipboard(await getShareUrl());
 };
 
 export const updateChatFolderIdById = async (token: string, id: string, folderId?: string) => {

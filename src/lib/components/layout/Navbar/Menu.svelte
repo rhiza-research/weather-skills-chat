@@ -233,7 +233,7 @@
 							clip-rule="evenodd"
 						/>
 					</svg>
-					<div class="flex items-center">{$i18n.t('Share')}</div>
+					<div class="flex items-center">{$i18n.t('Share via link')}</div>
 				</DropdownMenu.Item>
 			{/if}
 

@@ -31,13 +31,15 @@ export const getTeams = async (token: string) => request(token, '/teams/');
 
 export const getTeamById = async (token: string, id: string) => request(token, `/teams/${id}`);
 
-export const createTeam = async (token: string, team: { name: string; description?: string }) =>
-	request(token, '/teams/', { method: 'POST', body: JSON.stringify(team) });
+export const createTeam = async (
+	token: string,
+	team: { name: string; description?: string; default_models?: string | null }
+) => request(token, '/teams/', { method: 'POST', body: JSON.stringify(team) });
 
 export const updateTeamById = async (
 	token: string,
 	id: string,
-	team: { name?: string; description?: string }
+	team: { name?: string; description?: string; default_models?: string | null }
 ) => request(token, `/teams/${id}/update`, { method: 'POST', body: JSON.stringify(team) });
 
 export const addTeamMember = async (

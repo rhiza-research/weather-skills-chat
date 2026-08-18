@@ -248,7 +248,7 @@
 				}}
 			>
 				<Share />
-				<div class="flex items-center">{$i18n.t('Share')}</div>
+				<div class="flex items-center">{$i18n.t('Share via link')}</div>
 			</DropdownMenu.Item>
 
 			{#each $teams as team}

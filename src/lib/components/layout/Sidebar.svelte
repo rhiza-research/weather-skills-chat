@@ -230,6 +230,7 @@
 
 	const startTeamChat = async (teamId) => {
 		pendingTeamId.set(teamId);
+		sessionStorage.removeItem('selectedModels');
 		selectedChatId = null;
 		chatId.set('');
 		await goto('/');

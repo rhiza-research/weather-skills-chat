@@ -23,6 +23,7 @@ class Team(Base):
     created_by = Column(Text, nullable=False)
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
+    default_models = Column(Text, nullable=True)
 
 
 class TeamMember(Base):
@@ -57,11 +58,13 @@ class TeamModel(BaseModel):
     updated_at: int
     role: Optional[str] = None
     members: Optional[list[TeamMemberModel]] = None
+    default_models: Optional[str] = None
 
 
 class TeamForm(BaseModel):
     name: str
     description: Optional[str] = None
+    default_models: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -75,6 +78,7 @@ class TeamForm(BaseModel):
 class TeamUpdateForm(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    default_models: Optional[str] = None
 
 
 class TeamMemberAddForm(BaseModel):
@@ -112,6 +116,7 @@ class TeamTable:
                 created_by=user_id,
                 created_at=now,
                 updated_at=now,
+                default_models=form_data.default_models,
             )
             member = TeamMember(
                 team_id=team_id,

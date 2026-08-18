@@ -38,7 +38,8 @@
 		artifactsRefresh,
 		tools,
 		toolServers,
-		pendingTeamId
+		pendingTeamId,
+		teams
 	} from '$lib/stores';
 	import {
 		convertMessagesToHistory,
@@ -740,7 +741,18 @@
 				selectedModels = urlModels;
 			}
 		} else {
-			if (sessionStorage.selectedModels) {
+			const teamId = get(pendingTeamId);
+			const teamDefaultModels = teamId
+				? ($teams.find((t) => t.id === teamId)?.default_models || '')
+						.split(',')
+						.map((s) => s.trim())
+						.filter(Boolean)
+				: [];
+
+			if (teamDefaultModels.length) {
+				selectedModels = teamDefaultModels;
+				sessionStorage.removeItem('selectedModels');
+			} else if (sessionStorage.selectedModels) {
 				selectedModels = JSON.parse(sessionStorage.selectedModels);
 				sessionStorage.removeItem('selectedModels');
 			} else {

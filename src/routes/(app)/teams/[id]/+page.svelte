@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { teams, user, WEBUI_NAME, showSidebar } from '$lib/stores';
+	import { models, teams, user, WEBUI_NAME, showSidebar } from '$lib/stores';
 	import {
 		addTeamMember,
 		deleteTeamById,
@@ -29,6 +29,7 @@
 	let results = [];
 	let name = '';
 	let description = '';
+	let defaultModelId = '';
 	let secrets = [];
 	let secretName = '';
 	let secretValue = '';
@@ -43,6 +44,7 @@
 			team = await getTeamById(localStorage.token, id);
 			name = team.name;
 			description = team.description ?? '';
+			defaultModelId = (team.default_models || '').split(',')[0]?.trim() ?? '';
 			secrets = await getTeamSecrets(localStorage.token, id).catch(() => []);
 		} catch (error) {
 			toast.error(`${error}`);
@@ -94,7 +96,11 @@
 
 	const save = async () => {
 		try {
-			team = await updateTeamById(localStorage.token, id, { name, description });
+			team = await updateTeamById(localStorage.token, id, {
+				name,
+				description,
+				default_models: defaultModelId || ''
+			});
 			teams.set(await getTeams(localStorage.token));
 			toast.success($i18n.t('Team updated'));
 		} catch (error) {
@@ -200,6 +206,21 @@
 						rows="2"
 						bind:value={description}
 					/>
+					<div>
+						<div class="text-xs text-gray-500 mb-1">{$i18n.t('Default Model')}</div>
+						<select
+							class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+							bind:value={defaultModelId}
+						>
+							<option value="">{$i18n.t('Not set')}</option>
+							{#each $models as model}
+								<option value={model.id}>{model.name}</option>
+							{/each}
+						</select>
+						<p class="text-xs text-gray-400 mt-1">
+							{$i18n.t('Used for new team chats. Members can still switch models.')}
+						</p>
+					</div>
 					<div class="flex gap-2">
 						<button
 							class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
@@ -211,8 +232,16 @@
 						>
 					</div>
 				</div>
-			{:else if team.description}
-				<div class="text-sm text-gray-500">{team.description}</div>
+			{:else}
+				{#if team.description}
+					<div class="text-sm text-gray-500">{team.description}</div>
+				{/if}
+				{#if defaultModelId}
+					<div class="text-sm text-gray-500">
+						{$i18n.t('Default Model')}:
+						{$models.find((m) => m.id === defaultModelId)?.name ?? defaultModelId}
+					</div>
+				{/if}
 			{/if}
 
 			<div>

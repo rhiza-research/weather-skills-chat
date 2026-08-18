@@ -169,7 +169,8 @@
 	};
 
 	onMount(async () => {
-		await tools.set(await getTools(localStorage.token));
+		const loadedTools = await getTools(localStorage.token);
+		await tools.set(loadedTools);
 		await functions.set(await getFunctions(localStorage.token));
 		await knowledgeCollections.set(await getKnowledgeBases(localStorage.token));
 
@@ -255,6 +256,8 @@
 			};
 
 			console.log(model);
+		} else if (!edit) {
+			toolIds = (loadedTools ?? []).map((t) => t.id);
 		}
 
 		loaded = true;

@@ -69,10 +69,6 @@ describe('Settings', () => {
 			cy.get('#chat-context-menu-button').click();
 			// Click share button
 			cy.get('#chat-share-button').click();
-			// Check if the share dialog is visible
-			cy.get('#copy-and-share-chat-button').should('exist');
-			// Click the copy button
-			cy.get('#copy-and-share-chat-button').click();
 			cy.wrap({}, { timeout: 5_000 }).should(() => {
 				// Check if the share request was made
 				expect(spy).to.be.callCount(1);
