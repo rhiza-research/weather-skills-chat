@@ -23,7 +23,7 @@ image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
   # Empty uses Chart.appVersion (currently "main").
   tag: ""
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 imagePullSecrets: []
 
