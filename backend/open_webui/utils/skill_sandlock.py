@@ -83,9 +83,18 @@ def sandlock_available() -> bool:
 
 
 def select_landlock_backend() -> LandlockBackend | None:
-    """Choose sandlock or landlock_only for the current host."""
+    """Choose sandlock or landlock_only for the current host.
+
+    ``SKILL_LANDLOCK_BACKEND`` may be ``auto`` (default), ``sandlock``, or
+    ``landlock_only``.
+    """
     if not landlock_confinement_available():
         return None
+    requested = os.getenv("SKILL_LANDLOCK_BACKEND", "auto").strip().lower()
+    if requested == "landlock_only":
+        return "landlock_only"
+    if requested == "sandlock":
+        return "sandlock" if sandlock_usable() else None
     if sandlock_usable():
         return "sandlock"
     return "landlock_only"

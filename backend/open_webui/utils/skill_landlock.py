@@ -57,6 +57,8 @@ LANDLOCK_ACCESS_FS_MAKE_FIFO = 1 << 10
 LANDLOCK_ACCESS_FS_MAKE_BLOCK = 1 << 11
 LANDLOCK_ACCESS_FS_MAKE_SYM = 1 << 12
 LANDLOCK_ACCESS_FS_REFER = 1 << 13
+LANDLOCK_ACCESS_FS_TRUNCATE = 1 << 14
+LANDLOCK_ACCESS_FS_IOCTL_DEV = 1 << 15
 
 READ_ACCESS = (
     LANDLOCK_ACCESS_FS_EXECUTE
@@ -147,6 +149,27 @@ class _Landlock:
         access = WRITE_ACCESS
         if abi >= 2:
             access |= LANDLOCK_ACCESS_FS_REFER
+        if abi >= 3:
+            access |= LANDLOCK_ACCESS_FS_TRUNCATE
+        if abi >= 5:
+            access |= LANDLOCK_ACCESS_FS_IOCTL_DEV
+        return access
+
+    def _path_access(self, abi: int, writable: bool) -> int:
+        """Rights granted on a PATH_BENEATH rule.
+
+        Handled rights that are not granted here are denied. In particular
+        LANDLOCK_ACCESS_FS_REFER must be granted on writable trees or
+        rename/link across subdirectories returns EXDEV (uv python installs).
+        """
+        access = WRITE_ACCESS if writable else READ_ACCESS
+        if abi >= 5:
+            access |= LANDLOCK_ACCESS_FS_IOCTL_DEV
+        if writable:
+            if abi >= 2:
+                access |= LANDLOCK_ACCESS_FS_REFER
+            if abi >= 3:
+                access |= LANDLOCK_ACCESS_FS_TRUNCATE
         return access
 
     def confine(
@@ -180,12 +203,11 @@ class _Landlock:
         for path in readable_paths:
             if path not in seen:
                 seen.add(path)
-                access = WRITE_ACCESS if path in writable_set else READ_ACCESS
-                rules.append((path, access))
+                rules.append((path, self._path_access(abi, path in writable_set)))
         for path in writable_paths:
             if path not in seen:
                 seen.add(path)
-                rules.append((path, WRITE_ACCESS))
+                rules.append((path, self._path_access(abi, True)))
 
         for path, access in rules:
             if _is_char_device(path):
