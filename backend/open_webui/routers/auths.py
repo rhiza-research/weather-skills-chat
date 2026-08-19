@@ -537,34 +537,39 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
 @router.get("/signout")
 async def signout(request: Request, response: Response):
-    response.delete_cookie("token")
+    cookie_kwargs = {
+        "httponly": True,
+        "samesite": WEBUI_AUTH_COOKIE_SAME_SITE,
+        "secure": WEBUI_AUTH_COOKIE_SECURE,
+    }
+    response.delete_cookie("token", **cookie_kwargs)
+    response.delete_cookie("oauth_id_token", **cookie_kwargs)
 
-    if ENABLE_OAUTH_SIGNUP.value:
-        oauth_id_token = request.cookies.get("oauth_id_token")
-        if oauth_id_token:
-            try:
-                async with ClientSession() as session:
-                    async with session.get(OPENID_PROVIDER_URL.value) as resp:
-                        if resp.status == 200:
-                            openid_data = await resp.json()
-                            logout_url = openid_data.get("end_session_endpoint")
-                            if logout_url:
-                                response.delete_cookie("oauth_id_token")
-                                return RedirectResponse(
-                                    headers=response.headers,
-                                    url=f"{logout_url}?id_token_hint={oauth_id_token}",
-                                )
-                        else:
-                            raise HTTPException(
-                                status_code=resp.status,
-                                detail="Failed to fetch OpenID configuration",
+    # Google (and other non-OIDC) OAuth sets oauth_id_token when signup is
+    # enabled, but OPENID_PROVIDER_URL is empty. Fetching that URL used to
+    # 500 and abort signout before the session cookies were cleared.
+    openid_provider_url = (OPENID_PROVIDER_URL.value or "").strip()
+    oauth_id_token = request.cookies.get("oauth_id_token")
+    if ENABLE_OAUTH_SIGNUP.value and oauth_id_token and openid_provider_url:
+        try:
+            async with ClientSession() as session:
+                async with session.get(openid_provider_url) as resp:
+                    if resp.status == 200:
+                        openid_data = await resp.json()
+                        logout_url = openid_data.get("end_session_endpoint")
+                        if logout_url:
+                            return RedirectResponse(
+                                headers=response.headers,
+                                url=f"{logout_url}?id_token_hint={oauth_id_token}",
                             )
-            except Exception as e:
-                log.error(f"OpenID signout error: {str(e)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to sign out from the OpenID provider.",
-                )
+                    else:
+                        log.warning(
+                            "OpenID configuration fetch failed with status %s; "
+                            "continuing with local signout",
+                            resp.status,
+                        )
+        except Exception as e:
+            log.error("OpenID signout error: %s; continuing with local signout", e)
 
     return {"status": True}
 
