@@ -139,6 +139,19 @@
 	}
 
 	onMount(async () => {
+		const form = querystringValue('form');
+		if (form === 'signup') {
+			mode = 'signup';
+		}
+		const emailParam = querystringValue('email');
+		if (emailParam) {
+			email = emailParam;
+		}
+		const nameParam = querystringValue('name');
+		if (nameParam) {
+			name = nameParam;
+		}
+
 		if ($user !== undefined) {
 			const redirectPath = querystringValue('redirect') || '/';
 			goto(redirectPath);

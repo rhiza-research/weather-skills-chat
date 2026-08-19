@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import sys
 import uuid
+from urllib.parse import urlencode
 
 import aiohttp
 from authlib.integrations.starlette_client import OAuth
@@ -12,6 +13,7 @@ from fastapi import (
     status,
 )
 from starlette.responses import RedirectResponse
+from typing import Optional
 
 from open_webui.models.auths import Auths
 from open_webui.models.users import Users
@@ -227,6 +229,24 @@ class OAuthManager:
             raise HTTPException(404)
         return await client.authorize_redirect(request, redirect_uri)
 
+    def _auth_page_redirect(
+        self,
+        request,
+        *,
+        form: Optional[str] = None,
+        email: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> RedirectResponse:
+        params: dict[str, str] = {}
+        if form:
+            params["form"] = form
+        if email:
+            params["email"] = email
+        if name:
+            params["name"] = name
+        query = f"?{urlencode(params)}" if params else ""
+        return RedirectResponse(url=f"{request.base_url}auth{query}")
+
     async def handle_callback(self, request, provider, response):
         if provider not in OAUTH_PROVIDERS:
             raise HTTPException(404)
@@ -296,7 +316,15 @@ class OAuthManager:
             log.warning(
                 f"OAuth callback failed, e-mail domain is not in the list of allowed domains: {user_data}"
             )
-            raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+            # Browser OAuth callback would otherwise render a JSON 400. Send
+            # them to the same signup form as clicking "Sign up" on /auth.
+            username_claim = auth_manager_config.OAUTH_USERNAME_CLAIM
+            return self._auth_page_redirect(
+                request,
+                form="signup",
+                email=email,
+                name=user_data.get(username_claim) or None,
+            )
 
         # Check if the user exists
         user = Users.get_user_by_oauth_sub(provider_sub)
