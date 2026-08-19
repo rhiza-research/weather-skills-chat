@@ -3,6 +3,7 @@ from pathlib import Path
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 import re
 from uuid import uuid4
@@ -24,6 +25,9 @@ from open_webui.utils.teams import (
 )
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+EMAIL_ATTACHMENTS_MAX_TOTAL_BYTES = 25 * 1024 * 1024
+EMAIL_ATTACHMENTS_MAX_COUNT = 10
 
 
 async def create_automation(
@@ -581,20 +585,127 @@ def _validate_emails(emails: list[str]) -> tuple[list[str], list[str]]:
     return ok, bad
 
 
-def _allowed_email_recipients_for_user(user_id: str, chat) -> set[str]:
-    allowed: set[str] = set()
+def _email_recipient_directory(user_id: str, chat) -> dict:
     user = Users.get_user_by_id(user_id)
-    if user and user.email:
-        allowed.add(user.email.strip().lower())
+    self_info = None
+    if user:
+        email = (user.email or "").strip().lower()
+        self_info = {
+            "email": email if email and EMAIL_RE.match(email) else None,
+            "name": (user.name or "").strip() or None,
+        }
+
     team_ids = set(Teams.user_team_ids(user_id))
     chat_team_id = getattr(chat, "team_id", None) if chat else None
     if chat_team_id:
         team_ids.add(chat_team_id)
-    for team_id in team_ids:
+
+    teams = []
+    for team_id in sorted(team_ids):
+        team = Teams.get_team_by_id(team_id)
+        if not team:
+            continue
+        members = []
         for member in Teams.get_members(team_id):
-            if member.email:
-                allowed.add(member.email.strip().lower())
+            email = (member.email or "").strip().lower()
+            if not email or not EMAIL_RE.match(email):
+                continue
+            members.append(
+                {
+                    "email": email,
+                    "name": (member.name or "").strip() or None,
+                    "role": member.role,
+                    "is_self": member.user_id == user_id,
+                }
+            )
+        if members:
+            teams.append(
+                {
+                    "team_id": team_id,
+                    "team_name": team.name,
+                    "members": members,
+                }
+            )
+
+    return {"self": self_info, "teams": teams}
+
+
+def _allowed_email_recipients_for_user(user_id: str, chat) -> set[str]:
+    directory = _email_recipient_directory(user_id, chat)
+    allowed: set[str] = set()
+    self_email = (directory.get("self") or {}).get("email")
+    if self_email:
+        allowed.add(self_email)
+    for team in directory.get("teams") or []:
+        for member in team.get("members") or []:
+            allowed.add(member["email"])
     return allowed
+
+
+async def list_email_recipients(
+    __user__: dict = {},
+    __metadata__: dict = None,
+    __request__=None,
+) -> str:
+    """Return the current user's email and teammate emails allowed for send_email."""
+    user = Users.get_user_by_id(__user__.get("id"))
+    if not user:
+        return "User not found."
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    chat = (
+        Chats.get_chat_by_id(chat_id) if chat_id and chat_id != "local" else None
+    )
+    directory = _email_recipient_directory(user.id, chat)
+
+    lines: list[str] = []
+    self_info = directory.get("self") or {}
+    if self_info.get("email"):
+        name = self_info.get("name") or "You"
+        lines.append(f"Your email: `{self_info['email']}` ({name})")
+    else:
+        lines.append("Your account has no email address on file.")
+
+    teams = directory.get("teams") or []
+    teammate_lines: list[str] = []
+    for team in teams:
+        team_header = f"**{team['team_name']}**"
+        team_members = []
+        for member in team.get("members") or []:
+            if member.get("is_self"):
+                continue
+            label = member.get("name") or member["email"]
+            role = member.get("role")
+            role_suffix = f" ({role})" if role else ""
+            team_members.append(f"- `{member['email']}` — {label}{role_suffix}")
+        if team_members:
+            teammate_lines.append(team_header)
+            teammate_lines.extend(team_members)
+
+    if teammate_lines:
+        lines.append("")
+        lines.append("Teammate emails (valid `send_email` recipients):")
+        lines.extend(teammate_lines)
+    else:
+        lines.append("")
+        lines.append("No teammate email addresses found.")
+
+    lines.append("")
+    lines.append(
+        "Only your email and teammate emails listed above may be used with `send_email`."
+    )
+    return "\n".join(lines)
+
+
+LIST_EMAIL_RECIPIENTS_SPEC = {
+    "name": "list_email_recipients",
+    "description": (
+        "List your email address and the email addresses of your teammates. "
+        "Use before send_email to look up valid recipient addresses."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
 
 
 def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
@@ -608,7 +719,93 @@ def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
     base = (base_url or "").rstrip("/")
     if not (base and share_id):
         return ""
-    return f"{base}/share/{share_id}"
+    return f"{base}/s/{share_id}"
+
+
+def _attachment_filename(rel: str, *, is_archive: bool = False) -> str:
+    path = Path(rel.rstrip("/"))
+    if is_archive:
+        base = path.name or "artifact"
+        return f"{base}.zip"
+    return path.as_posix().replace("/", "_")
+
+
+def _guess_attachment_mime(filename: str) -> tuple[str, str]:
+    if filename.endswith(".zip"):
+        return "application", "zip"
+    mime, _ = mimetypes.guess_type(filename)
+    if mime and "/" in mime:
+        maintype, subtype = mime.split("/", 1)
+        return maintype, subtype
+    return "application", "octet-stream"
+
+
+def _load_email_attachments(
+    chat_id: str, paths: list[str]
+) -> tuple[list[tuple[str, bytes, str, str]], list[str]]:
+    """Load sandbox files/directories as email attachments.
+
+    Returns (attachments, notes) where each attachment is
+    (filename, data, maintype, subtype).
+    """
+    from open_webui.utils.artifacts import (
+        normalize_sandbox_relpath,
+        pack_sandbox_zip,
+        resolve_in_sandbox,
+        sandbox_tree_size,
+    )
+
+    if len(paths) > EMAIL_ATTACHMENTS_MAX_COUNT:
+        raise ValueError(
+            f"At most {EMAIL_ATTACHMENTS_MAX_COUNT} attachments are allowed."
+        )
+
+    attachments: list[tuple[str, bytes, str, str]] = []
+    notes: list[str] = []
+    seen_names: set[str] = set()
+    total = 0
+
+    for raw in paths:
+        rel = normalize_sandbox_relpath(raw)
+        target = resolve_in_sandbox(chat_id, rel)
+        if not target.exists():
+            raise FileNotFoundError(f"Attachment not found: `{rel}`")
+
+        if target.is_dir():
+            size = sandbox_tree_size(target)
+            if size > EMAIL_ATTACHMENT_MAX_BYTES:
+                raise ValueError(
+                    f"`{rel}` is too large to attach "
+                    f"({size} bytes; max {EMAIL_ATTACHMENT_MAX_BYTES})."
+                )
+            data = pack_sandbox_zip(chat_id, [rel])
+            filename = _attachment_filename(rel, is_archive=True)
+        else:
+            size = target.stat().st_size
+            if size > EMAIL_ATTACHMENT_MAX_BYTES:
+                raise ValueError(
+                    f"`{rel}` is too large to attach "
+                    f"({size} bytes; max {EMAIL_ATTACHMENT_MAX_BYTES})."
+                )
+            data = target.read_bytes()
+            filename = _attachment_filename(rel)
+
+        if filename in seen_names:
+            raise ValueError(f"Duplicate attachment filename: `{filename}`")
+        seen_names.add(filename)
+
+        total += len(data)
+        if total > EMAIL_ATTACHMENTS_MAX_TOTAL_BYTES:
+            raise ValueError(
+                "Total attachment size exceeds "
+                f"{EMAIL_ATTACHMENTS_MAX_TOTAL_BYTES} bytes."
+            )
+
+        maintype, subtype = _guess_attachment_mime(filename)
+        attachments.append((filename, data, maintype, subtype))
+        notes.append(f"`{rel}` as `{filename}`")
+
+    return attachments, notes
 
 
 def _send_via_smtp(
@@ -623,6 +820,7 @@ def _send_via_smtp(
     to: list[str],
     subject: str,
     body: str,
+    attachments: list[tuple[str, bytes, str, str]] | None = None,
 ) -> tuple[bool, str]:
     msg = EmailMessage()
     msg["From"] = f"{sender_name} <{sender_email}>"
@@ -630,6 +828,13 @@ def _send_via_smtp(
     msg["Subject"] = subject
     msg["Reply-To"] = reply_to
     msg.set_content(body)
+    for filename, data, maintype, subtype in attachments or []:
+        msg.add_attachment(
+            data,
+            maintype=maintype,
+            subtype=subtype,
+            filename=filename,
+        )
     try:
         if use_tls:
             with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
@@ -651,6 +856,7 @@ async def send_email(
     to: list[str] | str,
     subject: str,
     body: str,
+    attachments: list[str] | str | None = None,
     __user__: dict = {},
     __metadata__: dict = None,
     __request__=None,
@@ -712,6 +918,17 @@ async def send_email(
     )
     full_body = f"{(body or '').rstrip()}{footer}"
 
+    try:
+        attachment_paths = _as_path_list(attachments)
+    except ValueError as e:
+        return str(e)
+    try:
+        loaded_attachments, attachment_notes = _load_email_attachments(
+            chat_id, attachment_paths
+        )
+    except (ValueError, FileNotFoundError) as e:
+        return str(e)
+
     sender_name = f"Weather Skills Chat ({(user.name or user.email).strip()})"
     ok, detail = await asyncio.to_thread(
         _send_via_smtp,
@@ -726,20 +943,26 @@ async def send_email(
         to=valid,
         subject=(subject or "").strip() or "Weather Skills Chat update",
         body=full_body,
+        attachments=loaded_attachments,
     )
     if not ok:
         return f"Email send failed: {detail}"
-    return (
+    result = (
         f"Email sent to {', '.join(valid)} with reply-to `{user.email}` "
         f"and from `{sender_name} <{from_email}>`."
     )
+    if attachment_notes:
+        result += f" Attachments: {', '.join(attachment_notes)}."
+    return result
 
 
 SEND_EMAIL_SPEC = {
     "name": "send_email",
     "description": (
         "Send an email via configured SMTP. Recipients are restricted "
-        "to the current user and members of one of the user's teams."
+        "to the current user and members of one of the user's teams. "
+        "Call list_email_recipients first to look up valid addresses. "
+        "Optional attachments are read from the chat artifact sandbox."
     ),
     "parameters": {
         "type": "object",
@@ -756,6 +979,16 @@ SEND_EMAIL_SPEC = {
                 "type": "string",
                 "description": (
                     "Plain-text email body. A footer with sender and share link is added automatically."
+                ),
+            },
+            "attachments": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional relative paths to files or folders in the chat "
+                    "artifact sandbox (e.g. `plots/map.png`, "
+                    "`imerg_kenya_weekly/imerg_kenya_weekly_totals.png`). "
+                    "Folders and Zarr stores are attached as `.zip` archives."
                 ),
             },
         },
@@ -850,8 +1083,15 @@ async def list_available_tools(
     )
     lines.append(
         _tool_summary_line(
+            "list_email_recipients",
+            "List your email and teammate emails allowed for send_email.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
             "send_email",
-            "Email results to yourself or teammates with an automatic share-link footer.",
+            "Email results to yourself or teammates; optional artifact sandbox attachments.",
             kind="builtin",
         )
     )
@@ -1051,7 +1291,7 @@ def _as_path_list(value) -> list[str]:
     elif isinstance(value, (list, tuple)):
         parts = list(value)
     else:
-        raise ValueError("inputs/outputs must be a list of relative artifact paths")
+        raise ValueError("Paths must be a list of relative artifact paths")
     paths = []
     for item in parts:
         text = str(item).strip()
@@ -1309,6 +1549,9 @@ def get_builtin_tools(extra_params: dict) -> dict:
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
+        "list_email_recipients": _tool(
+            list_email_recipients, LIST_EMAIL_RECIPIENTS_SPEC
+        ),
         "send_email": _tool(send_email, SEND_EMAIL_SPEC),
     }
     features = (extra_params.get("__metadata__") or {}).get("features") or {}

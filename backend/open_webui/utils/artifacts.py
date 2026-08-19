@@ -2,6 +2,7 @@ import io
 import json
 import shutil
 import tarfile
+import zipfile
 from pathlib import Path
 from open_webui.env import ARTIFACTS_DIR
 
@@ -648,6 +649,47 @@ def pack_sandbox_archive(chat_id: str, paths: list[str]) -> bytes:
                 recursive=True,
                 filter=_tar_add_filter,
             )
+    data = buf.getvalue()
+    if len(data) > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+        raise ValueError(
+            f"Archive exceeds the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+        )
+    return data
+
+
+def pack_sandbox_zip(chat_id: str, paths: list[str]) -> bytes:
+    """Zip one or more sandbox files/directories (includes zarr internals)."""
+    if not paths:
+        raise ValueError("Provide at least one path to archive")
+    resolved: list[tuple[str, Path]] = []
+    total = 0
+    seen: set[str] = set()
+    for raw in paths:
+        rel = normalize_sandbox_relpath(raw)
+        if rel in seen:
+            continue
+        seen.add(rel)
+        target = resolve_in_sandbox(chat_id, rel)
+        if not target.exists():
+            raise FileNotFoundError(f"Artifact not found: {rel}")
+        total += sandbox_tree_size(target)
+        if total > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+            raise ValueError(
+                f"Selected files exceed the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+            )
+        resolved.append((rel, target))
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for rel, target in resolved:
+            if target.is_file():
+                zf.write(target, arcname=rel)
+                continue
+            for child in sorted(target.rglob("*")):
+                if not child.is_file() or child.is_symlink():
+                    continue
+                arcname = Path(rel, child.relative_to(target)).as_posix()
+                zf.write(child, arcname=arcname)
     data = buf.getvalue()
     if len(data) > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
         raise ValueError(

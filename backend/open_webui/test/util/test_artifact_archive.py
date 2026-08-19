@@ -4,6 +4,7 @@ import json
 import tarfile
 import tempfile
 import unittest
+import zipfile
 import zlib
 import struct
 from pathlib import Path
@@ -13,6 +14,7 @@ from open_webui.utils.artifacts import (
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
+    pack_sandbox_zip,
 )
 
 
@@ -150,6 +152,24 @@ class ArchiveRoundTripTest(unittest.TestCase):
                 (artifacts / "c" / "intermediate_results").mkdir(parents=True)
                 with self.assertRaises(FileNotFoundError):
                     pack_sandbox_archive("c", ["missing.csv"])
+
+    def test_zip_packs_file_and_zarr_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            chat_id = "chat-zip"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                root = artifacts / chat_id
+                (root / "intermediate_results").mkdir(parents=True)
+                (root / "notes.csv").write_text("a,b\n1,2\n")
+                zarr = root / "kenya.zarr"
+                zarr.mkdir()
+                (zarr / ".zgroup").write_text('{"zarr_format":2}')
+
+                data = pack_sandbox_zip(chat_id, ["notes.csv", "kenya.zarr"])
+                with zipfile.ZipFile(__import__("io").BytesIO(data)) as zf:
+                    members = set(zf.namelist())
+                self.assertIn("notes.csv", members)
+                self.assertIn("kenya.zarr/.zgroup", members)
 
 
 def json_bytes(payload: dict) -> bytes:

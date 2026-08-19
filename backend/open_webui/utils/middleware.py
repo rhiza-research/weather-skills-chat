@@ -2500,6 +2500,7 @@ async def process_chat_response(
                         metadata["message_id"],
                         {
                             "content": serialize_content_blocks(content_blocks),
+                            "done": True,
                         },
                     )
 

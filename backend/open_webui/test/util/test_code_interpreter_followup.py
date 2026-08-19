@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from open_webui.utils.middleware import (
     code_interpreter_followup_messages,
@@ -98,6 +99,51 @@ class EmailHelpersTest(unittest.TestCase):
         tools = get_builtin_tools({"__metadata__": {"features": {}}})
         self.assertIn("send_email", tools)
         self.assertEqual(tools["send_email"]["spec"]["name"], "send_email")
+        params = tools["send_email"]["spec"]["parameters"]["properties"]
+        self.assertIn("attachments", params)
+
+
+class EmailAttachmentTest(unittest.TestCase):
+    def test_load_file_attachment(self):
+        import tempfile
+        from unittest.mock import patch
+
+        from open_webui.utils import artifacts
+        from open_webui.utils.builtin_tools import _load_email_attachments
+
+        with tempfile.TemporaryDirectory() as tmp:
+            chat_id = "test-chat-email"
+            root = Path(tmp) / chat_id
+            root.mkdir(parents=True)
+            (root / "intermediate_results").mkdir()
+            plot = root / "plots" / "map.png"
+            plot.parent.mkdir(parents=True)
+            plot.write_bytes(b"\x89PNG\r\n")
+
+            with patch.object(artifacts, "ARTIFACTS_DIR", Path(tmp)):
+                loaded, notes = _load_email_attachments(chat_id, ["plots/map.png"])
+
+        self.assertEqual(len(loaded), 1)
+        filename, data, maintype, subtype = loaded[0]
+        self.assertEqual(filename, "plots_map.png")
+        self.assertEqual(data, b"\x89PNG\r\n")
+        self.assertEqual(maintype, "image")
+        self.assertEqual(subtype, "png")
+        self.assertIn("plots/map.png", notes[0])
+
+    def test_missing_attachment_raises(self):
+        import tempfile
+        from unittest.mock import patch
+
+        from open_webui.utils import artifacts
+        from open_webui.utils.builtin_tools import _load_email_attachments
+
+        with tempfile.TemporaryDirectory() as tmp:
+            chat_id = "test-chat-email-missing"
+            (Path(tmp) / chat_id).mkdir()
+            with patch.object(artifacts, "ARTIFACTS_DIR", Path(tmp)):
+                with self.assertRaises(FileNotFoundError):
+                    _load_email_attachments(chat_id, ["missing.png"])
 
 
 if __name__ == "__main__":
