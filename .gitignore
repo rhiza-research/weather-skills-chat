@@ -25,6 +25,9 @@ build/
 npm-debug.log*
 yarn-error.log*
 
+# Runtime cache
+backend/cache/
+
 # Pyodide runtime copied from node_modules (see scripts/prepare-pyodide.js)
 static/pyodide/*
 !static/pyodide/pyodide-lock.json
