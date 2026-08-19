@@ -281,6 +281,7 @@ class OAuthManager:
         form: Optional[str] = None,
         email: Optional[str] = None,
         name: Optional[str] = None,
+        error: Optional[str] = None,
     ) -> RedirectResponse:
         params: dict[str, str] = {}
         if form:
@@ -289,6 +290,8 @@ class OAuthManager:
             params["email"] = email
         if name:
             params["name"] = name
+        if error:
+            params["error"] = error
         query = f"?{urlencode(params)}" if params else ""
         return RedirectResponse(url=f"{request.base_url}auth{query}")
 
@@ -354,34 +357,35 @@ class OAuthManager:
                 log.warning(f"OAuth callback failed, email is missing: {user_data}")
                 raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
         email = email.lower()
-        if (
-            "*" not in auth_manager_config.OAUTH_ALLOWED_DOMAINS
-            and email.split("@")[-1] not in auth_manager_config.OAUTH_ALLOWED_DOMAINS
-        ):
-            log.warning(
-                f"OAuth callback failed, e-mail domain is not in the list of allowed domains: {user_data}"
-            )
-            # Browser OAuth callback would otherwise render a JSON 400. Send
-            # them to the same signup form as clicking "Sign up" on /auth.
-            username_claim = auth_manager_config.OAUTH_USERNAME_CLAIM
-            return self._auth_page_redirect(
-                request,
-                form="signup",
-                email=email,
-                name=user_data.get(username_claim) or None,
-            )
 
-        # Check if the user exists
+        # Existing users (admin-added or password signup) can always sign in
+        # with OAuth and have the identity merged, even if their domain is
+        # not on the auto-signup allowlist.
         user = Users.get_user_by_oauth_sub(provider_sub)
+        if not user:
+            user = Users.get_user_by_email(email)
+            if user:
+                Users.update_user_oauth_sub_by_id(user.id, provider_sub)
 
         if not user:
-            # If the user does not exist, check if merging is enabled
-            if auth_manager_config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL:
-                # Check if the user exists by email
-                user = Users.get_user_by_email(email)
-                if user:
-                    # Update the user with the new oauth sub
-                    Users.update_user_oauth_sub_by_id(user.id, provider_sub)
+            domain_allowed = (
+                "*" in auth_manager_config.OAUTH_ALLOWED_DOMAINS
+                or email.split("@")[-1]
+                in auth_manager_config.OAUTH_ALLOWED_DOMAINS
+            )
+            if not domain_allowed:
+                log.warning(
+                    "OAuth auto-signup blocked; e-mail domain is not allowed: %s",
+                    email,
+                )
+                username_claim = auth_manager_config.OAUTH_USERNAME_CLAIM
+                return self._auth_page_redirect(
+                    request,
+                    form="signup",
+                    email=email,
+                    name=user_data.get(username_claim) or None,
+                    error="oauth_not_allowed",
+                )
 
         if user:
             determined_role = self.get_user_role(user, user_data)

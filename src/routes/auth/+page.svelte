@@ -151,6 +151,13 @@
 		if (nameParam) {
 			name = nameParam;
 		}
+		if (querystringValue('error') === 'oauth_not_allowed') {
+			toast.error(
+				$i18n.t(
+					'That email or domain name is not registered. Please sign up to request access.'
+				)
+			);
+		}
 
 		if ($user !== undefined) {
 			const redirectPath = querystringValue('redirect') || '/';
