@@ -121,7 +121,7 @@ async def create_automation(
     )
     return (
         f"Created automation **{automation.name}** ({cron}) under {scope}."
-        f"{tool_note} Open /automations to manage it."
+        f"{tool_note} [Open automations](/automations) to manage it."
     )
 
 

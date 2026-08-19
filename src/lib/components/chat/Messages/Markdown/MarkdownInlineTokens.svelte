@@ -10,6 +10,11 @@
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
 
+	const isInternalAppPath = (text: string) => {
+		const path = text.trim();
+		return path.startsWith('/') && !path.startsWith('//') && !/\s/.test(path);
+	};
+
 	import Image from '$lib/components/common/Image.svelte';
 	import KatexRenderer from './KatexRenderer.svelte';
 	import Source from './Source.svelte';
@@ -34,12 +39,23 @@
 			{@html html}
 		{/if}
 	{:else if token.type === 'link'}
+		{@const internalLink = isInternalAppPath(token.href ?? '')}
 		{#if token.tokens}
-			<a href={token.href} target="_blank" rel="nofollow" title={token.title}>
+			<a
+				href={token.href}
+				target={internalLink ? undefined : '_blank'}
+				rel={internalLink ? undefined : 'nofollow'}
+				title={token.title}
+			>
 				<svelte:self id={`${id}-a`} tokens={token.tokens} {onSourceClick} />
 			</a>
 		{:else}
-			<a href={token.href} target="_blank" rel="nofollow" title={token.title}>{token.text}</a>
+			<a
+				href={token.href}
+				target={internalLink ? undefined : '_blank'}
+				rel={internalLink ? undefined : 'nofollow'}
+				title={token.title}>{token.text}</a
+			>
 		{/if}
 	{:else if token.type === 'image'}
 		<Image src={token.href} alt={token.text} />
@@ -48,15 +64,20 @@
 	{:else if token.type === 'em'}
 		<em><svelte:self id={`${id}-em`} tokens={token.tokens} {onSourceClick} /></em>
 	{:else if token.type === 'codespan'}
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
-		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-		<code
-			class="codespan cursor-pointer"
-			on:click={() => {
-				copyToClipboard(unescapeHtml(token.text));
-				toast.success($i18n.t('Copied to clipboard'));
-			}}>{unescapeHtml(token.text)}</code
-		>
+		{@const codespanText = unescapeHtml(token.text)}
+		{#if isInternalAppPath(codespanText)}
+			<a href={codespanText.trim()} class="codespan underline">{codespanText}</a>
+		{:else}
+			<!-- svelte-ignore a11y-click-events-have-key-events -->
+			<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+			<code
+				class="codespan cursor-pointer"
+				on:click={() => {
+					copyToClipboard(codespanText);
+					toast.success($i18n.t('Copied to clipboard'));
+				}}>{codespanText}</code
+			>
+		{/if}
 	{:else if token.type === 'br'}
 		<br />
 	{:else if token.type === 'del'}
