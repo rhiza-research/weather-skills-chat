@@ -53,3 +53,27 @@ export const uploadChatArtifact = async (
 	if (!res.ok) throw await res.json();
 	return res.json();
 };
+
+export const getArtifactArchive = async (token: string, chatId: string, paths: string[]) => {
+	const qs = new URLSearchParams();
+	for (const path of paths) {
+		qs.append('path', path);
+	}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?${qs}`, {
+		headers: { authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) throw await res.json();
+	return await res.arrayBuffer();
+};
+
+export const uploadArtifactArchive = async (token: string, chatId: string, data: ArrayBuffer) => {
+	const form = new FormData();
+	form.append('file', new Blob([data], { type: 'application/gzip' }), 'outputs.tar.gz');
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive`, {
+		method: 'POST',
+		headers: { authorization: `Bearer ${token}` },
+		body: form
+	});
+	if (!res.ok) throw await res.json();
+	return res.json();
+};

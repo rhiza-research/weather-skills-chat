@@ -217,7 +217,18 @@
 			code.includes('sympy') ? 'sympy' : null,
 			code.includes('tiktoken') ? 'tiktoken' : null,
 			code.includes('matplotlib') ? 'matplotlib' : null,
-			code.includes('pytz') ? 'pytz' : null
+			code.includes('pytz') ? 'pytz' : null,
+			code.includes('xarray') ? 'xarray' : null,
+			code.includes('zarr') ? 'zarr' : null,
+			code.includes('fsspec') ? 'fsspec' : null,
+			code.includes('netCDF4') || code.includes('netcdf4') ? 'netcdf4' : null,
+			code.includes('h5py') ? 'h5py' : null,
+			code.includes('rasterio') ? 'rasterio' : null,
+			code.includes('geopandas') ? 'geopandas' : null,
+			code.includes('cartopy') ? 'cartopy' : null,
+			code.includes('pyproj') ? 'pyproj' : null,
+			code.includes('shapely') ? 'shapely' : null,
+			code.includes('cftime') ? 'cftime' : null
 		].filter(Boolean);
 
 		console.log(packages);

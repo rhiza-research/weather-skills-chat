@@ -412,6 +412,7 @@ def get_event_call(request_info):
                 "data": event_data,
             },
             to=request_info["session_id"],
+            timeout=90,
         )
         return response
 

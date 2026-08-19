@@ -46,6 +46,10 @@ from starlette.responses import Response, StreamingResponse
 
 
 from open_webui.utils import logger
+from open_webui.utils.pyodide_assets import (
+    PyodidePackageStaticFiles,
+    should_spa_fallback,
+)
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
@@ -411,13 +415,10 @@ class SPAStaticFiles(StaticFiles):
             return await super().get_response(path, scope)
         except (HTTPException, StarletteHTTPException) as ex:
             if ex.status_code == 404:
-                if path.endswith(".js"):
-                    # Return 404 for javascript files
-                    raise ex
-                else:
+                if should_spa_fallback(path):
                     return await super().get_response("index.html", scope)
-            else:
                 raise ex
+            raise ex
 
 
 print(
@@ -1537,6 +1538,16 @@ applications.get_swagger_ui_html = swagger_ui_html
 
 if os.path.exists(FRONTEND_BUILD_DIR):
     mimetypes.add_type("text/javascript", ".js")
+    pyodide_dir = FRONTEND_BUILD_DIR / "pyodide"
+    if pyodide_dir.is_dir():
+        app.mount(
+            "/pyodide",
+            PyodidePackageStaticFiles(
+                directory=pyodide_dir,
+                cache_dir=CACHE_DIR / "pyodide",
+            ),
+            name="pyodide-packages",
+        )
     app.mount(
         "/",
         SPAStaticFiles(directory=FRONTEND_BUILD_DIR, html=True),

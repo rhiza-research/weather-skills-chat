@@ -1,5 +1,7 @@
+import io
 import json
 import shutil
+import tarfile
 from pathlib import Path
 from open_webui.env import ARTIFACTS_DIR
 
@@ -483,6 +485,117 @@ def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     return target
+
+
+EXECUTE_CODE_MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+
+
+def normalize_sandbox_relpath(path: str) -> str:
+    rel = (path or "").strip().replace("\\", "/").lstrip("/")
+    if not rel or rel in (".",):
+        raise ValueError("Provide a relative artifact path")
+    if "\x00" in rel:
+        raise ValueError("Invalid path")
+    parts = Path(rel).parts
+    if any(part in ("", "..") for part in parts):
+        raise ValueError("Path escapes the chat artifact sandbox")
+    return Path(*parts).as_posix()
+
+
+def sandbox_tree_size(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    if not path.exists():
+        return 0
+    total = 0
+    for child in path.rglob("*"):
+        if child.is_file() and not child.is_symlink():
+            total += child.stat().st_size
+    return total
+
+
+def _tar_add_filter(tarinfo: tarfile.TarInfo):
+    if tarinfo.issym() or tarinfo.islnk():
+        return None
+    return tarinfo
+
+
+def _safe_tar_member_name(name: str) -> str:
+    cleaned = (name or "").replace("\\", "/").lstrip("/")
+    while cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+    if not cleaned or cleaned in (".",):
+        raise ValueError("Invalid archive member path")
+    return normalize_sandbox_relpath(cleaned)
+
+
+def pack_sandbox_archive(chat_id: str, paths: list[str]) -> bytes:
+    """Gzip-tar one or more sandbox files/directories (includes zarr internals)."""
+    if not paths:
+        raise ValueError("Provide at least one path to archive")
+    resolved: list[tuple[str, Path]] = []
+    total = 0
+    seen: set[str] = set()
+    for raw in paths:
+        rel = normalize_sandbox_relpath(raw)
+        if rel in seen:
+            continue
+        seen.add(rel)
+        target = resolve_in_sandbox(chat_id, rel)
+        if not target.exists():
+            raise FileNotFoundError(f"Artifact not found: {rel}")
+        total += sandbox_tree_size(target)
+        if total > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+            raise ValueError(
+                f"Selected files exceed the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+            )
+        resolved.append((rel, target))
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for rel, target in resolved:
+            tar.add(
+                target,
+                arcname=rel,
+                recursive=True,
+                filter=_tar_add_filter,
+            )
+    data = buf.getvalue()
+    if len(data) > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+        raise ValueError(
+            f"Archive exceeds the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+        )
+    return data
+
+
+def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
+    """Extract a gzip/tar archive into the chat sandbox. Returns written file paths."""
+    if not data:
+        raise ValueError("Empty archive")
+    if len(data) > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+        raise ValueError(
+            f"Archive exceeds the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+        )
+
+    written: list[str] = []
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
+        for member in tar:
+            if member.issym() or member.islnk():
+                continue
+            name = _safe_tar_member_name(member.name)
+            dest = resolve_in_sandbox(chat_id, name)
+            if member.isdir():
+                dest.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                continue
+            handle = tar.extractfile(member)
+            if handle is None:
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(handle.read())
+            written.append(name)
+    return written
 
 
 def write_json(chat_id: str, relpath: str, payload: dict) -> Path:

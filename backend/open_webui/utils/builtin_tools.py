@@ -1,5 +1,9 @@
 from typing import Optional
 from pathlib import Path
+import json
+import logging
+import os
+from uuid import uuid4
 
 from open_webui.models.automations import AutomationForm, Automations
 from open_webui.models.chats import Chats
@@ -634,6 +638,15 @@ async def list_available_tools(
             kind="builtin",
         )
     )
+    features = metadata.get("features") or {}
+    if isinstance(features, dict) and features.get("code_interpreter"):
+        lines.append(
+            _tool_summary_line(
+                "execute_code",
+                "Run Python in Pyodide. Can copy artifact files into /mnt and back out.",
+                kind="builtin",
+            )
+        )
 
     selected_ids = list(metadata.get("tool_ids") or [])
     if selected_ids:
@@ -780,6 +793,273 @@ LIST_AVAILABLE_TOOLS_SPEC = {
 }
 
 
+log = logging.getLogger(__name__)
+
+
+def _rewrite_png_data_uris(text: str) -> str:
+    if not isinstance(text, str) or "data:image/png;base64" not in text:
+        return text
+    import base64
+
+    from open_webui.config import CACHE_DIR
+
+    lines = text.split("\n")
+    for idx, line in enumerate(lines):
+        if "data:image/png;base64" not in line:
+            continue
+        try:
+            image_id = str(uuid4())
+            os.makedirs(os.path.join(CACHE_DIR, "images"), exist_ok=True)
+            image_path = os.path.join(CACHE_DIR, f"images/{image_id}.png")
+            with open(image_path, "wb") as handle:
+                handle.write(base64.b64decode(line.split(",", 1)[1]))
+            lines[idx] = f"![Output Image {idx}](/cache/images/{image_id}.png)"
+        except Exception:
+            log.exception("Failed to persist interpreter image")
+    return "\n".join(lines)
+
+
+def _as_path_list(value) -> list[str]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        parts = [value]
+    elif isinstance(value, (list, tuple)):
+        parts = list(value)
+    else:
+        raise ValueError("inputs/outputs must be a list of relative artifact paths")
+    paths = []
+    for item in parts:
+        text = str(item).strip()
+        if text:
+            paths.append(text)
+    return paths
+
+
+async def execute_code(
+    code: str,
+    inputs: Optional[list[str]] = None,
+    outputs: Optional[list[str]] = None,
+    __request__=None,
+    __event_call__=None,
+    __metadata__: dict = None,
+    __user__: dict = {},
+) -> str:
+    """Run Python in the browser Pyodide sandbox (or Jupyter) and return output.
+
+    Optional ``inputs`` are copied from the chat artifact sandbox into Pyodide
+    at ``/mnt/<path>`` before execution. Optional ``outputs`` are copied from
+    ``/mnt/<path>`` back into the artifact sandbox afterwards.
+    """
+    if __request__ is None:
+        return json.dumps({"error": "Request context not available"})
+
+    engine = getattr(
+        __request__.app.state.config, "CODE_INTERPRETER_ENGINE", "pyodide"
+    )
+    metadata = __metadata__ or {}
+
+    try:
+        input_paths = _as_path_list(inputs)
+        output_paths = _as_path_list(outputs)
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+
+    chat_id = metadata.get("chat_id")
+    if (input_paths or output_paths) and (not chat_id or chat_id == "local"):
+        return json.dumps(
+            {
+                "error": (
+                    "Cannot copy artifact files in a temporary chat. "
+                    "Save the chat first."
+                )
+            }
+        )
+
+    if input_paths or output_paths:
+        user = Users.get_user_by_id((__user__ or {}).get("id"))
+        chat = Chats.get_chat_by_id(chat_id) if chat_id else None
+        if output_paths:
+            if not can_write_chat(user, chat):
+                return json.dumps(
+                    {"error": "You do not have write access to this chat."}
+                )
+        elif not can_read_chat(user, chat):
+            return json.dumps({"error": "You do not have access to this chat."})
+
+        try:
+            from open_webui.utils.artifacts import (
+                EXECUTE_CODE_MAX_ARCHIVE_BYTES,
+                normalize_sandbox_relpath,
+                resolve_in_sandbox,
+                sandbox_tree_size,
+            )
+
+            input_paths = [normalize_sandbox_relpath(p) for p in input_paths]
+            output_paths = [normalize_sandbox_relpath(p) for p in output_paths]
+            total = 0
+            for rel in input_paths:
+                target = resolve_in_sandbox(chat_id, rel)
+                if not target.exists():
+                    return json.dumps({"error": f"Artifact not found: {rel}"})
+                total += sandbox_tree_size(target)
+                if total > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+                    return json.dumps(
+                        {
+                            "error": (
+                                "Input files exceed the "
+                                f"{EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
+                            )
+                        }
+                    )
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+
+    try:
+        if engine == "pyodide":
+            if __event_call__ is None:
+                return json.dumps(
+                    {
+                        "error": (
+                            "Pyodide needs a live browser session. "
+                            "Reload the page and try again."
+                        )
+                    }
+                )
+            output = await __event_call__(
+                {
+                    "type": "execute:python",
+                    "data": {
+                        "id": str(uuid4()),
+                        "code": code,
+                        "session_id": metadata.get("session_id"),
+                        "chat_id": chat_id,
+                        "inputs": input_paths,
+                        "outputs": output_paths,
+                    },
+                }
+            )
+        elif engine == "jupyter":
+            if input_paths or output_paths:
+                return json.dumps(
+                    {
+                        "error": (
+                            "Copying artifact files into execute_code is only "
+                            "supported with the Pyodide engine."
+                        )
+                    }
+                )
+            from open_webui.utils.code_interpreter import execute_code_jupyter
+
+            config = __request__.app.state.config
+            auth = getattr(config, "CODE_INTERPRETER_JUPYTER_AUTH", "")
+            output = await execute_code_jupyter(
+                getattr(config, "CODE_INTERPRETER_JUPYTER_URL", ""),
+                code,
+                (
+                    getattr(config, "CODE_INTERPRETER_JUPYTER_AUTH_TOKEN", None)
+                    if auth == "token"
+                    else None
+                ),
+                (
+                    getattr(config, "CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD", None)
+                    if auth == "password"
+                    else None
+                ),
+                getattr(config, "CODE_INTERPRETER_JUPYTER_TIMEOUT", 60),
+            )
+        else:
+            return json.dumps(
+                {"error": f"Unknown code interpreter engine: {engine}"}
+            )
+
+        if not isinstance(output, dict):
+            return json.dumps(
+                {
+                    "status": "success" if output else "error",
+                    "result": str(output) if output else "",
+                }
+            )
+
+        if output.get("error") and not output.get("stdout") and not output.get("result"):
+            return json.dumps(
+                {
+                    "status": "error",
+                    "stderr": output.get("error"),
+                    "stdout": "",
+                    "result": "",
+                }
+            )
+
+        stdout = _rewrite_png_data_uris(output.get("stdout") or "")
+        result = _rewrite_png_data_uris(output.get("result") or "")
+        stderr = output.get("stderr") or ""
+        payload = {
+            "status": "error" if stderr else "success",
+            "stdout": stdout,
+            "stderr": stderr,
+            "result": result,
+        }
+        if input_paths:
+            payload["inputs"] = input_paths
+        copied = output.get("copied_outputs") or output.get("written")
+        if copied:
+            payload["outputs"] = copied
+        missing = output.get("missing_outputs") or []
+        if missing:
+            payload["outputs_missing"] = missing
+        return json.dumps(payload, ensure_ascii=False)
+    except Exception as e:
+        log.exception("execute_code failed")
+        return json.dumps({"error": str(e)})
+
+
+EXECUTE_CODE_SPEC = {
+    "name": "execute_code",
+    "description": (
+        "Execute Python in a sandboxed in-browser interpreter (Pyodide) and "
+        "return stdout, stderr, and the result. Optional inputs are copied "
+        "from this chat's artifact sandbox into `/mnt/<path>` before the code "
+        "runs; optional outputs are copied from `/mnt/<path>` back into the "
+        "artifact sandbox afterwards (files or zarr folders). The working "
+        "directory is `/mnt`. Packages are limited to what Pyodide/micropip "
+        "can install (numpy, pandas, xarray, matplotlib, and similar)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": (
+                    "Python source to run. Read inputs from `/mnt/<path>`. "
+                    "Write anything that should be saved back under `/mnt/` "
+                    "and list those paths in outputs. Print values you need "
+                    "to see."
+                ),
+            },
+            "inputs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Artifact-sandbox relative paths to copy into Pyodide at "
+                    "`/mnt/<path>` before execution (files or directories, "
+                    "including zarr stores)."
+                ),
+            },
+            "outputs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Paths relative to `/mnt` to copy back into the artifact "
+                    "sandbox after execution, using the same relative path."
+                ),
+            },
+        },
+        "required": ["code"],
+    },
+}
+
+
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
@@ -793,7 +1073,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
             "citation": False,
         }
 
-    return {
+    tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
         "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
         "create_secret": _tool(create_secret, CREATE_SECRET_SPEC),
@@ -804,3 +1084,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
     }
+    features = (extra_params.get("__metadata__") or {}).get("features") or {}
+    if isinstance(features, dict) and features.get("code_interpreter"):
+        tools["execute_code"] = _tool(execute_code, EXECUTE_CODE_SPEC)
+    return tools

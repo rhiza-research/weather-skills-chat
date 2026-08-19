@@ -2,14 +2,16 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
+    extract_sandbox_archive,
     is_zarr_store,
     is_zarr_view,
     list_artifacts,
+    pack_sandbox_archive,
     read_view,
     resolve_in_sandbox,
     write_bytes,
@@ -65,6 +67,43 @@ async def get_artifact_content(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
     return FileResponse(target, filename=target.name)
+
+
+@router.get("/{chat_id}/artifacts/archive")
+async def get_artifact_archive(
+    chat_id: str,
+    path: list[str] = Query(..., min_length=1),
+    user=Depends(get_verified_user),
+):
+    _readable(chat_id, user)
+    try:
+        data = pack_sandbox_archive(chat_id, path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/gzip",
+        headers={
+            "Content-Disposition": 'attachment; filename="artifacts.tar.gz"'
+        },
+    )
+
+
+@router.post("/{chat_id}/artifacts/archive")
+async def upload_artifact_archive(
+    chat_id: str,
+    file: UploadFile = File(...),
+    user=Depends(get_verified_user),
+):
+    _writable(chat_id, user)
+    data = await file.read()
+    try:
+        written = extract_sandbox_archive(chat_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return {"ok": True, "written": written}
 
 
 @router.post("/{chat_id}/artifacts")

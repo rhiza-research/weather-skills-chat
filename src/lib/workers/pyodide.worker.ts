@@ -64,28 +64,51 @@ async function loadPyodideAndPackages(packages: string[] = []) {
 }
 
 self.onmessage = async (event) => {
-	const { id, code, ...context } = event.data;
+	const { id, code, inputArchive, outputs, ...context } = event.data;
 
-	console.log(event.data);
+	console.log({ id, packages: context.packages, outputs, hasInputArchive: !!inputArchive });
 
-	// The worker copies the context in its own "memory" (an object mapping name to values)
 	for (const key of Object.keys(context)) {
 		self[key] = context[key];
 	}
 
-	// make sure loading is done
 	await loadPyodideAndPackages(self.packages);
 
 	try {
-		// check if matplotlib is imported in the code
+		await self.pyodide.loadPackagesFromImports(code);
+	} catch (error) {
+		console.error('loadPackagesFromImports failed:', error);
+	}
+
+	let outputArchive = null;
+	let missingOutputs: string[] = [];
+
+	try {
+		self.pyodide.FS.mkdirTree('/mnt');
+		self.pyodide.FS.mkdirTree('/tmp');
+
+		if (inputArchive) {
+			self.pyodide.FS.writeFile('/tmp/_inputs.tar.gz', new Uint8Array(inputArchive));
+			await self.pyodide.runPythonAsync(`
+import os, tarfile
+os.makedirs('/mnt', exist_ok=True)
+with tarfile.open('/tmp/_inputs.tar.gz', 'r:*') as tar:
+    tar.extractall('/mnt', filter='data')
+os.chdir('/mnt')
+`);
+		} else {
+			await self.pyodide.runPythonAsync(`
+import os
+os.makedirs('/mnt', exist_ok=True)
+os.chdir('/mnt')
+`);
+		}
+
 		if (code.includes('matplotlib')) {
-			// Override plt.show() to return base64 image
 			await self.pyodide.runPythonAsync(`import base64
 import os
 from io import BytesIO
 
-# before importing matplotlib
-# to avoid the wasm backend (which needs js.document', not available in worker)
 os.environ["MPLBACKEND"] = "AGG"
 
 import matplotlib.pyplot
@@ -97,7 +120,6 @@ def show(*, block=None):
 	buf = BytesIO()
 	matplotlib.pyplot.savefig(buf, format="png")
 	buf.seek(0)
-	# encode to a base64 str
 	img_str = base64.b64encode(buf.read()).decode('utf-8')
 	matplotlib.pyplot.clf()
 	buf.close()
@@ -107,29 +129,65 @@ matplotlib.pyplot.show = show`);
 		}
 
 		self.result = await self.pyodide.runPythonAsync(code);
-
-		// Safely process and recursively serialize the result
 		self.result = processResult(self.result);
-
 		console.log('Python result:', self.result);
-
-		// Persist any changes to IndexedDB
-		// await new Promise<void>((resolve, reject) => {
-		// 	self.pyodide.FS.syncfs(false, (err) => {
-		// 		if (err) {
-		// 			console.error('Error syncing to IndexedDB:', err);
-		// 			reject(err);
-		// 		} else {
-		// 			console.log('Successfully synced to IndexedDB.');
-		// 			resolve();
-		// 		}
-		// 	});
-		// });
 	} catch (error) {
 		self.stderr = error.toString();
 	}
 
-	self.postMessage({ id, result: self.result, stdout: self.stdout, stderr: self.stderr });
+	try {
+		const outputPaths = Array.isArray(outputs) ? outputs : [];
+		if (outputPaths.length) {
+			self.pyodide.FS.writeFile('/tmp/_outputs.json', JSON.stringify(outputPaths));
+			await self.pyodide.runPythonAsync(`
+import json, os, tarfile, io
+outs = json.load(open('/tmp/_outputs.json'))
+missing = []
+buf = io.BytesIO()
+added = False
+with tarfile.open(fileobj=buf, mode='w:gz') as tar:
+    for rel in outs:
+        rel = str(rel).replace('\\\\', '/').lstrip('/')
+        if rel.startswith('mnt/'):
+            rel = rel[4:]
+        if not rel or '..' in rel.split('/'):
+            missing.append(rel)
+            continue
+        src = os.path.join('/mnt', rel)
+        if not os.path.exists(src):
+            missing.append(rel)
+            continue
+        tar.add(src, arcname=rel)
+        added = True
+open('/tmp/_missing.json', 'w').write(json.dumps(missing))
+open('/tmp/_out.tar.gz', 'wb').write(buf.getvalue() if added else b'')
+`);
+			const missingRaw = self.pyodide.FS.readFile('/tmp/_missing.json', { encoding: 'utf8' });
+			missingOutputs = JSON.parse(missingRaw || '[]');
+			const packed = self.pyodide.FS.readFile('/tmp/_out.tar.gz');
+			if (packed && packed.byteLength > 0) {
+				outputArchive = packed.buffer.slice(
+					packed.byteOffset,
+					packed.byteOffset + packed.byteLength
+				);
+			}
+		}
+	} catch (error) {
+		const message = error?.toString?.() || String(error);
+		self.stderr = self.stderr ? `${self.stderr}\n${message}` : message;
+	}
+
+	self.postMessage(
+		{
+			id,
+			result: self.result,
+			stdout: self.stdout,
+			stderr: self.stderr,
+			outputArchive,
+			missingOutputs
+		},
+		outputArchive ? [outputArchive] : []
+	);
 };
 
 function processResult(result: any): any {

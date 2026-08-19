@@ -47,6 +47,7 @@
 	import XMark from '../icons/XMark.svelte';
 	import Headphone from '../icons/Headphone.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
+	import CommandLine from '../icons/CommandLine.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
 	import { KokoroWorker } from '$lib/workers/KokoroWorker';
@@ -88,7 +89,8 @@
 		files,
 		selectedToolIds,
 		imageGenerationEnabled,
-		webSearchEnabled
+		webSearchEnabled,
+		codeInterpreterEnabled
 	});
 
 	let showTools = false;
@@ -773,6 +775,7 @@
 														selectedToolIds = [];
 														webSearchEnabled = false;
 														imageGenerationEnabled = false;
+														codeInterpreterEnabled = false;
 													}
 												}}
 												on:paste={async (e) => {
@@ -980,6 +983,7 @@
 													selectedToolIds = [];
 													webSearchEnabled = false;
 													imageGenerationEnabled = false;
+													codeInterpreterEnabled = false;
 												}
 											}}
 											rows="1"
@@ -1160,6 +1164,28 @@
 															<span
 																class="hidden @xl:block whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
 																>{$i18n.t('Image')}</span
+															>
+														</button>
+													</Tooltip>
+												{/if}
+
+												{#if $config?.features?.enable_code_interpreter && ($_user.role === 'admin' || $_user?.permissions?.features?.code_interpreter)}
+													<Tooltip content={$i18n.t('Execute code for analysis')} placement="top">
+														<button
+															on:click|preventDefault={() =>
+																(codeInterpreterEnabled = !codeInterpreterEnabled)}
+															type="button"
+															aria-pressed={codeInterpreterEnabled}
+															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden max-w-full overflow-hidden border {codeInterpreterEnabled
+																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
+																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
+														>
+															<CommandLine className="size-5" strokeWidth="1.75" />
+															<span
+																class="whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
+																>{codeInterpreterEnabled
+																	? $i18n.t('Code Interpreter Enabled')
+																	: $i18n.t('Code Interpreter Disabled')}</span
 															>
 														</button>
 													</Tooltip>

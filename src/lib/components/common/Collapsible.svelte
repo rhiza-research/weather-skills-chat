@@ -225,11 +225,26 @@
 		};
 	}
 
+	function extractExecuteCodeSource(name: string, argsRaw: string): string | null {
+		if (name !== 'execute_code') {
+			return null;
+		}
+		const args = unwrapJSON(argsRaw);
+		if (args && typeof args === 'object' && typeof args.code === 'string') {
+			return args.code;
+		}
+		return null;
+	}
+
 	$: toolArgsRaw = attributes?.type === 'tool_calls' ? decode(attributes?.arguments ?? '') : '';
 	$: toolCallSignature =
 		attributes?.type === 'tool_calls'
 			? formatToolCallSignature(attributes?.name ?? '', toolArgsRaw)
 			: '';
+	$: executeCodeSource =
+		attributes?.type === 'tool_calls'
+			? extractExecuteCodeSource(attributes?.name ?? '', toolArgsRaw)
+			: null;
 	$: toolResultRaw = attributes?.type === 'tool_calls' ? decode(attributes?.result ?? '') : '';
 	$: toolResult = attributes?.type === 'tool_calls' ? parseToolResult(toolResultRaw) : null;
 	$: toolFailed =
@@ -367,6 +382,8 @@
 				>
 					<ToolCallDetails
 						callSignature={toolCallSignature}
+						pythonCode={executeCodeSource ?? ''}
+						blockId={collapsibleId}
 						done={attributes?.done === 'true'}
 						result={toolResult}
 						failed={toolFailed}

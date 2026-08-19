@@ -176,6 +176,7 @@
 		selectedToolIds = [];
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
+		codeInterpreterEnabled = false;
 
 		try {
 			const ok = await loadChat(id);
@@ -202,6 +203,7 @@
 					selectedToolIds = input.selectedToolIds;
 					webSearchEnabled = input.webSearchEnabled;
 					imageGenerationEnabled = input.imageGenerationEnabled;
+					codeInterpreterEnabled = input.codeInterpreterEnabled;
 				} catch (e) {}
 			}
 
@@ -294,6 +296,15 @@
 
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
+
+		const type = event?.data?.type ?? null;
+		if (
+			type === 'execute:python' ||
+			type === 'execute:tool' ||
+			type === 'request:chat:completion'
+		) {
+			return;
+		}
 
 		if (event.chat_id === $chatId) {
 			await tick();
@@ -482,12 +493,14 @@
 				selectedToolIds = input.selectedToolIds;
 				webSearchEnabled = input.webSearchEnabled;
 				imageGenerationEnabled = input.imageGenerationEnabled;
+				codeInterpreterEnabled = input.codeInterpreterEnabled;
 			} catch (e) {
 				prompt = '';
 				files = [];
 				selectedToolIds = [];
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
+				codeInterpreterEnabled = false;
 			}
 		}
 

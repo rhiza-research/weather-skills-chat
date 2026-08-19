@@ -87,7 +87,6 @@ from open_webui.utils.langfuse_tracing import (
 from open_webui.config import (
     CACHE_DIR,
     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
-    DEFAULT_CODE_INTERPRETER_PROMPT,
 )
 from open_webui.env import (
     SRC_LOG_LEVELS,
@@ -101,6 +100,83 @@ from open_webui.constants import TASKS
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
+
+
+def format_code_interpreter_result(output) -> str:
+    """Readable stdout/stderr for the model. Empty dicts still produce a message."""
+    if output is None or output == "":
+        body = "The code interpreter produced no output."
+    elif isinstance(output, str):
+        body = output
+    elif isinstance(output, dict):
+        parts = []
+        if output.get("error"):
+            parts.append(f"error:\n{output['error']}")
+        stdout = output.get("stdout")
+        stderr = output.get("stderr")
+        result = output.get("result")
+        if stdout:
+            parts.append(f"stdout:\n{stdout}")
+        if stderr:
+            parts.append(f"stderr:\n{stderr}")
+        if result not in (None, ""):
+            parts.append(f"result:\n{result}")
+        if not parts:
+            parts.append(json.dumps(output, indent=2, default=str))
+        body = "\n\n".join(parts)
+    else:
+        body = str(output)
+
+    return (
+        "Code interpreter result:\n"
+        f"{body}\n\n"
+        "If this is an error, fix the code and run it again using "
+        '<code_interpreter type="code" lang="python"> tags. '
+        "Otherwise continue with your analysis."
+    )
+
+
+def code_interpreter_followup_messages(content_blocks, serialize_fn):
+    """Build messages that end on a user turn after each executed snippet.
+
+    Claude 4.6+ (and Anthropic's OpenAI-compatible endpoint) reject a trailing
+    assistant prefill with HTTP 400. Putting stdout/stderr in a user message
+    both satisfies that and lets the model see errors and retry.
+    """
+    messages = []
+    pending = []
+
+    def flush_assistant():
+        nonlocal pending
+        if not pending:
+            return
+        content = serialize_fn(pending, raw=True)
+        pending = []
+        if content and str(content).strip():
+            messages.append({"role": "assistant", "content": content})
+
+    for block in content_blocks:
+        if block.get("type") == "code_interpreter" and "output" in block:
+            pending.append({**block, "output": None})
+            flush_assistant()
+            messages.append(
+                {
+                    "role": "user",
+                    "content": format_code_interpreter_result(block.get("output")),
+                }
+            )
+        else:
+            pending.append(block)
+
+    flush_assistant()
+    if not messages or messages[-1]["role"] != "user":
+        messages.append(
+            {
+                "role": "user",
+                "content": format_code_interpreter_result(None),
+            }
+        )
+    return messages
 
 
 async def chat_completion_tools_handler(
@@ -843,15 +919,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 request, form_data, extra_params, user
             )
 
-        if "code_interpreter" in features and features["code_interpreter"]:
-            form_data["messages"] = add_or_update_user_message(
-                (
-                    request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE
-                    if request.app.state.config.CODE_INTERPRETER_PROMPT_TEMPLATE != ""
-                    else DEFAULT_CODE_INTERPRETER_PROMPT
-                ),
-                form_data["messages"],
-            )
+        # code_interpreter is registered as the execute_code built-in tool
+        # (same native tool-call loop as skills). Do not inject the XML
+        # <code_interpreter> prompt — that bypasses tool_calls and breaks
+        # Anthropic, which rejects a trailing assistant prefill.
 
     tool_ids = form_data.pop("tool_ids", None)
     files = form_data.pop("files", None)
@@ -2308,12 +2379,10 @@ async def process_chat_response(
                                     "stream": True,
                                     "messages": [
                                         *form_data["messages"],
-                                        {
-                                            "role": "assistant",
-                                            "content": serialize_content_blocks(
-                                                content_blocks, raw=True
-                                            ),
-                                        },
+                                        *code_interpreter_followup_messages(
+                                            content_blocks,
+                                            serialize_content_blocks,
+                                        ),
                                     ],
                                 },
                                 user,
@@ -2324,7 +2393,9 @@ async def process_chat_response(
                             else:
                                 break
                         except Exception as e:
-                            log.debug(e)
+                            log.exception(
+                                "Code interpreter follow-up completion failed: %s", e
+                            )
                             break
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])

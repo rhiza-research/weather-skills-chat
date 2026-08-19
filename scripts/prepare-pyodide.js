@@ -12,12 +12,27 @@ const packages = [
 	'sympy',
 	'tiktoken',
 	'seaborn',
-	'pytz'
+	'pytz',
+	// Geospatial / weather-skills stack (Pyodide 314.x catalog)
+	'fsspec',
+	'xarray',
+	'zarr',
+	'numcodecs',
+	'bottleneck',
+	'cftime',
+	'h5py',
+	'netcdf4',
+	'pyproj',
+	'shapely',
+	'affine',
+	'rasterio',
+	'geopandas',
+	'cartopy'
 ];
 
 import { loadPyodide } from 'pyodide';
 import { setGlobalDispatcher, ProxyAgent } from 'undici';
-import { writeFile, readFile, copyFile, readdir, rmdir } from 'fs/promises';
+import { copyFile, readFile, readdir, rmdir } from 'fs/promises';
 
 /**
  * Loading network proxy configurations from the environment variables.
@@ -49,6 +64,10 @@ function initNetworkProxyFromEnv() {
 	console.log(`Initialized network proxy "${preferedProxy}" from env`);
 }
 
+function pinnedPyodideVersion(packageJson) {
+	return String(packageJson.dependencies.pyodide).replace(/^[\^~]/, '');
+}
+
 async function downloadPackages() {
 	console.log('Setting up pyodide + micropip');
 
@@ -63,11 +82,11 @@ async function downloadPackages() {
 	}
 
 	const packageJson = JSON.parse(await readFile('package.json'));
-	const pyodideVersion = packageJson.dependencies.pyodide.replace('^', '');
+	const pyodideVersion = pinnedPyodideVersion(packageJson);
 
 	try {
 		const pyodidePackageJson = JSON.parse(await readFile('static/pyodide/package.json'));
-		const pyodidePackageVersion = pyodidePackageJson.version.replace('^', '');
+		const pyodidePackageVersion = String(pyodidePackageJson.version).replace(/^[\^~]/, '');
 
 		if (pyodideVersion !== pyodidePackageVersion) {
 			console.log('Pyodide version mismatch, removing static/pyodide directory');
@@ -94,14 +113,7 @@ async function downloadPackages() {
 			return;
 		}
 
-		console.log('Pyodide packages downloaded, freezing into lock file');
-
-		try {
-			const lockFile = await micropip.freeze();
-			await writeFile('static/pyodide/pyodide-lock.json', lockFile);
-		} catch (err) {
-			console.error('Failed to write lock file:', err);
-		}
+		console.log('Pyodide packages downloaded');
 	} catch (err) {
 		console.error('Failed to load or install micropip:', err);
 	}

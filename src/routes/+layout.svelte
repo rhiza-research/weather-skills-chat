@@ -26,6 +26,7 @@
 		isLastActiveTab,
 		isApp,
 		appInfo,
+		artifactsRefresh,
 		toolServers
 	} from '$lib/stores';
 	import { goto } from '$app/navigation';
@@ -33,6 +34,7 @@
 	import { Toaster, toast } from 'svelte-sonner';
 
 	import { executeToolServer, getBackendConfig } from '$lib/apis';
+	import { getArtifactArchive, uploadArtifactArchive } from '$lib/apis/artifacts';
 	import { getSessionUser } from '$lib/apis/auths';
 
 	import '../tailwind.css';
@@ -103,105 +105,148 @@
 		});
 	};
 
-	const executePythonAsWorker = async (id, code, cb) => {
-		let result = null;
-		let stdout = null;
-		let stderr = null;
+	const serializePythonResult = (stdout, stderr, result, extra = {}) =>
+		JSON.parse(
+			JSON.stringify(
+				{
+					stdout: stdout,
+					stderr: stderr,
+					result: result,
+					...extra
+				},
+				(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
+			)
+		);
 
-		let executing = true;
-		let packages = [
-			code.includes('requests') ? 'requests' : null,
-			code.includes('bs4') ? 'beautifulsoup4' : null,
-			code.includes('numpy') ? 'numpy' : null,
-			code.includes('pandas') ? 'pandas' : null,
-			code.includes('matplotlib') ? 'matplotlib' : null,
-			code.includes('sklearn') ? 'scikit-learn' : null,
-			code.includes('scipy') ? 'scipy' : null,
-			code.includes('re') ? 'regex' : null,
-			code.includes('seaborn') ? 'seaborn' : null,
-			code.includes('sympy') ? 'sympy' : null,
-			code.includes('tiktoken') ? 'tiktoken' : null,
-			code.includes('pytz') ? 'pytz' : null
-		].filter(Boolean);
+	const executePythonAsWorker = (id, code, cb, options = {}) => {
+		return new Promise((resolve) => {
+			let result = null;
+			let stdout = null;
+			let stderr = null;
+			let settled = false;
 
-		const pyodideWorker = new PyodideWorker();
-
-		pyodideWorker.postMessage({
-			id: id,
-			code: code,
-			packages: packages
-		});
-
-		setTimeout(() => {
-			if (executing) {
-				executing = false;
-				stderr = 'Execution Time Limit Exceeded';
-				pyodideWorker.terminate();
-
-				if (cb) {
-					cb(
-						JSON.parse(
-							JSON.stringify(
-								{
-									stdout: stdout,
-									stderr: stderr,
-									result: result
-								},
-								(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-							)
-						)
-					);
+			const finish = (payload) => {
+				if (settled) {
+					return;
 				}
-			}
-		}, 60000);
+				settled = true;
+				if (cb) {
+					cb(payload);
+				}
+				resolve(payload);
+			};
 
-		pyodideWorker.onmessage = (event) => {
-			console.log('pyodideWorker.onmessage', event);
-			const { id, ...data } = event.data;
+			const packages = [
+				code.includes('requests') ? 'requests' : null,
+				code.includes('bs4') ? 'beautifulsoup4' : null,
+				code.includes('numpy') ? 'numpy' : null,
+				code.includes('pandas') ? 'pandas' : null,
+				code.includes('matplotlib') ? 'matplotlib' : null,
+				code.includes('sklearn') ? 'scikit-learn' : null,
+				code.includes('scipy') ? 'scipy' : null,
+				code.includes('re') ? 'regex' : null,
+				code.includes('seaborn') ? 'seaborn' : null,
+				code.includes('sympy') ? 'sympy' : null,
+				code.includes('tiktoken') ? 'tiktoken' : null,
+				code.includes('pytz') ? 'pytz' : null,
+				code.includes('xarray') ? 'xarray' : null,
+				code.includes('zarr') ? 'zarr' : null,
+				code.includes('fsspec') ? 'fsspec' : null,
+				code.includes('netCDF4') || code.includes('netcdf4') ? 'netcdf4' : null,
+				code.includes('h5py') ? 'h5py' : null,
+				code.includes('rasterio') ? 'rasterio' : null,
+				code.includes('geopandas') ? 'geopandas' : null,
+				code.includes('cartopy') ? 'cartopy' : null,
+				code.includes('pyproj') ? 'pyproj' : null,
+				code.includes('shapely') ? 'shapely' : null,
+				code.includes('cftime') ? 'cftime' : null
+			].filter(Boolean);
 
-			console.log(id, data);
+			const inputs = Array.isArray(options.inputs) ? options.inputs.filter(Boolean) : [];
+			const outputs = Array.isArray(options.outputs) ? options.outputs.filter(Boolean) : [];
+			const runChatId = options.chatId || '';
 
-			data['stdout'] && (stdout = data['stdout']);
-			data['stderr'] && (stderr = data['stderr']);
-			data['result'] && (result = data['result']);
+			const pyodideWorker = new PyodideWorker();
 
-			if (cb) {
-				cb(
-					JSON.parse(
-						JSON.stringify(
-							{
-								stdout: stdout,
-								stderr: stderr,
-								result: result
-							},
-							(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-						)
-					)
+			setTimeout(() => {
+				if (!settled) {
+					stderr = 'Execution Time Limit Exceeded';
+					pyodideWorker.terminate();
+					finish(serializePythonResult(stdout, stderr, result));
+				}
+			}, 90000);
+
+			const run = async () => {
+				let inputArchive = null;
+				try {
+					if (inputs.length) {
+						if (!runChatId || !localStorage.token) {
+							throw new Error('Cannot copy artifact inputs without a saved chat session.');
+						}
+						inputArchive = await getArtifactArchive(localStorage.token, runChatId, inputs);
+					}
+				} catch (error) {
+					pyodideWorker.terminate();
+					const message = error?.detail || error?.message || String(error);
+					finish(
+						serializePythonResult(null, `Failed to copy inputs into Pyodide: ${message}`, null)
+					);
+					return;
+				}
+
+				pyodideWorker.onmessage = async (event) => {
+					console.log('pyodideWorker.onmessage', event);
+					const { id: _id, outputArchive, missingOutputs, ...data } = event.data;
+
+					data['stdout'] && (stdout = data['stdout']);
+					data['stderr'] && (stderr = data['stderr']);
+					data['result'] && (result = data['result']);
+
+					const extra = {};
+					if (Array.isArray(missingOutputs) && missingOutputs.length) {
+						extra.missing_outputs = missingOutputs;
+					}
+
+					if (outputArchive && runChatId && localStorage.token) {
+						try {
+							const uploaded = await uploadArtifactArchive(
+								localStorage.token,
+								runChatId,
+								outputArchive
+							);
+							extra.copied_outputs = uploaded?.written || [];
+							artifactsRefresh.update((n) => n + 1);
+						} catch (error) {
+							const message = error?.detail || error?.message || String(error);
+							stderr = stderr
+								? `${stderr}\nFailed to copy outputs into artifacts: ${message}`
+								: `Failed to copy outputs into artifacts: ${message}`;
+						}
+					}
+
+					finish(serializePythonResult(stdout, stderr, result, extra));
+				};
+
+				pyodideWorker.onerror = (event) => {
+					console.log('pyodideWorker.onerror', event);
+					finish(serializePythonResult(stdout, stderr, result));
+				};
+
+				const transfer = inputArchive ? [inputArchive] : [];
+				pyodideWorker.postMessage(
+					{
+						id: id,
+						code: code,
+						packages: packages,
+						inputArchive,
+						outputs
+					},
+					transfer
 				);
-			}
+			};
 
-			executing = false;
-		};
-
-		pyodideWorker.onerror = (event) => {
-			console.log('pyodideWorker.onerror', event);
-
-			if (cb) {
-				cb(
-					JSON.parse(
-						JSON.stringify(
-							{
-								stdout: stdout,
-								stderr: stderr,
-								result: result
-							},
-							(_key, value) => (typeof value === 'bigint' ? value.toString() : value)
-						)
-					)
-				);
-			}
-			executing = false;
-		};
+			void run();
+		});
 	};
 
 	const executeTool = async (data, cb) => {
@@ -210,6 +255,7 @@
 
 		console.log('executeTool', data, toolServer);
 
+		let payload;
 		if (toolServer) {
 			console.log(toolServer);
 			const res = await executeToolServer(
@@ -221,20 +267,18 @@
 			);
 
 			console.log('executeToolServer', res);
-			if (cb) {
-				cb(JSON.parse(JSON.stringify(res)));
-			}
+			payload = JSON.parse(JSON.stringify(res));
 		} else {
-			if (cb) {
-				cb(
-					JSON.parse(
-						JSON.stringify({
-							error: 'Tool Server Not Found'
-						})
-					)
-				);
-			}
+			payload = JSON.parse(
+				JSON.stringify({
+					error: 'Tool Server Not Found'
+				})
+			);
 		}
+		if (cb) {
+			cb(payload);
+		}
+		return payload;
 	};
 
 	const chatEventHandler = async (event, cb) => {
@@ -259,44 +303,20 @@
 			await chats.set(await getChatList(localStorage.token, $currentChatPage));
 		}
 
-		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isFocused) {
-			if (type === 'chat:completion') {
-				const { done, content, title } = data;
-
-				if (done) {
-					if ($isLastActiveTab) {
-						if ($settings?.notificationEnabled ?? false) {
-							new Notification(`${title} | Weather Skills`, {
-								body: content,
-								icon: `${WEBUI_BASE_URL}/static/favicon.png`
-							});
-						}
-					}
-
-					toast.custom(NotificationToast, {
-						componentProps: {
-							onClick: () => {
-								goto(`/c/${event.chat_id}`);
-							},
-							content: content,
-							title: title
-						},
-						duration: 15000,
-						unstyled: true
-					});
-				}
-			} else if (type === 'chat:title') {
-				// List refresh handled above.
-			} else if (type === 'chat:tags') {
-				tags.set(await getAllTags(localStorage.token));
-			}
-		} else if (data?.session_id === $socket.id) {
+		// Session-targeted RPC (Pyodide, tool servers, direct completion) must always
+		// run and ack. The backend sio.call blocks on this callback; gating on the
+		// active chat or tab visibility leaves the interpreter loop without output.
+		if (data?.session_id === $socket.id) {
 			if (type === 'execute:python') {
 				console.log('execute:python', data);
-				executePythonAsWorker(data.id, data.code, cb);
+				return await executePythonAsWorker(data.id, data.code, cb, {
+					chatId: data.chat_id,
+					inputs: data.inputs,
+					outputs: data.outputs
+				});
 			} else if (type === 'execute:tool') {
 				console.log('execute:tool', data);
-				executeTool(data, cb);
+				return await executeTool(data, cb);
 			} else if (type === 'request:chat:completion') {
 				console.log(data, $socket.id);
 				const { session_id, channel, form_data, model } = data;
@@ -384,6 +404,40 @@
 				}
 			} else {
 				console.log('chatEventHandler', event);
+			}
+			return;
+		}
+
+		if ((event.chat_id !== $chatId && !$temporaryChatEnabled) || isFocused) {
+			if (type === 'chat:completion') {
+				const { done, content, title } = data;
+
+				if (done) {
+					if ($isLastActiveTab) {
+						if ($settings?.notificationEnabled ?? false) {
+							new Notification(`${title} | Weather Skills`, {
+								body: content,
+								icon: `${WEBUI_BASE_URL}/static/favicon.png`
+							});
+						}
+					}
+
+					toast.custom(NotificationToast, {
+						componentProps: {
+							onClick: () => {
+								goto(`/c/${event.chat_id}`);
+							},
+							content: content,
+							title: title
+						},
+						duration: 15000,
+						unstyled: true
+					});
+				}
+			} else if (type === 'chat:title') {
+				// List refresh handled above.
+			} else if (type === 'chat:tags') {
+				tags.set(await getAllTags(localStorage.token));
 			}
 		}
 	};

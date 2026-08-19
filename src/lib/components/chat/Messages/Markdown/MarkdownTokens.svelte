@@ -251,7 +251,7 @@
 	{:else if token.type === 'details'}
 		<Collapsible
 			title={token.summary}
-			open={$settings?.expandDetails ?? false}
+			open={token?.attributes?.name === 'execute_code' ? true : ($settings?.expandDetails ?? false)}
 			attributes={token?.attributes}
 			className="w-full space-y-1"
 			dir="auto"

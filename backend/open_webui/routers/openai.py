@@ -725,6 +725,9 @@ async def generate_chat_completion(
                 log.error(e)
                 response = await r.text()
 
+            if r.status >= 400:
+                log.error("Upstream chat completion %s: %s", r.status, response)
+
             r.raise_for_status()
             return response
     except Exception as e:
