@@ -53,6 +53,10 @@ Optional keys on the **same** Secret:
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | `langfuse.enabled: true` (required then; optional otherwise) |
 | `OPENAI_API_KEY` | OpenAI-compatible API key (e.g. Anthropic); pair with `openai.apiBaseUrl` |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Initial admin password when `bootstrapAdmin.enabled` is true |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth when `oauth.google.clientId` is set |
+| `MICROSOFT_CLIENT_SECRET` | Microsoft OAuth when `oauth.microsoft.clientId` is set |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth when `oauth.github.clientId` is set |
+| `OAUTH_CLIENT_SECRET` | Generic OIDC when `oauth.oidc.clientId` is set |
 
 If your Secret uses different field names, override `secretKeys` in values.yaml.
 
@@ -188,6 +192,88 @@ langfuse:
 ```
 
 Add `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` to the same Secret. Unused env vars are harmless if tracing is disabled.
+
+## OAuth / OIDC (Terraform)
+
+All Open WebUI OAuth env vars are Helm values except **client secrets**, which stay on the same Kubernetes Secret as `WEBUI_SECRET_KEY`. A provider is enabled only when both its client ID (values) and client secret (Secret) are present.
+
+Redirect URIs: leave empty unless the public URL differs from the request host. Google Cloud Console must allow `{origin}/oauth/google/callback` (Microsoft `/oauth/microsoft/callback`, GitHub `/oauth/github/callback`, generic OIDC `/oauth/oidc/callback`).
+
+A setting **in the environment pins that key** (env wins over SQLite, including after UI saves). Unset keys still persist from the admin UI. Leave a Helm value `null` / empty to omit the env var and keep UI control; set it only when Terraform should own that key.
+
+### Google (merge admin-created users by email)
+
+```yaml
+oauth:
+  enableSignup: false          # pin: unknown Google accounts cannot self-register
+  mergeAccountsByEmail: true   # pin: admin-added email matches Google email → login
+  allowedDomains:
+    - rhiza.io
+  google:
+    clientId: "....apps.googleusercontent.com"
+    # redirectUri: https://chat.example.com/oauth/google/callback
+```
+
+Add `GOOGLE_CLIENT_SECRET` to the Secret.
+
+### Generic OIDC
+
+```yaml
+oauth:
+  enableSignup: true
+  mergeAccountsByEmail: true
+  allowedDomains: [rhiza.io]
+  oidc:
+    clientId: "..."
+    providerUrl: https://accounts.google.com/.well-known/openid-configuration
+    providerName: Google
+```
+
+Secret key: `OAUTH_CLIENT_SECRET`. Microsoft and GitHub follow the same pattern (`oauth.microsoft.*` + `MICROSOFT_CLIENT_SECRET`, `oauth.github.*` + `GITHUB_CLIENT_SECRET`). Microsoft also needs `oauth.microsoft.tenantId`.
+
+### Helm values → env
+
+| values.yaml | Env |
+|---|---|
+| `oauth.enableSignup` | `ENABLE_OAUTH_SIGNUP` |
+| `oauth.mergeAccountsByEmail` | `OAUTH_MERGE_ACCOUNTS_BY_EMAIL` |
+| `oauth.enableRoleManagement` | `ENABLE_OAUTH_ROLE_MANAGEMENT` |
+| `oauth.enableGroupManagement` | `ENABLE_OAUTH_GROUP_MANAGEMENT` |
+| `oauth.allowedDomains` | `OAUTH_ALLOWED_DOMAINS` (comma-joined) |
+| `oauth.allowedRoles` / `oauth.adminRoles` | `OAUTH_ALLOWED_ROLES` / `OAUTH_ADMIN_ROLES` |
+| `oauth.usernameClaim` / `pictureClaim` / `emailClaim` / `groupsClaim` / `rolesClaim` | `OAUTH_*_CLAIM` |
+| `oauth.google.clientId` / `scope` / `redirectUri` | `GOOGLE_CLIENT_ID` / `GOOGLE_OAUTH_SCOPE` / `GOOGLE_REDIRECT_URI` |
+| `oauth.microsoft.clientId` / `tenantId` / `scope` / `redirectUri` | `MICROSOFT_CLIENT_*` / `MICROSOFT_OAUTH_SCOPE` / `MICROSOFT_REDIRECT_URI` |
+| `oauth.github.clientId` / `scope` / `redirectUri` | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SCOPE` / `GITHUB_CLIENT_REDIRECT_URI` |
+| `oauth.oidc.clientId` / `providerUrl` / `redirectUri` / `scopes` / `providerName` / `codeChallengeMethod` | `OAUTH_CLIENT_ID` / `OPENID_PROVIDER_URL` / `OPENID_REDIRECT_URI` / `OAUTH_SCOPES` / `OAUTH_PROVIDER_NAME` / `OAUTH_CODE_CHALLENGE_METHOD` |
+
+Empty strings, empty lists, and `null` omit the env var (UI persist / app default). A boolean `true`/`false` pins that flag.
+
+### Terraform (`helm_release`)
+
+```hcl
+resource "helm_release" "weather_skills_chat" {
+  name       = "weather-skills-chat"
+  chart      = "./charts/weather-skills-chat"
+  namespace  = var.namespace
+
+  values = [
+    yamlencode({
+      secretName = kubernetes_secret.weather_skills.metadata[0].name
+      oauth = {
+        enableSignup         = false
+        mergeAccountsByEmail = true
+        allowedDomains       = ["rhiza.io"]
+        google = {
+          clientId = var.google_oauth_client_id
+        }
+      }
+    })
+  ]
+}
+```
+
+Put `GOOGLE_CLIENT_SECRET` (and other client secrets) on `kubernetes_secret.weather_skills`, sourced from Google Secret Manager. Do not put secrets in Helm values.
 
 ## Ollama
 

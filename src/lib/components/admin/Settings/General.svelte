@@ -240,6 +240,47 @@
 						<Switch bind:state={adminConfig.ENABLE_SIGNUP} />
 					</div>
 
+					<div class="mb-2.5 flex w-full justify-between pr-2">
+						<div class=" self-center text-xs pr-2">
+							<div class="font-medium">{$i18n.t('Enable OAuth Sign Ups')}</div>
+							<div class="text-xs text-gray-500">
+								{$i18n.t('Allow new accounts to be created on first OAuth login.')}
+							</div>
+						</div>
+
+						<Switch bind:state={adminConfig.ENABLE_OAUTH_SIGNUP} />
+					</div>
+
+					<div class="mb-2.5 flex w-full justify-between pr-2">
+						<div class=" self-center text-xs pr-2">
+							<div class="font-medium">{$i18n.t('Merge Accounts by Email')}</div>
+							<div class="text-xs text-gray-500">
+								{$i18n.t('Link OAuth logins to existing users with the same email.')}
+							</div>
+						</div>
+
+						<Switch bind:state={adminConfig.OAUTH_MERGE_ACCOUNTS_BY_EMAIL} />
+					</div>
+
+					<div class="mb-2.5 flex w-full flex-col pr-2">
+						<div class="text-xs font-medium">
+							{$i18n.t('Allowed OAuth Email Domains')}
+						</div>
+
+						<input
+							class="w-full mt-1 rounded-lg text-sm dark:text-gray-300 bg-transparent outline-hidden"
+							type="text"
+							placeholder={$i18n.t(
+								'Enter domains separated by commas (e.g., example.com,site.org)'
+							)}
+							bind:value={adminConfig.OAUTH_ALLOWED_DOMAINS}
+						/>
+
+						<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+							{$i18n.t('Use * to allow any domain.')}
+						</div>
+					</div>
+
 					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
 						<div class=" self-center text-xs font-medium">
 							{$i18n.t('Show Admin Details in Account Pending Overlay')}

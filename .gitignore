@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+.svelte-kit/
+build/
+.vite/
+npm-debug.log*
+yarn-error.log*
+
+# Pyodide runtime copied from node_modules (see scripts/prepare-pyodide.js)
+static/pyodide/*
+!static/pyodide/pyodide-lock.json
+
+# Env / secrets / local data
+.env
+.env.*
+!.env.example
+*.db
+.webui_secret_key
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

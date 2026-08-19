@@ -650,6 +650,17 @@ async def get_admin_details(request: Request, user=Depends(get_current_user)):
 ############################
 
 
+def _oauth_allowed_domains_csv(value) -> str:
+    if isinstance(value, str):
+        return value
+    return ", ".join(str(domain).strip() for domain in (value or []) if str(domain).strip()) or "*"
+
+
+def _parse_oauth_allowed_domains(value: str) -> list[str]:
+    domains = [domain.strip() for domain in (value or "").split(",") if domain.strip()]
+    return domains or ["*"]
+
+
 @router.get("/admin/config")
 async def get_admin_config(request: Request, user=Depends(get_admin_user)):
     return {
@@ -665,6 +676,11 @@ async def get_admin_config(request: Request, user=Depends(get_admin_user)):
         "ENABLE_MESSAGE_RATING": request.app.state.config.ENABLE_MESSAGE_RATING,
         "ENABLE_CHANNELS": request.app.state.config.ENABLE_CHANNELS,
         "ENABLE_USER_WEBHOOKS": request.app.state.config.ENABLE_USER_WEBHOOKS,
+        "ENABLE_OAUTH_SIGNUP": request.app.state.config.ENABLE_OAUTH_SIGNUP,
+        "OAUTH_MERGE_ACCOUNTS_BY_EMAIL": request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
+        "OAUTH_ALLOWED_DOMAINS": _oauth_allowed_domains_csv(
+            request.app.state.config.OAUTH_ALLOWED_DOMAINS
+        ),
     }
 
 
@@ -681,6 +697,9 @@ class AdminConfig(BaseModel):
     ENABLE_MESSAGE_RATING: bool
     ENABLE_CHANNELS: bool
     ENABLE_USER_WEBHOOKS: bool
+    ENABLE_OAUTH_SIGNUP: bool = False
+    OAUTH_MERGE_ACCOUNTS_BY_EMAIL: bool = False
+    OAUTH_ALLOWED_DOMAINS: str = "*"
 
 
 @router.post("/admin/config")
@@ -717,6 +736,14 @@ async def update_admin_config(
 
     request.app.state.config.ENABLE_USER_WEBHOOKS = form_data.ENABLE_USER_WEBHOOKS
 
+    request.app.state.config.ENABLE_OAUTH_SIGNUP = form_data.ENABLE_OAUTH_SIGNUP
+    request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL = (
+        form_data.OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+    )
+    request.app.state.config.OAUTH_ALLOWED_DOMAINS = _parse_oauth_allowed_domains(
+        form_data.OAUTH_ALLOWED_DOMAINS
+    )
+
     return {
         "SHOW_ADMIN_DETAILS": request.app.state.config.SHOW_ADMIN_DETAILS,
         "WEBUI_URL": request.app.state.config.WEBUI_URL,
@@ -730,6 +757,11 @@ async def update_admin_config(
         "ENABLE_COMMUNITY_SHARING": request.app.state.config.ENABLE_COMMUNITY_SHARING,
         "ENABLE_MESSAGE_RATING": request.app.state.config.ENABLE_MESSAGE_RATING,
         "ENABLE_USER_WEBHOOKS": request.app.state.config.ENABLE_USER_WEBHOOKS,
+        "ENABLE_OAUTH_SIGNUP": request.app.state.config.ENABLE_OAUTH_SIGNUP,
+        "OAUTH_MERGE_ACCOUNTS_BY_EMAIL": request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
+        "OAUTH_ALLOWED_DOMAINS": _oauth_allowed_domains_csv(
+            request.app.state.config.OAUTH_ALLOWED_DOMAINS
+        ),
     }
 
 

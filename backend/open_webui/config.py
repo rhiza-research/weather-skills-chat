@@ -180,13 +180,28 @@ ENABLE_PERSISTENT_CONFIG = (
 )
 
 
+def persistent_config_env_is_set(env_name: str) -> bool:
+    """True when this setting was explicitly provided in the process environment.
+
+    An empty string still counts as set, so Helm/Terraform can pin a value off.
+    Unset keys fall through to the database (if persistence is on) then the default.
+    """
+    return env_name in os.environ
+
+
 class PersistentConfig(Generic[T]):
     def __init__(self, env_name: str, config_path: str, env_value: T):
         self.env_name = env_name
         self.config_path = config_path
         self.env_value = env_value
         self.config_value = get_config_value(config_path)
-        if self.config_value is not None and ENABLE_PERSISTENT_CONFIG:
+        if persistent_config_env_is_set(env_name):
+            if self.config_value is not None:
+                log.info(
+                    f"'{env_name}' set by environment; ignoring database value"
+                )
+            self.value = env_value
+        elif self.config_value is not None and ENABLE_PERSISTENT_CONFIG:
             log.info(f"'{env_name}' loaded from the latest database entry")
             self.value = self.config_value
         else:
@@ -211,6 +226,11 @@ class PersistentConfig(Generic[T]):
         return super().__getattribute__(item)
 
     def update(self):
+        if persistent_config_env_is_set(self.env_name):
+            log.info(
+                f"'{self.env_name}' set by environment; ignoring database update"
+            )
+            return
         new_value = get_config_value(self.config_path)
         if new_value is not None:
             self.value = new_value
@@ -247,16 +267,26 @@ class AppConfig:
         if isinstance(value, PersistentConfig):
             self._state[key] = value
         else:
-            self._state[key].value = value
-            self._state[key].save()
+            cfg = self._state[key]
+            if persistent_config_env_is_set(cfg.env_name):
+                log.info(
+                    f"'{cfg.env_name}' set by environment; ignoring UI/database write"
+                )
+                return
+            cfg.value = value
+            cfg.save()
 
             if self._redis:
                 redis_key = f"open-webui:config:{key}"
-                self._redis.set(redis_key, json.dumps(self._state[key].value))
+                self._redis.set(redis_key, json.dumps(cfg.value))
 
     def __getattr__(self, key):
         if key not in self._state:
             raise AttributeError(f"Config key '{key}' not found")
+
+        cfg = self._state[key]
+        if persistent_config_env_is_set(cfg.env_name):
+            return cfg.value
 
         # If Redis is available, check for an updated value
         if self._redis:
@@ -268,14 +298,14 @@ class AppConfig:
                     decoded_value = json.loads(redis_value)
 
                     # Update the in-memory value if different
-                    if self._state[key].value != decoded_value:
-                        self._state[key].value = decoded_value
+                    if cfg.value != decoded_value:
+                        cfg.value = decoded_value
                         log.info(f"Updated {key} from Redis: {decoded_value}")
 
                 except json.JSONDecodeError:
                     log.error(f"Invalid JSON format in Redis for {key}: {redis_value}")
 
-        return self._state[key].value
+        return cfg.value
 
 
 ####################################

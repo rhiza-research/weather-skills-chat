@@ -78,8 +78,7 @@ spec:
               value: {{ printf "%s/tiktoken" .Values.modelCache.dir | quote }}
             - name: WEBUI_NAME
               value: {{ .Values.webui.name | quote }}
-            - name: ENABLE_SIGNUP
-              value: {{ .Values.webui.enableSignup | quote }}
+            {{- include "weather-skills-chat.optionalEnv" (dict "name" "ENABLE_SIGNUP" "value" .Values.webui.enableSignup) | nindent 12 }}
             - name: DEFAULT_USER_ROLE
               value: {{ .Values.webui.defaultUserRole | quote }}
             - name: ENABLE_OLLAMA_API
@@ -135,6 +134,7 @@ spec:
             {{- end }}
             - name: SKILL_SANDLOCK
               value: {{ .Values.sandbox.skillSandlock | quote }}
+            {{- include "weather-skills-chat.oauthEnv" . | nindent 12 }}
             - name: LANGFUSE_ENABLED
               value: {{ .Values.langfuse.enabled | quote }}
             {{- with .Values.langfuse.host }}

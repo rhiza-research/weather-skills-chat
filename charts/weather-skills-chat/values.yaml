@@ -7,7 +7,8 @@ replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
 # REQUIRED. Name of a Kubernetes Secret you create out-of-band.
 # Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
 #   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
-#   BOOTSTRAP_ADMIN_PASSWORD
+#   BOOTSTRAP_ADMIN_PASSWORD, GOOGLE_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET,
+#   GITHUB_CLIENT_SECRET, OAUTH_CLIENT_SECRET
 secretName: ""
 
 # Override Secret data key names if your Secret uses different field names.
@@ -18,6 +19,10 @@ secretKeys:
   langfuseSecretKey: LANGFUSE_SECRET_KEY
   openaiApiKey: OPENAI_API_KEY
   bootstrapAdminPassword: BOOTSTRAP_ADMIN_PASSWORD
+  googleClientSecret: GOOGLE_CLIENT_SECRET
+  microsoftClientSecret: MICROSOFT_CLIENT_SECRET
+  githubClientSecret: GITHUB_CLIENT_SECRET
+  oidcClientSecret: OAUTH_CLIENT_SECRET
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
@@ -129,8 +134,47 @@ ollama:
 webui:
   name: Weather Skills
   url: ""
-  enableSignup: true
+  # null = omit env (UI persist / first-user disable signup). true/false pins ENABLE_SIGNUP.
+  enableSignup: null
   defaultUserRole: pending
+
+# OAuth / OIDC. Client *secrets* stay in the Kubernetes Secret; everything else
+# is Helm values so Terraform can set it. null / empty omits the env var so the
+# UI can persist that key; a set value pins it (env wins over the database).
+# Redirect URIs empty → app builds {origin}/oauth/{provider}/callback.
+oauth:
+  enableSignup: null
+  mergeAccountsByEmail: null
+  enableRoleManagement: null
+  enableGroupManagement: null
+  allowedDomains: [] # e.g. [rhiza.io] — omit or ["*"] for any domain
+  allowedRoles: [] # default user,admin
+  adminRoles: [] # default admin
+  usernameClaim: ""
+  pictureClaim: ""
+  emailClaim: ""
+  groupsClaim: ""
+  rolesClaim: ""
+  google:
+    clientId: ""
+    scope: ""
+    redirectUri: ""
+  microsoft:
+    clientId: ""
+    tenantId: ""
+    scope: ""
+    redirectUri: ""
+  github:
+    clientId: ""
+    scope: ""
+    redirectUri: ""
+  oidc:
+    clientId: ""
+    providerUrl: "" # e.g. https://accounts.google.com/.well-known/openid-configuration
+    redirectUri: ""
+    scopes: ""
+    providerName: ""
+    codeChallengeMethod: "" # S256 or empty
 
 otel:
   enabled: false

@@ -2,7 +2,7 @@ apiVersion: v2
 name: weather-skills-chat
 description: Weather Skills chat (Open WebUI fork) — SQLite-on-PVC by default, optional GCS FUSE for skill artifacts
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "main"
 keywords:
   - weather-skills
