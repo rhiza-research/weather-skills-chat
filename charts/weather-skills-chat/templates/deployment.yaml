@@ -115,6 +115,30 @@ spec:
             - name: WEBUI_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.emailTool.smtpHost }}
+            - name: EMAIL_TOOL_SMTP_HOST
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.emailTool.smtpPort }}
+            - name: EMAIL_TOOL_SMTP_PORT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.emailTool.smtpUsername }}
+            - name: EMAIL_TOOL_SMTP_USERNAME
+              value: {{ . | quote }}
+            {{- end }}
+            - name: EMAIL_TOOL_SMTP_USE_TLS
+              value: {{ .Values.emailTool.smtpUseTls | quote }}
+            {{- with .Values.emailTool.fromEmail }}
+            - name: EMAIL_TOOL_FROM_EMAIL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: EMAIL_TOOL_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.emailToolSmtpPassword | quote }}
+                  optional: true
             {{- with .Values.openai.apiBaseUrl }}
             - name: OPENAI_API_BASE_URL
               value: {{ . | quote }}

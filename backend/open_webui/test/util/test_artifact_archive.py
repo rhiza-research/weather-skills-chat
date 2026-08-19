@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import tarfile
 import tempfile
 import unittest
+import zlib
+import struct
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,6 +90,59 @@ class ArchiveRoundTripTest(unittest.TestCase):
                 dest = artifacts / chat_id / "out" / "result.txt"
                 self.assertEqual(dest.read_bytes(), b"hello")
 
+    def test_extract_strips_provenance_from_zarr_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            chat_id = "chat-1"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                (artifacts / chat_id / "intermediate_results").mkdir(parents=True)
+                import io
+
+                zattrs = {
+                    "weather_skills_history": [{"skill": "plot"}],
+                    "rhiza_history_alpha": [{"skill": "reduce"}],
+                    "keep": 1,
+                }
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    info = tarfile.TarInfo(name="out/demo.zarr/.zattrs")
+                    payload = json_bytes(zattrs)
+                    info.size = len(payload)
+                    tar.addfile(info, io.BytesIO(payload))
+                extract_sandbox_archive(chat_id, buf.getvalue())
+                saved = json.loads(
+                    (artifacts / chat_id / "out" / "demo.zarr" / ".zattrs").read_text()
+                )
+                self.assertNotIn("weather_skills_history", saved)
+                self.assertNotIn("rhiza_history_alpha", saved)
+                self.assertEqual(saved["keep"], 1)
+
+    def test_extract_strips_provenance_text_chunks_from_png(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            chat_id = "chat-1"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                (artifacts / chat_id / "intermediate_results").mkdir(parents=True)
+                import io
+                from open_webui.utils.artifacts import read_png_text_chunks
+
+                png = minimal_png_with_text(
+                    {
+                        "weather_skills_history": '[{"skill":"plot"}]',
+                        "note": "keep me",
+                    }
+                )
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    info = tarfile.TarInfo(name="plots/out.png")
+                    info.size = len(png)
+                    tar.addfile(info, io.BytesIO(png))
+                extract_sandbox_archive(chat_id, buf.getvalue())
+                saved_path = artifacts / chat_id / "plots" / "out.png"
+                texts = read_png_text_chunks(saved_path)
+                self.assertNotIn("weather_skills_history", texts)
+                self.assertEqual(texts.get("note"), "keep me")
+
     def test_missing_input_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp) / "artifacts"
@@ -94,6 +150,34 @@ class ArchiveRoundTripTest(unittest.TestCase):
                 (artifacts / "c" / "intermediate_results").mkdir(parents=True)
                 with self.assertRaises(FileNotFoundError):
                     pack_sandbox_archive("c", ["missing.csv"])
+
+
+def json_bytes(payload: dict) -> bytes:
+    return json.dumps(payload).encode("utf-8")
+
+
+def minimal_png_with_text(texts: dict[str, str]) -> bytes:
+    png_sig = b"\x89PNG\r\n\x1a\n"
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(kind)
+        crc = zlib.crc32(data, crc) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", crc)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    idat = zlib.compress(b"\x00\x00\x00\x00")
+    out = bytearray(png_sig)
+    out.extend(chunk(b"IHDR", ihdr))
+    for key, value in texts.items():
+        out.extend(chunk(b"tEXt", key.encode("latin-1") + b"\x00" + value.encode("latin-1")))
+    out.extend(chunk(b"IDAT", idat))
+    out.extend(chunk(b"IEND", b""))
+    return bytes(out)
 
 
 if __name__ == "__main__":

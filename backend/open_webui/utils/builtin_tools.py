@@ -1,9 +1,13 @@
 from typing import Optional
 from pathlib import Path
+import asyncio
 import json
 import logging
 import os
+import re
 from uuid import uuid4
+import smtplib
+from email.message import EmailMessage
 
 from open_webui.models.automations import AutomationForm, Automations
 from open_webui.models.chats import Chats
@@ -18,6 +22,8 @@ from open_webui.utils.teams import (
     is_team_admin,
     is_team_member,
 )
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 async def create_automation(
@@ -547,6 +553,217 @@ DISPLAY_IMAGE_SPEC = {
 }
 
 
+def _as_email_list(value) -> list[str]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        parts = [value]
+    elif isinstance(value, (list, tuple)):
+        parts = list(value)
+    else:
+        raise ValueError("Email recipients must be a string or list of strings")
+    emails = []
+    for item in parts:
+        email = str(item).strip().lower()
+        if email:
+            emails.append(email)
+    return sorted(set(emails))
+
+
+def _validate_emails(emails: list[str]) -> tuple[list[str], list[str]]:
+    ok: list[str] = []
+    bad: list[str] = []
+    for email in emails:
+        if EMAIL_RE.match(email):
+            ok.append(email)
+        else:
+            bad.append(email)
+    return ok, bad
+
+
+def _allowed_email_recipients_for_user(user_id: str, chat) -> set[str]:
+    allowed: set[str] = set()
+    user = Users.get_user_by_id(user_id)
+    if user and user.email:
+        allowed.add(user.email.strip().lower())
+    team_ids = set(Teams.user_team_ids(user_id))
+    chat_team_id = getattr(chat, "team_id", None) if chat else None
+    if chat_team_id:
+        team_ids.add(chat_team_id)
+    for team_id in team_ids:
+        for member in Teams.get_members(team_id):
+            if member.email:
+                allowed.add(member.email.strip().lower())
+    return allowed
+
+
+def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
+    chat = Chats.get_chat_by_id(chat_id)
+    if not chat:
+        return ""
+    share_id = getattr(chat, "share_id", None)
+    if not share_id:
+        shared = Chats.insert_shared_chat_by_chat_id(chat_id)
+        share_id = getattr(shared, "id", None) if shared else None
+    base = (base_url or "").rstrip("/")
+    if not (base and share_id):
+        return ""
+    return f"{base}/share/{share_id}"
+
+
+def _send_via_smtp(
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    use_tls: bool,
+    sender_name: str,
+    sender_email: str,
+    reply_to: str,
+    to: list[str],
+    subject: str,
+    body: str,
+) -> tuple[bool, str]:
+    msg = EmailMessage()
+    msg["From"] = f"{sender_name} <{sender_email}>"
+    msg["To"] = ", ".join(to)
+    msg["Subject"] = subject
+    msg["Reply-To"] = reply_to
+    msg.set_content(body)
+    try:
+        if use_tls:
+            with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+                if username:
+                    smtp.login(username, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=30) as smtp:
+                smtp.starttls()
+                if username:
+                    smtp.login(username, password)
+                smtp.send_message(msg)
+        return True, "sent"
+    except Exception as e:
+        return False, str(e)
+
+
+async def send_email(
+    to: list[str] | str,
+    subject: str,
+    body: str,
+    __user__: dict = {},
+    __metadata__: dict = None,
+    __request__=None,
+) -> str:
+    """Send a restricted email (self + teammates only) via configured provider."""
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot send email from a temporary chat. Save the chat first."
+    if __request__ is None:
+        return "Request context not available."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    if not user:
+        return "User not found."
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_read_chat(user, chat):
+        return "You do not have access to this chat."
+
+    try:
+        recipients = _as_email_list(to)
+    except ValueError as e:
+        return str(e)
+    if not recipients:
+        return "Provide at least one recipient email."
+    valid, invalid = _validate_emails(recipients)
+    if invalid:
+        return f"Invalid recipient email(s): {', '.join(invalid)}"
+
+    allowed = _allowed_email_recipients_for_user(user.id, chat)
+    blocked = [email for email in valid if email not in allowed]
+    if blocked:
+        return (
+            "These recipients are not allowed. You can only email yourself or "
+            f"members of one of your teams: {', '.join(blocked)}"
+        )
+
+    config = __request__.app.state.config
+    smtp_host = (getattr(config, "EMAIL_TOOL_SMTP_HOST", "") or "").strip()
+    smtp_port = int(getattr(config, "EMAIL_TOOL_SMTP_PORT", 465) or 465)
+    smtp_user = (getattr(config, "EMAIL_TOOL_SMTP_USERNAME", "") or "").strip()
+    smtp_password = (getattr(config, "EMAIL_TOOL_SMTP_PASSWORD", "") or "").strip()
+    smtp_use_tls = bool(getattr(config, "EMAIL_TOOL_SMTP_USE_TLS", True))
+    from_email = (getattr(config, "EMAIL_TOOL_FROM_EMAIL", "") or "").strip()
+    if not smtp_host:
+        return "Email delivery is not configured (missing EMAIL_TOOL_SMTP_HOST)."
+    if not smtp_user:
+        return "Email delivery is not configured (missing EMAIL_TOOL_SMTP_USERNAME)."
+    if not smtp_password:
+        return "Email delivery is not configured (missing EMAIL_TOOL_SMTP_PASSWORD)."
+    if not from_email:
+        return "Email delivery is not configured (missing EMAIL_TOOL_FROM_EMAIL)."
+
+    share_link = _ensure_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
+    footer = (
+        "\n\n---\n"
+        f"This email was generated from Weather Skills Chat by user {user.email}. "
+        f"Share link: {share_link or '(share link unavailable)'}"
+    )
+    full_body = f"{(body or '').rstrip()}{footer}"
+
+    sender_name = f"Weather Skills Chat ({(user.name or user.email).strip()})"
+    ok, detail = await asyncio.to_thread(
+        _send_via_smtp,
+        host=smtp_host,
+        port=smtp_port,
+        username=smtp_user,
+        password=smtp_password,
+        use_tls=smtp_use_tls,
+        sender_name=sender_name,
+        sender_email=from_email,
+        reply_to=user.email,
+        to=valid,
+        subject=(subject or "").strip() or "Weather Skills Chat update",
+        body=full_body,
+    )
+    if not ok:
+        return f"Email send failed: {detail}"
+    return (
+        f"Email sent to {', '.join(valid)} with reply-to `{user.email}` "
+        f"and from `{sender_name} <{from_email}>`."
+    )
+
+
+SEND_EMAIL_SPEC = {
+    "name": "send_email",
+    "description": (
+        "Send an email via configured SMTP. Recipients are restricted "
+        "to the current user and members of one of the user's teams."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "to": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Recipient email addresses. Must be your email or a teammate's email."
+                ),
+            },
+            "subject": {"type": "string", "description": "Email subject line"},
+            "body": {
+                "type": "string",
+                "description": (
+                    "Plain-text email body. A footer with sender and share link is added automatically."
+                ),
+            },
+        },
+        "required": ["to", "subject", "body"],
+    },
+}
+
+
 def _tool_summary_line(name: str, description: str = "", kind: str = "tool", tool_id: str = "") -> str:
     desc = (description or "").strip().split("\n")[0].strip()
     if len(desc) > 160:
@@ -628,6 +845,13 @@ async def list_available_tools(
         _tool_summary_line(
             "create_folder",
             "Create a folder in the chat artifact sandbox for organizing outputs.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "send_email",
+            "Email results to yourself or teammates with an automatic share-link footer.",
             kind="builtin",
         )
     )
@@ -1034,7 +1258,9 @@ EXECUTE_CODE_SPEC = {
                     "Python source to run. Read inputs from `/mnt/<path>`. "
                     "Write anything that should be saved back under `/mnt/` "
                     "and list those paths in outputs. Print values you need "
-                    "to see."
+                    "to see. Do not write or append weather-skills provenance "
+                    "metadata (such as `weather_skills_history*` or "
+                    "`rhiza_history*`) into output files."
                 ),
             },
             "inputs": {
@@ -1083,6 +1309,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
+        "send_email": _tool(send_email, SEND_EMAIL_SPEC),
     }
     features = (extra_params.get("__metadata__") or {}).get("features") or {}
     if isinstance(features, dict) and features.get("code_interpreter"):

@@ -1184,8 +1184,8 @@
 															<span
 																class="whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
 																>{codeInterpreterEnabled
-																	? $i18n.t('Code Interpreter Enabled')
-																	: $i18n.t('Code Interpreter Disabled')}</span
+																	? $i18n.t('Agent allowed to write and execute its own code')
+																	: $i18n.t('Agent not allowed to write and execute its own code')}</span
 															>
 														</button>
 													</Tooltip>

@@ -207,6 +207,8 @@
 	"Code Interpreter": "",
 	"Code Interpreter Disabled": "",
 	"Code Interpreter Enabled": "",
+	"Agent allowed to write and execute its own code": "",
+	"Agent not allowed to write and execute its own code": "",
 	"Code Interpreter Engine": "",
 	"Code Interpreter Prompt Template": "",
 	"Collapse": "",

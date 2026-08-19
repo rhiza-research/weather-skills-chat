@@ -188,6 +188,7 @@ def classify_entry(path: Path) -> str:
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+PROVENANCE_ATTR_PREFIXES = ("weather_skills_history", "rhiza_history")
 
 
 def read_png_text_chunks(path: Path) -> dict[str, str]:
@@ -232,6 +233,93 @@ def read_png_text_chunks(path: Path) -> dict[str, str]:
             except Exception:
                 continue
     return texts
+
+
+def _is_provenance_key(key: str) -> bool:
+    return any(key == prefix or key.startswith(f"{prefix}_") for prefix in PROVENANCE_ATTR_PREFIXES)
+
+
+def _strip_provenance_png_bytes(data: bytes) -> bytes:
+    """Drop weather-skills provenance text chunks from PNG bytes."""
+    import struct
+    import zlib
+
+    if len(data) < 8 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return data
+
+    out = bytearray(data[:8])
+    offset = 8
+    while offset + 8 <= len(data):
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        chunk_type = data[offset + 4 : offset + 8]
+        start = offset + 8
+        end = start + length
+        if end + 4 > len(data):
+            break
+        chunk = data[start:end]
+        offset = end + 4
+
+        keep = True
+        if chunk_type in (b"tEXt", b"zTXt", b"iTXt"):
+            key_b = chunk.split(b"\x00", 1)[0] if b"\x00" in chunk else b""
+            key = key_b.decode("latin-1", errors="ignore")
+            if _is_provenance_key(key):
+                keep = False
+
+        if keep:
+            out.extend(struct.pack(">I", len(chunk)))
+            out.extend(chunk_type)
+            out.extend(chunk)
+            crc = zlib.crc32(chunk_type)
+            crc = zlib.crc32(chunk, crc) & 0xFFFFFFFF
+            out.extend(struct.pack(">I", crc))
+
+        if chunk_type == b"IEND":
+            break
+
+    return bytes(out)
+
+
+def _strip_provenance_from_mapping(obj) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    changed = False
+    for key in list(obj.keys()):
+        if isinstance(key, str) and _is_provenance_key(key):
+            del obj[key]
+            changed = True
+    return changed
+
+
+def _strip_provenance_from_zarr_json(path_name: str, data: bytes) -> bytes:
+    """Remove provenance attrs from zarr metadata files when present."""
+    basename = Path(path_name).name
+    if basename not in (".zattrs", ".zmetadata", "zarr.json"):
+        return data
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except Exception:
+        return data
+
+    changed = False
+    if basename == ".zattrs":
+        changed = _strip_provenance_from_mapping(doc)
+    elif basename == ".zmetadata":
+        attrs = ((doc.get("metadata") or {}).get(".zattrs")) if isinstance(doc, dict) else None
+        changed = _strip_provenance_from_mapping(attrs)
+    elif basename == "zarr.json" and isinstance(doc, dict):
+        changed = _strip_provenance_from_mapping(doc.get("attributes") or doc.get("attrs"))
+
+    if not changed:
+        return data
+    return json.dumps(doc, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def sanitize_output_artifact_bytes(path_name: str, data: bytes) -> bytes:
+    """Strip weather-skills provenance when copying execute_code outputs back."""
+    if path_name.lower().endswith(".png"):
+        return _strip_provenance_png_bytes(data)
+    return _strip_provenance_from_zarr_json(path_name, data)
 
 
 def _skill_names_from_chain(chain) -> list[str]:
@@ -593,7 +681,9 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
             if handle is None:
                 continue
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(handle.read())
+            payload = handle.read()
+            payload = sanitize_output_artifact_bytes(name, payload)
+            dest.write_bytes(payload)
             written.append(name)
     return written
 

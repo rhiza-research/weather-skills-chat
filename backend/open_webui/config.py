@@ -1631,6 +1631,42 @@ CODE_INTERPRETER_JUPYTER_TIMEOUT = PersistentConfig(
     ),
 )
 
+EMAIL_TOOL_SMTP_HOST = PersistentConfig(
+    "EMAIL_TOOL_SMTP_HOST",
+    "email_tool.smtp.host",
+    os.environ.get("EMAIL_TOOL_SMTP_HOST", ""),
+)
+
+EMAIL_TOOL_SMTP_PORT = PersistentConfig(
+    "EMAIL_TOOL_SMTP_PORT",
+    "email_tool.smtp.port",
+    int(os.environ.get("EMAIL_TOOL_SMTP_PORT", "465")),
+)
+
+EMAIL_TOOL_SMTP_USERNAME = PersistentConfig(
+    "EMAIL_TOOL_SMTP_USERNAME",
+    "email_tool.smtp.username",
+    os.environ.get("EMAIL_TOOL_SMTP_USERNAME", ""),
+)
+
+EMAIL_TOOL_SMTP_PASSWORD = PersistentConfig(
+    "EMAIL_TOOL_SMTP_PASSWORD",
+    "email_tool.smtp.password",
+    os.environ.get("EMAIL_TOOL_SMTP_PASSWORD", ""),
+)
+
+EMAIL_TOOL_SMTP_USE_TLS = PersistentConfig(
+    "EMAIL_TOOL_SMTP_USE_TLS",
+    "email_tool.smtp.use_tls",
+    os.environ.get("EMAIL_TOOL_SMTP_USE_TLS", "true").lower() == "true",
+)
+
+EMAIL_TOOL_FROM_EMAIL = PersistentConfig(
+    "EMAIL_TOOL_FROM_EMAIL",
+    "email_tool.from_email",
+    os.environ.get("EMAIL_TOOL_FROM_EMAIL", ""),
+)
+
 
 DEFAULT_CODE_INTERPRETER_PROMPT = """
 #### Tools Available
@@ -1640,6 +1676,7 @@ DEFAULT_CODE_INTERPRETER_PROMPT = """
    - The Python code you write can incorporate a wide array of libraries, handle data manipulation or visualization, perform API calls for web-related tasks, or tackle virtually any computational challenge. Use this flexibility to **think outside the box, craft elegant solutions, and harness Python's full potential**.
    - To use it, **you must enclose your code within `<code_interpreter type="code" lang="python">` XML tags** and stop right away. If you don't, the code won't execute. Do NOT use triple backticks.
    - When coding, **always aim to print meaningful outputs** (e.g., results, tables, summaries, or visuals) to better interpret and verify the findings. Avoid relying on implicit outputs; prioritize explicit and clear print statements so the results are effectively communicated to the user.  
+   - Do **not** write, append, or preserve weather-skills provenance metadata in any generated artifacts (for example `weather_skills_history`, `weather_skills_history_*`, `rhiza_history`, or `rhiza_history_*` keys in PNG/Zarr outputs).
    - After obtaining the printed output, **always provide a concise analysis, interpretation, or next steps to help the user understand the findings or refine the outcome further.**  
    - If the results are unclear, unexpected, or require validation, refine the code and execute it again as needed. Always aim to deliver meaningful insights from the results, iterating if necessary.  
    - **If a link to an image, audio, or any file is provided in markdown format in the output, ALWAYS regurgitate word for word, explicitly display it as part of the response to ensure the user can access it easily, do NOT change the link.**

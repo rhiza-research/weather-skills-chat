@@ -101,6 +101,11 @@ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
+MAX_TOOL_CALL_RETRIES = int(os.environ.get("MAX_TOOL_CALL_RETRIES", "40"))
+MAX_CODE_INTERPRETER_RETRIES = int(
+    os.environ.get("MAX_CODE_INTERPRETER_RETRIES", "20")
+)
+
 
 def format_code_interpreter_result(output) -> str:
     """Readable stdout/stderr for the model. Empty dicts still produce a message."""
@@ -132,6 +137,8 @@ def format_code_interpreter_result(output) -> str:
         f"{body}\n\n"
         "If this is an error, fix the code and run it again using "
         '<code_interpreter type="code" lang="python"> tags. '
+        "Do not write or append weather-skills provenance metadata "
+        "(`weather_skills_history*` / `rhiza_history*`) to outputs. "
         "Otherwise continue with your analysis."
     )
 
@@ -1378,6 +1385,21 @@ async def process_chat_response(
 
         # Handle as a background task
         async def post_response_handler(response, events):
+            loop_exit_reasons: list[dict] = []
+
+            def note_loop_exit(reason: str, **extra):
+                payload = {
+                    "reason": reason,
+                    "chat_id": metadata.get("chat_id"),
+                    "message_id": metadata.get("message_id"),
+                    "session_id": metadata.get("session_id"),
+                    "user_id": getattr(user, "id", None),
+                    "model_id": model_id,
+                }
+                payload.update(extra)
+                loop_exit_reasons.append(payload)
+                log.warning("agent_loop_exit %s", json.dumps(payload, default=str))
+
             def serialize_content_blocks(content_blocks, raw=False):
                 content = ""
 
@@ -1764,6 +1786,8 @@ async def process_chat_response(
                     nonlocal content_blocks
 
                     response_tool_calls = []
+                    stream_parse_errors = 0
+                    stream_events_seen = 0
 
                     async for line in response.body_iterator:
                         line = line.decode("utf-8") if isinstance(line, bytes) else line
@@ -1782,6 +1806,7 @@ async def process_chat_response(
 
                         try:
                             data = json.loads(data)
+                            stream_events_seen += 1
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -2012,7 +2037,14 @@ async def process_chat_response(
                             if done:
                                 pass
                             else:
-                                log.debug("Error: ", e)
+                                stream_parse_errors += 1
+                                if stream_parse_errors <= 3 or stream_parse_errors % 25 == 0:
+                                    note_loop_exit(
+                                        "stream_parse_error",
+                                        errors=stream_parse_errors,
+                                        events_seen=stream_events_seen,
+                                        error=str(e),
+                                    )
                                 continue
 
                     if content_blocks:
@@ -2038,10 +2070,15 @@ async def process_chat_response(
 
                     if response.background:
                         await response.background()
+                    if stream_parse_errors:
+                        note_loop_exit(
+                            "stream_parse_error_summary",
+                            errors=stream_parse_errors,
+                            events_seen=stream_events_seen,
+                        )
 
                 await stream_body_handler(response)
 
-                MAX_TOOL_CALL_RETRIES = 10
                 tool_call_retries = 0
 
                 while len(tool_calls) > 0 and tool_call_retries < MAX_TOOL_CALL_RETRIES:
@@ -2212,18 +2249,41 @@ async def process_chat_response(
                         if isinstance(res, StreamingResponse):
                             await stream_body_handler(res)
                         else:
+                            note_loop_exit(
+                                "tool_followup_non_stream",
+                                pending_tool_batches=len(tool_calls),
+                            )
                             break
                     except Exception as e:
-                        log.debug(e)
+                        note_loop_exit(
+                            "tool_followup_exception",
+                            pending_tool_batches=len(tool_calls),
+                            error=str(e),
+                        )
                         break
 
+                if len(tool_calls) > 0 and tool_call_retries >= MAX_TOOL_CALL_RETRIES:
+                    note_loop_exit(
+                        "tool_retry_limit",
+                        limit=MAX_TOOL_CALL_RETRIES,
+                        pending_tool_batches=len(tool_calls),
+                    )
+                    content_blocks.append(
+                        {
+                            "type": "text",
+                            "content": (
+                                "I hit the tool-call safety limit before finishing all steps. "
+                                "Increase MAX_TOOL_CALL_RETRIES on the server if you want longer autonomous runs."
+                            ),
+                        }
+                    )
+
                 if DETECT_CODE_INTERPRETER:
-                    MAX_RETRIES = 5
                     retries = 0
 
                     while (
                         content_blocks[-1]["type"] == "code_interpreter"
-                        and retries < MAX_RETRIES
+                        and retries < MAX_CODE_INTERPRETER_RETRIES
                     ):
                         await event_emitter(
                             {
@@ -2391,12 +2451,40 @@ async def process_chat_response(
                             if isinstance(res, StreamingResponse):
                                 await stream_body_handler(res)
                             else:
+                                note_loop_exit(
+                                    "code_followup_non_stream",
+                                    retries=retries,
+                                    limit=MAX_CODE_INTERPRETER_RETRIES,
+                                )
                                 break
                         except Exception as e:
-                            log.exception(
-                                "Code interpreter follow-up completion failed: %s", e
+                            note_loop_exit(
+                                "code_followup_exception",
+                                retries=retries,
+                                limit=MAX_CODE_INTERPRETER_RETRIES,
+                                error=str(e),
                             )
                             break
+
+                    if (
+                        content_blocks
+                        and content_blocks[-1]["type"] == "code_interpreter"
+                        and retries >= MAX_CODE_INTERPRETER_RETRIES
+                    ):
+                        note_loop_exit(
+                            "code_retry_limit",
+                            limit=MAX_CODE_INTERPRETER_RETRIES,
+                            retries=retries,
+                        )
+                        content_blocks.append(
+                            {
+                                "type": "text",
+                                "content": (
+                                    "I hit the code-interpreter safety limit before completing. "
+                                    "Increase MAX_CODE_INTERPRETER_RETRIES on the server to allow longer runs."
+                                ),
+                            }
+                        )
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])
                 data = {

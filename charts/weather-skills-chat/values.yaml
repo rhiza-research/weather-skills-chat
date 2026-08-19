@@ -8,7 +8,7 @@ replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
 # Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
 #   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
 #   BOOTSTRAP_ADMIN_PASSWORD, GOOGLE_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET,
-#   GITHUB_CLIENT_SECRET, OAUTH_CLIENT_SECRET
+#   GITHUB_CLIENT_SECRET, OAUTH_CLIENT_SECRET, EMAIL_TOOL_SMTP_PASSWORD
 secretName: ""
 
 # Override Secret data key names if your Secret uses different field names.
@@ -23,6 +23,7 @@ secretKeys:
   microsoftClientSecret: MICROSOFT_CLIENT_SECRET
   githubClientSecret: GITHUB_CLIENT_SECRET
   oidcClientSecret: OAUTH_CLIENT_SECRET
+  emailToolSmtpPassword: EMAIL_TOOL_SMTP_PASSWORD
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
@@ -137,6 +138,15 @@ webui:
   # null = omit env (UI persist / first-user disable signup). true/false pins ENABLE_SIGNUP.
   enableSignup: null
   defaultUserRole: pending
+
+# Built-in send_email() tool SMTP defaults.
+# Leave empty to omit env vars and configure from admin UI.
+emailTool:
+  smtpHost: ""
+  smtpPort: 465
+  smtpUsername: ""
+  smtpUseTls: true
+  fromEmail: ""
 
 # OAuth / OIDC. Client *secrets* stay in the Kubernetes Secret; everything else
 # is Helm values so Terraform can set it. null / empty omits the env var so the

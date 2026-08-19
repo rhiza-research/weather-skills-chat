@@ -226,7 +226,6 @@ async def set_code_execution_config(
     request.app.state.config.CODE_INTERPRETER_JUPYTER_TIMEOUT = (
         form_data.CODE_INTERPRETER_JUPYTER_TIMEOUT
     )
-
     return {
         "ENABLE_CODE_EXECUTION": request.app.state.config.ENABLE_CODE_EXECUTION,
         "CODE_EXECUTION_ENGINE": request.app.state.config.CODE_EXECUTION_ENGINE,
@@ -243,6 +242,63 @@ async def set_code_execution_config(
         "CODE_INTERPRETER_JUPYTER_AUTH_TOKEN": request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_TOKEN,
         "CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD": request.app.state.config.CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD,
         "CODE_INTERPRETER_JUPYTER_TIMEOUT": request.app.state.config.CODE_INTERPRETER_JUPYTER_TIMEOUT,
+    }
+
+
+############################
+# Email Tool Config
+############################
+class EmailToolConfigForm(BaseModel):
+    EMAIL_TOOL_SMTP_HOST: Optional[str] = None
+    EMAIL_TOOL_SMTP_PORT: Optional[int] = None
+    EMAIL_TOOL_SMTP_USERNAME: Optional[str] = None
+    EMAIL_TOOL_SMTP_PASSWORD: Optional[str] = None
+    EMAIL_TOOL_SMTP_USE_TLS: Optional[bool] = None
+    EMAIL_TOOL_FROM_EMAIL: Optional[str] = None
+
+
+@router.get("/email_tool", response_model=EmailToolConfigForm)
+async def get_email_tool_config(request: Request, user=Depends(get_admin_user)):
+    return {
+        "EMAIL_TOOL_SMTP_HOST": request.app.state.config.EMAIL_TOOL_SMTP_HOST,
+        "EMAIL_TOOL_SMTP_PORT": request.app.state.config.EMAIL_TOOL_SMTP_PORT,
+        "EMAIL_TOOL_SMTP_USERNAME": request.app.state.config.EMAIL_TOOL_SMTP_USERNAME,
+        "EMAIL_TOOL_SMTP_PASSWORD": request.app.state.config.EMAIL_TOOL_SMTP_PASSWORD,
+        "EMAIL_TOOL_SMTP_USE_TLS": request.app.state.config.EMAIL_TOOL_SMTP_USE_TLS,
+        "EMAIL_TOOL_FROM_EMAIL": request.app.state.config.EMAIL_TOOL_FROM_EMAIL,
+    }
+
+
+@router.post("/email_tool", response_model=EmailToolConfigForm)
+async def set_email_tool_config(
+    request: Request, form_data: EmailToolConfigForm, user=Depends(get_admin_user)
+):
+    if form_data.EMAIL_TOOL_SMTP_HOST is not None:
+        request.app.state.config.EMAIL_TOOL_SMTP_HOST = form_data.EMAIL_TOOL_SMTP_HOST
+    if form_data.EMAIL_TOOL_SMTP_PORT is not None:
+        request.app.state.config.EMAIL_TOOL_SMTP_PORT = form_data.EMAIL_TOOL_SMTP_PORT
+    if form_data.EMAIL_TOOL_SMTP_USERNAME is not None:
+        request.app.state.config.EMAIL_TOOL_SMTP_USERNAME = (
+            form_data.EMAIL_TOOL_SMTP_USERNAME
+        )
+    if form_data.EMAIL_TOOL_SMTP_PASSWORD is not None:
+        request.app.state.config.EMAIL_TOOL_SMTP_PASSWORD = (
+            form_data.EMAIL_TOOL_SMTP_PASSWORD
+        )
+    if form_data.EMAIL_TOOL_SMTP_USE_TLS is not None:
+        request.app.state.config.EMAIL_TOOL_SMTP_USE_TLS = (
+            form_data.EMAIL_TOOL_SMTP_USE_TLS
+        )
+    if form_data.EMAIL_TOOL_FROM_EMAIL is not None:
+        request.app.state.config.EMAIL_TOOL_FROM_EMAIL = form_data.EMAIL_TOOL_FROM_EMAIL
+
+    return {
+        "EMAIL_TOOL_SMTP_HOST": request.app.state.config.EMAIL_TOOL_SMTP_HOST,
+        "EMAIL_TOOL_SMTP_PORT": request.app.state.config.EMAIL_TOOL_SMTP_PORT,
+        "EMAIL_TOOL_SMTP_USERNAME": request.app.state.config.EMAIL_TOOL_SMTP_USERNAME,
+        "EMAIL_TOOL_SMTP_PASSWORD": request.app.state.config.EMAIL_TOOL_SMTP_PASSWORD,
+        "EMAIL_TOOL_SMTP_USE_TLS": request.app.state.config.EMAIL_TOOL_SMTP_USE_TLS,
+        "EMAIL_TOOL_FROM_EMAIL": request.app.state.config.EMAIL_TOOL_FROM_EMAIL,
     }
 
 

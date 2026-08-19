@@ -57,6 +57,7 @@ Optional keys on the **same** Secret:
 | `MICROSOFT_CLIENT_SECRET` | Microsoft OAuth when `oauth.microsoft.clientId` is set |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth when `oauth.github.clientId` is set |
 | `OAUTH_CLIENT_SECRET` | Generic OIDC when `oauth.oidc.clientId` is set |
+| `EMAIL_TOOL_SMTP_PASSWORD` | Built-in `send_email` SMTP password |
 
 If your Secret uses different field names, override `secretKeys` in values.yaml.
 
@@ -246,6 +247,7 @@ Secret key: `OAUTH_CLIENT_SECRET`. Microsoft and GitHub follow the same pattern 
 | `oauth.microsoft.clientId` / `tenantId` / `scope` / `redirectUri` | `MICROSOFT_CLIENT_*` / `MICROSOFT_OAUTH_SCOPE` / `MICROSOFT_REDIRECT_URI` |
 | `oauth.github.clientId` / `scope` / `redirectUri` | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SCOPE` / `GITHUB_CLIENT_REDIRECT_URI` |
 | `oauth.oidc.clientId` / `providerUrl` / `redirectUri` / `scopes` / `providerName` / `codeChallengeMethod` | `OAUTH_CLIENT_ID` / `OPENID_PROVIDER_URL` / `OPENID_REDIRECT_URI` / `OAUTH_SCOPES` / `OAUTH_PROVIDER_NAME` / `OAUTH_CODE_CHALLENGE_METHOD` |
+| `emailTool.smtpHost` / `smtpPort` / `smtpUsername` / `smtpUseTls` / `fromEmail` | `EMAIL_TOOL_SMTP_HOST` / `EMAIL_TOOL_SMTP_PORT` / `EMAIL_TOOL_SMTP_USERNAME` / `EMAIL_TOOL_SMTP_USE_TLS` / `EMAIL_TOOL_FROM_EMAIL` |
 
 Empty strings, empty lists, and `null` omit the env var (UI persist / app default). A boolean `true`/`false` pins that flag.
 

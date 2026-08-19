@@ -2,6 +2,7 @@
 	import DOMPurify from 'dompurify';
 
 	import { getBackendConfig, getWebhookUrl, updateWebhookUrl } from '$lib/apis';
+import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 	import {
 		getAdminConfig,
 		getLdapConfig,
@@ -24,6 +25,14 @@
 
 	let adminConfig = null;
 	let webhookUrl = '';
+	let emailToolConfig = {
+		EMAIL_TOOL_SMTP_HOST: '',
+		EMAIL_TOOL_SMTP_PORT: 465,
+		EMAIL_TOOL_SMTP_USERNAME: '',
+		EMAIL_TOOL_SMTP_PASSWORD: '',
+		EMAIL_TOOL_SMTP_USE_TLS: true,
+		EMAIL_TOOL_FROM_EMAIL: ''
+	};
 
 	// LDAP
 	let ENABLE_LDAP = false;
@@ -56,9 +65,13 @@
 	const updateHandler = async () => {
 		webhookUrl = await updateWebhookUrl(localStorage.token, webhookUrl);
 		const res = await updateAdminConfig(localStorage.token, adminConfig);
+		const emailRes = await setEmailToolConfig(localStorage.token, emailToolConfig).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
 		await updateLdapServerHandler();
 
-		if (res) {
+		if (res && emailRes) {
 			saveHandler();
 		} else {
 			toast.error(i18n.t('Failed to update settings'));
@@ -76,6 +89,12 @@
 			})(),
 			(async () => {
 				LDAP_SERVER = await getLdapServer(localStorage.token);
+			})(),
+			(async () => {
+				const res = await getEmailToolConfig(localStorage.token);
+				if (res) {
+					emailToolConfig = { ...emailToolConfig, ...res };
+				}
 			})()
 		]);
 
@@ -562,6 +581,77 @@
 									</div>
 								</div>
 							{/if}
+						</div>
+					</div>
+				</div>
+
+				<div class="mb-3">
+					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Email Tool')}</div>
+
+					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+
+					<div class="space-y-2.5">
+						<div class="text-xs text-gray-500">
+							{$i18n.t(
+								'Configure SMTP for built-in email sending. Environment variables still take precedence when set.'
+							)}
+						</div>
+
+						<div class="flex w-full gap-2">
+							<div class="w-full">
+								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Host')}</div>
+								<input
+									class="w-full bg-transparent outline-hidden py-0.5"
+									type="text"
+									placeholder={$i18n.t('smtp.example.com')}
+									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_HOST}
+								/>
+							</div>
+							<div class="w-full">
+								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Port')}</div>
+								<input
+									class="w-full bg-transparent outline-hidden py-0.5"
+									type="number"
+									placeholder="465"
+									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_PORT}
+								/>
+							</div>
+						</div>
+
+						<div class="flex w-full gap-2">
+							<div class="w-full">
+								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Username')}</div>
+								<input
+									class="w-full bg-transparent outline-hidden py-0.5"
+									type="text"
+									placeholder={$i18n.t('Enter SMTP username')}
+									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_USERNAME}
+								/>
+							</div>
+							<div class="w-full">
+								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Password')}</div>
+								<SensitiveInput
+									type="text"
+									placeholder={$i18n.t('Enter SMTP password')}
+									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_PASSWORD}
+								/>
+							</div>
+						</div>
+
+						<div class="flex w-full gap-2">
+							<div class="w-full">
+								<div class="text-xs font-medium mb-1">{$i18n.t('From Email')}</div>
+								<input
+									class="w-full bg-transparent outline-hidden py-0.5"
+									type="text"
+									placeholder={$i18n.t('no-reply@example.com')}
+									bind:value={emailToolConfig.EMAIL_TOOL_FROM_EMAIL}
+								/>
+							</div>
+							<div class="w-full flex items-end justify-between pr-2 pb-1">
+								<div class="text-xs font-medium">{$i18n.t('Use TLS')}</div>
+								<Switch bind:state={emailToolConfig.EMAIL_TOOL_SMTP_USE_TLS} />
+							</div>
 						</div>
 					</div>
 				</div>

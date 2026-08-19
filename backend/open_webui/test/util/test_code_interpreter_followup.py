@@ -82,5 +82,23 @@ class AsPathListTest(unittest.TestCase):
         self.assertEqual(_as_path_list(["a.csv", " b.zarr ", ""]), ["a.csv", "b.zarr"])
 
 
+class EmailHelpersTest(unittest.TestCase):
+    def test_as_email_list_and_validation(self):
+        from open_webui.utils.builtin_tools import _as_email_list, _validate_emails
+
+        emails = _as_email_list(["A@EXAMPLE.com", "b@example.com", "a@example.com", ""])
+        self.assertEqual(emails, ["a@example.com", "b@example.com"])
+        valid, invalid = _validate_emails(["ok@example.com", "bad-email"])
+        self.assertEqual(valid, ["ok@example.com"])
+        self.assertEqual(invalid, ["bad-email"])
+
+    def test_send_email_builtin_is_available(self):
+        from open_webui.utils.builtin_tools import get_builtin_tools
+
+        tools = get_builtin_tools({"__metadata__": {"features": {}}})
+        self.assertIn("send_email", tools)
+        self.assertEqual(tools["send_email"]["spec"]["name"], "send_email")
+
+
 if __name__ == "__main__":
     unittest.main()
