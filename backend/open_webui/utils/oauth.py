@@ -70,6 +70,10 @@ auth_manager_config.OAUTH_ALLOWED_DOMAINS = OAUTH_ALLOWED_DOMAINS
 auth_manager_config.WEBHOOK_URL = WEBHOOK_URL
 auth_manager_config.JWT_EXPIRES_IN = JWT_EXPIRES_IN
 
+_UNSET_PROFILE_IMAGES = frozenset(
+    ("", "/user.png", "/favicon.png", "/static/favicon.png")
+)
+
 
 class OAuthManager:
     def __init__(self, app):
@@ -80,6 +84,47 @@ class OAuthManager:
 
     def get_client(self, provider_name):
         return self.oauth.create_client(provider_name)
+
+    def _profile_image_is_unset(self, profile_image_url: Optional[str]) -> bool:
+        if profile_image_url is None:
+            return True
+        return profile_image_url.strip() in _UNSET_PROFILE_IMAGES
+
+    async def _fetch_oauth_picture(self, provider, token, user_data) -> Optional[str]:
+        """Download the provider avatar. Returns a data URL, or None if unavailable."""
+        picture_claim = auth_manager_config.OAUTH_PICTURE_CLAIM
+        if not picture_claim:
+            return None
+        picture_url = user_data.get(
+            picture_claim, OAUTH_PROVIDERS[provider].get("picture_url", "")
+        )
+        if not picture_url:
+            return None
+        try:
+            access_token = token.get("access_token")
+            get_kwargs = {}
+            if access_token:
+                get_kwargs["headers"] = {
+                    "Authorization": f"Bearer {access_token}",
+                }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(picture_url, **get_kwargs) as resp:
+                    if not resp.ok:
+                        log.warning(
+                            "Failed to download OAuth profile image %s: %s",
+                            picture_url,
+                            resp.status,
+                        )
+                        return None
+                    picture = await resp.read()
+                    guessed_mime_type = mimetypes.guess_type(picture_url)[0]
+                    if guessed_mime_type is None:
+                        guessed_mime_type = "image/jpeg"
+                    encoded = base64.b64encode(picture).decode("utf-8")
+                    return f"data:{guessed_mime_type};base64,{encoded}"
+        except Exception as e:
+            log.error("Error downloading profile image '%s': %s", picture_url, e)
+            return None
 
     def get_user_role(self, user, user_data):
         if user and Users.get_num_users() == 1:
@@ -342,6 +387,16 @@ class OAuthManager:
             determined_role = self.get_user_role(user, user_data)
             if user.role != determined_role:
                 Users.update_user_role_by_id(user.id, determined_role)
+            if self._profile_image_is_unset(user.profile_image_url):
+                picture_url = await self._fetch_oauth_picture(
+                    provider, token, user_data
+                )
+                if picture_url:
+                    updated = Users.update_user_profile_image_url_by_id(
+                        user.id, picture_url
+                    )
+                    if updated:
+                        user = updated
 
         if not user:
             user_count = Users.get_num_users()
@@ -353,46 +408,10 @@ class OAuthManager:
                 if existing_user:
                     raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
 
-                picture_claim = auth_manager_config.OAUTH_PICTURE_CLAIM
-                if picture_claim:
-                    picture_url = user_data.get(
-                        picture_claim, OAUTH_PROVIDERS[provider].get("picture_url", "")
-                    )
-                    if picture_url:
-                        # Download the profile image into a base64 string
-                        try:
-                            access_token = token.get("access_token")
-                            get_kwargs = {}
-                            if access_token:
-                                get_kwargs["headers"] = {
-                                    "Authorization": f"Bearer {access_token}",
-                                }
-                            async with aiohttp.ClientSession() as session:
-                                async with session.get(
-                                    picture_url, **get_kwargs
-                                ) as resp:
-                                    if resp.ok:
-                                        picture = await resp.read()
-                                        base64_encoded_picture = base64.b64encode(
-                                            picture
-                                        ).decode("utf-8")
-                                        guessed_mime_type = mimetypes.guess_type(
-                                            picture_url
-                                        )[0]
-                                        if guessed_mime_type is None:
-                                            # assume JPG, browsers are tolerant enough of image formats
-                                            guessed_mime_type = "image/jpeg"
-                                        picture_url = f"data:{guessed_mime_type};base64,{base64_encoded_picture}"
-                                    else:
-                                        picture_url = "/user.png"
-                        except Exception as e:
-                            log.error(
-                                f"Error downloading profile image '{picture_url}': {e}"
-                            )
-                            picture_url = "/user.png"
-                    if not picture_url:
-                        picture_url = "/user.png"
-                else:
+                picture_url = await self._fetch_oauth_picture(
+                    provider, token, user_data
+                )
+                if not picture_url:
                     picture_url = "/user.png"
 
                 username_claim = auth_manager_config.OAUTH_USERNAME_CLAIM
