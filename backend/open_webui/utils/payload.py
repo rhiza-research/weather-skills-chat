@@ -1,10 +1,32 @@
 from open_webui.utils.task import prompt_template, prompt_variables_template
 from open_webui.utils.misc import (
     add_or_update_system_message,
+    get_system_message,
 )
 
 from typing import Callable, Optional
 import json
+
+HEADLESS_SYSTEM_CONTEXT = """\
+This chat is a scheduled automation. No user is present and cannot reply.
+Do not ask clarifying questions or wait for user input.
+Make reasonable assumptions, use available tools, and complete the task autonomously.
+If critical information is missing, state your assumptions and proceed with the best available option."""
+
+_HEADLESS_MARKER = "This chat is a scheduled automation"
+
+
+def inject_headless_context(form_data: dict) -> dict:
+    """Tell the model it is running without a user (scheduled automation)."""
+    messages = form_data.get("messages") or []
+    system = get_system_message(messages)
+    if system and _HEADLESS_MARKER in (system.get("content") or ""):
+        return form_data
+
+    form_data["messages"] = add_or_update_system_message(
+        HEADLESS_SYSTEM_CONTEXT, messages
+    )
+    return form_data
 
 
 # inplace function: form_data is modified

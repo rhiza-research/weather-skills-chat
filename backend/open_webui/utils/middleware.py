@@ -68,6 +68,7 @@ from open_webui.utils.misc import (
     prepend_to_first_user_message_content,
     convert_logit_bias_input_to_json,
 )
+from open_webui.utils.payload import inject_headless_context
 from open_webui.utils.tools import get_tools
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
@@ -1123,6 +1124,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 },
             }
         )
+
+    if metadata.get("headless"):
+        form_data = inject_headless_context(form_data)
 
     return form_data, metadata, events
 

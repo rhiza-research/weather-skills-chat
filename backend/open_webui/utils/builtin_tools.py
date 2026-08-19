@@ -130,7 +130,8 @@ CREATE_AUTOMATION_SPEC = {
     "description": (
         "Create a scheduled automation from the current chat. "
         "Use when the user asks to repeat this task on a schedule "
-        "(for example: 'do this again every day at noon')."
+        "(for example: 'do this again every day at noon'). "
+        "Automations run headless: no user is present to answer follow-up questions."
     ),
     "parameters": {
         "type": "object",
