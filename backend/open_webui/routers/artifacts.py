@@ -12,6 +12,7 @@ from open_webui.utils.artifacts import (
     is_zarr_view,
     list_artifacts,
     pack_sandbox_archive,
+    pack_sandbox_zip,
     read_view,
     resolve_in_sandbox,
     write_bytes,
@@ -73,21 +74,40 @@ async def get_artifact_content(
 async def get_artifact_archive(
     chat_id: str,
     path: list[str] = Query(..., min_length=1),
+    format: str = Query("tar.gz"),
     user=Depends(get_verified_user),
 ):
     _readable(chat_id, user)
+    fmt = (format or "tar.gz").lower().strip()
+    if fmt not in ("tar.gz", "zip"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="format must be tar.gz or zip",
+        )
     try:
-        data = pack_sandbox_archive(chat_id, path)
+        data = (
+            pack_sandbox_zip(chat_id, path)
+            if fmt == "zip"
+            else pack_sandbox_archive(chat_id, path)
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    ext = ".zip" if fmt == "zip" else ".tar.gz"
+    media_type = "application/zip" if fmt == "zip" else "application/gzip"
+    if len(path) == 1:
+        name = path[0].rstrip("/").split("/")[-1] or "artifacts"
+        if not name.endswith(ext):
+            name = f"{name}{ext}"
+        disposition = f'attachment; filename="{name}"'
+    else:
+        disposition = f'attachment; filename="artifacts{ext}"'
     return StreamingResponse(
         io.BytesIO(data),
-        media_type="application/gzip",
-        headers={
-            "Content-Disposition": 'attachment; filename="artifacts.tar.gz"'
-        },
+        media_type=media_type,
+        headers={"Content-Disposition": disposition},
     )
 
 

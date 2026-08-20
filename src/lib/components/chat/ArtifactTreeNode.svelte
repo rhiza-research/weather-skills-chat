@@ -3,7 +3,7 @@
 	import ProvenanceTree from './ProvenanceTree.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
-	import { getArtifactContentUrl } from '$lib/apis/artifacts';
+	import { getArtifactArchiveUrl, getArtifactContentUrl } from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
 	const i18n = getContext('i18n');
@@ -88,7 +88,6 @@
 					on:toggle
 					on:openImage
 					on:openView
-					on:newView
 				/>
 			{/each}
 		{/if}
@@ -100,13 +99,12 @@
 				<span class="truncate">{node.name}</span>
 				<span class="text-gray-400 shrink-0">zarr</span>
 			</div>
-			<button
-				type="button"
+			<a
 				class="underline shrink-0"
-				on:click={() => dispatch('newView', { path: file.path })}
+				href={getArtifactArchiveUrl($chatId, file.path)}
+				target="_blank"
+				rel="noreferrer">{$i18n.t('Download')}</a
 			>
-				{$i18n.t('New view')}
-			</button>
 		</div>
 		{#if provenanceBranches(file).length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>

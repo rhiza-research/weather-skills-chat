@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import re
+import signal
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,6 +21,32 @@ DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
 SKILL_SANDLOCK = os.getenv("SKILL_SANDLOCK", "true").lower() in ("1", "true", "yes")
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
 SAFE_ENV_SECRET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+async def _terminate_skill_process(proc: asyncio.subprocess.Process) -> None:
+    """Kill the skill process tree (uv + script children) if still running."""
+    if proc.returncode is not None:
+        return
+
+    pid = proc.pid
+    try:
+        if os.name != "nt" and pid:
+            # start_new_session=True makes the child the process-group leader.
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                proc.kill()
+        else:
+            proc.kill()
+    except ProcessLookupError:
+        return
+
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except (asyncio.TimeoutError, ProcessLookupError):
+        pass
 
 
 def pick_primary_script(scripts_dir: Path) -> str:
@@ -225,14 +252,18 @@ async def run_skill(
         list(used_secrets.keys()),
     )
 
+    spawn_kwargs: dict[str, Any] = {
+        "cwd": spawn_cwd,
+        "env": env,
+        "stdout": asyncio.subprocess.PIPE,
+        "stderr": asyncio.subprocess.PIPE,
+    }
+    # Own process group so Stop/timeout can kill uv and its script children.
+    if os.name != "nt":
+        spawn_kwargs["start_new_session"] = True
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=spawn_cwd,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        proc = await asyncio.create_subprocess_exec(*cmd, **spawn_kwargs)
     except FileNotFoundError:
         return _error_result(
             "Failed to start skill: `uv` is not installed on the server. "
@@ -245,10 +276,7 @@ async def run_skill(
     try:
         stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=limit)
     except asyncio.TimeoutError:
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
+        await _terminate_skill_process(proc)
         return _redact_skill_result(
             _error_result(
                 f"Skill timed out after {limit}s: {script_path.name}",
@@ -261,6 +289,11 @@ async def run_skill(
             ),
             used_secrets,
         )
+    except asyncio.CancelledError:
+        # Chat Stop cancels the asyncio task; kill the OS process tree too.
+        log.info("Skill cancelled; terminating process tree for %s", script_path.name)
+        await _terminate_skill_process(proc)
+        raise
 
     stdout = (stdout_b or b"").decode("utf-8", errors="replace").strip()
     stderr = (stderr_b or b"").decode("utf-8", errors="replace").strip()

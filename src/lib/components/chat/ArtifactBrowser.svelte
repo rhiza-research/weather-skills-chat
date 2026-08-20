@@ -126,7 +126,6 @@
 				on:toggle={onToggle}
 				on:openImage
 				on:openView
-				on:newView
 			/>
 		{/each}
 	</div>

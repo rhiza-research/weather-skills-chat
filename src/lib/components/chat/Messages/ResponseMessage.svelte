@@ -964,36 +964,6 @@
 							{/if}
 
 							{#if message.done}
-								{#if !readOnly}
-									{#if $user?.role === 'user' ? ($user?.permissions?.chat?.edit ?? true) : true}
-										<Tooltip content={$i18n.t('Edit')} placement="bottom">
-											<button
-												class="{isLastMessage
-													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
-												on:click={() => {
-													editMessageHandler();
-												}}
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke-width="2.3"
-													stroke="currentColor"
-													class="w-4 h-4"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
-													/>
-												</svg>
-											</button>
-										</Tooltip>
-									{/if}
-								{/if}
-
 								<Tooltip content={$i18n.t('Copy')} placement="bottom">
 									<button
 										class="{isLastMessage
@@ -1275,41 +1245,6 @@
 												>
 													<path
 														d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"
-													/>
-												</svg>
-											</button>
-										</Tooltip>
-									{/if}
-
-									{#if isLastMessage}
-										<Tooltip content={$i18n.t('Continue Response')} placement="bottom">
-											<button
-												type="button"
-												id="continue-response-button"
-												class="{isLastMessage
-													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition regenerate-response-button"
-												on:click={() => {
-													continueResponse();
-												}}
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke-width="2.3"
-													stroke="currentColor"
-													class="w-4 h-4"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-													/>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M15.91 11.672a.375.375 0 0 1 0 .656l-5.603 3.113a.375.375 0 0 1-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112Z"
 													/>
 												</svg>
 											</button>

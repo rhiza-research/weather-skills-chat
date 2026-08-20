@@ -6,10 +6,8 @@
 
 	import { chatId, settings, showArtifacts, showControls, artifactsRefresh } from '$lib/stores';
 	import {
-		createZarrView,
 		getArtifactContentUrl,
 		getChatArtifacts,
-		getZarrMeta,
 		getZarrRenderUrl,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
@@ -36,9 +34,6 @@
 	let previewUrl = null;
 	let showImageModal = false;
 	let modalAlt = '';
-	let showViewForm = false;
-	let viewForm = { zarr: '', title: '', variable: '', style: 'heatmap', colormap: 'viridis' };
-	let zarrMeta = null;
 	let uploading = false;
 	let fileInput: HTMLInputElement;
 	let pollId: ReturnType<typeof setInterval> | null = null;
@@ -410,60 +405,7 @@
 				{selectedView}
 				on:openImage={(e) => openImage(e.detail.path)}
 				on:openView={(e) => openView(e.detail.path, e.detail.title)}
-				on:newView={async (e) => {
-					viewForm.zarr = e.detail.path;
-					showViewForm = true;
-					clearPreview();
-					zarrMeta = await getZarrMeta(localStorage.token, $chatId, e.detail.path).catch(
-						() => null
-					);
-				}}
 			/>
-
-			{#if showViewForm}
-				<form
-					class="mt-2 flex flex-col gap-1 shrink-0"
-					on:submit|preventDefault={async () => {
-						await createZarrView(localStorage.token, $chatId, viewForm);
-						showViewForm = false;
-						await loadFiles();
-					}}
-				>
-					<input
-						class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs"
-						placeholder={$i18n.t('View title')}
-						bind:value={viewForm.title}
-					/>
-					<select
-						class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs"
-						bind:value={viewForm.variable}
-					>
-						<option value="">{$i18n.t('First variable')}</option>
-						{#if zarrMeta}
-							{#each Object.keys(zarrMeta.variables || {}) as name}
-								<option value={name}>{name}</option>
-							{/each}
-						{/if}
-					</select>
-					<select class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs" bind:value={viewForm.style}>
-						<option value="heatmap">heatmap</option>
-						<option value="timeseries">timeseries</option>
-					</select>
-					<input
-						class="rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs"
-						placeholder={$i18n.t('Colormap (viridis)')}
-						bind:value={viewForm.colormap}
-					/>
-					<div class="flex gap-1">
-						<button class="text-xs underline" type="submit">{$i18n.t('Save view')}</button>
-						<button
-							class="text-xs text-gray-400"
-							type="button"
-							on:click={() => (showViewForm = false)}>{$i18n.t('Cancel')}</button
-						>
-					</div>
-				</form>
-			{/if}
 		</div>
 
 		{#if contents.length > 0}

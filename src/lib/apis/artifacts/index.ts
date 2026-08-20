@@ -11,6 +11,9 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 
+export const getArtifactArchiveUrl = (chatId: string, path: string) =>
+	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?path=${encodeURIComponent(path)}&format=zip`;
+
 export const getZarrRenderUrl = (chatId: string, view: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/render?view=${encodeURIComponent(view)}`;
 

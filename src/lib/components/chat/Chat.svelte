@@ -1848,6 +1848,13 @@
 		if (responseMessage?.role === 'assistant' && responseMessage.done !== true) {
 			markAssistantResponsesDone(responseMessage.parentId);
 			responseMessage.done = true;
+			// Clear tool-call spinners immediately even if the socket update races.
+			if (typeof responseMessage.content === 'string') {
+				responseMessage.content = responseMessage.content.replace(
+					/(<details type="tool_calls" )done="false"/g,
+					'$1done="true"'
+				);
+			}
 			history.messages[history.currentId] = responseMessage;
 			history = history;
 			await saveChatHandler($chatId, history);
