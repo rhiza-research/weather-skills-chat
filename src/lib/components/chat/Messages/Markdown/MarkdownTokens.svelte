@@ -38,6 +38,17 @@
 		return 'h' + depth;
 	};
 
+	const tokenKey = (token: Token, tokenIdx: number) => {
+		const attrs = (token as any)?.attributes;
+		if (token?.type === 'details' && attrs?.id) {
+			return `details-${attrs.id}`;
+		}
+		if (token?.type === 'details' && attrs?.type && attrs?.name) {
+			return `details-${attrs.type}-${attrs.name}-${tokenIdx}`;
+		}
+		return tokenIdx;
+	};
+
 	const exportTableToCSVHandler = (token, tokenIdx = 0) => {
 		console.log('Exporting table to CSV');
 
@@ -76,7 +87,7 @@
 </script>
 
 <!-- {JSON.stringify(tokens)} -->
-{#each tokens as token, tokenIdx (tokenIdx)}
+{#each tokens as token, tokenIdx (tokenKey(token, tokenIdx))}
 	{#if token.type === 'hr'}
 		<hr class=" border-gray-100 dark:border-gray-850" />
 	{:else if token.type === 'heading'}

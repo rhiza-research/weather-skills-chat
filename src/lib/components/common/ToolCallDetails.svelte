@@ -11,6 +11,7 @@
 	export let done = false;
 	export let result: any = null;
 	export let failed = false;
+	export let secretNames: string[] = [];
 
 	function outputText(result: any): string {
 		if (!result) return '';
@@ -40,6 +41,15 @@
 			token={{ text: pythonCode, raw: `\`\`\`python\n${pythonCode}\n\`\`\`` }}
 			className="my-1"
 		/>
+		{#if secretNames.length}
+			<div class="text-xs text-gray-500 dark:text-gray-400">
+				<span class="font-medium">{$i18n.t('Environment secrets')}:</span>
+				{#each secretNames as name, idx}
+					<code class="font-mono text-gray-700 dark:text-gray-200">{name}</code
+					>{idx < secretNames.length - 1 ? ', ' : ''}
+				{/each}
+			</div>
+		{/if}
 	{:else}
 		<Collapsible
 			title={$i18n.t('Call')}
@@ -47,10 +57,19 @@
 			buttonClassName="w-full text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
 			className="w-full"
 		>
-			<div class="mb-1" slot="content">
+			<div class="mb-1 space-y-1.5" slot="content">
 				<p class="m-0 break-words font-sans text-sm leading-relaxed text-gray-700 dark:text-gray-200">
 					{callSignature}
 				</p>
+				{#if secretNames.length}
+					<div class="text-xs text-gray-500 dark:text-gray-400">
+						<span class="font-medium">{$i18n.t('Environment secrets')}:</span>
+						{#each secretNames as name, idx}
+							<code class="font-mono text-gray-700 dark:text-gray-200">{name}</code
+							>{idx < secretNames.length - 1 ? ', ' : ''}
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</Collapsible>
 	{/if}

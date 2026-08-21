@@ -27,7 +27,6 @@
 	$: loadLocale($i18n.languages);
 
 	const dispatch = createEventDispatcher();
-	$: dispatch('change', open);
 
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
@@ -55,6 +54,21 @@
 	export let hide = false;
 
 	const collapsibleId = uuidv4();
+
+	// Keep user-expanded state across parent re-renders (e.g. streaming content updates).
+	let userControlled = false;
+	let localOpen = open;
+	$: if (!userControlled) {
+		localOpen = open;
+	}
+	$: dispatch('change', localOpen);
+
+	const toggleOpen = () => {
+		if (disabled) return;
+		userControlled = true;
+		localOpen = !localOpen;
+		open = localOpen;
+	};
 
 	function unwrapJSON(value: any): any {
 		if (typeof value !== 'string') {
@@ -255,6 +269,33 @@
 			toolResult.ok === false);
 	$: toolFiles =
 		attributes?.type === 'tool_calls' ? unwrapJSON(decode(attributes?.files ?? '')) : null;
+
+	const secretNamesFromValue = (value: any): string[] => {
+		if (!Array.isArray(value)) return [];
+		const names: string[] = [];
+		const seen = new Set<string>();
+		for (const item of value) {
+			const name = typeof item === 'string' ? item.trim() : '';
+			if (!name || seen.has(name)) continue;
+			seen.add(name);
+			names.push(name);
+		}
+		return names;
+	};
+
+	$: toolSecretNames = (() => {
+		if (attributes?.type !== 'tool_calls') return [] as string[];
+		const fromResult =
+			toolResult?.kind === 'structured'
+				? secretNamesFromValue(toolResult.extra?.env_secrets)
+				: [];
+		if (fromResult.length) return fromResult;
+		const args = unwrapJSON(toolArgsRaw);
+		if (args && typeof args === 'object' && !Array.isArray(args)) {
+			return secretNamesFromValue(args.env_secrets);
+		}
+		return [] as string[];
+	})();
 </script>
 
 <div {id} class={className}>
@@ -263,11 +304,7 @@
 		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
 			class="{buttonClassName} cursor-pointer"
-			on:pointerup={() => {
-				if (!disabled) {
-					open = !open;
-				}
-			}}
+			on:pointerup={toggleOpen}
 		>
 			<div
 				class=" w-full font-medium flex items-center justify-between gap-2 {attributes?.done &&
@@ -322,7 +359,7 @@
 				</div>
 
 				<div class="flex self-center translate-y-[1px]">
-					{#if open}
+					{#if localOpen}
 						<ChevronUp strokeWidth="3.5" className="size-3.5" />
 					{:else}
 						<ChevronDown strokeWidth="3.5" className="size-3.5" />
@@ -335,11 +372,7 @@
 		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
 			class="{buttonClassName} cursor-pointer"
-			on:pointerup={() => {
-				if (!disabled) {
-					open = !open;
-				}
-			}}
+			on:pointerup={toggleOpen}
 		>
 			<div>
 				<div class="flex items-start justify-between">
@@ -347,7 +380,7 @@
 
 					{#if chevron}
 						<div class="flex self-start translate-y-1">
-							{#if open}
+							{#if localOpen}
 								<ChevronUp strokeWidth="3.5" className="size-3.5" />
 							{:else}
 								<ChevronDown strokeWidth="3.5" className="size-3.5" />
@@ -357,7 +390,7 @@
 				</div>
 
 				{#if grow}
-					{#if open && !hide}
+					{#if localOpen && !hide}
 						<div
 							transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
 							on:pointerup={(e) => {
@@ -374,7 +407,7 @@
 
 	{#if attributes?.type === 'tool_calls'}
 		{#if !grow}
-			{#if open && !hide}
+			{#if localOpen && !hide}
 				<div
 					class="mt-1.5 ml-1 border-l border-gray-200 pl-3 dark:border-gray-700"
 					transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
@@ -387,6 +420,7 @@
 						done={attributes?.done === 'true'}
 						result={toolResult}
 						failed={toolFailed}
+						secretNames={toolSecretNames}
 					/>
 				</div>
 			{/if}
@@ -406,7 +440,7 @@
 			{/if}
 		{/if}
 	{:else if !grow}
-		{#if open && !hide}
+		{#if localOpen && !hide}
 			<div transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}>
 				<slot name="content" />
 			</div>
