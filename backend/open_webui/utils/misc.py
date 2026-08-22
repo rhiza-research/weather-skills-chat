@@ -133,17 +133,27 @@ def prepend_to_first_user_message_content(
 def add_or_update_system_message(content: str, messages: list[dict]):
     """
     Adds a new system message at the beginning of the messages list
-    or updates the existing system message at the beginning.
+    or prepends onto the existing system message at the beginning.
 
-    :param msg: The message to be added or appended.
-    :param messages: The list of message dictionaries.
-    :return: The updated list of message dictionaries.
+    Idempotent: if ``content`` is already the system message or a leading
+    prefix (as produced by a prior prepend), this is a no-op. That prevents
+    tool-loop follow-ups from stacking the model system prompt N times when
+    ``apply_model_system_prompt_to_body`` mutates a shared messages list.
     """
+    content = (content or "").strip()
+    if not content:
+        return messages
 
     if messages and messages[0].get("role") == "system":
-        messages[0]["content"] = f"{content}\n{messages[0]['content']}"
+        existing = messages[0].get("content") or ""
+        if (
+            existing == content
+            or existing.startswith(content + "\n")
+            or existing.startswith(content)
+        ):
+            return messages
+        messages[0]["content"] = f"{content}\n{existing}"
     else:
-        # Insert at the beginning
         messages.insert(0, {"role": "system", "content": content})
 
     return messages

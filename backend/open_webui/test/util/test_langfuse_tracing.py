@@ -27,6 +27,28 @@ class MapUsageTest(unittest.TestCase):
             {"input": 10, "output": 5, "total": 15},
         )
 
+    def test_openrouter_cache_details(self):
+        self.assertEqual(
+            lf.map_usage(
+                {
+                    "prompt_tokens": 1000,
+                    "completion_tokens": 10,
+                    "total_tokens": 1010,
+                    "prompt_tokens_details": {
+                        "cached_tokens": 900,
+                        "cache_write_tokens": 100,
+                    },
+                }
+            ),
+            {
+                "input": 1000,
+                "output": 10,
+                "total": 1010,
+                "cache_read_input_tokens": 900,
+                "cache_creation_input_tokens": 100,
+            },
+        )
+
 
 class TraceUserIdTest(unittest.TestCase):
     def test_prefers_email(self):

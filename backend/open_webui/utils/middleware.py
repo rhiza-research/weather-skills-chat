@@ -1085,10 +1085,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if metadata.get("function_calling") == "native":
             # If the function calling is native, then call the tools function calling handler
             metadata["tools"] = tools_dict
-            form_data["tools"] = [
-                {"type": "function", "function": tool.get("spec", {})}
-                for tool in tools_dict.values()
-            ]
+            form_data["tools"] = sorted(
+                [
+                    {"type": "function", "function": tool.get("spec", {})}
+                    for tool in tools_dict.values()
+                ],
+                key=lambda t: ((t.get("function") or {}).get("name") or ""),
+            )
             try:
                 from open_webui.utils.secrets import secret_usage_hint
 
@@ -1213,6 +1216,23 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     if metadata.get("headless"):
         form_data = inject_headless_context(form_data)
+
+    # Apply workspace-model system prompt once here so every LLM round
+    # (including the first) and Langfuse see the same system message.
+    # openai.generate_chat_completion still calls apply_model_system_prompt_to_body,
+    # but that is now idempotent and will no-op when already present.
+    try:
+        from open_webui.utils.payload import apply_model_system_prompt_to_body
+
+        model_id = form_data.get("model") or (model or {}).get("id")
+        model_info = Models.get_model_by_id(model_id) if model_id else None
+        if model_info and model_info.params:
+            params = model_info.params.model_dump()
+            form_data = apply_model_system_prompt_to_body(
+                params, form_data, metadata, user
+            )
+    except Exception:
+        log.debug("Early model system prompt apply skipped", exc_info=True)
 
     return form_data, metadata, events
 
@@ -1615,18 +1635,76 @@ async def process_chat_response(
                         block_content = str(block["content"]).strip()
                         content = f"{content}{block['type']}: {block_content}\n"
 
-                return content.strip()
+                return repair_unclosed_details(content.strip())
+
+            def repair_unclosed_details(content: str) -> str:
+                """Insert missing </details> before sibling <details> opens.
+
+                GPT reasoning blocks can be left open when the model switches to
+                tool_calls; nested-looking HTML then breaks the markdown details
+                tokenizer and raw tags render in the chat.
+                """
+                if not content or "<details" not in content:
+                    return content
+                out: list[str] = []
+                depth = 0
+                i = 0
+                n = len(content)
+                open_tag = "<details"
+                close_tag = "</details>"
+                while i < n:
+                    if content.startswith(open_tag, i):
+                        if depth > 0:
+                            out.append(f"\n{close_tag}\n")
+                            depth = 0
+                        out.append(open_tag)
+                        depth += 1
+                        i += len(open_tag)
+                        continue
+                    if content.startswith(close_tag, i):
+                        out.append(close_tag)
+                        depth = max(0, depth - 1)
+                        i += len(close_tag)
+                        continue
+                    out.append(content[i])
+                    i += 1
+                while depth > 0:
+                    out.append(f"\n{close_tag}")
+                    depth -= 1
+                return "".join(out)
+
+            def close_open_reasoning_block(content_blocks):
+                """End an in-flight reasoning block before tool calls / final text."""
+                if not content_blocks:
+                    return
+                block = content_blocks[-1]
+                if block.get("type") != "reasoning":
+                    return
+                if block.get("ended_at") is not None:
+                    return
+                block["ended_at"] = time.time()
+                started = block.get("started_at") or block["ended_at"]
+                block["duration"] = max(int(block["ended_at"] - started), 0)
+                content_blocks.append({"type": "text", "content": ""})
 
             def convert_content_blocks_to_messages(content_blocks):
+                from open_webui.utils.model_messages import (
+                    compact_tool_result_for_model,
+                    serialize_content_blocks_for_model,
+                )
+
                 messages = []
 
                 temp_blocks = []
                 for idx, block in enumerate(content_blocks):
                     if block["type"] == "tool_calls":
+                        assistant_content = serialize_content_blocks_for_model(
+                            temp_blocks
+                        )
                         messages.append(
                             {
                                 "role": "assistant",
-                                "content": serialize_content_blocks(temp_blocks),
+                                "content": assistant_content or None,
                                 "tool_calls": block.get("content"),
                             }
                         )
@@ -1638,7 +1716,9 @@ async def process_chat_response(
                                 {
                                     "role": "tool",
                                     "tool_call_id": result["tool_call_id"],
-                                    "content": result["content"],
+                                    "content": compact_tool_result_for_model(
+                                        result.get("content")
+                                    ),
                                 }
                             )
                         temp_blocks = []
@@ -1646,7 +1726,7 @@ async def process_chat_response(
                         temp_blocks.append(block)
 
                 if temp_blocks:
-                    content = serialize_content_blocks(temp_blocks)
+                    content = serialize_content_blocks_for_model(temp_blocks)
                     if content:
                         messages.append(
                             {
@@ -1968,6 +2048,7 @@ async def process_chat_response(
                                             await heartbeat.mark_activity()
 
                                         if delta_tool_calls:
+                                            close_open_reasoning_block(content_blocks)
                                             for delta_tool_call in delta_tool_calls:
                                                 tool_call_index = delta_tool_call.get(
                                                     "index"
@@ -2194,6 +2275,7 @@ async def process_chat_response(
                         await heartbeat.stop(clear=True)
 
                 await stream_body_handler(response)
+                close_open_reasoning_block(content_blocks)
 
                 tool_call_retries = 0
 
@@ -2214,6 +2296,7 @@ async def process_chat_response(
                         real_params = scrub_tool_call_in_place(tool_call)
                         prepared_calls.append((tool_call, real_params))
 
+                    close_open_reasoning_block(content_blocks)
                     content_blocks.append(
                         {
                             "type": "tool_calls",
@@ -2351,6 +2434,8 @@ async def process_chat_response(
                     )
 
                     try:
+                        from open_webui.utils.model_messages import deepcopy_messages
+
                         res = await generate_chat_completion(
                             request,
                             {
@@ -2358,9 +2443,16 @@ async def process_chat_response(
                                 "stream": True,
                                 "tools": form_data["tools"],
                                 "messages": [
-                                    *form_data["messages"],
+                                    *deepcopy_messages(form_data["messages"]),
                                     *convert_content_blocks_to_messages(content_blocks),
                                 ],
+                                "metadata": {
+                                    "chat_id": metadata.get("chat_id"),
+                                    "message_id": metadata.get("message_id"),
+                                    "session_id": metadata.get("session_id"),
+                                    "user_id": metadata.get("user_id")
+                                    or getattr(user, "id", None),
+                                },
                             },
                             user,
                         )
@@ -2551,18 +2643,27 @@ async def process_chat_response(
                         )
 
                         try:
+                            from open_webui.utils.model_messages import deepcopy_messages
+
                             res = await generate_chat_completion(
                                 request,
                                 {
                                     "model": model_id,
                                     "stream": True,
                                     "messages": [
-                                        *form_data["messages"],
+                                        *deepcopy_messages(form_data["messages"]),
                                         *code_interpreter_followup_messages(
                                             content_blocks,
                                             serialize_content_blocks,
                                         ),
                                     ],
+                                    "metadata": {
+                                        "chat_id": metadata.get("chat_id"),
+                                        "message_id": metadata.get("message_id"),
+                                        "session_id": metadata.get("session_id"),
+                                        "user_id": metadata.get("user_id")
+                                        or getattr(user, "id", None),
+                                    },
                                 },
                                 user,
                             )

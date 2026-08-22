@@ -4,7 +4,6 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 import logging
-import re
 
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.task import (
@@ -25,6 +24,7 @@ from open_webui.utils.filter import (
     process_filter_functions,
 )
 from open_webui.utils.task import get_task_model_id
+from open_webui.utils.model_messages import strip_message_details_for_tasks
 
 from open_webui.config import (
     DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
@@ -186,16 +186,7 @@ async def generate_title(
     else:
         template = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
 
-    messages = form_data["messages"]
-
-    # Remove reasoning details from the messages
-    for message in messages:
-        message["content"] = re.sub(
-            r"<details\s+type=\"reasoning\"[^>]*>.*?<\/details>",
-            "",
-            message["content"],
-            flags=re.S,
-        ).strip()
+    messages = strip_message_details_for_tasks(form_data["messages"])
 
     content = title_generation_template(
         template,
@@ -285,7 +276,9 @@ async def generate_chat_tags(
         template = DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE
 
     content = tags_generation_template(
-        template, form_data["messages"], {"name": user.name}
+        template,
+        strip_message_details_for_tasks(form_data["messages"]),
+        {"name": user.name},
     )
 
     payload = {

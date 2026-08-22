@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional, overload
 
@@ -118,6 +119,123 @@ def openai_o1_o3_handler(payload):
             payload["messages"][0]["role"] = "user"
         else:
             payload["messages"][0]["role"] = "developer"
+
+    return payload
+
+
+def _is_openrouter_anthropic_model(model: Optional[str]) -> bool:
+    mid = (model or "").lower()
+    return (
+        mid.startswith("anthropic/")
+        or mid.startswith("claude")
+        or "/claude" in mid
+    )
+
+
+def _openrouter_prompt_cache_key(
+    metadata: Optional[dict] = None, user=None
+) -> Optional[str]:
+    """Sticky cache key shared across a user's chats for one calendar day.
+
+    Per-chat keys partition the OpenAI cache and hurt reuse of the large
+    tools/system prefix. Rotating daily aligns with ``{{CURRENT_DATE}}`` in
+    the model system prompt.
+    """
+    user_id = None
+    if user is not None:
+        user_id = getattr(user, "id", None)
+        if user_id is None and isinstance(user, dict):
+            user_id = user.get("id")
+    if not user_id and isinstance(metadata, dict):
+        user_id = metadata.get("user_id")
+    if not user_id:
+        return None
+    day = datetime.now().strftime("%Y-%m-%d")
+    return f"{user_id}:{day}"[:256]
+
+
+def enable_openrouter_prompt_caching(
+    url: Optional[str],
+    payload: dict,
+    metadata: Optional[dict] = None,
+    user=None,
+) -> dict:
+    """Enable OpenRouter prompt caching when applicable.
+
+    Common:
+    - ``session_id`` from chat_id for sticky provider routing within a chat
+    - ``prompt_cache_key`` = ``{user_id}:{YYYY-MM-DD}`` so tools/system can
+      be reused across that user's chats for the day (OpenAI cache routing)
+
+    Anthropic / Claude additionally:
+    - Top-level ``cache_control``
+    - Explicit ``cache_control`` on the last tool and on the system message
+
+    Copies tools/messages before mutating so shared ``form_data`` lists are
+    not permanently altered mid-loop.
+    """
+    if not url or "openrouter.ai" not in url:
+        return payload
+
+    chat_id = None
+    if isinstance(metadata, dict):
+        chat_id = metadata.get("chat_id") or metadata.get("session_id")
+    if chat_id:
+        payload["session_id"] = str(chat_id)[:256]
+
+    cache_key = _openrouter_prompt_cache_key(metadata, user)
+    if cache_key:
+        payload["prompt_cache_key"] = cache_key
+
+    if not _is_openrouter_anthropic_model(payload.get("model")):
+        return payload
+
+    payload["cache_control"] = {"type": "ephemeral"}
+
+    tools = payload.get("tools")
+    if isinstance(tools, list) and tools:
+        tools = [dict(t) if isinstance(t, dict) else t for t in tools]
+        last = tools[-1]
+        if isinstance(last, dict):
+            last = dict(last)
+            last["cache_control"] = {"type": "ephemeral"}
+            tools[-1] = last
+            payload["tools"] = tools
+
+    messages = payload.get("messages")
+    if isinstance(messages, list) and messages:
+        messages = [dict(m) if isinstance(m, dict) else m for m in messages]
+        for idx, msg in enumerate(messages):
+            if not isinstance(msg, dict) or msg.get("role") != "system":
+                continue
+            content = msg.get("content")
+            if isinstance(content, str):
+                messages[idx] = {
+                    **msg,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": content,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                }
+            elif isinstance(content, list) and content:
+                blocks = [
+                    dict(block) if isinstance(block, dict) else block
+                    for block in content
+                ]
+                for block_idx in range(len(blocks) - 1, -1, -1):
+                    block = blocks[block_idx]
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        blocks[block_idx] = {
+                            **block,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                        break
+                messages[idx] = {**msg, "content": blocks}
+            break
+        payload["messages"] = messages
 
     return payload
 
@@ -667,6 +785,8 @@ async def generate_chat_completion(
             convert_logit_bias_input_to_json(payload["logit_bias"])
         )
 
+    payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
+
     payload = json.dumps(payload)
 
     r = None
@@ -688,8 +808,8 @@ async def generate_chat_completion(
                 "Content-Type": "application/json",
                 **(
                     {
-                        "HTTP-Referer": "https://openwebui.com/",
-                        "X-Title": "Open WebUI",
+                        "HTTP-Referer": "https://weather-skills.sheerwater.rhizaresearch.org/",
+                        "X-Title": "Weather Skills",
                     }
                     if "openrouter.ai" in url
                     else {}

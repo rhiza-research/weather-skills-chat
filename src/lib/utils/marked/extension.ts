@@ -1,18 +1,31 @@
-// Helper function to find matching closing tag
-function findMatchingClosingTag(src: string, openTag: string, closeTag: string): number {
+// Helper function to find the end of a details block.
+// Details are not intentionally nested in chat content. If a sibling <details
+// appears while the current block is still open, treat that as the end so
+// unclosed reasoning tags (common with GPT tool calls) do not swallow the rest
+// of the message as raw HTML.
+function findDetailsBlockEnd(src: string, openLength: number): { end: number; closed: boolean } {
 	let depth = 1;
-	let index = openTag.length;
+	let index = openLength;
 	while (depth > 0 && index < src.length) {
-		if (src.startsWith(openTag, index)) {
+		if (src.startsWith('<details', index)) {
+			if (depth === 1) {
+				return { end: index, closed: false };
+			}
 			depth++;
-		} else if (src.startsWith(closeTag, index)) {
+			index += 8;
+			continue;
+		}
+		if (src.startsWith('</details>', index)) {
 			depth--;
+			index += '</details>'.length;
+			if (depth === 0) {
+				return { end: index, closed: true };
+			}
+			continue;
 		}
-		if (depth > 0) {
-			index++;
-		}
+		index++;
 	}
-	return depth === 0 ? index + closeTag.length : -1;
+	return { end: index, closed: depth === 0 };
 }
 
 // Function to parse attributes from tag
@@ -33,14 +46,16 @@ function detailsTokenizer(src: string) {
 
 	const detailsMatch = detailsRegex.exec(src);
 	if (detailsMatch) {
-		const endIndex = findMatchingClosingTag(src, '<details', '</details>');
-		if (endIndex === -1) return;
+		const detailsTag = detailsMatch[0];
+		const { end: endIndex, closed } = findDetailsBlockEnd(src, detailsTag.length);
+		if (endIndex <= detailsTag.length) return;
 
 		const fullMatch = src.slice(0, endIndex);
-		const detailsTag = detailsMatch[0];
 		const attributes = parseAttributes(detailsTag); // Parse attributes from <details>
 
-		let content = fullMatch.slice(detailsTag.length, -10).trim(); // Remove <details> and </details>
+		let content = closed
+			? fullMatch.slice(detailsTag.length, -'</details>'.length).trim()
+			: fullMatch.slice(detailsTag.length).trim();
 		let summary = '';
 
 		const summaryMatch = summaryRegex.exec(content);

@@ -24,6 +24,8 @@ from open_webui.env import (
 log = logging.getLogger(__name__)
 
 MAX_PAYLOAD_CHARS = 32_000
+# Generations include full tool specs (skill descriptions); keep room to inspect.
+MAX_GENERATION_INPUT_CHARS = 1_000_000
 
 _client: Any = None
 _client_failed = False
@@ -54,6 +56,9 @@ def get_client():
                 public_key=LANGFUSE_PUBLIC_KEY,
                 secret_key=LANGFUSE_SECRET_KEY,
                 base_url=LANGFUSE_HOST,
+                # Required for Langfuse Cloud v4 realtime processing of OTLP spans.
+                # Without this, the UI can lag by minutes even after flush().
+                additional_headers={"x-langfuse-ingestion-version": "4"},
             )
             log.info("Langfuse tracing enabled (host=%s)", LANGFUSE_HOST)
         except Exception:
@@ -239,19 +244,33 @@ def start_generation(form_data: Optional[dict]) -> Any:
     ):
         if form_data.get(key) is not None:
             model_parameters[key] = form_data[key]
+    tools = form_data.get("tools") or []
     tool_names = []
-    for tool in form_data.get("tools") or []:
+    for tool in tools:
         name = (tool.get("function") or {}).get("name")
         if name:
             tool_names.append(name)
+    # Include full tool specs (names + descriptions + parameters) so Langfuse
+    # shows what the model actually received — not just tool name metadata.
+    generation_input: dict[str, Any] = {
+        "messages": form_data.get("messages"),
+    }
+    if tools:
+        generation_input["tools"] = tools
+    metadata: dict[str, Any] = {}
+    if tool_names:
+        metadata["tool_names"] = tool_names
+        metadata["tool_count"] = len(tool_names)
     generation = _safe_call(
         trace.start_observation,
         name="llm",
         as_type="generation",
         model=form_data.get("model"),
-        input=truncate_payload(form_data.get("messages")),
+        input=truncate_payload(
+            generation_input, limit=MAX_GENERATION_INPUT_CHARS
+        ),
         model_parameters=model_parameters or None,
-        metadata={"tools": tool_names} if tool_names else None,
+        metadata=metadata or None,
     )
     if generation is not None:
         _generation_stack().append(generation)
@@ -266,7 +285,26 @@ def map_usage(usage: Any) -> Optional[dict]:
         "output": usage.get("completion_tokens", usage.get("output")),
         "total": usage.get("total_tokens", usage.get("total")),
     }
-    if all(v is None for v in mapped.values()):
+    details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        cached = details.get("cached_tokens")
+        cache_write = details.get("cache_write_tokens")
+        if cached is not None:
+            mapped["cache_read_input_tokens"] = cached
+        if cache_write is not None:
+            mapped["cache_creation_input_tokens"] = cache_write
+    # Native Anthropic-style fields (if a provider surfaces them directly)
+    for src, dst in (
+        ("cache_read_input_tokens", "cache_read_input_tokens"),
+        ("cache_creation_input_tokens", "cache_creation_input_tokens"),
+    ):
+        if usage.get(src) is not None and dst not in mapped:
+            mapped[dst] = usage.get(src)
+    if all(
+        v is None
+        for k, v in mapped.items()
+        if k in ("input", "output", "total")
+    ):
         return None
     return {k: v for k, v in mapped.items() if v is not None}
 
@@ -289,6 +327,10 @@ def end_generation(*, output: Any = None, usage: Any = None, error: Any = None) 
     if update_kwargs:
         _safe_call(generation.update, **update_kwargs)
     _safe_call(generation.end)
+    # Push mid-turn generations promptly (tool loops can run a long time).
+    client = get_client()
+    if client:
+        _safe_call(client.flush)
 
 
 def start_tool_observation(name: str, params: Any) -> Any:
