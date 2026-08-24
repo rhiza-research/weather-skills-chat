@@ -9,6 +9,8 @@ from datetime import datetime
 from open_webui.utils.misc import add_or_update_system_message
 from open_webui.utils.model_messages import (
     compact_tool_result_for_model,
+    expand_assistant_content_to_messages,
+    expand_ui_tool_history_messages,
     serialize_content_blocks_for_model,
     strip_message_details_for_tasks,
 )
@@ -114,6 +116,106 @@ class SerializeForModelTest(unittest.TestCase):
         text = serialize_content_blocks_for_model(blocks)
         self.assertEqual(text, "I will call a tool\nDone.")
         self.assertNotIn("<details", text)
+
+
+class ExpandUiToolHistoryTest(unittest.TestCase):
+    def test_expands_details_into_native_tool_turns(self):
+        content = (
+            '<details type="reasoning" done="true"><summary>Thought</summary>'
+            "secret</details>\n"
+            "I will fetch Kenya precip.\n"
+            '<details type="tool_calls" done="true" '
+            'id="call_abc" name="create_folder" '
+            'arguments="{&quot;path&quot;: &quot;kenya&quot;}" '
+            'result="&quot;Created folder: `kenya`.&quot;">'
+            "<summary>Tool Executed</summary></details>\n\n"
+            "Done with the map."
+        )
+        expanded = expand_assistant_content_to_messages(content)
+        self.assertEqual(expanded[0]["role"], "assistant")
+        self.assertEqual(expanded[0]["content"], "I will fetch Kenya precip.")
+        self.assertEqual(len(expanded[0]["tool_calls"]), 1)
+        tc = expanded[0]["tool_calls"][0]
+        self.assertEqual(tc["id"], "call_abc")
+        self.assertEqual(tc["function"]["name"], "create_folder")
+        self.assertEqual(json.loads(tc["function"]["arguments"])["path"], "kenya")
+        self.assertEqual(expanded[1]["role"], "tool")
+        self.assertEqual(expanded[1]["tool_call_id"], "call_abc")
+        self.assertIn("Created folder", expanded[1]["content"])
+        self.assertEqual(expanded[2]["role"], "assistant")
+        self.assertEqual(expanded[2]["content"], "Done with the map.")
+        self.assertNotIn("secret", json.dumps(expanded))
+        self.assertNotIn("<details", json.dumps(expanded))
+
+    def test_groups_consecutive_tool_calls(self):
+        content = (
+            '<details type="tool_calls" done="true" id="c1" name="a" '
+            'arguments="{}" result="&quot;1&quot;">'
+            "<summary>Tool</summary></details>\n"
+            '<details type="tool_calls" done="true" id="c2" name="b" '
+            'arguments="{}" result="&quot;2&quot;">'
+            "<summary>Tool</summary></details>"
+        )
+        expanded = expand_assistant_content_to_messages(content)
+        self.assertEqual(len(expanded), 3)  # 1 assistant + 2 tools
+        self.assertEqual(len(expanded[0]["tool_calls"]), 2)
+        self.assertEqual(expanded[1]["tool_call_id"], "c1")
+        self.assertEqual(expanded[2]["tool_call_id"], "c2")
+
+    def test_expands_legacy_xml_tool_markup(self):
+        content = (
+            "Working on it.\n"
+            '<tool_calls name="create_folder" result="&quot;Created folder: `x`.&quot;"/>\n'
+            '<tool_calls name="dynamical_fetch" result="{&quot;ok&quot;: true, &quot;exit_code&quot;: 0, &quot;stdout&quot;: &quot;hi&quot;}"/>'
+        )
+        expanded = expand_assistant_content_to_messages(content)
+        self.assertEqual(expanded[0]["role"], "assistant")
+        self.assertEqual(len(expanded[0]["tool_calls"]), 2)
+        self.assertEqual(expanded[0]["tool_calls"][0]["function"]["name"], "create_folder")
+        self.assertEqual(expanded[1]["role"], "tool")
+        self.assertTrue(expanded[2]["content"])  # compacted skill JSON
+
+    def test_history_list_idempotent_for_native_messages(self):
+        native = [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "a", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        ]
+        self.assertEqual(expand_ui_tool_history_messages(native), native)
+
+    def test_history_list_expands_assistant_ui_content(self):
+        messages = [
+            {"role": "user", "content": "forecast Kenya"},
+            {
+                "role": "assistant",
+                "content": (
+                    '<details type="tool_calls" done="true" id="c1" name="resolve_region" '
+                    'arguments="{&quot;argv&quot;: [&quot;KEN&quot;]}" '
+                    'result="{&quot;ok&quot;: true, &quot;exit_code&quot;: 0, &quot;stdout&quot;: &quot;bbox&quot;}">'
+                    "<summary>Tool</summary></details>\n\nHere is the forecast."
+                ),
+            },
+            {"role": "user", "content": "now IFS ENS"},
+        ]
+        out = expand_ui_tool_history_messages(messages)
+        self.assertEqual(out[0]["role"], "user")
+        self.assertEqual(out[1]["role"], "assistant")
+        self.assertIn("tool_calls", out[1])
+        self.assertEqual(out[2]["role"], "tool")
+        self.assertEqual(out[3]["role"], "assistant")
+        self.assertEqual(out[3]["content"], "Here is the forecast.")
+        self.assertEqual(out[4]["role"], "user")
+        self.assertEqual(out[4]["content"], "now IFS ENS")
 
 
 class OpenRouterCacheTest(unittest.TestCase):

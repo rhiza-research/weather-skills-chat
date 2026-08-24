@@ -30,13 +30,11 @@
 	marked.use(markedKatexExtension(options));
 	marked.use(markedExtension(options));
 
-	$: (async () => {
-		if (content) {
-			tokens = marked.lexer(
+	$: tokens = content
+		? marked.lexer(
 				replaceTokens(processResponseContent(content), sourceIds, model?.name, $user?.name)
-			);
-		}
-	})();
+			)
+		: [];
 </script>
 
 {#key id}

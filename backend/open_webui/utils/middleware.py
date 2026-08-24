@@ -954,6 +954,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     events = []
     sources = []
 
+    # Rebuild native assistant/tool turns from UI <details type="tool_calls">
+    # history (and strip reasoning chrome). Prevents the client processDetails
+    # XML rewrite from teaching the model a fake tool-call dialect on follow-ups.
+    try:
+        from open_webui.utils.model_messages import expand_ui_tool_history_messages
+
+        form_data["messages"] = expand_ui_tool_history_messages(
+            form_data.get("messages")
+        )
+    except Exception:
+        log.exception("expand_ui_tool_history_messages failed")
+
     user_message = get_last_user_message(form_data["messages"])
     model_knowledge = model.get("info", {}).get("meta", {}).get("knowledge", False)
 

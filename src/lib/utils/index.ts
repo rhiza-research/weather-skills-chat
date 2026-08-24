@@ -106,8 +106,61 @@ export const sanitizeToolCallDetailsContent = (content: string) => {
 	});
 };
 
+/** Close reasoning/details blocks left open before a sibling <details> opens. */
+export const repairUnclosedDetails = (content: string) => {
+	if (!content || !content.includes('<details')) {
+		return content;
+	}
+	const out: string[] = [];
+	const openTag = '<details';
+	const closeTag = '</details>';
+	let depth = 0;
+	for (let i = 0; i < content.length; i++) {
+		if (content.startsWith(openTag, i)) {
+			if (depth > 0) {
+				out.push(`\n${closeTag}\n`);
+				depth = 0;
+			}
+			out.push(openTag);
+			depth += 1;
+			i += openTag.length - 1;
+			continue;
+		}
+		if (content.startsWith(closeTag, i)) {
+			out.push(closeTag);
+			depth = Math.max(0, depth - 1);
+			i += closeTag.length - 1;
+			continue;
+		}
+		out.push(content[i]);
+	}
+	while (depth > 0) {
+		out.push(`\n${closeTag}`);
+		depth -= 1;
+	}
+	return out.join('');
+};
+
+/** Convert legacy XML-style <tool_calls> tags to <details type="tool_calls"> for display. */
+export const convertLegacyToolCallMarkup = (content: string) => {
+	if (!content || !content.includes('<tool_calls')) {
+		return content;
+	}
+	let converted = content.replace(
+		/<tool_calls\s+name="([^"]*)"\s+(?:params|arguments)="([^"]*)"\s*\/?>\s*/gi,
+		(_match, name, args) =>
+			`<details type="tool_calls" done="true" name="${name}" arguments="${args}" result="" files="">\n<summary>Tool Executed</summary>\n</details>\n\n`
+	);
+	converted = converted.replace(/<\/?tool_calls\s*\/?>\s*/gi, '');
+	return converted;
+};
+
 export const processResponseContent = (content: string) => {
-	return sanitizeToolCallDetailsContent(content.trim());
+	let normalized = content.trim();
+	normalized = sanitizeToolCallDetailsContent(normalized);
+	normalized = convertLegacyToolCallMarkup(normalized);
+	normalized = repairUnclosedDetails(normalized);
+	return normalized;
 };
 
 export function unescapeHtml(html: string) {

@@ -51,8 +51,7 @@
 		splitStream,
 		sleep,
 		removeDetails,
-		getPromptVariables,
-		processDetails
+		getPromptVariables
 	} from '$lib/utils';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
@@ -1632,15 +1631,24 @@
 						}`
 					}
 				: undefined,
+			// Keep UI <details type="tool_calls"> intact. The backend expands them
+			// into native assistant tool_calls + role:tool messages. Do not run
+			// processDetails() here — that rewrote tools as <tool_calls> XML and
+			// taught the model a fake tool dialect on follow-up turns.
 			...createMessagesList(_history, responseMessageId).map((message) => ({
 				...message,
-				content: processDetails(message.content)
+				content:
+					typeof message.content === 'string'
+						? removeDetails(message.content, ['reasoning', 'code_interpreter'])
+						: message.content
 			}))
 		].filter((message) => message);
 
 		messages = messages
 			.map((message, idx, arr) => ({
 				role: message.role,
+				...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
+				...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
 				...((message.files?.filter((file) => file.type === 'image').length > 0 ?? false) &&
 				message.role === 'user'
 					? {
@@ -1663,7 +1671,14 @@
 							content: message?.merged?.content ?? message.content
 						})
 			}))
-			.filter((message) => message?.role === 'user' || message?.content?.trim());
+			.filter((message) => {
+				if (message?.role === 'user' || message?.role === 'system') return true;
+				if (message?.role === 'tool') return true;
+				if (message?.tool_calls?.length) return true;
+				const content = message?.content;
+				if (typeof content === 'string') return !!content.trim();
+				return Array.isArray(content) ? content.length > 0 : !!content;
+			});
 
 		const res = await generateOpenAIChatCompletion(
 			localStorage.token,
