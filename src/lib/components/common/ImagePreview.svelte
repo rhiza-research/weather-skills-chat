@@ -29,14 +29,37 @@
 		console.log(instance.getTransform());
 	};
 
-	const downloadImage = (url, filename, prefixName = '') => {
+	const downloadBasename = (name: string, url: string) => {
+		const fromAlt = (name || '').split(/[/\\]/).pop()?.trim() || '';
+		if (fromAlt && /\.[a-z0-9]{2,5}$/i.test(fromAlt)) {
+			return fromAlt;
+		}
+		try {
+			const parsed = new URL(url, window.location.origin);
+			if (parsed.protocol !== 'blob:') {
+				const pathParam = parsed.searchParams.get('path');
+				if (pathParam) {
+					const base = pathParam.split('/').pop();
+					if (base) return base;
+				}
+				const last = parsed.pathname.split('/').pop() || '';
+				if (last.includes('.')) return last;
+			}
+		} catch {
+			// ignore invalid URLs
+		}
+		if (fromAlt) return `${fromAlt}.png`;
+		return 'image.png';
+	};
+
+	const downloadImage = (url: string, filename: string) => {
 		fetch(url)
 			.then((response) => response.blob())
 			.then((blob) => {
 				const objectUrl = window.URL.createObjectURL(blob);
 				const link = document.createElement('a');
 				link.href = objectUrl;
-				link.download = `${prefixName}${filename}`;
+				link.download = filename;
 				document.body.appendChild(link);
 				link.click();
 				document.body.removeChild(link);
@@ -114,10 +137,10 @@
 					on:pointerdown={(e) => {
 						e.stopImmediatePropagation();
 						e.preventDefault();
-						downloadImage(src, src.substring(src.lastIndexOf('/') + 1), alt);
 					}}
 					on:click={(e) => {
-						downloadImage(src, src.substring(src.lastIndexOf('/') + 1), alt);
+						e.stopPropagation();
+						downloadImage(src, downloadBasename(alt, src));
 					}}
 				>
 					<svg

@@ -51,6 +51,26 @@
 		dispatch('toggle', { path: node.path });
 	};
 
+	const downloadFile = async (path: string, name: string) => {
+		try {
+			const res = await fetch(getArtifactContentUrl($chatId, path), {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(`download failed: ${res.status}`);
+			const blob = await res.blob();
+			const objectUrl = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = objectUrl;
+			link.download = name || path.split('/').pop() || 'download';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(objectUrl);
+		} catch (e) {
+			console.error(e);
+		}
+	};
+
 	$: file = node.file;
 	$: navigable = isNavigableDir(node);
 	$: open = expanded.has(node.path);
@@ -186,6 +206,13 @@
 					>
 						{$i18n.t('Open')}
 					</button>
+					<button
+						type="button"
+						class="underline"
+						on:click={() => downloadFile(file.path, node.name)}
+					>
+						{$i18n.t('Download')}
+					</button>
 				{:else if file.kind === 'zarr_view' && !file.missing_zarr}
 					<button
 						type="button"
@@ -199,6 +226,7 @@
 					<a
 						class="underline"
 						href={getArtifactContentUrl($chatId, file.path)}
+						download={node.name}
 						target="_blank"
 						rel="noreferrer">{$i18n.t('Download')}</a
 					>

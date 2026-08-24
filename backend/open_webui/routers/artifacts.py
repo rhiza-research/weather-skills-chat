@@ -67,7 +67,11 @@ async def get_artifact_content(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    return FileResponse(target, filename=target.name)
+    return FileResponse(
+        target,
+        filename=target.name,
+        content_disposition_type="attachment",
+    )
 
 
 @router.get("/{chat_id}/artifacts/archive")
