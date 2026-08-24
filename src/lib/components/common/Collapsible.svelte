@@ -285,16 +285,16 @@
 	})();
 
 	let displayImageSrc = '';
-	let displayImageLoadId = 0;
+	let displayImageLoadedKey = '';
 
-	async function loadDisplayImage(path: string, cid: string, loadId: number) {
+	async function loadDisplayImageOnce(cid: string, path: string, requestKey: string) {
 		try {
 			const res = await fetch(getArtifactContentUrl(cid, path), {
 				headers: { authorization: `Bearer ${localStorage.token}` }
 			});
 			if (!res.ok) throw new Error(`artifact fetch failed: ${res.status}`);
 			const blob = await res.blob();
-			if (loadId !== displayImageLoadId) return;
+			if (requestKey !== displayImageLoadedKey) return;
 			if (displayImageSrc.startsWith('blob:')) {
 				URL.revokeObjectURL(displayImageSrc);
 			}
@@ -304,18 +304,33 @@
 		}
 	}
 
-	$: if (displayImagePath && $chatId && attributes?.done === 'true') {
-		displayImageLoadId += 1;
-		loadDisplayImage(displayImagePath, $chatId, displayImageLoadId);
-	} else if (displayImageSrc.startsWith('blob:')) {
-		URL.revokeObjectURL(displayImageSrc);
-		displayImageSrc = '';
-	}
-
-	onDestroy(() => {
+	function clearDisplayImage() {
 		if (displayImageSrc.startsWith('blob:')) {
 			URL.revokeObjectURL(displayImageSrc);
 		}
+		displayImageSrc = '';
+		displayImageLoadedKey = '';
+	}
+
+	$: displayImageRequestKey =
+		displayImagePath && $chatId && attributes?.done === 'true'
+			? `${$chatId}::${displayImagePath}`
+			: '';
+
+	$: if (displayImageRequestKey) {
+		if (displayImageRequestKey !== displayImageLoadedKey) {
+			displayImageLoadedKey = displayImageRequestKey;
+			const sep = displayImageRequestKey.indexOf('::');
+			const cid = displayImageRequestKey.slice(0, sep);
+			const path = displayImageRequestKey.slice(sep + 2);
+			loadDisplayImageOnce(cid, path, displayImageRequestKey);
+		}
+	} else if (displayImageLoadedKey) {
+		clearDisplayImage();
+	}
+
+	onDestroy(() => {
+		clearDisplayImage();
 	});
 
 	const secretNamesFromValue = (value: any): string[] => {
