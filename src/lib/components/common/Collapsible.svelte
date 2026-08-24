@@ -2,7 +2,7 @@
 	import { decode } from 'html-entities';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { getContext, createEventDispatcher } from 'svelte';
+	import { getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const i18n = getContext('i18n');
 
 	import dayjs from '$lib/dayjs';
@@ -36,6 +36,8 @@
 	import Spinner from './Spinner.svelte';
 	import Image from './Image.svelte';
 	import ToolCallDetails from './ToolCallDetails.svelte';
+	import { getArtifactContentUrl } from '$lib/apis/artifacts';
+	import { chatId } from '$lib/stores';
 
 	export let open = false;
 
@@ -270,6 +272,52 @@
 	$: toolFiles =
 		attributes?.type === 'tool_calls' ? unwrapJSON(decode(attributes?.files ?? '')) : null;
 
+	$: displayImagePath = (() => {
+		if (attributes?.type !== 'tool_calls' || attributes?.name !== 'display_image') {
+			return null;
+		}
+		const args = unwrapJSON(toolArgsRaw);
+		if (args && typeof args === 'object' && !Array.isArray(args)) {
+			const path = typeof args.path === 'string' ? args.path.trim() : '';
+			return path || null;
+		}
+		return null;
+	})();
+
+	let displayImageSrc = '';
+	let displayImageLoadId = 0;
+
+	async function loadDisplayImage(path: string, cid: string, loadId: number) {
+		try {
+			const res = await fetch(getArtifactContentUrl(cid, path), {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(`artifact fetch failed: ${res.status}`);
+			const blob = await res.blob();
+			if (loadId !== displayImageLoadId) return;
+			if (displayImageSrc.startsWith('blob:')) {
+				URL.revokeObjectURL(displayImageSrc);
+			}
+			displayImageSrc = URL.createObjectURL(blob);
+		} catch (err) {
+			console.error('display_image load failed', err);
+		}
+	}
+
+	$: if (displayImagePath && $chatId && attributes?.done === 'true') {
+		displayImageLoadId += 1;
+		loadDisplayImage(displayImagePath, $chatId, displayImageLoadId);
+	} else if (displayImageSrc.startsWith('blob:')) {
+		URL.revokeObjectURL(displayImageSrc);
+		displayImageSrc = '';
+	}
+
+	onDestroy(() => {
+		if (displayImageSrc.startsWith('blob:')) {
+			URL.revokeObjectURL(displayImageSrc);
+		}
+	});
+
 	const secretNamesFromValue = (value: any): string[] => {
 		if (!Array.isArray(value)) return [];
 		const names: string[] = [];
@@ -426,7 +474,13 @@
 			{/if}
 
 			{#if attributes?.done === 'true'}
-				{#if typeof toolFiles === 'object' && Array.isArray(toolFiles)}
+				{#if displayImageSrc}
+					<Image
+						id={`${collapsibleId}-tool-calls-${attributes?.id}-display-image`}
+						src={displayImageSrc}
+						alt={displayImagePath ?? 'Image'}
+					/>
+				{:else if typeof toolFiles === 'object' && Array.isArray(toolFiles)}
 					{#each toolFiles ?? [] as file, idx}
 						{#if typeof file === 'string' && file.startsWith('data:image/')}
 							<Image

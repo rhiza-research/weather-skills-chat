@@ -90,8 +90,24 @@ export const sanitizeResponseContent = (content: string) => {
 		.trim();
 };
 
+/** Strip inline data URLs from tool-call <details> files attributes (legacy messages). */
+export const sanitizeToolCallDetailsContent = (content: string) => {
+	if (!content || !content.includes('type="tool_calls"')) {
+		return content;
+	}
+	if (!content.includes('files="') || !content.includes('data:image')) {
+		return content;
+	}
+	return content.replace(/<details\s+type="tool_calls"\s+([^>]*?)>/gi, (openTag) => {
+		if (!openTag.includes('files="') || !openTag.includes('data:image')) {
+			return openTag;
+		}
+		return openTag.replace(/\sfiles="[^"]*"/, ' files=""');
+	});
+};
+
 export const processResponseContent = (content: string) => {
-	return content.trim();
+	return sanitizeToolCallDetailsContent(content.trim());
 };
 
 export function unescapeHtml(html: string) {

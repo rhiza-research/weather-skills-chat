@@ -113,6 +113,26 @@ WAITING_RESPONSE_INTERVAL_S = float(
 )
 
 
+def tool_call_files_for_display(
+    tool_name: str, tool_result_files: Optional[list]
+) -> Optional[list]:
+    """Omit inline data URLs from serialized tool-call HTML.
+
+    display_image returns multi-hundred-KB base64 data URLs; embedding them in
+    a <details files="..."> attribute breaks markdown/HTML parsing in the UI.
+    """
+    if not tool_result_files:
+        return None
+    if tool_name == "display_image":
+        return None
+    filtered = [
+        item
+        for item in tool_result_files
+        if not (isinstance(item, str) and item.startswith("data:"))
+    ]
+    return filtered or None
+
+
 class WaitingResponseHeartbeat:
     """Periodic status events so the UI shows the model is still being waited on."""
 
@@ -1551,7 +1571,15 @@ async def process_chat_response(
                                         break
 
                                 if tool_result:
-                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="true" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}" result="{html.escape(json.dumps(tool_result))}" files="{html.escape(json.dumps(tool_result_files)) if tool_result_files else ""}">\n<summary>Tool Executed</summary>\n</details>\n'
+                                    display_files = tool_call_files_for_display(
+                                        tool_name, tool_result_files
+                                    )
+                                    files_attr = (
+                                        html.escape(json.dumps(display_files))
+                                        if display_files
+                                        else ""
+                                    )
+                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="true" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}" result="{html.escape(json.dumps(tool_result))}" files="{files_attr}">\n<summary>Tool Executed</summary>\n</details>\n'
                                 else:
                                     tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="false" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}">\n<summary>Executing...</summary>\n</details>'
 
