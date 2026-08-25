@@ -850,6 +850,20 @@
 
 								{#if message?.error}
 									<Error content={message?.error?.content ?? message.content} />
+									{#if !readOnly && isLastMessage && message.done}
+										<div class="mt-2">
+											<button
+												type="button"
+												class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 transition"
+												on:click={() => {
+													showRateComment = false;
+													regenerateResponse(message);
+												}}
+											>
+												{$i18n.t('Retry')}
+											</button>
+										</div>
+									{/if}
 								{/if}
 
 								{#if (message?.sources || message?.citations) && (model?.info?.meta?.capabilities?.citations ?? true)}

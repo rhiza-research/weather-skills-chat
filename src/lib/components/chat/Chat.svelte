@@ -53,6 +53,13 @@
 		removeDetails,
 		getPromptVariables
 	} from '$lib/utils';
+	import {
+		GENERATION_HEARTBEAT_ACTION,
+		GENERATION_LOST_MESSAGE,
+		clearSpinningToolCalls,
+		finalizeOrphanAssistantMessages,
+		formatGenerationRequestError
+	} from '$lib/utils/generationLiveness';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
 	import {
@@ -141,6 +148,95 @@
 	};
 
 	let taskIds = null;
+
+	// Dead-generation detection: server emits generation_heartbeat ~every 5s.
+	const GENERATION_SILENCE_TIMEOUT_MS = 30_000;
+	const TASK_LIVENESS_POLL_MS = 8_000;
+
+	let lastServerActivityAt = 0;
+	let generationWatchMessageId: string | null = null;
+	let generationSilenceTimer: ReturnType<typeof setInterval> | null = null;
+	let taskLivenessTimer: ReturnType<typeof setInterval> | null = null;
+
+	const bumpGenerationActivity = (messageId?: string | null) => {
+		if (messageId && generationWatchMessageId && messageId !== generationWatchMessageId) {
+			return;
+		}
+		lastServerActivityAt = Date.now();
+	};
+
+	const stopGenerationWatchdogs = () => {
+		if (generationSilenceTimer) {
+			clearInterval(generationSilenceTimer);
+			generationSilenceTimer = null;
+		}
+		if (taskLivenessTimer) {
+			clearInterval(taskLivenessTimer);
+			taskLivenessTimer = null;
+		}
+		generationWatchMessageId = null;
+	};
+
+	const failInFlightMessage = async (
+		messageId: string,
+		reason: string = GENERATION_LOST_MESSAGE
+	) => {
+		const message = history.messages[messageId];
+		if (!message || message.role !== 'assistant' || message.done === true) {
+			stopGenerationWatchdogs();
+			taskIds = null;
+			return;
+		}
+
+		message.error = { content: reason };
+		message.done = true;
+		message.content = clearSpinningToolCalls(message.content ?? '');
+		if (message.statusHistory?.length) {
+			message.statusHistory = message.statusHistory.map((status) =>
+				status?.done === false ? { ...status, done: true, hidden: true } : status
+			);
+		}
+		history.messages[messageId] = message;
+		history = history;
+		taskIds = null;
+		stopGenerationWatchdogs();
+		toast.error(reason);
+		if ($chatId) {
+			await saveChatHandler($chatId, history);
+		}
+	};
+
+	const startGenerationWatchdogs = (messageId: string) => {
+		stopGenerationWatchdogs();
+		generationWatchMessageId = messageId;
+		lastServerActivityAt = Date.now();
+
+		generationSilenceTimer = setInterval(() => {
+			if (!generationWatchMessageId) return;
+			const message = history.messages[generationWatchMessageId];
+			if (!message || message.done === true) {
+				stopGenerationWatchdogs();
+				return;
+			}
+			if (Date.now() - lastServerActivityAt >= GENERATION_SILENCE_TIMEOUT_MS) {
+				failInFlightMessage(generationWatchMessageId, GENERATION_LOST_MESSAGE);
+			}
+		}, 5_000);
+
+		taskLivenessTimer = setInterval(async () => {
+			if (!generationWatchMessageId || !taskIds?.length || !$chatId) return;
+			const message = history.messages[generationWatchMessageId];
+			if (!message || message.done === true) {
+				stopGenerationWatchdogs();
+				return;
+			}
+			const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch(() => null);
+			const liveIds = taskRes?.task_ids ?? [];
+			if (!liveIds.length) {
+				failInFlightMessage(generationWatchMessageId, GENERATION_LOST_MESSAGE);
+			}
+		}, TASK_LIVENESS_POLL_MS);
+	};
 
 	// Chat Input
 	let prompt = '';
@@ -323,6 +419,12 @@
 				};
 
 				if (type === 'status') {
+					bumpGenerationActivity(event.message_id);
+					// Liveness-only pings — do not replace visible status UI.
+					if (data?.action === GENERATION_HEARTBEAT_ACTION) {
+						history.messages[message.id] = message;
+						return;
+					}
 					if (message?.statusHistory) {
 						message.statusHistory.push(data);
 					} else {
@@ -330,14 +432,18 @@
 					}
 					if (data?.done) bumpArtifactsSoon();
 				} else if (type === 'chat:completion') {
+					bumpGenerationActivity(event.message_id);
 					chatCompletionEventHandler(data, message, event.chat_id);
 					bumpArtifactsSoon();
 				} else if (type === 'chat:message:delta' || type === 'message') {
+					bumpGenerationActivity(event.message_id);
 					message.content += data.content;
 				} else if (type === 'chat:message' || type === 'replace') {
+					bumpGenerationActivity(event.message_id);
 					message.content = data.content;
 					bumpArtifactsSoon();
 				} else if (type === 'chat:message:files' || type === 'files') {
+					bumpGenerationActivity(event.message_id);
 					message.files = data.files;
 					bumpArtifactsSoon();
 				} else if (type === 'chat:title') {
@@ -348,6 +454,7 @@
 					chat = await getChatById(localStorage.token, $chatId);
 					allTags.set(await getAllTags(localStorage.token));
 				} else if (type === 'source' || type === 'citation') {
+					bumpGenerationActivity(event.message_id);
 					if (data?.type === 'code_execution') {
 						// Code execution; update existing code execution by ID, or add new one.
 						if (!message?.code_executions) {
@@ -374,6 +481,7 @@
 						}
 					}
 				} else if (type === 'notification') {
+					bumpGenerationActivity(event.message_id);
 					const toastType = data?.type ?? 'info';
 					const toastContent = data?.content ?? '';
 
@@ -387,6 +495,7 @@
 						toast.info(toastContent);
 					}
 				} else if (type === 'confirmation') {
+					bumpGenerationActivity(event.message_id);
 					eventCallback = cb;
 
 					eventConfirmationInput = false;
@@ -535,6 +644,7 @@
 	onDestroy(() => {
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
+		stopGenerationWatchdogs();
 		window.removeEventListener('message', onMessageHandler);
 		$socket?.off('chat-events', chatEventHandler);
 	});
@@ -866,6 +976,8 @@
 	};
 
 	const loadChat = async (id: string) => {
+		stopGenerationWatchdogs();
+		taskIds = null;
 		chatId.set(id);
 		chat = await getChatById(localStorage.token, id).catch(async (error) => {
 			await goto('/');
@@ -914,20 +1026,28 @@
 				autoScroll = true;
 				await tick();
 
-				if (history.currentId) {
-					for (const message of Object.values(history.messages)) {
-						if (message.role === 'assistant') {
-							message.done = true;
-						}
-					}
-					history = history;
-				}
-
 				const taskRes = await getTaskIdsByChatId(localStorage.token, id).catch((error) => {
 					return null;
 				});
 
 				taskIds = taskRes?.task_ids?.length ? taskRes.task_ids : null;
+				const hasLiveTask = !!(taskIds && taskIds.length);
+
+				const orphanCount = finalizeOrphanAssistantMessages(
+					history.messages,
+					hasLiveTask,
+					GENERATION_LOST_MESSAGE
+				);
+				history = history;
+
+				if (hasLiveTask && history.currentId) {
+					const current = history.messages[history.currentId];
+					if (current?.role === 'assistant' && current.done !== true) {
+						startGenerationWatchdogs(current.id);
+					}
+				} else if (orphanCount > 0) {
+					toast.error(GENERATION_LOST_MESSAGE);
+				}
 
 				await tick();
 
@@ -1001,6 +1121,7 @@
 		}
 
 		taskIds = null;
+		stopGenerationWatchdogs();
 	};
 
 	const chatActionHandler = async (chatId, actionId, modelId, responseMessageId, event = null) => {
@@ -1287,6 +1408,10 @@
 
 		if (done) {
 			message.done = true;
+			if (generationWatchMessageId === message.id) {
+				stopGenerationWatchdogs();
+			}
+			taskIds = null;
 
 			if ($settings.responseAutoCopy) {
 				copyToClipboard(message.content);
@@ -1512,7 +1637,21 @@
 
 		_history = JSON.parse(JSON.stringify(history));
 		// Save chat after all messages have been created
-		await saveChatHandler(_chatId, _history);
+		try {
+			await saveChatHandler(_chatId, _history);
+		} catch (error) {
+			const reason = formatGenerationRequestError(error);
+			toast.error(reason);
+			for (const responseMessageId of Object.values(responseMessageIds)) {
+				const responseMessage = history.messages[responseMessageId];
+				if (!responseMessage) continue;
+				responseMessage.error = { content: reason };
+				responseMessage.done = true;
+				history.messages[responseMessageId] = responseMessage;
+			}
+			history = history;
+			return;
+		}
 
 		await Promise.all(
 			selectedModelIds.map(async (modelId, _modelIdx) => {
@@ -1762,10 +1901,11 @@
 			},
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
-			toast.error(`${error}`);
+			const reason = formatGenerationRequestError(error);
+			toast.error(reason);
 
 			responseMessage.error = {
-				content: error
+				content: reason
 			};
 			responseMessage.done = true;
 
@@ -1783,6 +1923,7 @@
 				} else {
 					taskIds = [res.task_id];
 				}
+				startGenerationWatchdogs(responseMessageId);
 			}
 		}
 
@@ -1822,6 +1963,8 @@
 			content: $i18n.t(`Uh-oh! There was an issue with the response.`) + '\n' + errorMessage
 		};
 		responseMessage.done = true;
+		stopGenerationWatchdogs();
+		taskIds = null;
 
 		if (responseMessage.statusHistory) {
 			responseMessage.statusHistory = responseMessage.statusHistory.filter(
@@ -1858,18 +2001,14 @@
 			}
 			taskIds = null;
 		}
+		stopGenerationWatchdogs();
 
 		const responseMessage = history.messages[history.currentId];
 		if (responseMessage?.role === 'assistant' && responseMessage.done !== true) {
 			markAssistantResponsesDone(responseMessage.parentId);
 			responseMessage.done = true;
 			// Clear tool-call spinners immediately even if the socket update races.
-			if (typeof responseMessage.content === 'string') {
-				responseMessage.content = responseMessage.content.replace(
-					/(<details type="tool_calls" )done="false"/g,
-					'$1done="true"'
-				);
-			}
+			responseMessage.content = clearSpinningToolCalls(responseMessage.content ?? '');
 			history.messages[history.currentId] = responseMessage;
 			history = history;
 			await saveChatHandler($chatId, history);

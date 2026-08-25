@@ -112,6 +112,11 @@ WAITING_RESPONSE_INTERVAL_S = float(
     os.environ.get("WAITING_RESPONSE_HEARTBEAT_INTERVAL", "1")
 )
 
+GENERATION_HEARTBEAT_ACTION = "generation_heartbeat"
+GENERATION_HEARTBEAT_INTERVAL_S = float(
+    os.environ.get("GENERATION_HEARTBEAT_INTERVAL", "5")
+)
+
 
 def tool_call_files_for_display(
     tool_name: str, tool_result_files: Optional[list]
@@ -194,6 +199,73 @@ class WaitingResponseHeartbeat:
     async def mark_activity(self):
         """First useful model delta — clear the waiting indicator."""
         await self.stop(clear=True)
+
+    async def stop(self, clear: bool = True):
+        was_active = self._active
+        self._active = False
+        task = self._task
+        self._task = None
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        if clear and was_active and not self._cleared:
+            self._cleared = True
+            await self._emit(done=True)
+
+
+class GenerationHeartbeat:
+    """Periodic status so the client can detect a dead generation/pod.
+
+    Emitted for the full agent-loop lifetime (model waits and tool runs).
+    Marked hidden so it does not replace visible status UI; the client
+    filters it out of statusHistory and only uses it for liveness.
+    """
+
+    def __init__(self, event_emitter):
+        self.event_emitter = event_emitter
+        self._task = None
+        self._started_at = None
+        self._active = False
+        self._cleared = False
+
+    async def start(self):
+        await self.stop(clear=False)
+        if not self.event_emitter:
+            return
+        self._started_at = time.time()
+        self._active = True
+        self._cleared = False
+        await self._emit(done=False)
+        self._task = asyncio.create_task(self._loop())
+
+    async def _loop(self):
+        try:
+            while self._active:
+                await asyncio.sleep(GENERATION_HEARTBEAT_INTERVAL_S)
+                if not self._active:
+                    break
+                await self._emit(done=False)
+        except asyncio.CancelledError:
+            return
+
+    async def _emit(self, done: bool):
+        if not self.event_emitter:
+            return
+        elapsed = int(time.time() - (self._started_at or time.time()))
+        data = {
+            "action": GENERATION_HEARTBEAT_ACTION,
+            "description": "Generation running…",
+            "done": done,
+            "hidden": True,
+            "elapsed": elapsed,
+        }
+        try:
+            await self.event_emitter({"type": "status", "data": data})
+        except Exception:
+            log.debug("generation_heartbeat emit failed", exc_info=True)
 
     async def stop(self, clear: bool = True):
         was_active = self._active
@@ -1973,6 +2045,35 @@ async def process_chat_response(
 
             solution_tags = [("|begin_of_solution|", "|end_of_solution|")]
 
+            def complete_open_tool_calls(result_text: str):
+                """Mark in-flight tool_calls blocks complete so the UI stops spinning."""
+                for block in content_blocks:
+                    if block.get("type") != "tool_calls":
+                        continue
+                    tool_calls = block.get("content") or []
+                    results = list(block.get("results") or [])
+                    by_id = {
+                        r.get("tool_call_id"): r
+                        for r in results
+                        if r.get("tool_call_id") is not None
+                    }
+                    for tool_call in tool_calls:
+                        tid = tool_call.get("id", "")
+                        existing = by_id.get(tid)
+                        if existing is None:
+                            results.append(
+                                {
+                                    "tool_call_id": tid,
+                                    "content": result_text,
+                                }
+                            )
+                        elif not existing.get("content"):
+                            existing["content"] = result_text
+                    block["results"] = results
+
+            generation_heartbeat = GenerationHeartbeat(event_emitter)
+            await generation_heartbeat.start()
+
             try:
                 for event in events:
                     await event_emitter(
@@ -2791,30 +2892,7 @@ async def process_chat_response(
                 end_chat_trace(output=data)
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
-                # Mark in-flight tool calls complete so the UI stops spinning.
-                for block in content_blocks:
-                    if block.get("type") != "tool_calls":
-                        continue
-                    tool_calls = block.get("content") or []
-                    results = list(block.get("results") or [])
-                    by_id = {
-                        r.get("tool_call_id"): r
-                        for r in results
-                        if r.get("tool_call_id") is not None
-                    }
-                    for tool_call in tool_calls:
-                        tid = tool_call.get("id", "")
-                        existing = by_id.get(tid)
-                        if existing is None:
-                            results.append(
-                                {
-                                    "tool_call_id": tid,
-                                    "content": "Cancelled by user.",
-                                }
-                            )
-                        elif not existing.get("content"):
-                            existing["content"] = "Cancelled by user."
-                    block["results"] = results
+                complete_open_tool_calls("Cancelled by user.")
 
                 cancelled_content = serialize_content_blocks(content_blocks)
                 await event_emitter(
@@ -2837,6 +2915,50 @@ async def process_chat_response(
                         "done": True,
                     },
                 )
+            except Exception as e:
+                log.exception(
+                    "Generation failed chat_id=%s message_id=%s",
+                    metadata.get("chat_id"),
+                    metadata.get("message_id"),
+                )
+                note_loop_exit("generation_exception", error=str(e))
+                complete_open_tool_calls(f"Interrupted: {e}")
+                failed_content = serialize_content_blocks(content_blocks)
+                error_payload = {
+                    "content": (
+                        "The server stopped this generation unexpectedly. "
+                        "You can retry — the model will continue from any "
+                        "tools or artifacts that already completed."
+                    )
+                }
+                try:
+                    await event_emitter(
+                        {
+                            "type": "chat:completion",
+                            "data": {
+                                "content": failed_content,
+                                "done": True,
+                                "error": error_payload,
+                            },
+                        }
+                    )
+                except Exception:
+                    log.debug("Failed to emit generation error event", exc_info=True)
+                try:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata["chat_id"],
+                        metadata["message_id"],
+                        {
+                            "content": failed_content,
+                            "done": True,
+                            "error": error_payload,
+                        },
+                    )
+                except Exception:
+                    log.debug("Failed to persist generation error", exc_info=True)
+                end_chat_trace(error=str(e))
+            finally:
+                await generation_heartbeat.stop(clear=True)
 
             if response.background is not None:
                 await response.background()
