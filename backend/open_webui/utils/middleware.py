@@ -1617,6 +1617,26 @@ async def process_chat_response(
             def serialize_content_blocks(content_blocks, raw=False):
                 content = ""
 
+                def tool_timing_attr(block, tool_call_id, *, done: bool, result=None):
+                    timing = (block.get("tool_timing") or {}).get(tool_call_id) or {}
+                    if done:
+                        duration = None
+                        if isinstance(result, dict):
+                            duration = result.get("duration")
+                        if duration is None:
+                            duration = timing.get("duration")
+                        if duration is None:
+                            return ""
+                        return f' duration="{int(duration)}"'
+                    # Only show a live timer once THIS tool has started. Do not fall
+                    # back to the batch start time — tools run sequentially, and
+                    # overwriting a shared batch clock when the next tool begins
+                    # looked like parallel timers resetting.
+                    started = timing.get("started_at")
+                    if started is None:
+                        return ""
+                    return f' started_at="{int(started)}"'
+
                 for block in content_blocks:
                     if block["type"] == "text":
                         content = f"{content}{block['content'].strip()}\n"
@@ -1646,15 +1666,15 @@ async def process_chat_response(
                                     tool_name, tool_arguments
                                 )
 
-                                tool_result = None
-                                tool_result_files = None
+                                matched_result = None
                                 for result in results:
                                     if tool_call_id == result.get("tool_call_id", ""):
-                                        tool_result = result.get("content", None)
-                                        tool_result_files = result.get("files", None)
+                                        matched_result = result
                                         break
 
-                                if tool_result:
+                                if matched_result is not None:
+                                    tool_result = matched_result.get("content", None)
+                                    tool_result_files = matched_result.get("files", None)
                                     display_files = tool_call_files_for_display(
                                         tool_name, tool_result_files
                                     )
@@ -1663,9 +1683,18 @@ async def process_chat_response(
                                         if display_files
                                         else ""
                                     )
-                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="true" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}" result="{html.escape(json.dumps(tool_result))}" files="{files_attr}">\n<summary>Tool Executed</summary>\n</details>\n'
+                                    duration_attr = tool_timing_attr(
+                                        block,
+                                        tool_call_id,
+                                        done=True,
+                                        result=matched_result,
+                                    )
+                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="true" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}" result="{html.escape(json.dumps(tool_result))}" files="{files_attr}"{duration_attr}>\n<summary>Tool Executed</summary>\n</details>\n'
                                 else:
-                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="false" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}">\n<summary>Executing...</summary>\n</details>'
+                                    started_attr = tool_timing_attr(
+                                        block, tool_call_id, done=False
+                                    )
+                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="false" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}"{started_attr}>\n<summary>Executing...</summary>\n</details>'
 
                             if not raw:
                                 content = f"{content}\n{tool_calls_display_content}\n\n"
@@ -1687,8 +1716,11 @@ async def process_chat_response(
                                 tool_arguments = display_tool_arguments(
                                     tool_name, tool_arguments
                                 )
+                                started_attr = tool_timing_attr(
+                                    block, tool_call_id, done=False
+                                )
 
-                                tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="false" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}">\n<summary>Executing...</summary>\n</details>'
+                                tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="false" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}"{started_attr}>\n<summary>Executing...</summary>\n</details>'
 
                             if not raw:
                                 content = f"{content}\n{tool_calls_display_content}\n\n"
@@ -2442,6 +2474,8 @@ async def process_chat_response(
                         {
                             "type": "tool_calls",
                             "content": response_tool_calls,
+                            "started_at": time.time(),
+                            "tool_timing": {},
                         }
                     )
 
@@ -2457,9 +2491,22 @@ async def process_chat_response(
                     tools = metadata.get("tools", {})
 
                     results = []
+                    tool_timing = content_blocks[-1].setdefault("tool_timing", {})
                     for tool_call, tool_function_params in prepared_calls:
                         tool_call_id = tool_call.get("id", "")
                         tool_name = tool_call.get("function", {}).get("name", "")
+                        tool_started_at = time.time()
+                        tool_timing[tool_call_id] = {"started_at": tool_started_at}
+                        content_blocks[-1]["tool_timing"] = tool_timing
+
+                        await event_emitter(
+                            {
+                                "type": "chat:completion",
+                                "data": {
+                                    "content": serialize_content_blocks(content_blocks),
+                                },
+                            }
+                        )
 
                         tool_result = None
 
@@ -2544,15 +2591,35 @@ async def process_chat_response(
                         ):
                             tool_result = json.dumps(tool_result, indent=2)
 
+                        tool_duration = max(
+                            0, int(round(time.time() - tool_started_at))
+                        )
+                        tool_timing[tool_call_id] = {
+                            "started_at": tool_started_at,
+                            "duration": tool_duration,
+                        }
+                        content_blocks[-1]["tool_timing"] = tool_timing
+
                         results.append(
                             {
                                 "tool_call_id": tool_call_id,
                                 "content": tool_result,
+                                "duration": tool_duration,
                                 **(
                                     {"files": tool_result_files}
                                     if tool_result_files
                                     else {}
                                 ),
+                            }
+                        )
+                        content_blocks[-1]["results"] = list(results)
+
+                        await event_emitter(
+                            {
+                                "type": "chat:completion",
+                                "data": {
+                                    "content": serialize_content_blocks(content_blocks),
+                                },
                             }
                         )
 

@@ -12,6 +12,15 @@
 	dayjs.extend(duration);
 	dayjs.extend(relativeTime);
 
+	const formatToolElapsed = (seconds: number) => {
+		if (!Number.isFinite(seconds) || seconds < 0) return '';
+		const whole = Math.floor(seconds);
+		if (whole < 60) return `${whole}s`;
+		const minutes = Math.floor(whole / 60);
+		const rem = whole % 60;
+		return rem ? `${minutes}m ${rem}s` : `${minutes}m`;
+	};
+
 	async function loadLocale(locales) {
 		for (const locale of locales) {
 			try {
@@ -329,10 +338,6 @@
 		clearDisplayImage();
 	}
 
-	onDestroy(() => {
-		clearDisplayImage();
-	});
-
 	const secretNamesFromValue = (value: any): string[] => {
 		if (!Array.isArray(value)) return [];
 		const names: string[] = [];
@@ -359,6 +364,65 @@
 		}
 		return [] as string[];
 	})();
+
+	let toolNowMs = Date.now();
+	let toolElapsedTimer: ReturnType<typeof setInterval> | null = null;
+	/** Freeze the first started_at we see so stream rewrites can't reset the live clock. */
+	let lockedToolStartedAt: number | null = null;
+
+	$: if (attributes?.type === 'tool_calls') {
+		if (attributes?.done === 'true') {
+			lockedToolStartedAt = null;
+		} else if (
+			lockedToolStartedAt === null &&
+			attributes?.started_at != null &&
+			attributes?.started_at !== ''
+		) {
+			const started = Number(attributes.started_at);
+			if (Number.isFinite(started)) {
+				lockedToolStartedAt = started;
+			}
+		}
+	} else {
+		lockedToolStartedAt = null;
+	}
+
+	$: toolIsRunning =
+		attributes?.type === 'tool_calls' &&
+		attributes?.done !== 'true' &&
+		lockedToolStartedAt !== null;
+
+	$: {
+		if (toolIsRunning) {
+			if (!toolElapsedTimer) {
+				toolNowMs = Date.now();
+				toolElapsedTimer = setInterval(() => {
+					toolNowMs = Date.now();
+				}, 1000);
+			}
+		} else if (toolElapsedTimer) {
+			clearInterval(toolElapsedTimer);
+			toolElapsedTimer = null;
+		}
+	}
+
+	$: toolElapsedLabel = (() => {
+		if (attributes?.type !== 'tool_calls') return '';
+		if (attributes?.done === 'true' && attributes?.duration != null && attributes?.duration !== '') {
+			const seconds = Number(attributes.duration);
+			return Number.isFinite(seconds) ? formatToolElapsed(seconds) : '';
+		}
+		if (!toolIsRunning || lockedToolStartedAt === null) return '';
+		return formatToolElapsed(Math.max(0, Math.floor(toolNowMs / 1000 - lockedToolStartedAt)));
+	})();
+
+	onDestroy(() => {
+		clearDisplayImage();
+		if (toolElapsedTimer) {
+			clearInterval(toolElapsedTimer);
+			toolElapsedTimer = null;
+		}
+	});
 </script>
 
 <div {id} class={className}>
@@ -406,14 +470,15 @@
 					{:else if attributes?.type === 'tool_calls'}
 						<span class="text-sm font-medium text-gray-700 dark:text-gray-200">
 							{#if attributes?.done === 'true'}
-								{attributes.name}
+								{attributes.name}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}
 								{#if toolFailed}
 									<span class="ml-2 text-xs font-normal text-red-600 dark:text-red-400"
 										>{$i18n.t('failed')}</span
 									>
 								{/if}
 							{:else}
-								{$i18n.t('Running')} {attributes.name}…
+								{$i18n.t('Running')}
+								{attributes.name}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}…
 							{/if}
 						</span>
 					{:else}

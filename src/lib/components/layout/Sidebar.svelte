@@ -82,6 +82,37 @@
 	let newFolderId = null;
 	let teamChats = {};
 
+	/** Which chat time-range sections are expanded in the sidebar. Missing keys default to open. */
+	let openTimeRanges: Record<string, boolean> = {};
+
+	const groupChatsByTimeRange = (chatList: any[] | null | undefined) => {
+		const groups: { time_range: string; chats: any[] }[] = [];
+		for (const chat of chatList ?? []) {
+			const last = groups.at(-1);
+			if (!last || last.time_range !== chat.time_range) {
+				groups.push({ time_range: chat.time_range, chats: [chat] });
+			} else {
+				last.chats.push(chat);
+			}
+		}
+		return groups;
+	};
+
+	const timeRangeKey = (scope: string, timeRange: string) => `${scope}::${timeRange}`;
+
+	const isTimeRangeOpen = (scope: string, timeRange: string) =>
+		openTimeRanges[timeRangeKey(scope, timeRange)] !== false;
+
+	const setTimeRangeOpen = (scope: string, timeRange: string, open: boolean) => {
+		openTimeRanges[timeRangeKey(scope, timeRange)] = open;
+		openTimeRanges = openTimeRanges;
+		try {
+			localStorage.setItem('chatTimeRangeOpen', JSON.stringify(openTimeRanges));
+		} catch (_) {
+			/* ignore quota / private mode */
+		}
+	};
+
 	const initFolders = async () => {
 		const folderList = await getFolders(localStorage.token).catch((error) => {
 			toast.error(`${error}`);
@@ -422,6 +453,16 @@
 
 	onMount(async () => {
 		showPinnedChat = localStorage?.showPinnedChat ? localStorage.showPinnedChat === 'true' : true;
+		try {
+			const stored = localStorage?.chatTimeRangeOpen
+				? JSON.parse(localStorage.chatTimeRangeOpen)
+				: null;
+			if (stored && typeof stored === 'object') {
+				openTimeRanges = stored;
+			}
+		} catch (_) {
+			openTimeRanges = {};
+		}
 
 		mobile.subscribe((value) => {
 			if ($showSidebar && value) {
@@ -764,6 +805,7 @@
 				collapsible={!search}
 				className="px-2 mt-0.5"
 				name={$i18n.t('Private')}
+				emphasis="strong"
 				onAdd={() => {
 					createFolder();
 				}}
@@ -821,6 +863,9 @@
 					<div class="absolute z-40 w-full h-full flex justify-center"></div>
 				{/if}
 
+				<div
+					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+				>
 				{#if !search && $pinnedChats.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
 						<Folder
@@ -867,9 +912,7 @@
 							}}
 							name={$i18n.t('Pinned')}
 						>
-							<div
-								class="ml-3 pl-1 mt-[1px] flex flex-col overflow-y-auto scrollbar-hidden border-s border-gray-100 dark:border-gray-900"
-							>
+							<div class="flex flex-col overflow-y-auto scrollbar-hidden">
 								{#each $pinnedChats as chat, idx}
 									<ChatItem
 										className=""
@@ -915,16 +958,17 @@
 				<div class=" flex-1 flex flex-col overflow-y-auto scrollbar-hidden">
 					<div class="pt-1.5">
 						{#if $chats}
-							{#each $chats as chat, idx}
-								{#if idx === 0 || (idx > 0 && chat.time_range !== $chats[idx - 1].time_range)}
-									<div
-										class="w-full pl-2.5 text-xs text-gray-500 dark:text-gray-500 font-medium {idx ===
-										0
-											? ''
-											: 'pt-5'} pb-1.5"
-									>
-										{$i18n.t(chat.time_range)}
-										<!-- localisation keys for time_range to be recognized from the i18next parser (so they don't get automatically removed):
+							{#each groupChatsByTimeRange($chats) as group, groupIdx (group.time_range)}
+								<Folder
+									className={groupIdx === 0 ? '' : 'pt-3'}
+									name={$i18n.t(group.time_range)}
+									open={isTimeRangeOpen('private', group.time_range)}
+									dragAndDrop={false}
+									on:change={(e) => {
+										setTimeRangeOpen('private', group.time_range, e.detail);
+									}}
+								>
+									<!-- localisation keys for time_range to be recognized from the i18next parser (so they don't get automatically removed):
 							{$i18n.t('Today')}
 							{$i18n.t('Yesterday')}
 							{$i18n.t('Previous 7 days')}
@@ -942,28 +986,28 @@
 							{$i18n.t('November')}
 							{$i18n.t('December')}
 							-->
-									</div>
-								{/if}
-
-								<ChatItem
-									className=""
-									id={chat.id}
-									title={chat.title}
-									selected={selectedChatId === chat.id}
-									on:select={() => {
-										selectedChatId = chat.id;
-									}}
-									on:unselect={() => {
-										selectedChatId = null;
-									}}
-									on:change={async () => {
-										initChatList();
-									}}
-									on:tag={(e) => {
-										const { type, name } = e.detail;
-										tagEventHandler(type, name, chat.id);
-									}}
-								/>
+									{#each group.chats as chat (chat.id)}
+										<ChatItem
+											className=""
+											id={chat.id}
+											title={chat.title}
+											selected={selectedChatId === chat.id}
+											on:select={() => {
+												selectedChatId = chat.id;
+											}}
+											on:unselect={() => {
+												selectedChatId = null;
+											}}
+											on:change={async () => {
+												initChatList();
+											}}
+											on:tag={(e) => {
+												const { type, name } = e.detail;
+												tagEventHandler(type, name, chat.id);
+											}}
+										/>
+									{/each}
+								</Folder>
 							{/each}
 
 							{#if $scrollPaginationEnabled && !allChatsLoaded}
@@ -990,6 +1034,7 @@
 						{/if}
 					</div>
 				</div>
+				</div>
 			</Folder>
 
 			{#if !search}
@@ -1000,6 +1045,7 @@
 					<Folder
 						className="px-2 mt-0.5"
 						name={team.name}
+						emphasis="strong"
 						onAdd={() => startTeamChat(team.id)}
 						onAddLabel={$i18n.t('New team chat')}
 						dragAndDrop={false}
@@ -1008,66 +1054,78 @@
 							<div class="w-full pl-2.5 text-xs text-gray-500 font-medium pb-1.5 pt-1">
 								{$i18n.t('My chats')}
 							</div>
-							{#each mine as chat, idx}
-								{#if idx === 0 || chat.time_range !== mine[idx - 1].time_range}
-									<div class="w-full pl-2.5 text-[11px] text-gray-400 font-medium pb-1">
-										{$i18n.t(chat.time_range)}
-									</div>
-								{/if}
-								<ChatItem
-									id={chat.id}
-									title={chat.title}
-									ownerName={chat.owner_name}
-									isMine={true}
-									teamId={team.id}
-									selected={selectedChatId === chat.id}
-									on:select={() => {
-										selectedChatId = chat.id;
+							{#each groupChatsByTimeRange(mine) as group (group.time_range)}
+								<Folder
+									name={$i18n.t(group.time_range)}
+									open={isTimeRangeOpen(`team:${team.id}:mine`, group.time_range)}
+									dragAndDrop={false}
+									on:change={(e) => {
+										setTimeRangeOpen(`team:${team.id}:mine`, group.time_range, e.detail);
 									}}
-									on:unselect={() => {
-										selectedChatId = null;
-									}}
-									on:change={async () => {
-										initChatList();
-									}}
-									on:tag={(e) => {
-										const { type, name } = e.detail;
-										tagEventHandler(type, name, chat.id);
-									}}
-								/>
+								>
+									{#each group.chats as chat (chat.id)}
+										<ChatItem
+											id={chat.id}
+											title={chat.title}
+											ownerName={chat.owner_name}
+											isMine={true}
+											teamId={team.id}
+											selected={selectedChatId === chat.id}
+											on:select={() => {
+												selectedChatId = chat.id;
+											}}
+											on:unselect={() => {
+												selectedChatId = null;
+											}}
+											on:change={async () => {
+												initChatList();
+											}}
+											on:tag={(e) => {
+												const { type, name } = e.detail;
+												tagEventHandler(type, name, chat.id);
+											}}
+										/>
+									{/each}
+								</Folder>
 							{:else}
 								<div class="pl-2.5 pb-2 text-[11px] text-gray-400">{$i18n.t('No chats yet')}</div>
 							{/each}
 							<div class="w-full pl-2.5 text-xs text-gray-500 font-medium pb-1.5 pt-3">
 								{$i18n.t("Others' chats")}
 							</div>
-							{#each others as chat, idx}
-								{#if idx === 0 || chat.time_range !== others[idx - 1].time_range}
-									<div class="w-full pl-2.5 text-[11px] text-gray-400 font-medium pb-1">
-										{$i18n.t(chat.time_range)}
-									</div>
-								{/if}
-								<ChatItem
-									id={chat.id}
-									title={chat.title}
-									ownerName={chat.owner_name}
-									isMine={false}
-									teamId={team.id}
-									selected={selectedChatId === chat.id}
-									on:select={() => {
-										selectedChatId = chat.id;
+							{#each groupChatsByTimeRange(others) as group (group.time_range)}
+								<Folder
+									name={$i18n.t(group.time_range)}
+									open={isTimeRangeOpen(`team:${team.id}:others`, group.time_range)}
+									dragAndDrop={false}
+									on:change={(e) => {
+										setTimeRangeOpen(`team:${team.id}:others`, group.time_range, e.detail);
 									}}
-									on:unselect={() => {
-										selectedChatId = null;
-									}}
-									on:change={async () => {
-										initChatList();
-									}}
-									on:tag={(e) => {
-										const { type, name } = e.detail;
-										tagEventHandler(type, name, chat.id);
-									}}
-								/>
+								>
+									{#each group.chats as chat (chat.id)}
+										<ChatItem
+											id={chat.id}
+											title={chat.title}
+											ownerName={chat.owner_name}
+											isMine={false}
+											teamId={team.id}
+											selected={selectedChatId === chat.id}
+											on:select={() => {
+												selectedChatId = chat.id;
+											}}
+											on:unselect={() => {
+												selectedChatId = null;
+											}}
+											on:change={async () => {
+												initChatList();
+											}}
+											on:tag={(e) => {
+												const { type, name } = e.detail;
+												tagEventHandler(type, name, chat.id);
+											}}
+										/>
+									{/each}
+								</Folder>
 							{:else}
 								<div class="pl-2.5 pb-2 text-[11px] text-gray-400">{$i18n.t('No chats yet')}</div>
 							{/each}
