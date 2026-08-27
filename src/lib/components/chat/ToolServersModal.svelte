@@ -9,6 +9,12 @@
 	import Modal from '../common/Modal.svelte';
 	import Link from '../icons/Link.svelte';
 	import Collapsible from '../common/Collapsible.svelte';
+	import {
+		isSkillTool,
+		toolBaseName,
+		toolSkillRepoRef,
+		toolSkillVersion
+	} from '$lib/utils/toolDisplay';
 
 	export let show = false;
 	export let selectedToolIds = [];
@@ -53,10 +59,28 @@
 			<div class="px-5 pb-3 w-full flex flex-col justify-center">
 				<div class=" text-sm dark:text-gray-300 mb-1">
 					{#each selectedTools as tool}
+						{@const version = toolSkillVersion(tool)}
+						{@const repoRef = toolSkillRepoRef(tool)}
 						<Collapsible buttonClassName="w-full mb-0.5">
 							<div>
-								<div class="text-sm font-medium dark:text-gray-100 text-gray-800">
-									{tool?.name}
+								<div
+									class="text-sm font-medium dark:text-gray-100 text-gray-800 flex flex-wrap items-center gap-1.5"
+								>
+									<span>{toolBaseName(tool)}</span>
+									{#if isSkillTool(tool) && version}
+										<span
+											class="text-[10px] font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+										>
+											v{version}
+										</span>
+									{/if}
+									{#if isSkillTool(tool) && repoRef}
+										<span
+											class="text-[10px] font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+										>
+											{repoRef}
+										</span>
+									{/if}
 								</div>
 
 								{#if tool?.meta?.description}

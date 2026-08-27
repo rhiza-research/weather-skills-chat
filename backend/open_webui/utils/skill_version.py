@@ -76,13 +76,19 @@ def resolve_tool_ids_by_skill_version(
 ) -> list[str]:
     """Replace enabled skill tool IDs with a same-named higher-version copy.
 
-    ``skills`` items are ``{id, skill_name, version}`` records the user can
-    access. Equal versions keep the originally requested tool. Unknown IDs
-    (builtin servers, missing rows) pass through unchanged.
+    ``skills`` items are ``{id, skill_name, version, enabled?}`` records the
+    user can access. Equal versions keep the originally requested tool.
+    Unknown IDs (builtin servers, missing rows) pass through unchanged.
+
+    Globally disabled skills (``enabled is False``) are never chosen as an
+    upgrade target. If the user explicitly selected a disabled skill ID, that
+    ID is kept as-is so the chat bar can still opt in.
     """
     by_id = {s["id"]: s for s in skills if s.get("id")}
     best_by_name: dict[str, dict] = {}
     for skill in skills:
+        if skill.get("enabled") is False:
+            continue
         name = skill.get("skill_name")
         if not name:
             continue
@@ -96,7 +102,7 @@ def resolve_tool_ids_by_skill_version(
     seen: set[str] = set()
     for tool_id in tool_ids:
         skill = by_id.get(tool_id)
-        if skill:
+        if skill and skill.get("enabled") is not False:
             best = best_by_name.get(skill.get("skill_name") or "")
             if best and prefer_incoming_tool_version(
                 best.get("version"), skill.get("version")

@@ -88,6 +88,7 @@ class WorkspacePermissions(BaseModel):
     knowledge: bool = False
     prompts: bool = False
     tools: bool = False
+    skills: bool = False
 
 
 class SharingPermissions(BaseModel):

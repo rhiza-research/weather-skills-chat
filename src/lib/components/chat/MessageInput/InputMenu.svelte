@@ -7,6 +7,16 @@
 	import { createPicker } from '$lib/utils/google-drive-picker';
 
 	import { getTools } from '$lib/apis/tools';
+	import {
+		dedupeToolsForSelection,
+		isSkillDefaultEnabled,
+		isSkillTool,
+		remapSelectedToolIdsToHighestSkills,
+		toolBaseName,
+		toolSelectionLabel,
+		toolSkillRepoRef,
+		toolSkillVersion
+	} from '$lib/utils/toolDisplay';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -46,10 +56,15 @@
 			await _tools.set(await getTools(localStorage.token));
 		}
 
-		tools = $_tools.reduce((a, tool, i, arr) => {
+		const allTools = $_tools ?? [];
+		const visibleTools = dedupeToolsForSelection(allTools);
+		selectedToolIds = remapSelectedToolIdsToHighestSkills(selectedToolIds ?? [], allTools);
+
+		tools = visibleTools.reduce((a, tool) => {
 			a[tool.id] = {
-				name: tool.name,
-				description: tool.meta.description,
+				...tool,
+				label: toolSelectionLabel(tool),
+				description: tool.meta?.description,
 				enabled: selectedToolIds.includes(tool.id)
 			};
 			return a;
@@ -94,7 +109,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[200px] rounded-xl px-1 py-1 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
+			class="w-full max-w-[420px] rounded-xl px-1 py-1 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
 			sideOffset={10}
 			alignOffset={-8}
 			side="top"
@@ -102,31 +117,47 @@
 			transition={flyAndScale}
 		>
 			{#if Object.keys(tools).length > 0}
-				<div class="  max-h-28 overflow-y-auto scrollbar-hidden">
+				<div class="  max-h-40 overflow-y-auto scrollbar-hidden">
 					{#each Object.keys(tools) as toolId}
+						{@const item = tools[toolId]}
+						{@const version = toolSkillVersion(item)}
+						{@const repoRef = toolSkillRepoRef(item)}
 						<button
 							class="flex w-full justify-between gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
 							on:click={() => {
 								tools[toolId].enabled = !tools[toolId].enabled;
 							}}
 						>
-							<div class="flex-1 truncate">
+							<div class="flex-1 min-w-0">
 								<Tooltip
-									content={tools[toolId]?.description ?? ''}
+									content={item?.description || item?.label || ''}
 									placement="top-start"
-									className="flex flex-1 gap-2 items-center"
+									className="flex flex-1 gap-2 items-center min-w-0"
 								>
 									<div class="shrink-0">
 										<WrenchSolid />
 									</div>
 
-									<div class=" truncate">{tools[toolId].name}</div>
+									<div class="min-w-0 text-left">
+										<div class="truncate">{toolBaseName(item)}</div>
+										{#if isSkillTool(item) && (version || repoRef || !isSkillDefaultEnabled(item))}
+											<div class="truncate text-[10px] font-normal text-gray-500 dark:text-gray-400">
+												{#if version}<span>v{version}</span>{/if}
+												{#if version && repoRef}<span> · </span>{/if}
+												{#if repoRef}<span class="font-mono">{repoRef}</span>{/if}
+												{#if !isSkillDefaultEnabled(item)}
+													{#if version || repoRef}<span> · </span>{/if}
+													<span>off by default</span>
+												{/if}
+											</div>
+										{/if}
+									</div>
 								</Tooltip>
 							</div>
 
 							<div class=" shrink-0">
 								<Switch
-									state={tools[toolId].enabled}
+									state={item.enabled}
 									on:change={async (e) => {
 										const state = e.detail;
 										await tick();

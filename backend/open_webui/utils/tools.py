@@ -35,7 +35,7 @@ from langchain_core.utils.function_calling import (
 
 from open_webui.models.tools import Tools
 from open_webui.models.users import UserModel
-from open_webui.utils.access_control import has_access
+from open_webui.utils.access_control import user_owns_or_has_access
 from open_webui.utils.plugin import load_tool_module_by_id
 from open_webui.utils.skill_version import (
     register_tool_by_function_name,
@@ -72,10 +72,8 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
     """Skill tools the user can read, for version-preference substitution."""
     records = []
     for tool in Tools.get_tools():
-        if not (
-            user.role == "admin"
-            or tool.user_id == user.id
-            or has_access(user.id, "read", tool.access_control)
+        if not user_owns_or_has_access(
+            user.id, tool.user_id, tool.access_control, "read"
         ):
             continue
         manifest = (tool.meta.manifest if tool.meta else None) or {}
@@ -89,6 +87,7 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
                 "id": tool.id,
                 "skill_name": name,
                 "version": manifest.get("version"),
+                "enabled": manifest.get("enabled", True) is not False,
             }
         )
     return records
@@ -110,6 +109,13 @@ def get_tools(
                 tool_server_connection = (
                     request.app.state.config.TOOL_SERVER_CONNECTIONS[server_idx]
                 )
+                server_acl = tool_server_connection.get("config", {}).get(
+                    "access_control", None
+                )
+                if not user_owns_or_has_access(
+                    user.id, f"server:{server_idx}", server_acl, "read"
+                ):
+                    continue
                 tool_server_data = None
                 for server in request.app.state.TOOL_SERVERS:
                     if server["idx"] == server_idx:
@@ -161,6 +167,10 @@ def get_tools(
             else:
                 continue
         else:
+            if not user_owns_or_has_access(
+                user.id, tool.user_id, tool.access_control, "read"
+            ):
+                continue
             module = request.app.state.TOOLS.get(tool_id, None)
             if module is None:
                 module, _ = load_tool_module_by_id(tool_id)

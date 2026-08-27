@@ -1,16 +1,14 @@
 <script lang="ts">
 	import { onMount, getContext, tick } from 'svelte';
-	import { models, tools, functions, knowledge as knowledgeCollections, user } from '$lib/stores';
+	import { models, functions, knowledge as knowledgeCollections, user } from '$lib/stores';
 
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
 	import Tags from '$lib/components/common/Tags.svelte';
 	import Knowledge from '$lib/components/workspace/Models/Knowledge.svelte';
-	import ToolsSelector from '$lib/components/workspace/Models/ToolsSelector.svelte';
 	import FiltersSelector from '$lib/components/workspace/Models/FiltersSelector.svelte';
 	import ActionsSelector from '$lib/components/workspace/Models/ActionsSelector.svelte';
 	import Capabilities from '$lib/components/workspace/Models/Capabilities.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { getTools } from '$lib/apis/tools';
 	import { getFunctions } from '$lib/apis/functions';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
 	import AccessControl from '../common/AccessControl.svelte';
@@ -81,7 +79,6 @@
 	};
 
 	let knowledge = [];
-	let toolIds = [];
 	let filterIds = [];
 	let actionIds = [];
 
@@ -131,12 +128,10 @@
 			}
 		}
 
-		if (toolIds.length > 0) {
-			info.meta.toolIds = toolIds;
-		} else {
-			if (info.meta.toolIds) {
-				delete info.meta.toolIds;
-			}
+		// Skills/tools are enabled per-chat from everything the user can access;
+		// do not persist a per-model allowlist.
+		if (info.meta.toolIds) {
+			delete info.meta.toolIds;
 		}
 
 		if (filterIds.length > 0) {
@@ -169,8 +164,6 @@
 	};
 
 	onMount(async () => {
-		const loadedTools = await getTools(localStorage.token);
-		await tools.set(loadedTools);
 		await functions.set(await getFunctions(localStorage.token));
 		await knowledgeCollections.set(await getKnowledgeBases(localStorage.token));
 
@@ -209,7 +202,6 @@
 					)
 				: null;
 
-			toolIds = model?.meta?.toolIds ?? [];
 			filterIds = model?.meta?.filterIds ?? [];
 			actionIds = model?.meta?.actionIds ?? [];
 			knowledge = (model?.meta?.knowledge ?? []).map((item) => {
@@ -256,8 +248,6 @@
 			};
 
 			console.log(model);
-		} else if (!edit) {
-			toolIds = (loadedTools ?? []).map((t) => t.id);
 		}
 
 		loaded = true;
@@ -698,8 +688,10 @@
 						<Knowledge bind:selectedKnowledge={knowledge} collections={$knowledgeCollections} />
 					</div>
 
-					<div class="my-2">
-						<ToolsSelector bind:selectedToolIds={toolIds} tools={$tools} />
+					<div class="my-2 text-xs text-gray-500 dark:text-gray-400">
+						{$i18n.t(
+							'Skills and tools available to you are enabled by default in chat (highest skill version). Use the chat tools menu to change that per conversation.'
+						)}
 					</div>
 
 					<div class="my-2">

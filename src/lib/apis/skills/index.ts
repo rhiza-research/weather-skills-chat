@@ -117,3 +117,31 @@ export const updateSkillPackAccess = async (
 	if (error) throw error;
 	return res;
 };
+
+export const updateSkillEnabled = async (
+	token: string,
+	packId: string,
+	toolId: string,
+	enabled: boolean
+) => {
+	let error = null;
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/skills/${packId}/skills/${encodeURIComponent(toolId)}/enabled`,
+		{
+			method: 'POST',
+			headers: authHeaders(token),
+			body: JSON.stringify({ enabled })
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};

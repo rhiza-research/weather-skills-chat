@@ -20,6 +20,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Valves from '$lib/components/common/Valves.svelte';
+	import { toolSelectionLabel } from '$lib/utils/toolDisplay';
 
 	const dispatch = createEventDispatcher();
 
@@ -173,7 +174,9 @@
 								>
 
 								{#each $tools as tool, toolIdx}
-									<option value={tool.id} class="bg-gray-100 dark:bg-gray-800">{tool.name}</option>
+									<option value={tool.id} class="bg-gray-100 dark:bg-gray-800"
+										>{toolSelectionLabel(tool)}</option
+									>
 								{/each}
 							{:else if tab === 'functions'}
 								<option value="" selected disabled class="bg-gray-100 dark:bg-gray-800"

@@ -50,7 +50,8 @@
 			models: false,
 			knowledge: false,
 			prompts: false,
-			tools: false
+			tools: false,
+			skills: false
 		},
 		sharing: {
 			public_models: false,

@@ -6,6 +6,7 @@ import mimetypes
 import os
 import shutil
 import sys
+import threading
 import time
 import random
 
@@ -444,6 +445,73 @@ https://github.com/open-webui/open-webui
 )
 
 
+_retrieval_models_lock = threading.Lock()
+
+
+def ensure_retrieval_models(app_ref: Optional[FastAPI] = None) -> None:
+    """Load local embedding/reranking models once (thread-safe, local cache only when AUTO_UPDATE=false)."""
+    target = app_ref or app
+    with _retrieval_models_lock:
+        if getattr(target.state, "_retrieval_models_ready", False):
+            return
+        try:
+            target.state.ef = get_ef(
+                target.state.config.RAG_EMBEDDING_ENGINE,
+                target.state.config.RAG_EMBEDDING_MODEL,
+                RAG_EMBEDDING_MODEL_AUTO_UPDATE,
+            )
+            target.state.rf = get_rf(
+                target.state.config.RAG_RERANKING_MODEL,
+                RAG_RERANKING_MODEL_AUTO_UPDATE,
+            )
+        except Exception as e:
+            log.error(f"Error loading retrieval models: {e}")
+
+        embedding_fn = get_embedding_function(
+            target.state.config.RAG_EMBEDDING_ENGINE,
+            target.state.config.RAG_EMBEDDING_MODEL,
+            target.state.ef,
+            (
+                target.state.config.RAG_OPENAI_API_BASE_URL
+                if target.state.config.RAG_EMBEDDING_ENGINE == "openai"
+                else target.state.config.RAG_OLLAMA_BASE_URL
+            ),
+            (
+                target.state.config.RAG_OPENAI_API_KEY
+                if target.state.config.RAG_EMBEDDING_ENGINE == "openai"
+                else target.state.config.RAG_OLLAMA_API_KEY
+            ),
+            target.state.config.RAG_EMBEDDING_BATCH_SIZE,
+        )
+        target.state._embedding_function_impl = embedding_fn
+        target.state.EMBEDDING_FUNCTION = embedding_fn
+        target.state._retrieval_models_ready = True
+        log.info(
+            "Retrieval models ready (embedding auto_update=%s)",
+            RAG_EMBEDDING_MODEL_AUTO_UPDATE,
+        )
+
+
+def _embedding_function_proxy(query, prefix=None, user=None):
+    """Wait for / trigger embedding load on first RAG use if startup bg load isn't done yet."""
+    ensure_retrieval_models()
+    return app.state._embedding_function_impl(query, prefix=prefix, user=user)
+
+
+def _resync_skill_packs(app_ref: FastAPI) -> None:
+    try:
+        from open_webui.utils.skills import resync_all_skill_pack_tools
+
+        result = resync_all_skill_pack_tools(app_ref.state.TOOLS)
+        log.info(
+            "Skill pack tool resync on startup: synced=%s errors=%s",
+            len(result.get("synced") or []),
+            len(result.get("errors") or []),
+        )
+    except Exception:
+        log.exception("Skill pack tool resync on startup failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
@@ -464,17 +532,9 @@ async def lifespan(app: FastAPI):
     )
 
     start_scheduler(app)
-    try:
-        from open_webui.utils.skills import resync_all_skill_pack_tools
-
-        result = resync_all_skill_pack_tools(app.state.TOOLS)
-        log.info(
-            "Skill pack tool resync on startup: synced=%s errors=%s",
-            len(result.get("synced") or []),
-            len(result.get("errors") or []),
-        )
-    except Exception:
-        log.exception("Skill pack tool resync on startup failed")
+    # Don't block HTTP listen on HF/model load or skill module imports.
+    asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
+    asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
     yield
     shutdown_langfuse()
     shutdown_scheduler()
@@ -724,45 +784,13 @@ app.state.config.FIRECRAWL_API_BASE_URL = FIRECRAWL_API_BASE_URL
 app.state.config.FIRECRAWL_API_KEY = FIRECRAWL_API_KEY
 app.state.config.TAVILY_EXTRACT_DEPTH = TAVILY_EXTRACT_DEPTH
 
-app.state.EMBEDDING_FUNCTION = None
+app.state.EMBEDDING_FUNCTION = _embedding_function_proxy
+app.state._embedding_function_impl = None
 app.state.ef = None
 app.state.rf = None
+app.state._retrieval_models_ready = False
 
 app.state.YOUTUBE_LOADER_TRANSLATION = None
-
-
-try:
-    app.state.ef = get_ef(
-        app.state.config.RAG_EMBEDDING_ENGINE,
-        app.state.config.RAG_EMBEDDING_MODEL,
-        RAG_EMBEDDING_MODEL_AUTO_UPDATE,
-    )
-
-    app.state.rf = get_rf(
-        app.state.config.RAG_RERANKING_MODEL,
-        RAG_RERANKING_MODEL_AUTO_UPDATE,
-    )
-except Exception as e:
-    log.error(f"Error updating models: {e}")
-    pass
-
-
-app.state.EMBEDDING_FUNCTION = get_embedding_function(
-    app.state.config.RAG_EMBEDDING_ENGINE,
-    app.state.config.RAG_EMBEDDING_MODEL,
-    app.state.ef,
-    (
-        app.state.config.RAG_OPENAI_API_BASE_URL
-        if app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-        else app.state.config.RAG_OLLAMA_BASE_URL
-    ),
-    (
-        app.state.config.RAG_OPENAI_API_KEY
-        if app.state.config.RAG_EMBEDDING_ENGINE == "openai"
-        else app.state.config.RAG_OLLAMA_API_KEY
-    ),
-    app.state.config.RAG_EMBEDDING_BATCH_SIZE,
-)
 
 ########################################
 #

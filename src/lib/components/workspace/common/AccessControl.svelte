@@ -43,10 +43,11 @@
 		groups = await getGroups(localStorage.token);
 		userTeams = await getTeams(localStorage.token).catch(() => []);
 
+		// Normalize shape for the form only — do not emit onChange here.
+		// Auto-save callers (skills/knowledge) must not get a spurious Private
+		// write when the modal opens with `{}` or expands empty arrays.
 		if (accessControl === null) {
-			if (allowPublic) {
-				accessControl = null;
-			} else {
+			if (!allowPublic) {
 				accessControl = {
 					read: {
 						group_ids: [],
@@ -77,8 +78,6 @@
 		}
 	});
 
-	$: onChange(accessControl);
-
 	$: if (selectedGroupId) {
 		onSelectGroup();
 	}
@@ -94,8 +93,8 @@
 	const onSelectGroup = () => {
 		if (selectedGroupId !== '') {
 			accessControl.read.group_ids = [...accessControl.read.group_ids, selectedGroupId];
-
 			selectedGroupId = '';
+			onChange(accessControl);
 		}
 	};
 
@@ -103,6 +102,7 @@
 		if (selectedTeamId !== '') {
 			accessControl.read.team_ids = [...(accessControl.read.team_ids ?? []), selectedTeamId];
 			selectedTeamId = '';
+			onChange(accessControl);
 		}
 	};
 </script>
@@ -170,6 +170,7 @@
 								}
 							};
 						}
+						onChange(accessControl);
 					}}
 				>
 					<option class=" text-gray-700" value="private" selected>{$i18n.t('Private')}</option>
@@ -265,6 +266,7 @@
 														group.id
 													];
 												}
+												onChange(accessControl);
 											}
 										}}
 									>
@@ -282,6 +284,7 @@
 											accessControl.read.group_ids = accessControl.read.group_ids.filter(
 												(id) => id !== group.id
 											);
+											onChange(accessControl);
 										}}
 									>
 										<XMark />
@@ -331,6 +334,7 @@
 													team.id
 												];
 											}
+											onChange(accessControl);
 										}
 									}}
 								>
@@ -347,6 +351,7 @@
 										accessControl.read.team_ids = (accessControl.read.team_ids ?? []).filter(
 											(id) => id !== team.id
 										);
+										onChange(accessControl);
 									}}
 								>
 									<XMark />

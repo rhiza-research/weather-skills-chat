@@ -237,12 +237,14 @@ class ToolsTable:
     def update_tool_by_id(self, id: str, updated: dict) -> Optional[ToolModel]:
         try:
             with get_db() as db:
-                db.query(Tool).filter_by(id=id).update(
-                    {**updated, "updated_at": int(time.time())}
-                )
+                tool = db.query(Tool).filter_by(id=id).first()
+                if not tool:
+                    return None
+                for key, value in updated.items():
+                    setattr(tool, key, value)
+                tool.updated_at = int(time.time())
+                db.add(tool)
                 db.commit()
-
-                tool = db.query(Tool).get(id)
                 db.refresh(tool)
                 return ToolModel.model_validate(tool)
         except Exception:

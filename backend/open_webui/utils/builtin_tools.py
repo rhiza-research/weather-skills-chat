@@ -1023,7 +1023,7 @@ async def list_available_tools(
     which skill to run.
     """
     from open_webui.models.tools import Tools
-    from open_webui.utils.access_control import has_access
+    from open_webui.utils.access_control import user_owns_or_has_access
     from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
     from open_webui.utils.tools import accessible_skill_records
 
@@ -1121,9 +1121,9 @@ async def list_available_tools(
     all_tools = Tools.get_tools()
 
     def _visible(tool) -> bool:
-        if user.role == "admin" or tool.user_id == user.id:
-            return True
-        return has_access(user.id, "read", tool.access_control)
+        return user_owns_or_has_access(
+            user.id, tool.user_id, tool.access_control, "read"
+        )
 
     if scope == "chat":
         lines.append("")

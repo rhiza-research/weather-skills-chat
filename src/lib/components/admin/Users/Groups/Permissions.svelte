@@ -11,7 +11,8 @@
 			models: false,
 			knowledge: false,
 			prompts: false,
-			tools: false
+			tools: false,
+			skills: false
 		},
 		sharing: {
 			public_models: false,
@@ -201,6 +202,21 @@
 					{$i18n.t('Tools Access')}
 				</div>
 				<Switch bind:state={permissions.workspace.tools} />
+			</Tooltip>
+		</div>
+
+		<div class=" ">
+			<Tooltip
+				className=" flex w-full justify-between my-2 pr-2"
+				content={$i18n.t(
+					'Warning: Enabling this will allow users to install skill packs from git on the server.'
+				)}
+				placement="top-start"
+			>
+				<div class=" self-center text-xs font-medium">
+					{$i18n.t('Skills Access')}
+				</div>
+				<Switch bind:state={permissions.workspace.skills} />
 			</Tooltip>
 		</div>
 	</div>

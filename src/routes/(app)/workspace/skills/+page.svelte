@@ -8,12 +8,16 @@
 		getSkillPacks,
 		installSkillPack,
 		updateSkillPack,
-		updateSkillPackAccess
+		updateSkillPackAccess,
+		updateSkillEnabled
 	} from '$lib/apis/skills';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import AccessControlModal from '$lib/components/workspace/common/AccessControlModal.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
+	import { tools as toolsStore } from '$lib/stores';
+	import { getTools } from '$lib/apis/tools';
 
 	const i18n = getContext('i18n');
 
@@ -27,8 +31,32 @@
 	let showAccessModal = false;
 	let accessPack = null;
 	let accessControl = {};
+	let accessSaveTimeout = null;
+	let lastSavedAccessKey = '';
+	let accessSaveInFlight = false;
+	let pendingAccessAcl = undefined;
 
 	const shortSha = (sha: string) => (sha ? sha.slice(0, 7) : '');
+
+	/** Canonicalize empty private ACL shapes so `{}` matches AccessControl's form. */
+	const accessKey = (acl) => {
+		if (acl === null || acl === undefined) {
+			return 'null';
+		}
+		const read = acl.read || {};
+		const write = acl.write || {};
+		const empty =
+			!(read.group_ids || []).length &&
+			!(read.team_ids || []).length &&
+			!(read.user_ids || []).length &&
+			!(write.group_ids || []).length &&
+			!(write.team_ids || []).length &&
+			!(write.user_ids || []).length;
+		if (empty) {
+			return 'private';
+		}
+		return JSON.stringify(acl);
+	};
 
 	const accessLabel = (acl) => {
 		if (acl === null) return 'Public';
@@ -88,29 +116,70 @@
 	};
 
 	const openAccess = (pack) => {
+		if (accessSaveTimeout) {
+			clearTimeout(accessSaveTimeout);
+			accessSaveTimeout = null;
+		}
+		pendingAccessAcl = undefined;
 		accessPack = pack;
 		accessControl =
 			pack.access_control === null
 				? null
 				: structuredClone(pack.access_control ?? {});
+		lastSavedAccessKey = accessKey(accessControl);
 		showAccessModal = true;
 	};
 
-	const saveAccess = async (acl) => {
+	const persistAccess = async (acl) => {
 		if (!accessPack) return;
-		accessControl = acl;
-		const updated = await updateSkillPackAccess(
-			localStorage.token,
-			accessPack.id,
-			acl
-		).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+
+		if (accessSaveInFlight) {
+			// Keep the latest user choice (e.g. Public) instead of dropping it
+			// while a prior save is still propagating tool ACLs.
+			pendingAccessAcl = acl;
+			return;
+		}
+
+		const key = accessKey(acl);
+		if (key === lastSavedAccessKey) return;
+
+		accessSaveInFlight = true;
+		const packId = accessPack.id;
+		const updated = await updateSkillPackAccess(localStorage.token, packId, acl).catch(
+			(error) => {
+				toast.error(`${error}`);
+				return null;
+			}
+		);
+		accessSaveInFlight = false;
+
 		if (updated) {
+			lastSavedAccessKey = accessKey(updated.access_control);
 			toast.success('Pack access updated for all skills');
 			await refresh();
+			if (accessPack?.id === packId) {
+				accessPack = { ...accessPack, access_control: updated.access_control };
+			}
 		}
+
+		if (pendingAccessAcl !== undefined) {
+			const next = pendingAccessAcl;
+			pendingAccessAcl = undefined;
+			await persistAccess(next);
+		}
+	};
+
+	const saveAccess = (acl) => {
+		if (!accessPack) return;
+		// AccessControl fires onChange on every reactive tick; debounce and
+		// skip no-ops so Public (null) does not re-enter save in a loop.
+		if (accessSaveTimeout) {
+			clearTimeout(accessSaveTimeout);
+		}
+		accessSaveTimeout = setTimeout(() => {
+			accessSaveTimeout = null;
+			persistAccess(acl);
+		}, 400);
 	};
 
 	const deleteHandler = async () => {
@@ -129,8 +198,44 @@
 		}
 	};
 
+	const skillEnabled = (skill) => skill?.enabled !== false;
+
+	const toggleSkillEnabled = async (pack, skill, enabled) => {
+		if (!pack?.id || !skill?.tool_id) return;
+		const previous = skillEnabled(skill);
+		// Optimistic UI
+		skill.enabled = enabled;
+		packs = packs;
+
+		const updated = await updateSkillEnabled(
+			localStorage.token,
+			pack.id,
+			skill.tool_id,
+			enabled
+		).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (!updated) {
+			skill.enabled = previous;
+			packs = packs;
+			return;
+		}
+
+		const idx = packs.findIndex((p) => p.id === pack.id);
+		if (idx >= 0) {
+			packs[idx] = updated;
+			packs = packs;
+		}
+		// Refresh tools store so new chats pick up the default.
+		try {
+			await toolsStore.set(await getTools(localStorage.token));
+		} catch (_) {}
+	};
+
 	onMount(async () => {
-		if ($user?.role !== 'admin') {
+		if ($user?.role !== 'admin' && !$user?.permissions?.workspace?.skills) {
 			goto('/');
 			return;
 		}
@@ -157,8 +262,9 @@
 		<div class="text-lg font-medium mb-1">Skills</div>
 		<div class="text-sm text-gray-500 dark:text-gray-400 mb-4">
 			Install Agent Skills from a public git repo (include the branch/ref). Skills run like tools in
-			chat but are managed here — set pack access to grant users the whole pack. To switch branches,
-			remove the pack and install again at the new ref.
+			chat but are managed here — expand a pack to enable/disable skills globally (new installs are
+			all on). Disabled skills stay available in the chat tools menu. Set pack access to grant users
+			the whole pack. To switch branches, remove the pack and install again at the new ref.
 		</div>
 
 		<div
@@ -262,14 +368,20 @@
 							{#if (pack.skills || []).length}
 								<ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
 									{#each pack.skills as skill (skill.tool_id || skill.name)}
-										<li class="py-2 text-sm">
-											<div class="min-w-0">
-												<span class="font-medium">{skill.name}</span>
+										<li class="py-2.5 text-sm flex items-start justify-between gap-3">
+											<div class="min-w-0 flex-1">
+												<span
+													class="font-medium {skillEnabled(skill)
+														? ''
+														: 'text-gray-400 dark:text-gray-500'}"
+												>
+													{skill.name}
+												</span>
 												{#if skill.version}
 													<span class="text-xs text-gray-500">v{skill.version}</span>
 												{/if}
-												{#if skill.tool_id}
-													<span class="text-xs text-gray-400 font-mono ml-1">{skill.tool_id}</span>
+												{#if !skillEnabled(skill)}
+													<span class="text-xs text-gray-400 ml-1">off by default</span>
 												{/if}
 												{#if skill.description}
 													<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
@@ -277,6 +389,24 @@
 													</div>
 												{/if}
 											</div>
+											{#if skill.tool_id}
+												<!-- svelte-ignore a11y-click-events-have-key-events -->
+												<!-- svelte-ignore a11y-no-static-element-interactions -->
+												<div
+													class="shrink-0 pt-0.5"
+													on:click|stopPropagation
+													on:mousedown|stopPropagation
+												>
+													<Switch
+														state={skillEnabled(skill)}
+														on:change={(e) => {
+															const next = !!e.detail;
+															if (next === skillEnabled(skill)) return;
+															toggleSkillEnabled(pack, skill, next);
+														}}
+													/>
+												</div>
+											{/if}
 										</li>
 									{/each}
 								</ul>

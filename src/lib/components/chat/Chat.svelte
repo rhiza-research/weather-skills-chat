@@ -88,6 +88,7 @@
 		getTaskIdsByChatId
 	} from '$lib/apis';
 	import { getTools } from '$lib/apis/tools';
+	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -350,9 +351,9 @@
 
 		const model = atSelectedModel ?? $models.find((m) => m.id === selectedModels[0]);
 		if (model) {
-			selectedToolIds = (model?.info?.meta?.toolIds ?? []).filter((id) =>
-				$tools.find((t) => t.id === id)
-			);
+			// Enable accessible tools/skills by default (highest skill version;
+			// pack-level disabled skills stay off until toggled in the chat menu).
+			selectedToolIds = defaultEnabledToolIds($tools ?? []);
 		}
 	};
 

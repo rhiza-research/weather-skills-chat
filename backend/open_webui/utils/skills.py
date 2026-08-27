@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import textwrap
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -73,8 +74,18 @@ def repo_slug_from_url(git_url: str) -> str:
     return sanitize_slug(name, "skills")
 
 
-def pack_dirname(git_url: str, git_ref: str) -> str:
-    return f"{repo_slug_from_url(git_url)}__{sanitize_slug(git_ref, 'ref')}"
+def pack_dirname(
+    git_url: str, git_ref: str, owner_key: Optional[str] = None
+) -> str:
+    """On-disk folder for a pack checkout.
+
+    Includes a short owner key so two users can install the same url@ref
+    without sharing a working tree.
+    """
+    base = f"{repo_slug_from_url(git_url)}__{sanitize_slug(git_ref, 'ref')}"
+    if owner_key:
+        return f"{base}__{sanitize_slug(owner_key, 'user')[:16]}"
+    return base
 
 
 def skill_method_name(skill_name: str) -> str:
@@ -309,6 +320,7 @@ def _upsert_skill_tool(
     skill: DiscoveredSkill,
     tool_id: str,
     preserve_access_control: Optional[dict],
+    enabled: bool = True,
 ) -> str:
     method = skill_method_name(skill.name)
     content = generate_tool_content(
@@ -335,6 +347,7 @@ def _upsert_skill_tool(
         "skill_dir": str(skill.skill_dir),
         "relative_path": skill.relative_path,
         "scripts": skill.scripts,
+        "enabled": bool(enabled),
     }
     meta = ToolMeta(
         description=skill.description,
@@ -353,9 +366,8 @@ def _upsert_skill_tool(
                 name=display_name,
                 content=content,
                 meta=meta,
-                access_control=preserve_access_control
-                if preserve_access_control is not None
-                else {},
+                # None = Public; {} = Private. Do not rewrite None to {}.
+                access_control=preserve_access_control,
             ),
             specs,
         )
@@ -367,12 +379,8 @@ def _upsert_skill_tool(
                 "content": content,
                 "specs": specs,
                 "meta": meta.model_dump(),
-                # Preserve ACL unless this is a brand-new insert
-                "access_control": (
-                    preserve_access_control
-                    if preserve_access_control is not None
-                    else existing.access_control
-                ),
+                # Always mirror pack ACL (including None for Public).
+                "access_control": preserve_access_control,
             },
         )
     return tool_id
@@ -394,7 +402,7 @@ def sync_pack_tools(
         for s in (pack.meta or {}).get("skills") or []
         if isinstance(s, dict)
     }
-    pack_slug = pack_dirname(pack.git_url, pack.git_ref)
+    pack_slug = pack_dirname(pack.git_url, pack.git_ref, owner_key=pack.user_id)
     used_ids: set[str] = set()
     summaries: list[dict] = []
 
@@ -407,15 +415,18 @@ def sync_pack_tools(
             tool_id = tool_id_for_skill(skill.name, pack_slug, used_ids)
             used_ids.add(tool_id)
 
-        pack_acl = pack.access_control if pack.access_control is not None else {}
+        # New skills default on; preserve user toggle across sync/update.
+        enabled = True if prev.get("enabled") is None else bool(prev.get("enabled"))
 
+        # Keep pack ACL as-is: None means Public. Do not coerce to {} (Private).
         _upsert_skill_tool(
             request_app_tools=request_app_tools,
             user_id=user_id or pack.user_id,
             pack=pack,
             skill=skill,
             tool_id=tool_id,
-            preserve_access_control=pack_acl,
+            preserve_access_control=pack.access_control,
+            enabled=enabled,
         )
         summaries.append(
             {
@@ -425,6 +436,7 @@ def sync_pack_tools(
                 "tool_id": tool_id,
                 "skill_dir": str(skill.skill_dir),
                 "relative_path": skill.relative_path,
+                "enabled": enabled,
             }
         )
 
@@ -476,13 +488,14 @@ def install_skill_pack(
     url = validate_public_git_url(git_url)
     ref = (git_ref or "main").strip() or "main"
 
-    existing = SkillPacks.get_by_url_ref(url, ref)
+    existing = SkillPacks.get_by_user_url_ref(user_id, url, ref)
     if existing:
         raise SkillInstallError(
-            f"Pack already installed for {url} @ {ref} (id={existing.id}). Use update instead."
+            f"You already have this pack installed for {url} @ {ref} "
+            f"(id={existing.id}). Use update instead."
         )
 
-    dirname = pack_dirname(url, ref)
+    dirname = pack_dirname(url, ref, owner_key=user_id)
     local_path = SKILLS_DIR / dirname
     if local_path.exists():
         shutil.rmtree(local_path)
@@ -529,17 +542,19 @@ def update_skill_pack(
     if not ref:
         raise SkillInstallError("git ref is required")
 
-    # If retargeting to a ref that already has another pack, refuse
+    # If retargeting to a ref this user already tracks, refuse
     if ref != pack.git_ref:
-        conflict = SkillPacks.get_by_url_ref(pack.git_url, ref)
+        conflict = SkillPacks.get_by_user_url_ref(pack.user_id, pack.git_url, ref)
         if conflict and conflict.id != pack.id:
             raise SkillInstallError(
-                f"Another pack already tracks {pack.git_url} @ {ref}"
+                f"You already have another pack tracking {pack.git_url} @ {ref}"
             )
 
     local_path = Path(pack.local_path)
     # If changing ref, optionally move directory to new slug path
-    target_path = SKILLS_DIR / pack_dirname(pack.git_url, ref)
+    target_path = SKILLS_DIR / pack_dirname(
+        pack.git_url, ref, owner_key=pack.user_id
+    )
     if ref != pack.git_ref and target_path.resolve() != local_path.resolve():
         if target_path.exists():
             shutil.rmtree(target_path)
@@ -582,23 +597,72 @@ def set_pack_access_control(
     pack_id: str, access_control: Optional[dict]
 ) -> SkillPackModel:
     """Set pack ACL and propagate to every linked skill tool."""
+    from open_webui.internal.db import get_db
+    from open_webui.models.tools import Tool
+
     pack = SkillPacks.get_by_id(pack_id)
     if not pack:
         raise SkillInstallError("Skill pack not found")
 
-    SkillPacks.update(pack_id, {"access_control": access_control})
-    for s in (pack.meta or {}).get("skills") or []:
-        if not isinstance(s, dict):
-            continue
-        tool_id = s.get("tool_id")
-        if not tool_id:
-            continue
-        if Tools.get_tool_by_id(tool_id):
-            Tools.update_tool_by_id(tool_id, {"access_control": access_control})
-
-    updated = SkillPacks.get_by_id(pack_id)
+    updated = SkillPacks.update(pack_id, {"access_control": access_control})
     if not updated:
         raise SkillInstallError("Skill pack not found after access update")
+
+    tool_ids = [
+        s.get("tool_id")
+        for s in (pack.meta or {}).get("skills") or []
+        if isinstance(s, dict) and s.get("tool_id")
+    ]
+    if tool_ids:
+        try:
+            with get_db() as db:
+                tools = db.query(Tool).filter(Tool.id.in_(tool_ids)).all()
+                now = int(time.time())
+                for tool in tools:
+                    tool.access_control = access_control
+                    tool.updated_at = now
+                db.commit()
+        except Exception:
+            log.exception(
+                "Failed to propagate access_control to tools for pack %s", pack_id
+            )
+
+    return updated
+
+
+def set_skill_enabled(pack_id: str, tool_id: str, enabled: bool) -> SkillPackModel:
+    """Toggle a skill's global default enabled flag (chat can still override)."""
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack:
+        raise SkillInstallError("Skill pack not found")
+
+    meta = dict(pack.meta or {})
+    skills = list(meta.get("skills") or [])
+    found = False
+    for skill in skills:
+        if not isinstance(skill, dict):
+            continue
+        if skill.get("tool_id") == tool_id:
+            skill["enabled"] = bool(enabled)
+            found = True
+            break
+    if not found:
+        raise SkillInstallError(f"Skill tool {tool_id} not found in pack")
+
+    meta["skills"] = skills
+    updated = SkillPacks.update(pack_id, {"meta": meta})
+    if not updated:
+        raise SkillInstallError("Skill pack not found after enable update")
+
+    tool = Tools.get_tool_by_id(tool_id)
+    if tool:
+        tool_meta = tool.meta.model_dump() if tool.meta else {}
+        manifest = dict(tool_meta.get("manifest") or {})
+        if manifest.get("kind") == "skill" or manifest.get("pack_id") == pack_id:
+            manifest["enabled"] = bool(enabled)
+            tool_meta["manifest"] = manifest
+            Tools.update_tool_by_id(tool_id, {"meta": tool_meta})
+
     return updated
 
 

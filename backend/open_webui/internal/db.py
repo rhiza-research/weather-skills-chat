@@ -31,6 +31,8 @@ class JSONField(types.TypeDecorator):
     cache_ok = True
 
     def process_bind_param(self, value: Optional[_T], dialect: Dialect) -> Any:
+        if value is None:
+            return None
         return json.dumps(value)
 
     def process_result_value(self, value: Optional[_T], dialect: Dialect) -> Any:
@@ -41,6 +43,8 @@ class JSONField(types.TypeDecorator):
         return JSONField(self.impl.length)
 
     def db_value(self, value):
+        if value is None:
+            return None
         return json.dumps(value)
 
     def python_value(self, value):

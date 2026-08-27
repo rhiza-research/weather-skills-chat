@@ -274,7 +274,7 @@ async def update_embedding_config(
             request.app.state.config.RAG_EMBEDDING_MODEL,
         )
 
-        request.app.state.EMBEDDING_FUNCTION = get_embedding_function(
+        embedding_fn = get_embedding_function(
             request.app.state.config.RAG_EMBEDDING_ENGINE,
             request.app.state.config.RAG_EMBEDDING_MODEL,
             request.app.state.ef,
@@ -290,6 +290,9 @@ async def update_embedding_config(
             ),
             request.app.state.config.RAG_EMBEDDING_BATCH_SIZE,
         )
+        request.app.state._embedding_function_impl = embedding_fn
+        request.app.state.EMBEDDING_FUNCTION = embedding_fn
+        request.app.state._retrieval_models_ready = True
 
         return {
             "status": True,

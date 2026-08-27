@@ -131,3 +131,39 @@ class ResolveToolIdsBySkillVersionTest(unittest.TestCase):
         )
         self.assertEqual(resolved, ["skill_branch_ecmwf_fetch"])
 
+    def test_does_not_upgrade_to_disabled_higher_version(self):
+        skills = [
+            {
+                "id": "skill_plot_old",
+                "skill_name": "plot",
+                "version": "1.0.0",
+                "enabled": True,
+            },
+            {
+                "id": "skill_plot_new",
+                "skill_name": "plot",
+                "version": "2.0.0",
+                "enabled": False,
+            },
+        ]
+        resolved = resolve_tool_ids_by_skill_version(["skill_plot_old"], skills)
+        self.assertEqual(resolved, ["skill_plot_old"])
+
+    def test_keeps_explicitly_selected_disabled_skill(self):
+        skills = [
+            {
+                "id": "skill_plot_old",
+                "skill_name": "plot",
+                "version": "1.0.0",
+                "enabled": True,
+            },
+            {
+                "id": "skill_plot_new",
+                "skill_name": "plot",
+                "version": "2.0.0",
+                "enabled": False,
+            },
+        ]
+        resolved = resolve_tool_ids_by_skill_version(["skill_plot_new"], skills)
+        self.assertEqual(resolved, ["skill_plot_new"])
+

@@ -132,6 +132,22 @@ def has_access(
     )
 
 
+def user_owns_or_has_access(
+    user_id: str,
+    owner_user_id: Optional[str],
+    access_control: Optional[dict],
+    permission: str = "read",
+) -> bool:
+    """
+    Owner or explicit ACL grant. No admin bypass — private resources
+    (access_control == {}) stay private to their owner unless shared.
+    Public resources (access_control is None) grant read to everyone.
+    """
+    if owner_user_id and owner_user_id == user_id:
+        return True
+    return has_access(user_id, permission, access_control)
+
+
 # Get all users with access to a resource
 def get_users_with_access(
     type: str = "write", access_control: Optional[dict] = None

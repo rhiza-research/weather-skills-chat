@@ -15,7 +15,9 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 class SkillPack(Base):
     __tablename__ = "skill_pack"
     __table_args__ = (
-        UniqueConstraint("git_url", "git_ref", name="uq_skill_pack_git_url_ref"),
+        UniqueConstraint(
+            "user_id", "git_url", "git_ref", name="uq_skill_pack_user_git_url_ref"
+        ),
     )
 
     id = Column(Text, unique=True, primary_key=True)
@@ -38,6 +40,8 @@ class SkillSummary(BaseModel):
     tool_id: Optional[str] = None
     skill_dir: Optional[str] = None
     relative_path: Optional[str] = None
+    # Global default for chat/automation; chat bar can still enable manually.
+    enabled: bool = True
 
 
 class SkillPackModel(BaseModel):
@@ -68,6 +72,10 @@ class SkillPackUpdateForm(BaseModel):
 
 class SkillPackAccessForm(BaseModel):
     access_control: Optional[dict] = None
+
+
+class SkillPackSkillEnabledForm(BaseModel):
+    enabled: bool
 
 
 class SkillPackTable:
@@ -117,6 +125,17 @@ class SkillPackTable:
             )
             return self._to_model(row) if row else None
 
+    def get_by_user_url_ref(
+        self, user_id: str, git_url: str, git_ref: str
+    ) -> Optional[SkillPackModel]:
+        with get_db() as db:
+            row = (
+                db.query(SkillPack)
+                .filter_by(user_id=user_id, git_url=git_url, git_ref=git_ref)
+                .first()
+            )
+            return self._to_model(row) if row else None
+
     def get_all(self) -> list[SkillPackModel]:
         with get_db() as db:
             rows = db.query(SkillPack).order_by(SkillPack.updated_at.desc()).all()
@@ -124,12 +143,18 @@ class SkillPackTable:
 
     def update(self, pack_id: str, data: dict[str, Any]) -> Optional[SkillPackModel]:
         with get_db() as db:
-            db.query(SkillPack).filter_by(id=pack_id).update(
-                {**data, "updated_at": int(time.time())}
-            )
-            db.commit()
             row = db.get(SkillPack, pack_id)
-            return self._to_model(row) if row else None
+            if not row:
+                return None
+            # Use ORM setattr so JSONField bind processors run (needed for
+            # access_control=None / Public). Query.update() can skip them.
+            for key, value in data.items():
+                setattr(row, key, value)
+            row.updated_at = int(time.time())
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return self._to_model(row)
 
     def delete(self, pack_id: str) -> bool:
         with get_db() as db:

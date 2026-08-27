@@ -76,8 +76,11 @@ ENV WHISPER_MODEL="base" \
     WHISPER_MODEL_DIR="/app/backend/cache/whisper/models"
 
 ## RAG Embedding model settings ##
+# Model is baked into the image at build time; skip HuggingFace hub checks on every start.
 ENV RAG_EMBEDDING_MODEL="$USE_EMBEDDING_MODEL_DOCKER" \
     RAG_RERANKING_MODEL="$USE_RERANKING_MODEL_DOCKER" \
+    RAG_EMBEDDING_MODEL_AUTO_UPDATE=false \
+    RAG_RERANKING_MODEL_AUTO_UPDATE=false \
     SENTENCE_TRANSFORMERS_HOME="/app/backend/cache/embedding/models"
 
 ## Tiktoken model settings ##

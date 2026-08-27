@@ -16,7 +16,7 @@ from open_webui.constants import ERROR_MESSAGES
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from open_webui.utils.tools import get_tool_specs
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_access, has_permission
+from open_webui.utils.access_control import has_permission, user_owns_or_has_access
 from open_webui.env import SRC_LOG_LEVELS
 
 from open_webui.utils.tools import get_tool_servers_data
@@ -70,13 +70,14 @@ async def get_tools(request: Request, user=Depends(get_verified_user)):
             )
         )
 
-    if user.role != "admin":
-        tools = [
-            tool
-            for tool in tools
-            if tool.user_id == user.id
-            or has_access(user.id, "read", tool.access_control)
-        ]
+    # Admins are not exempt: private tools/skills stay owner-only unless shared.
+    tools = [
+        tool
+        for tool in tools
+        if user_owns_or_has_access(
+            user.id, tool.user_id, tool.access_control, "read"
+        )
+    ]
 
     return tools
 
@@ -88,10 +89,7 @@ async def get_tools(request: Request, user=Depends(get_verified_user)):
 
 @router.get("/list", response_model=list[ToolUserResponse])
 async def get_tool_list(user=Depends(get_verified_user)):
-    if user.role == "admin":
-        tools = Tools.get_tools()
-    else:
-        tools = Tools.get_tools_by_user_id(user.id, "write")
+    tools = Tools.get_tools_by_user_id(user.id, "write")
     return tools
 
 
@@ -181,12 +179,14 @@ async def get_tools_by_id(id: str, user=Depends(get_verified_user)):
     tools = Tools.get_tool_by_id(id)
 
     if tools:
-        if (
-            user.role == "admin"
-            or tools.user_id == user.id
-            or has_access(user.id, "read", tools.access_control)
+        if user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
         ):
             return tools
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -213,11 +213,8 @@ async def update_tools_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    # Is the user the original creator, in a group with write access, or an admin
-    if (
-        tools.user_id != user.id
-        and not has_access(user.id, "write", tools.access_control)
-        and user.role != "admin"
+    if not user_owns_or_has_access(
+        user.id, tools.user_id, tools.access_control, "write"
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -273,10 +270,8 @@ async def delete_tools_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        tools.user_id != user.id
-        and not has_access(user.id, "write", tools.access_control)
-        and user.role != "admin"
+    if not user_owns_or_has_access(
+        user.id, tools.user_id, tools.access_control, "write"
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -301,6 +296,13 @@ async def delete_tools_by_id(
 async def get_tools_valves_by_id(id: str, user=Depends(get_verified_user)):
     tools = Tools.get_tool_by_id(id)
     if tools:
+        if not user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
         try:
             valves = Tools.get_tool_valves_by_id(id)
             return valves
@@ -327,6 +329,13 @@ async def get_tools_valves_spec_by_id(
 ):
     tools = Tools.get_tool_by_id(id)
     if tools:
+        if not user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
         if id in request.app.state.TOOLS:
             tools_module = request.app.state.TOOLS[id]
         else:
@@ -360,10 +369,8 @@ async def update_tools_valves_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        tools.user_id != user.id
-        and not has_access(user.id, "write", tools.access_control)
-        and user.role != "admin"
+    if not user_owns_or_has_access(
+        user.id, tools.user_id, tools.access_control, "write"
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -405,6 +412,13 @@ async def update_tools_valves_by_id(
 async def get_tools_user_valves_by_id(id: str, user=Depends(get_verified_user)):
     tools = Tools.get_tool_by_id(id)
     if tools:
+        if not user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
         try:
             user_valves = Tools.get_user_valves_by_id_and_user_id(id, user.id)
             return user_valves
@@ -426,6 +440,13 @@ async def get_tools_user_valves_spec_by_id(
 ):
     tools = Tools.get_tool_by_id(id)
     if tools:
+        if not user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
         if id in request.app.state.TOOLS:
             tools_module = request.app.state.TOOLS[id]
         else:
@@ -450,6 +471,13 @@ async def update_tools_user_valves_by_id(
     tools = Tools.get_tool_by_id(id)
 
     if tools:
+        if not user_owns_or_has_access(
+            user.id, tools.user_id, tools.access_control, "read"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
         if id in request.app.state.TOOLS:
             tools_module = request.app.state.TOOLS[id]
         else:

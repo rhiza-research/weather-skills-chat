@@ -36,6 +36,11 @@
 				goto('/');
 			} else if ($page.url.pathname.includes('/tools') && !$user?.permissions?.workspace?.tools) {
 				goto('/');
+			} else if (
+				$page.url.pathname.includes('/skills') &&
+				!$user?.permissions?.workspace?.skills
+			) {
+				goto('/');
 			}
 		}
 
@@ -122,7 +127,7 @@
 							</a>
 						{/if}
 
-						{#if $user?.role === 'admin'}
+						{#if $user?.role === 'admin' || $user?.permissions?.workspace?.skills}
 							<a
 								class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/workspace/skills')
 									? ''

@@ -53,10 +53,36 @@ async def _notify_chat_created(user_ids: list[str], chat_id: str, title: str) ->
         log.exception("Failed to notify clients of new automation chat")
 
 
-def _resolve_tool_ids(automation, model: Optional[dict]) -> Optional[list[str]]:
+def _accessible_tool_ids(user) -> list[str]:
+    """Tool/skill IDs the user can read (chat default / automation fallback).
+
+    Skills with manifest.enabled=false are omitted from defaults; chat can still
+    send those IDs explicitly.
+    """
+    from open_webui.models.tools import Tools
+    from open_webui.utils.access_control import user_owns_or_has_access
+
+    ids: list[str] = []
+    for tool in Tools.get_tools():
+        if not user_owns_or_has_access(
+            user.id, tool.user_id, tool.access_control, "read"
+        ):
+            continue
+        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        if manifest.get("kind") == "skill" and manifest.get("enabled") is False:
+            continue
+        ids.append(tool.id)
+    return ids
+
+
+def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[list[str]]:
     if automation.tool_ids is not None:
         return list(automation.tool_ids)
-    # Legacy automations: fall back to the model's default tools.
+    # Default: every tool/skill the owner can access (skill versions resolved later).
+    if user is not None:
+        ids = _accessible_tool_ids(user)
+        return ids or None
+    # Legacy: fall back to the model's stored tool list if present.
     if model:
         tool_ids = (model.get("info") or {}).get("meta", {}).get("toolIds")
         if isinstance(tool_ids, list) and tool_ids:
@@ -207,7 +233,7 @@ async def execute_automation(
                 log.exception("Failed to resolve team members for chat notify")
         await _notify_chat_created(notify_ids, chat.id, title)
 
-        tool_ids = _resolve_tool_ids(automation, model)
+        tool_ids = _resolve_tool_ids(automation, model, user)
         features = automation.features if isinstance(automation.features, dict) else {}
 
         async def _complete():
