@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const createNewGroup = async (token: string, group: object) => {
 	let error = null;
@@ -15,7 +16,7 @@ export const createNewGroup = async (token: string, group: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -43,7 +44,7 @@ export const getGroups = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -74,7 +75,7 @@ export const getGroupById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -109,7 +110,7 @@ export const updateGroupById = async (token: string, id: string, group: object) 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -141,7 +142,7 @@ export const deleteGroupById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {

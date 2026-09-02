@@ -639,6 +639,8 @@ async def chat_web_search_handler(
         except Exception as e:
             queries = [response]
 
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         log.exception(e)
         queries = [user_message]
@@ -658,118 +660,136 @@ async def chat_web_search_handler(
 
     all_results = []
 
-    for searchQuery in queries:
-        await event_emitter(
-            {
-                "type": "status",
-                "data": {
-                    "action": "web_search",
-                    "description": 'Searching "{{searchQuery}}"',
-                    "query": searchQuery,
-                    "done": False,
-                },
-            }
-        )
+    try:
+        for searchQuery in queries:
+            # Yield so task.cancel() can interrupt between searches.
+            await asyncio.sleep(0)
 
-        try:
-            results = await process_web_search(
-                request,
-                SearchForm(
-                    **{
-                        "query": searchQuery,
-                    }
-                ),
-                user=user,
-            )
-
-            if results:
-                all_results.append(results)
-                files = form_data.get("files", [])
-
-                if results.get("collection_names"):
-                    for col_idx, collection_name in enumerate(
-                        results.get("collection_names")
-                    ):
-                        files.append(
-                            {
-                                "collection_name": collection_name,
-                                "name": searchQuery,
-                                "type": "web_search",
-                                "urls": [results["filenames"][col_idx]],
-                            }
-                        )
-                elif results.get("docs"):
-                    # Invoked when bypass embedding and retrieval is set to True
-                    docs = results["docs"]
-
-                    if len(docs) == len(results["filenames"]):
-                        # the number of docs and filenames (urls) should be the same
-                        for doc_idx, doc in enumerate(docs):
-                            files.append(
-                                {
-                                    "docs": [doc],
-                                    "name": searchQuery,
-                                    "type": "web_search",
-                                    "urls": [results["filenames"][doc_idx]],
-                                }
-                            )
-                    else:
-                        # edge case when the number of docs and filenames (urls) are not the same
-                        # this should not happen, but if it does, we will just append the docs
-                        files.append(
-                            {
-                                "docs": results.get("docs", []),
-                                "name": searchQuery,
-                                "type": "web_search",
-                                "urls": results["filenames"],
-                            }
-                        )
-
-                form_data["files"] = files
-        except Exception as e:
-            log.exception(e)
             await event_emitter(
                 {
                     "type": "status",
                     "data": {
                         "action": "web_search",
-                        "description": 'Error searching "{{searchQuery}}"',
+                        "description": 'Searching "{{searchQuery}}"',
                         "query": searchQuery,
+                        "done": False,
+                    },
+                }
+            )
+
+            try:
+                results = await process_web_search(
+                    request,
+                    SearchForm(
+                        **{
+                            "query": searchQuery,
+                        }
+                    ),
+                    user=user,
+                )
+
+                if results:
+                    all_results.append(results)
+                    files = form_data.get("files", [])
+
+                    if results.get("collection_names"):
+                        for col_idx, collection_name in enumerate(
+                            results.get("collection_names")
+                        ):
+                            files.append(
+                                {
+                                    "collection_name": collection_name,
+                                    "name": searchQuery,
+                                    "type": "web_search",
+                                    "urls": [results["filenames"][col_idx]],
+                                }
+                            )
+                    elif results.get("docs"):
+                        # Invoked when bypass embedding and retrieval is set to True
+                        docs = results["docs"]
+
+                        if len(docs) == len(results["filenames"]):
+                            # the number of docs and filenames (urls) should be the same
+                            for doc_idx, doc in enumerate(docs):
+                                files.append(
+                                    {
+                                        "docs": [doc],
+                                        "name": searchQuery,
+                                        "type": "web_search",
+                                        "urls": [results["filenames"][doc_idx]],
+                                    }
+                                )
+                        else:
+                            # edge case when the number of docs and filenames (urls) are not the same
+                            # this should not happen, but if it does, we will just append the docs
+                            files.append(
+                                {
+                                    "docs": results.get("docs", []),
+                                    "name": searchQuery,
+                                    "type": "web_search",
+                                    "urls": results["filenames"],
+                                }
+                            )
+
+                    form_data["files"] = files
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.exception(e)
+                await event_emitter(
+                    {
+                        "type": "status",
+                        "data": {
+                            "action": "web_search",
+                            "description": 'Error searching "{{searchQuery}}"',
+                            "query": searchQuery,
+                            "done": True,
+                            "error": True,
+                        },
+                    }
+                )
+
+        if all_results:
+            urls = []
+            for results in all_results:
+                if "filenames" in results:
+                    urls.extend(results["filenames"])
+
+            await event_emitter(
+                {
+                    "type": "status",
+                    "data": {
+                        "action": "web_search",
+                        "description": "Searched {{count}} sites",
+                        "urls": urls,
+                        "done": True,
+                    },
+                }
+            )
+        else:
+            await event_emitter(
+                {
+                    "type": "status",
+                    "data": {
+                        "action": "web_search",
+                        "description": "No search results found",
                         "done": True,
                         "error": True,
                     },
                 }
             )
-
-    if all_results:
-        urls = []
-        for results in all_results:
-            if "filenames" in results:
-                urls.extend(results["filenames"])
-
+    except asyncio.CancelledError:
         await event_emitter(
             {
                 "type": "status",
                 "data": {
                     "action": "web_search",
-                    "description": "Searched {{count}} sites",
-                    "urls": urls,
+                    "description": "Cancelled",
                     "done": True,
                 },
             }
         )
-    else:
-        await event_emitter(
-            {
-                "type": "status",
-                "data": {
-                    "action": "web_search",
-                    "description": "No search results found",
-                    "done": True,
-                    "error": True,
-                },
-            }
-        )
+        raise
 
     return form_data
 
@@ -1341,8 +1361,122 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     return form_data, metadata, events
 
 
+def is_default_chat_title(title: Optional[str]) -> bool:
+    # Chats are created with i18n "New Chat" (e.g. "New weather chat" in en-US).
+    normalized = (title or "").strip().lower()
+    return normalized in {"", "new chat", "new weather chat"}
+
+
+async def emit_chat_title_if_needed(
+    request,
+    form_data: dict,
+    user,
+    metadata: dict,
+    tasks: Optional[dict] = None,
+    force: bool = False,
+):
+    """Generate a title when the chat is still on the default untitled name."""
+    chat_id = metadata.get("chat_id")
+    message_id = metadata.get("message_id")
+    if not chat_id or not message_id:
+        return
+
+    current_title = Chats.get_chat_title_by_id(chat_id)
+    if not is_default_chat_title(current_title):
+        # Already named (e.g. user renamed) — don't overwrite.
+        return
+
+    message_map = Chats.get_messages_by_chat_id(chat_id)
+    message = message_map.get(message_id) if message_map else None
+    if not message:
+        return
+
+    messages = get_message_list(message_map, message.get("id"))
+    if not messages:
+        return
+
+    auto_title = True
+    if tasks is not None and TASKS.TITLE_GENERATION in tasks:
+        auto_title = bool(tasks[TASKS.TITLE_GENERATION])
+
+    if not auto_title and not force:
+        # Auto title disabled — still seed from the first user message once.
+        if len(messages) <= 2:
+            title = next(
+                (
+                    m.get("content", "New Chat")
+                    for m in messages
+                    if m.get("role") == "user" and (m.get("content") or "").strip()
+                ),
+                messages[0].get("content", "New Chat"),
+            )
+            Chats.update_chat_title_by_id(chat_id, title)
+            emitter = get_event_emitter(metadata)
+            if emitter:
+                await emitter({"type": "chat:title", "data": title})
+        return
+
+    model_id = message.get("model") or form_data.get("model")
+    if not model_id:
+        return
+
+    try:
+        res = await generate_title(
+            request,
+            {
+                "model": model_id,
+                "messages": messages,
+                "chat_id": chat_id,
+            },
+            user,
+        )
+    except Exception:
+        log.exception("Title generation failed for chat_id=%s", chat_id)
+        return
+
+    if not (res and isinstance(res, dict)):
+        return
+
+    if len(res.get("choices", [])) == 1:
+        title_string = (
+            res.get("choices", [])[0]
+            .get("message", {})
+            .get("content", message.get("content", "New Chat"))
+        )
+    else:
+        title_string = ""
+
+    title_string = title_string[title_string.find("{") : title_string.rfind("}") + 1]
+
+    try:
+        title = json.loads(title_string).get("title", "New Chat")
+    except Exception:
+        title = ""
+
+    if not title:
+        title = next(
+            (
+                m.get("content", "New Chat")
+                for m in messages
+                if m.get("role") == "user" and (m.get("content") or "").strip()
+            ),
+            messages[0].get("content", "New Chat"),
+        )
+
+    Chats.update_chat_title_by_id(chat_id, title)
+
+    emitter = get_event_emitter(metadata)
+    if emitter:
+        await emitter(
+            {
+                "type": "chat:title",
+                "data": title,
+            }
+        )
+
+
 async def process_chat_response(
-    request, response, form_data, user, metadata, model, events, tasks
+    request, response, form_data, user, metadata, model, events, tasks, detach=True
 ):
     async def background_tasks_handler():
         message_map = Chats.get_messages_by_chat_id(metadata["chat_id"])
@@ -1351,64 +1485,13 @@ async def process_chat_response(
         if message:
             messages = get_message_list(message_map, message.get("id"))
 
-            if tasks and messages:
-                if TASKS.TITLE_GENERATION in tasks:
-                    if tasks[TASKS.TITLE_GENERATION]:
-                        res = await generate_title(
-                            request,
-                            {
-                                "model": message["model"],
-                                "messages": messages,
-                                "chat_id": metadata["chat_id"],
-                            },
-                            user,
-                        )
+            if messages:
+                # Always try to name untitled chats after a turn (including retries).
+                await emit_chat_title_if_needed(
+                    request, form_data, user, metadata, tasks=tasks
+                )
 
-                        if res and isinstance(res, dict):
-                            if len(res.get("choices", [])) == 1:
-                                title_string = (
-                                    res.get("choices", [])[0]
-                                    .get("message", {})
-                                    .get("content", message.get("content", "New Chat"))
-                                )
-                            else:
-                                title_string = ""
-
-                            title_string = title_string[
-                                title_string.find("{") : title_string.rfind("}") + 1
-                            ]
-
-                            try:
-                                title = json.loads(title_string).get(
-                                    "title", "New Chat"
-                                )
-                            except Exception as e:
-                                title = ""
-
-                            if not title:
-                                title = messages[0].get("content", "New Chat")
-
-                            Chats.update_chat_title_by_id(metadata["chat_id"], title)
-
-                            await event_emitter(
-                                {
-                                    "type": "chat:title",
-                                    "data": title,
-                                }
-                            )
-                    elif len(messages) == 2:
-                        title = messages[0].get("content", "New Chat")
-
-                        Chats.update_chat_title_by_id(metadata["chat_id"], title)
-
-                        await event_emitter(
-                            {
-                                "type": "chat:title",
-                                "data": message.get("content", "New Chat"),
-                            }
-                        )
-
-                if TASKS.TAGS_GENERATION in tasks and tasks[TASKS.TAGS_GENERATION]:
+                if tasks and TASKS.TAGS_GENERATION in tasks and tasks[TASKS.TAGS_GENERATION]:
                     res = await generate_chat_tags(
                         request,
                         {
@@ -2982,6 +3065,12 @@ async def process_chat_response(
                         "done": True,
                     },
                 )
+                try:
+                    await emit_chat_title_if_needed(
+                        request, form_data, user, metadata, tasks=tasks
+                    )
+                except Exception:
+                    log.debug("Title generation after cancel failed", exc_info=True)
             except Exception as e:
                 log.exception(
                     "Generation failed chat_id=%s message_id=%s",
@@ -3030,11 +3119,17 @@ async def process_chat_response(
             if response.background is not None:
                 await response.background()
 
-        # background_tasks.add_task(post_response_handler, response, events)
-        task_id, _ = create_task(
-            post_response_handler(response, events), id=metadata["chat_id"]
-        )
-        return {"status": True, "task_id": task_id}
+        if detach:
+            # background_tasks.add_task(post_response_handler, response, events)
+            task_id, _ = create_task(
+                post_response_handler(response, events), id=metadata["chat_id"]
+            )
+            return {"status": True, "task_id": task_id}
+
+        # Already running inside a chat job task — await inline so Stop cancels
+        # web search and generation with the same task_id.
+        await post_response_handler(response, events)
+        return {"status": True}
 
     else:
         # Fallback to the original response

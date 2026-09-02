@@ -11,7 +11,11 @@ from open_webui.models.skill_packs import (
     SkillPackUpdateForm,
     SkillPacks,
 )
-from open_webui.utils.access_control import has_permission, user_owns_or_has_access
+from open_webui.utils.access_control import (
+    can_update_access_control,
+    has_permission,
+    user_owns_or_has_access,
+)
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.skills import (
     SkillInstallError,
@@ -29,13 +33,29 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 router = APIRouter()
 
+SHARING_PERMISSION_KEY = "sharing.public_skills"
+
+
+def _can_read(user, pack) -> bool:
+    return user_owns_or_has_access(
+        user.id, pack.user_id, pack.access_control, "read", user.role
+    )
+
+
+def _can_write(user, pack) -> bool:
+    return user_owns_or_has_access(
+        user.id, pack.user_id, pack.access_control, "write", user.role
+    )
+
 
 def _require_pack_access(user, pack, permission: str = "read"):
     if not pack:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if not user_owns_or_has_access(
-        user.id, pack.user_id, pack.access_control, permission
-    ):
+    if permission == "read" and not _can_read(user, pack):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
+    if permission == "write" and not _can_write(user, pack):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
@@ -58,7 +78,7 @@ async def list_skill_packs(user=Depends(get_verified_user)):
     return [
         pack_to_response(p)
         for p in packs
-        if user_owns_or_has_access(user.id, p.user_id, p.access_control, "read")
+        if _can_read(user, p)
     ]
 
 
@@ -152,6 +172,19 @@ async def update_skill_pack_access(
 ):
     _require_skills_workspace(request, user)
     pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
+    if not can_update_access_control(
+        user.id,
+        user.role,
+        pack.user_id,
+        pack.access_control,
+        form_data.access_control,
+        SHARING_PERMISSION_KEY,
+        request.app.state.config.USER_PERMISSIONS,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
     try:
         pack = set_pack_access_control(pack.id, form_data.access_control)
         return pack_to_response(pack)

@@ -1,4 +1,5 @@
 import { RETRIEVAL_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const getRAGConfig = async (token: string) => {
 	let error = null;
@@ -11,7 +12,7 @@ export const getRAGConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -73,7 +74,7 @@ export const updateRAGConfig = async (token: string, payload: RAGConfigForm) => 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -100,7 +101,7 @@ export const getQuerySettings = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -136,7 +137,7 @@ export const updateQuerySettings = async (token: string, settings: QuerySettings
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -163,7 +164,7 @@ export const getEmbeddingConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -205,7 +206,7 @@ export const updateEmbeddingConfig = async (token: string, payload: EmbeddingMod
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -232,7 +233,7 @@ export const getRerankingConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -266,7 +267,7 @@ export const updateRerankingConfig = async (token: string, payload: RerankingMod
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -308,7 +309,7 @@ export const processFile = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -339,7 +340,7 @@ export const processYoutubeVideo = async (token: string, url: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -371,7 +372,7 @@ export const processWeb = async (token: string, collection_name: string, url: st
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -406,7 +407,7 @@ export const processWebSearch = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -444,7 +445,7 @@ export const queryDoc = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -481,7 +482,7 @@ export const queryCollection = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -507,7 +508,7 @@ export const resetUploadDir = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -533,7 +534,7 @@ export const resetVectorDB = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {

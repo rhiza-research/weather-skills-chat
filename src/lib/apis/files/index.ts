@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const uploadFile = async (token: string, file: File) => {
 	const data = new FormData();
@@ -14,7 +15,7 @@ export const uploadFile = async (token: string, file: File) => {
 		body: data
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -41,7 +42,7 @@ export const uploadDir = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -68,7 +69,7 @@ export const getFiles = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -99,7 +100,7 @@ export const getFileById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -133,7 +134,7 @@ export const updateFileDataContentById = async (token: string, id: string, conte
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -163,7 +164,7 @@ export const getFileContentById = async (id: string) => {
 		credentials: 'include'
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return await res.blob();
 		})
 		.catch((err) => {
@@ -192,7 +193,7 @@ export const deleteFileById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -223,7 +224,7 @@ export const deleteAllFiles = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {

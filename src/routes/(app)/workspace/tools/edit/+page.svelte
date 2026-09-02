@@ -82,6 +82,7 @@
 		meta={tool.meta}
 		content={tool.content}
 		accessControl={tool.access_control}
+		ownerUserId={tool.user_id}
 		onSave={(value) => {
 			saveHandler(value);
 		}}

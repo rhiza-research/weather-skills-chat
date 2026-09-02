@@ -12,6 +12,7 @@
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import { user } from '$lib/stores';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 
 	let formElement = null;
 	let loading = false;
@@ -31,6 +32,7 @@
 	};
 	export let content = '';
 	export let accessControl = {};
+	export let ownerUserId = null;
 
 	let _content = '';
 
@@ -189,7 +191,12 @@ class Tools:
 	bind:show={showAccessControlModal}
 	bind:accessControl
 	accessRoles={['read', 'write']}
-	allowPublic={$user?.permissions?.sharing?.public_tools || $user?.role === 'admin'}
+	allowPublic={userCanSetSharingAccess(
+		$user,
+		ownerUserId ?? $user?.id,
+		accessControl,
+		'public_tools'
+	)}
 />
 
 <div class=" flex flex-col justify-between w-full overflow-y-auto h-full">

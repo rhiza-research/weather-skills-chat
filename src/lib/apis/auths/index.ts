@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const getAdminDetails = async (token: string) => {
 	let error = null;
@@ -11,7 +12,7 @@ export const getAdminDetails = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -38,7 +39,7 @@ export const getAdminConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -66,7 +67,7 @@ export const updateAdminConfig = async (token: string, body: object) => {
 		body: JSON.stringify(body)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -94,7 +95,7 @@ export const getSessionUser = async (token: string) => {
 		credentials: 'include'
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -125,7 +126,7 @@ export const ldapUserSignIn = async (user: string, password: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -153,7 +154,7 @@ export const getLdapConfig = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -183,7 +184,7 @@ export const updateLdapConfig = async (token: string = '', enable_ldap: boolean)
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -210,7 +211,7 @@ export const getLdapServer = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -238,7 +239,7 @@ export const updateLdapServer = async (token: string = '', body: object) => {
 		body: JSON.stringify(body)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -269,7 +270,7 @@ export const userSignIn = async (email: string, password: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -308,7 +309,7 @@ export const userSignUp = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -335,7 +336,7 @@ export const userSignOut = async () => {
 		credentials: 'include'
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res;
 		})
 		.catch((err) => {
@@ -372,7 +373,7 @@ export const addUser = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -403,7 +404,7 @@ export const updateUserProfile = async (token: string, name: string, profileImag
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -434,7 +435,7 @@ export const updateUserPassword = async (token: string, password: string, newPas
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -461,7 +462,7 @@ export const getSignUpEnabledStatus = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -488,7 +489,7 @@ export const getDefaultUserRole = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -518,7 +519,7 @@ export const updateDefaultUserRole = async (token: string, role: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -545,7 +546,7 @@ export const toggleSignUpEnabledStatus = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -572,7 +573,7 @@ export const getJWTExpiresDuration = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -602,7 +603,7 @@ export const updateJWTExpiresDuration = async (token: string, duration: string) 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -629,7 +630,7 @@ export const createAPIKey = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -654,7 +655,7 @@ export const getAPIKey = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -679,7 +680,7 @@ export const deleteAPIKey = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {

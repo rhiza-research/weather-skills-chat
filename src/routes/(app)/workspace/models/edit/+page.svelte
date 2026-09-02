@@ -1,6 +1,6 @@
 <script>
 	import { toast } from 'svelte-sonner';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 
 	import { onMount, getContext } from 'svelte';
 	const i18n = getContext('i18n');
@@ -14,6 +14,17 @@
 	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
 
 	let model = null;
+
+	beforeNavigate(({ from, to, cancel }) => {
+		if (!from?.url.pathname.includes('/workspace/models/edit')) {
+			return;
+		}
+		if (!to || from.url.pathname === to.url.pathname) {
+			return;
+		}
+		cancel();
+		window.location.assign(`${to.url.pathname}${to.url.search}${to.url.hash}`);
+	});
 
 	onMount(async () => {
 		const _id = $page.url.searchParams.get('id');

@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const createNewKnowledge = async (
 	token: string,
@@ -22,7 +23,7 @@ export const createNewKnowledge = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -50,7 +51,7 @@ export const getKnowledgeBases = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -81,7 +82,7 @@ export const getKnowledgeBaseList = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -112,7 +113,7 @@ export const getKnowledgeById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -157,7 +158,7 @@ export const updateKnowledgeById = async (token: string, id: string, form: Knowl
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -192,7 +193,7 @@ export const addFileToKnowledgeById = async (token: string, id: string, fileId: 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -227,7 +228,7 @@ export const updateFileFromKnowledgeById = async (token: string, id: string, fil
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -262,7 +263,7 @@ export const removeFileFromKnowledgeById = async (token: string, id: string, fil
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -294,7 +295,7 @@ export const resetKnowledgeById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -326,7 +327,7 @@ export const deleteKnowledgeById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -358,7 +359,7 @@ export const reindexKnowledgeFiles = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {

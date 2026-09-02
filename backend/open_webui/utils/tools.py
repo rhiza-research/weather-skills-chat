@@ -73,7 +73,7 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
     records = []
     for tool in Tools.get_tools():
         if not user_owns_or_has_access(
-            user.id, tool.user_id, tool.access_control, "read"
+            user.id, tool.user_id, tool.access_control, "read", user.role
         ):
             continue
         manifest = (tool.meta.manifest if tool.meta else None) or {}
@@ -113,7 +113,7 @@ def get_tools(
                     "access_control", None
                 )
                 if not user_owns_or_has_access(
-                    user.id, f"server:{server_idx}", server_acl, "read"
+                    user.id, f"server:{server_idx}", server_acl, "read", user.role
                 ):
                     continue
                 tool_server_data = None
@@ -168,7 +168,7 @@ def get_tools(
                 continue
         else:
             if not user_owns_or_has_access(
-                user.id, tool.user_id, tool.access_control, "read"
+                user.id, tool.user_id, tool.access_control, "read", user.role
             ):
                 continue
             module = request.app.state.TOOLS.get(tool_id, None)

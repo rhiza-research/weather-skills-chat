@@ -10,6 +10,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { mobile, showSidebar, knowledge as _knowledge, config, user } from '$lib/stores';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 
 	import { updateFileDataContentById, uploadFile, deleteFileById } from '$lib/apis/files';
 	import {
@@ -627,7 +628,12 @@
 		<AccessControlModal
 			bind:show={showAccessControlModal}
 			bind:accessControl={knowledge.access_control}
-			allowPublic={$user?.permissions?.sharing?.public_knowledge || $user?.role === 'admin'}
+			allowPublic={userCanSetSharingAccess(
+				$user,
+				knowledge?.user_id,
+				knowledge?.access_control,
+				'public_knowledge'
+			)}
 			onChange={() => {
 				changeDebounceHandler();
 			}}

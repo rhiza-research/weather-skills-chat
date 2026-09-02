@@ -149,6 +149,7 @@
 	};
 
 	let taskIds = null;
+	let stopRequested = false;
 
 	// Dead-generation detection: server emits generation_heartbeat ~every 5s.
 	const GENERATION_SILENCE_TIMEOUT_MS = 30_000;
@@ -420,6 +421,10 @@
 				};
 
 				if (type === 'status') {
+					// Stop already finalized this message — ignore late search/status events.
+					if (message.done === true || stopRequested) {
+						return;
+					}
 					bumpGenerationActivity(event.message_id);
 					// Liveness-only pings — do not replace visible status UI.
 					if (data?.action === GENERATION_HEARTBEAT_ACTION) {
@@ -433,17 +438,29 @@
 					}
 					if (data?.done) bumpArtifactsSoon();
 				} else if (type === 'chat:completion') {
+					if ((message.done === true || stopRequested) && !data?.error) {
+						return;
+					}
 					bumpGenerationActivity(event.message_id);
 					chatCompletionEventHandler(data, message, event.chat_id);
 					bumpArtifactsSoon();
 				} else if (type === 'chat:message:delta' || type === 'message') {
+					if (message.done === true || stopRequested) {
+						return;
+					}
 					bumpGenerationActivity(event.message_id);
 					message.content += data.content;
 				} else if (type === 'chat:message' || type === 'replace') {
+					if (message.done === true || stopRequested) {
+						return;
+					}
 					bumpGenerationActivity(event.message_id);
 					message.content = data.content;
 					bumpArtifactsSoon();
 				} else if (type === 'chat:message:files' || type === 'files') {
+					if (message.done === true || stopRequested) {
+						return;
+					}
 					bumpGenerationActivity(event.message_id);
 					message.files = data.files;
 					bumpArtifactsSoon();
@@ -1577,6 +1594,7 @@
 		parentId: string,
 		{ modelId = null, modelIdx = null, newChat = false } = {}
 	) => {
+		stopRequested = false;
 		if (autoScroll) {
 			scrollToBottom();
 		}
@@ -1879,17 +1897,27 @@
 				id: responseMessageId,
 
 				...(!$temporaryChatEnabled &&
-				(messages.length == 1 ||
-					(messages.length == 2 &&
-						messages.at(0)?.role === 'system' &&
-						messages.at(1)?.role === 'user')) &&
 				(selectedModels[0] === model.id || atSelectedModel !== undefined)
-					? {
-							background_tasks: {
-								title_generation: $settings?.title?.auto ?? true,
-								tags_generation: $settings?.autoTags ?? true
-							}
-						}
+					? (() => {
+							const untitled =
+								($chatTitle || '').trim() === '' ||
+								$chatTitle === 'New Chat' ||
+								$chatTitle === $i18n.t('New Chat');
+							const firstTurn =
+								messages.length == 1 ||
+								(messages.length == 2 &&
+									messages.at(0)?.role === 'system' &&
+									messages.at(1)?.role === 'user');
+							const background_tasks = {
+								...(untitled && ($settings?.title?.auto ?? true)
+									? { title_generation: true }
+									: {}),
+								...(firstTurn ? { tags_generation: $settings?.autoTags ?? true } : {})
+							};
+							return Object.keys(background_tasks).length
+								? { background_tasks }
+								: {};
+						})()
 					: {}),
 
 				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
@@ -1918,13 +1946,18 @@
 		if (res) {
 			if (res.error) {
 				await handleOpenAIError(res.error, responseMessage);
-			} else {
-				if (taskIds) {
+			} else if (res.task_id) {
+				if (stopRequested) {
+					// User hit Stop before task_id arrived — cancel immediately.
+					await stopTask(localStorage.token, res.task_id).catch(() => null);
+					taskIds = null;
+				} else if (taskIds) {
 					taskIds.push(res.task_id);
+					startGenerationWatchdogs(responseMessageId);
 				} else {
 					taskIds = [res.task_id];
+					startGenerationWatchdogs(responseMessageId);
 				}
-				startGenerationWatchdogs(responseMessageId);
 			}
 		}
 
@@ -1993,6 +2026,7 @@
 	};
 
 	const stopResponse = async () => {
+		stopRequested = true;
 		if (taskIds) {
 			for (const taskId of taskIds) {
 				await stopTask(localStorage.token, taskId).catch((error) => {
@@ -2010,6 +2044,12 @@
 			responseMessage.done = true;
 			// Clear tool-call spinners immediately even if the socket update races.
 			responseMessage.content = clearSpinningToolCalls(responseMessage.content ?? '');
+			// Mark in-flight web search / status rows complete so the UI stops spinning.
+			if (responseMessage.statusHistory?.length) {
+				responseMessage.statusHistory = responseMessage.statusHistory.map((status) =>
+					status?.done === false ? { ...status, done: true, hidden: true } : status
+				);
+			}
 			history.messages[history.currentId] = responseMessage;
 			history = history;
 			await saveChatHandler($chatId, history);
@@ -2184,15 +2224,29 @@
 	const saveChatHandler = async (_chatId, history) => {
 		if ($chatId == _chatId) {
 			if (!$temporaryChatEnabled) {
-				chat = await updateChatById(localStorage.token, _chatId, {
-					models: selectedModels,
-					history: history,
-					messages: createMessagesList(history, history.currentId),
-					params: params,
-					files: chatFiles
-				});
-				currentChatPage.set(1);
-				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				try {
+					chat = await updateChatById(localStorage.token, _chatId, {
+						models: selectedModels,
+						history: history,
+						messages: createMessagesList(history, history.currentId),
+						params: params,
+						files: chatFiles
+					});
+					currentChatPage.set(1);
+					await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				} catch (error) {
+					console.error(error);
+					const detail =
+						error?.detail ??
+						error?.error?.message ??
+						error?.message ??
+						(typeof error === 'string' ? error : null);
+					toast.error(
+						detail
+							? `${$i18n.t('Failed to save chat')}: ${detail}`
+							: $i18n.t('Failed to save chat')
+					);
+				}
 			}
 		}
 	};

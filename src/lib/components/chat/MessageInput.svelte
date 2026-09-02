@@ -364,7 +364,7 @@
 			<div
 				class="flex flex-col px-3 {($settings?.widescreenMode ?? null)
 					? 'max-w-full'
-					: 'max-w-6xl'} w-full"
+					: 'max-w-[58rem]'} w-full"
 			>
 				<div class="relative">
 					{#if autoScroll === false && history?.currentId}
@@ -458,7 +458,7 @@
 			<div
 				class="{($settings?.widescreenMode ?? null)
 					? 'max-w-full'
-					: 'max-w-6xl'} px-2.5 mx-auto inset-x-0"
+					: 'max-w-[58rem]'} px-2.5 mx-auto inset-x-0"
 			>
 				<div class="">
 					<input
@@ -1038,7 +1038,7 @@
 								</div>
 
 								<div class=" flex justify-between mt-1 mb-2.5 mx-0.5 max-w-full" dir="ltr">
-									<div class="ml-1 self-end flex items-center flex-1 max-w-[80%] gap-0.5">
+									<div class="ml-1 self-end flex items-end flex-1 min-w-0 max-w-[90%] gap-0.5">
 										<InputMenu
 											bind:selectedToolIds
 											{screenCaptureHandler}
@@ -1106,7 +1106,7 @@
 											</button>
 										</InputMenu>
 
-										<div class="flex gap-1 items-center overflow-x-auto scrollbar-none flex-1">
+										<div class="flex flex-wrap gap-1 items-center flex-1 min-w-0">
 											{#if toolServers.length + selectedToolIds.length > 0}
 												<Tooltip
 													content={$i18n.t('{{COUNT}} Available Tools', {
@@ -1114,7 +1114,7 @@
 													})}
 												>
 													<button
-														class="translate-y-[0.5px] flex gap-1 items-center text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition"
+														class="translate-y-[0.5px] flex gap-1 items-center text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition shrink-0"
 														aria-label="Available Tools"
 														type="button"
 														on:click={() => {
@@ -1132,20 +1132,27 @@
 
 											{#if $_user}
 												{#if $config?.features?.enable_web_search && ($_user.role === 'admin' || $_user?.permissions?.features?.web_search)}
-													<Tooltip content={$i18n.t('Search the internet')} placement="top">
+													{@const webSearchOn =
+														webSearchEnabled || ($settings?.webSearch ?? false) === 'always'}
+													<Tooltip
+														content={webSearchOn
+															? $i18n.t('Agent allowed to search the web')
+															: $i18n.t('Agent not allowed to search the web')}
+														placement="top"
+													>
 														<button
 															on:click|preventDefault={() => (webSearchEnabled = !webSearchEnabled)}
 															type="button"
-															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden max-w-full overflow-hidden border {webSearchEnabled ||
-															($settings?.webSearch ?? false) === 'always'
+															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {webSearchOn
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
-															<GlobeAlt className="size-5" strokeWidth="1.75" />
-															<span
-																class="hidden @xl:block whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
-																>{$i18n.t('Web Search')}</span
-															>
+															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" />
+															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]">
+																{webSearchOn
+																	? $i18n.t('Agent allowed to search the web')
+																	: $i18n.t('Agent not allowed to search the web')}
+															</span>
 														</button>
 													</Tooltip>
 												{/if}
@@ -1156,13 +1163,13 @@
 															on:click|preventDefault={() =>
 																(imageGenerationEnabled = !imageGenerationEnabled)}
 															type="button"
-															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden max-w-full overflow-hidden border {imageGenerationEnabled
+															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {imageGenerationEnabled
 																? 'bg-gray-50 dark:bg-gray-400/10 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300  hover:bg-gray-100 dark:hover:bg-gray-800 '}"
 														>
 															<Photo className="size-5" strokeWidth="1.75" />
 															<span
-																class="hidden @xl:block whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
+																class="hidden @xl:block whitespace-nowrap translate-y-[0.5px]"
 																>{$i18n.t('Image')}</span
 															>
 														</button>
@@ -1176,16 +1183,15 @@
 																(codeInterpreterEnabled = !codeInterpreterEnabled)}
 															type="button"
 															aria-pressed={codeInterpreterEnabled}
-															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden max-w-full overflow-hidden border {codeInterpreterEnabled
+															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {codeInterpreterEnabled
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
 															<CommandLine className="size-5" strokeWidth="1.75" />
-															<span
-																class="whitespace-nowrap overflow-hidden text-ellipsis translate-y-[0.5px]"
+															<span class="whitespace-nowrap translate-y-[0.5px]"
 																>{codeInterpreterEnabled
-																	? $i18n.t('Agent allowed to write and execute its own code')
-																	: $i18n.t('Agent not allowed to write and execute its own code')}</span
+																	? $i18n.t('Agent allowed to write/execute its own code')
+																	: $i18n.t('Agent not allowed to write/execute its own code')}</span
 															>
 														</button>
 													</Tooltip>

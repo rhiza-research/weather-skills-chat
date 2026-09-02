@@ -6,6 +6,7 @@
 	import { createNewKnowledge, getKnowledgeBases } from '$lib/apis/knowledge';
 	import { toast } from 'svelte-sonner';
 	import { knowledge, user } from '$lib/stores';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 	import AccessControl from '../common/AccessControl.svelte';
 
 	let loading = false;
@@ -115,7 +116,12 @@
 				<AccessControl
 					bind:accessControl
 					accessRoles={['read', 'write']}
-					allowPublic={$user?.permissions?.sharing?.public_knowledge || $user?.role === 'admin'}
+					allowPublic={userCanSetSharingAccess(
+						$user,
+						$user?.id,
+						accessControl,
+						'public_knowledge'
+					)}
 				/>
 			</div>
 		</div>

@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import os
 import shutil
+import asyncio
 
 import uuid
 from datetime import datetime
@@ -1480,9 +1481,16 @@ async def process_web_search(
         logging.info(
             f"trying to web search with {request.app.state.config.WEB_SEARCH_ENGINE, form_data.query}"
         )
-        web_results = search_web(
-            request, request.app.state.config.WEB_SEARCH_ENGINE, form_data.query
+        # Run sync engine I/O off the event loop so task cancellation can interrupt
+        # at the await boundary (Stop during web search).
+        web_results = await run_in_threadpool(
+            search_web,
+            request,
+            request.app.state.config.WEB_SEARCH_ENGINE,
+            form_data.query,
         )
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         log.exception(e)
 
@@ -1544,6 +1552,8 @@ async def process_web_search(
                 "filenames": urls,
                 "loaded_count": len(docs),
             }
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         log.exception(e)
         raise HTTPException(

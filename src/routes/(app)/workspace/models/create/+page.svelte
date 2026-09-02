@@ -1,19 +1,38 @@
 <script>
-	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { config, models, settings } from '$lib/stores';
 
-	import { onMount, tick, getContext } from 'svelte';
-	import { createNewModel, getModelById } from '$lib/apis/models';
+	import { onMount, getContext } from 'svelte';
+	import { createNewModel } from '$lib/apis/models';
 	import { getModels } from '$lib/apis';
 
 	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
 
 	const i18n = getContext('i18n');
 
+	const readCloneModel = () => {
+		if (typeof sessionStorage === 'undefined' || !sessionStorage.model) {
+			return null;
+		}
+
+		try {
+			const parsed = JSON.parse(sessionStorage.model);
+			sessionStorage.removeItem('model');
+			const { user: _user, user_id, created_at, updated_at, ...rest } = parsed;
+			return {
+				...rest,
+				access_control: rest.access_control ?? {}
+			};
+		} catch (error) {
+			console.error(error);
+			toast.error($i18n.t('Could not load model to clone'));
+			return null;
+		}
+	};
+
 	const onSubmit = async (modelInfo) => {
-		if ($models.find((m) => m.id === modelInfo.id)) {
+		if (($models ?? []).find((m) => m.id === modelInfo.id)) {
 			toast.error(
 				`Error: A model with the ID '${modelInfo.id}' already exists. Please select a different ID to proceed.`
 			);
@@ -28,6 +47,7 @@
 		if (modelInfo) {
 			const res = await createNewModel(localStorage.token, {
 				...modelInfo,
+				access_control: modelInfo.access_control ?? {},
 				meta: {
 					...modelInfo.meta,
 					profile_image_url: modelInfo.meta.profile_image_url ?? '/static/favicon.png',
@@ -54,9 +74,31 @@
 		}
 	};
 
-	let model = null;
+	let model = readCloneModel();
+
+	// ModelEditor can leave SvelteKit's $page store out of sync with history on client nav.
+	// Force a full load when leaving create so sidebar / workspace tabs always work.
+	beforeNavigate(({ from, to, cancel }) => {
+		if (!from?.url.pathname.includes('/workspace/models/create')) {
+			return;
+		}
+		if (!to || from.url.pathname === to.url.pathname) {
+			return;
+		}
+		cancel();
+		window.location.assign(`${to.url.pathname}${to.url.search}${to.url.hash}`);
+	});
 
 	onMount(async () => {
+		if ($models === null) {
+			await models.set(
+				await getModels(
+					localStorage.token,
+					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+				)
+			);
+		}
+
 		window.addEventListener('message', async (event) => {
 			if (
 				!['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:5173'].includes(
@@ -78,14 +120,7 @@
 		if (window.opener ?? false) {
 			window.opener.postMessage('loaded', '*');
 		}
-
-		if (sessionStorage.model) {
-			model = JSON.parse(sessionStorage.model);
-			sessionStorage.removeItem('model');
-		}
 	});
 </script>
 
-{#key model}
-	<ModelEditor {model} {onSubmit} />
-{/key}
+<ModelEditor {model} {onSubmit} />

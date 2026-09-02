@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 const request = async (token: string, path: string, options: RequestInit = {}) => {
 	let error = null;
@@ -12,7 +13,7 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {

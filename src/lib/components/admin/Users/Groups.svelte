@@ -57,7 +57,8 @@
 			public_models: false,
 			public_knowledge: false,
 			public_prompts: false,
-			public_tools: false
+			public_tools: false,
+			public_skills: false
 		},
 		chat: {
 			controls: true,

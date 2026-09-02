@@ -8,10 +8,29 @@ from open_webui.models.prompts import (
 )
 from open_webui.constants import ERROR_MESSAGES
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_access, has_permission
+from open_webui.utils.auth import get_verified_user
+from open_webui.utils.access_control import (
+    can_update_access_control,
+    has_permission,
+    user_owns_or_has_access,
+)
 
 router = APIRouter()
+
+SHARING_PERMISSION_KEY = "sharing.public_prompts"
+
+
+def _can_read(user, prompt) -> bool:
+    return user_owns_or_has_access(
+        user.id, prompt.user_id, prompt.access_control, "read", user.role
+    )
+
+
+def _can_write(user, prompt) -> bool:
+    return user_owns_or_has_access(
+        user.id, prompt.user_id, prompt.access_control, "write", user.role
+    )
+
 
 ############################
 # GetPrompts
@@ -20,22 +39,20 @@ router = APIRouter()
 
 @router.get("/", response_model=list[PromptModel])
 async def get_prompts(user=Depends(get_verified_user)):
-    if user.role == "admin":
-        prompts = Prompts.get_prompts()
-    else:
-        prompts = Prompts.get_prompts_by_user_id(user.id, "read")
-
-    return prompts
+    return [
+        prompt
+        for prompt in Prompts.get_prompts()
+        if _can_read(user, prompt)
+    ]
 
 
 @router.get("/list", response_model=list[PromptUserResponse])
 async def get_prompt_list(user=Depends(get_verified_user)):
-    if user.role == "admin":
-        prompts = Prompts.get_prompts()
-    else:
-        prompts = Prompts.get_prompts_by_user_id(user.id, "write")
-
-    return prompts
+    return [
+        prompt
+        for prompt in Prompts.get_prompts()
+        if _can_write(user, prompt)
+    ]
 
 
 ############################
@@ -81,11 +98,7 @@ async def get_prompt_by_command(command: str, user=Depends(get_verified_user)):
     prompt = Prompts.get_prompt_by_command(f"/{command}")
 
     if prompt:
-        if (
-            user.role == "admin"
-            or prompt.user_id == user.id
-            or has_access(user.id, "read", prompt.access_control)
-        ):
+        if _can_read(user, prompt):
             return prompt
     else:
         raise HTTPException(
@@ -101,6 +114,7 @@ async def get_prompt_by_command(command: str, user=Depends(get_verified_user)):
 
 @router.post("/command/{command}/update", response_model=Optional[PromptModel])
 async def update_prompt_by_command(
+    request: Request,
     command: str,
     form_data: PromptForm,
     user=Depends(get_verified_user),
@@ -112,11 +126,20 @@ async def update_prompt_by_command(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    # Is the user the original creator, in a group with write access, or an admin
-    if (
-        prompt.user_id != user.id
-        and not has_access(user.id, "write", prompt.access_control)
-        and user.role != "admin"
+    if not _can_write(user, prompt):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+    if not can_update_access_control(
+        user.id,
+        user.role,
+        prompt.user_id,
+        prompt.access_control,
+        form_data.access_control,
+        SHARING_PERMISSION_KEY,
+        request.app.state.config.USER_PERMISSIONS,
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -147,11 +170,7 @@ async def delete_prompt_by_command(command: str, user=Depends(get_verified_user)
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        prompt.user_id != user.id
-        and not has_access(user.id, "write", prompt.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, prompt):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

@@ -1,10 +1,11 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 export const getChatArtifacts = async (token: string, chatId: string) => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts`, {
 		headers: { authorization: `Bearer ${token}` }
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };
 
@@ -22,7 +23,7 @@ export const getZarrMeta = async (token: string, chatId: string, path: string) =
 		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/meta?path=${encodeURIComponent(path)}`,
 		{ headers: { authorization: `Bearer ${token}` } }
 	);
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };
 
@@ -35,7 +36,7 @@ export const createZarrView = async (token: string, chatId: string, view: object
 		},
 		body: JSON.stringify(view)
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };
 
@@ -53,7 +54,7 @@ export const uploadChatArtifact = async (
 		headers: { authorization: `Bearer ${token}` },
 		body: form
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };
 
@@ -65,7 +66,7 @@ export const getArtifactArchive = async (token: string, chatId: string, paths: s
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?${qs}`, {
 		headers: { authorization: `Bearer ${token}` }
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return await res.arrayBuffer();
 };
 
@@ -77,6 +78,6 @@ export const uploadArtifactArchive = async (token: string, chatId: string, data:
 		headers: { authorization: `Bearer ${token}` },
 		body: form
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };

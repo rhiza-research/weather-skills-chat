@@ -15,6 +15,7 @@
 	import {
 		createNewModel,
 		deleteModelById,
+		getModelById,
 		getModels as getWorkspaceModels,
 		toggleModelById,
 		updateModelById
@@ -34,6 +35,7 @@
 	import Switch from '../common/Switch.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import { capitalizeFirstLetter } from '$lib/utils';
+	import { userCanAccessResource } from '$lib/utils/accessControl';
 
 	let shiftKey = false;
 
@@ -77,11 +79,31 @@
 		models = await getWorkspaceModels(localStorage.token);
 	};
 
+	const prepareModelClone = (source) => {
+		const { user: _user, user_id, created_at, updated_at, ...rest } = source;
+		return {
+			...rest,
+			access_control: {},
+			is_active: rest.is_active ?? true
+		};
+	};
+
 	const cloneModelHandler = async (model) => {
+		const source = await getModelById(localStorage.token, model.id).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+
+		if (!source) {
+			toast.error($i18n.t('Could not load model to clone'));
+			return;
+		}
+
+		const clone = prepareModelClone(source);
 		sessionStorage.model = JSON.stringify({
-			...model,
-			id: `${model.id}-clone`,
-			name: `${model.name} (Clone)`
+			...clone,
+			id: `${source.id}-clone`,
+			name: `${source.name} (Clone)`
 		});
 		goto('/workspace/models/create');
 	};
@@ -320,7 +342,7 @@
 								</button>
 							</Tooltip>
 						{:else}
-							{#if $user?.role === 'admin' || model.user_id === $user?.id || model.access_control.write.group_ids.some( (wg) => group_ids.includes(wg) )}
+							{#if userCanAccessResource($user, model.user_id, model.access_control, 'write', group_ids)}
 								<a
 									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 									type="button"

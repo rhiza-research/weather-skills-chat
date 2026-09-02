@@ -12,10 +12,28 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_access, has_permission
+from open_webui.utils.access_control import (
+    can_update_access_control,
+    has_permission,
+    user_owns_or_has_access,
+)
 
 
 router = APIRouter()
+
+SHARING_PERMISSION_KEY = "sharing.public_models"
+
+
+def _can_read(user, model) -> bool:
+    return user_owns_or_has_access(
+        user.id, model.user_id, model.access_control, "read", user.role
+    )
+
+
+def _can_write(user, model) -> bool:
+    return user_owns_or_has_access(
+        user.id, model.user_id, model.access_control, "write", user.role
+    )
 
 
 ###########################
@@ -25,10 +43,11 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ModelUserResponse])
 async def get_models(id: Optional[str] = None, user=Depends(get_verified_user)):
-    if user.role == "admin":
-        return Models.get_models()
-    else:
-        return Models.get_models_by_user_id(user.id)
+    return [
+        model
+        for model in Models.get_models()
+        if _can_read(user, model)
+    ]
 
 
 ###########################
@@ -88,12 +107,12 @@ async def create_new_model(
 async def get_model_by_id(id: str, user=Depends(get_verified_user)):
     model = Models.get_model_by_id(id)
     if model:
-        if (
-            user.role == "admin"
-            or model.user_id == user.id
-            or has_access(user.id, "read", model.access_control)
-        ):
+        if _can_read(user, model):
             return model
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -110,11 +129,7 @@ async def get_model_by_id(id: str, user=Depends(get_verified_user)):
 async def toggle_model_by_id(id: str, user=Depends(get_verified_user)):
     model = Models.get_model_by_id(id)
     if model:
-        if (
-            user.role == "admin"
-            or model.user_id == user.id
-            or has_access(user.id, "write", model.access_control)
-        ):
+        if _can_write(user, model):
             model = Models.toggle_model_by_id(id)
 
             if model:
@@ -143,6 +158,7 @@ async def toggle_model_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/model/update", response_model=Optional[ModelModel])
 async def update_model_by_id(
+    request: Request,
     id: str,
     form_data: ModelForm,
     user=Depends(get_verified_user),
@@ -155,10 +171,20 @@ async def update_model_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        model.user_id != user.id
-        and not has_access(user.id, "write", model.access_control)
-        and user.role != "admin"
+    if not _can_write(user, model):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+    if not can_update_access_control(
+        user.id,
+        user.role,
+        model.user_id,
+        model.access_control,
+        form_data.access_control,
+        SHARING_PERMISSION_KEY,
+        request.app.state.config.USER_PERMISSIONS,
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -183,11 +209,7 @@ async def delete_model_by_id(id: str, user=Depends(get_verified_user)):
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        user.role != "admin"
-        and model.user_id != user.id
-        and not has_access(user.id, "write", model.access_control)
-    ):
+    if not _can_write(user, model):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,

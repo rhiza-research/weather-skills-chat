@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { parseApiError } from '$lib/apis/response';
 
 const authHeaders = (token: string) => ({
 	Accept: 'application/json',
@@ -13,7 +14,7 @@ export const getSkillPacks = async (token: string = '') => {
 		headers: authHeaders(token)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -37,7 +38,7 @@ export const installSkillPack = async (
 		body: JSON.stringify({ git_url: gitUrl, ref: ref || 'main' })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -63,7 +64,7 @@ export const updateSkillPack = async (
 		body: JSON.stringify(body)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -82,7 +83,7 @@ export const deleteSkillPack = async (token: string, packId: string) => {
 		headers: authHeaders(token)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -106,7 +107,7 @@ export const updateSkillPackAccess = async (
 		body: JSON.stringify({ access_control: accessControl })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -134,7 +135,7 @@ export const updateSkillEnabled = async (
 		}
 	)
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
 		.catch((err) => {

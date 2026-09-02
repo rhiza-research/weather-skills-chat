@@ -107,6 +107,35 @@ def has_permission(
     return get_permission(default_permissions, permission_hierarchy)
 
 
+def is_private_access(access_control: Optional[dict]) -> bool:
+    """Private resources use an empty dict — owner-only unless explicitly shared."""
+    return access_control is not None and access_control == {}
+
+
+def is_public_access(access_control: Optional[dict]) -> bool:
+    """Public resources use SQL NULL / JSON null."""
+    return access_control is None
+
+
+def has_explicit_acl_grants(access_control: Optional[dict]) -> bool:
+    if not access_control:
+        return False
+    for perm_type in ("read", "write"):
+        section = access_control.get(perm_type) or {}
+        if (
+            section.get("user_ids")
+            or section.get("group_ids")
+            or section.get("team_ids")
+        ):
+            return True
+    return False
+
+
+def requires_sharing_permission(access_control: Optional[dict]) -> bool:
+    """True when ACL is public or grants access to other users/groups/teams."""
+    return is_public_access(access_control) or has_explicit_acl_grants(access_control)
+
+
 def has_access(
     user_id: str,
     type: str = "write",
@@ -137,15 +166,72 @@ def user_owns_or_has_access(
     owner_user_id: Optional[str],
     access_control: Optional[dict],
     permission: str = "read",
+    user_role: Optional[str] = None,
 ) -> bool:
     """
-    Owner or explicit ACL grant. No admin bypass — private resources
-    (access_control == {}) stay private to their owner unless shared.
-    Public resources (access_control is None) grant read to everyone.
+    Unified resource ACL check for workspace models, knowledge, prompts, tools, and skills.
+
+    - Owner always has read and write.
+    - Private resources (access_control == {}) are owner-only.
+    - Public resources (access_control is None) grant read to everyone; write to owner and admins.
+    - Restricted resources follow explicit read/write grants.
+    - Admins do not bypass privacy: they only see private resources they own.
+    - Admins can read/write public resources and anything explicitly shared with them.
     """
     if owner_user_id and owner_user_id == user_id:
         return True
+
+    if user_role == "admin":
+        if is_private_access(access_control):
+            return False
+        if permission == "read":
+            if is_public_access(access_control):
+                return True
+            return has_access(user_id, "read", access_control)
+        if is_public_access(access_control):
+            return True
+        return has_access(user_id, "write", access_control)
+
     return has_access(user_id, permission, access_control)
+
+
+def can_update_access_control(
+    user_id: str,
+    user_role: str,
+    owner_user_id: str,
+    old_access_control: Optional[dict],
+    new_access_control: Optional[dict],
+    sharing_permission_key: str,
+    default_permissions: Dict[str, Any],
+) -> bool:
+    """
+  Owners with sharing permission, or admins with write on the resource, may set public
+  or explicit group/user/team grants. Anyone with write may set fully private ({}).
+    """
+    if old_access_control == new_access_control:
+        return True
+
+    if new_access_control == {}:
+        return True
+
+    if not requires_sharing_permission(new_access_control):
+        return True
+
+    if user_role == "admin":
+        return user_owns_or_has_access(
+            user_id,
+            owner_user_id,
+            old_access_control,
+            "write",
+            user_role,
+        )
+
+    if user_id == owner_user_id:
+        return has_permission(
+            user_id, sharing_permission_key, default_permissions
+        )
+
+    return False
 
 
 # Get all users with access to a resource

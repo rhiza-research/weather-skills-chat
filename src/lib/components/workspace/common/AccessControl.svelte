@@ -23,19 +23,46 @@
 	let groups = [];
 	let userTeams = [];
 
-	$: if (!allowPublic && accessControl === null) {
-		accessControl = {
+	/** Expand private `{}` / partial ACLs so the template can safely read .read/.write. */
+	const emptyAclForm = () => ({
+		read: {
+			group_ids: [],
+			team_ids: [],
+			user_ids: []
+		},
+		write: {
+			group_ids: [],
+			team_ids: [],
+			user_ids: []
+		}
+	});
+
+	const normalizeAclForm = (acl) => {
+		if (acl === null) return null;
+		return {
 			read: {
-				group_ids: [],
-				team_ids: [],
-				user_ids: []
+				group_ids: acl?.read?.group_ids ?? [],
+				team_ids: acl?.read?.team_ids ?? [],
+				user_ids: acl?.read?.user_ids ?? []
 			},
 			write: {
-				group_ids: [],
-				team_ids: [],
-				user_ids: []
+				group_ids: acl?.write?.group_ids ?? [],
+				team_ids: acl?.write?.team_ids ?? [],
+				user_ids: acl?.write?.user_ids ?? []
 			}
 		};
+	};
+
+	// Private packs open as `{}` — normalize before first render or the Groups
+	// section throws on accessControl.read and freezes the modal.
+	if (accessControl !== null) {
+		accessControl = normalizeAclForm(accessControl);
+	} else if (!allowPublic) {
+		accessControl = emptyAclForm();
+	}
+
+	$: if (!allowPublic && accessControl === null) {
+		accessControl = emptyAclForm();
 		onChange(accessControl);
 	}
 
@@ -43,38 +70,15 @@
 		groups = await getGroups(localStorage.token);
 		userTeams = await getTeams(localStorage.token).catch(() => []);
 
-		// Normalize shape for the form only — do not emit onChange here.
-		// Auto-save callers (skills/knowledge) must not get a spurious Private
-		// write when the modal opens with `{}` or expands empty arrays.
+		// Re-normalize after mount in case parent rebound a raw `{}` / null.
+		// Do not emit onChange here — auto-save callers must not get a spurious write.
 		if (accessControl === null) {
 			if (!allowPublic) {
-				accessControl = {
-					read: {
-						group_ids: [],
-						team_ids: [],
-						user_ids: []
-					},
-					write: {
-						group_ids: [],
-						team_ids: [],
-						user_ids: []
-					}
-				};
+				accessControl = emptyAclForm();
 				onChange(accessControl);
 			}
 		} else {
-			accessControl = {
-				read: {
-					group_ids: accessControl?.read?.group_ids ?? [],
-					team_ids: accessControl?.read?.team_ids ?? [],
-					user_ids: accessControl?.read?.user_ids ?? []
-				},
-				write: {
-					group_ids: accessControl?.write?.group_ids ?? [],
-					team_ids: accessControl?.write?.team_ids ?? [],
-					user_ids: accessControl?.write?.user_ids ?? []
-				}
-			};
+			accessControl = normalizeAclForm(accessControl);
 		}
 	});
 
@@ -91,7 +95,8 @@
 	);
 
 	const onSelectGroup = () => {
-		if (selectedGroupId !== '') {
+		if (selectedGroupId !== '' && accessControl) {
+			accessControl = normalizeAclForm(accessControl);
 			accessControl.read.group_ids = [...accessControl.read.group_ids, selectedGroupId];
 			selectedGroupId = '';
 			onChange(accessControl);
@@ -99,7 +104,8 @@
 	};
 
 	const onSelectTeam = () => {
-		if (selectedTeamId !== '') {
+		if (selectedTeamId !== '' && accessControl) {
+			accessControl = normalizeAclForm(accessControl);
 			accessControl.read.team_ids = [...(accessControl.read.team_ids ?? []), selectedTeamId];
 			selectedTeamId = '';
 			onChange(accessControl);
@@ -190,9 +196,9 @@
 		</div>
 	</div>
 	{#if accessControl !== null}
-		{@const accessGroups = groups.filter((group) =>
-			accessControl.read.group_ids.includes(group.id)
-		)}
+		{@const readGroupIds = accessControl?.read?.group_ids ?? []}
+		{@const writeGroupIds = accessControl?.write?.group_ids ?? []}
+		{@const accessGroups = groups.filter((group) => readGroupIds.includes(group.id))}
 		<div>
 			<div class="">
 				<div class="flex justify-between mb-1.5">
@@ -214,7 +220,7 @@
 									<option class=" text-gray-700" value="" disabled selected
 										>{$i18n.t('Select a group')}</option
 									>
-									{#each groups.filter((group) => !accessControl.read.group_ids.includes(group.id)) as group}
+									{#each groups.filter((group) => !readGroupIds.includes(group.id)) as group}
 										<option class=" text-gray-700" value={group.id}>{group.name}</option>
 									{/each}
 								</select>
@@ -256,21 +262,18 @@
 										type="button"
 										on:click={() => {
 											if (accessRoles.includes('write')) {
-												if (accessControl.write.group_ids.includes(group.id)) {
-													accessControl.write.group_ids = accessControl.write.group_ids.filter(
+												if (writeGroupIds.includes(group.id)) {
+													accessControl.write.group_ids = writeGroupIds.filter(
 														(group_id) => group_id !== group.id
 													);
 												} else {
-													accessControl.write.group_ids = [
-														...accessControl.write.group_ids,
-														group.id
-													];
+													accessControl.write.group_ids = [...writeGroupIds, group.id];
 												}
 												onChange(accessControl);
 											}
 										}}
 									>
-										{#if accessControl.write.group_ids.includes(group.id)}
+										{#if writeGroupIds.includes(group.id)}
 											<Badge type={'success'} content={$i18n.t('Write')} />
 										{:else}
 											<Badge type={'info'} content={$i18n.t('Read')} />
@@ -281,9 +284,7 @@
 										class=" rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition"
 										type="button"
 										on:click={() => {
-											accessControl.read.group_ids = accessControl.read.group_ids.filter(
-												(id) => id !== group.id
-											);
+											accessControl.read.group_ids = readGroupIds.filter((id) => id !== group.id);
 											onChange(accessControl);
 										}}
 									>

@@ -55,6 +55,7 @@ from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
+    get_event_emitter,
     periodic_usage_pool_cleanup,
 )
 from open_webui.routers import (
@@ -379,14 +380,18 @@ from open_webui.utils.chat import (
     chat_completed as chat_completed_handler,
     chat_action as chat_action_handler,
 )
-from open_webui.utils.middleware import process_chat_payload, process_chat_response
+from open_webui.utils.middleware import (
+    process_chat_payload,
+    process_chat_response,
+    emit_chat_title_if_needed,
+)
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
     shutdown_langfuse,
     start_chat_trace,
 )
 from open_webui.env import LANGFUSE_ENABLED
-from open_webui.utils.access_control import has_access
+from open_webui.utils.access_control import has_access, user_owns_or_has_access
 
 from open_webui.utils.auth import (
     get_license_data,
@@ -399,6 +404,7 @@ from open_webui.utils.oauth import OAuthManager
 from open_webui.utils.security_headers import SecurityHeadersMiddleware
 
 from open_webui.tasks import (
+    create_task,
     list_task_ids_by_chat_id,
     stop_task,
     list_tasks,
@@ -1087,20 +1093,26 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
         filtered_models = []
         for model in models:
             if model.get("arena"):
-                if has_access(
+                if user_owns_or_has_access(
                     user.id,
-                    type="read",
-                    access_control=model.get("info", {})
+                    None,
+                    model.get("info", {})
                     .get("meta", {})
                     .get("access_control", {}),
+                    "read",
+                    user.role,
                 ):
                     filtered_models.append(model)
                 continue
 
             model_info = Models.get_model_by_id(model["id"])
             if model_info:
-                if user.id == model_info.user_id or has_access(
-                    user.id, type="read", access_control=model_info.access_control
+                if user_owns_or_has_access(
+                    user.id,
+                    model_info.user_id,
+                    model_info.access_control,
+                    "read",
+                    user.role,
                 ):
                     filtered_models.append(model)
 
@@ -1216,14 +1228,9 @@ async def chat_completion(
         request.state.metadata = metadata
         form_data["metadata"] = metadata
 
-        form_data, metadata, events = await process_chat_payload(
-            request, form_data, user, metadata, model
-        )
-
     except Exception as e:
-        log.debug(f"Error processing chat payload: {e}")
+        log.debug(f"Error preparing chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):
-            # Update the chat message with the error
             Chats.upsert_message_to_chat_by_id_and_message_id(
                 metadata["chat_id"],
                 metadata["message_id"],
@@ -1237,22 +1244,124 @@ async def chat_completion(
             detail=str(e),
         )
 
-    if LANGFUSE_ENABLED:
-        start_chat_trace(user=user, metadata=metadata, form_data=form_data)
+    async def run_chat_job():
+        job_form_data = form_data
+        job_metadata = metadata
+        try:
+            job_form_data, job_metadata, events = await process_chat_payload(
+                request, job_form_data, user, job_metadata, model
+            )
 
-    try:
-        response = await chat_completion_handler(request, form_data, user)
+            if LANGFUSE_ENABLED:
+                start_chat_trace(
+                    user=user, metadata=job_metadata, form_data=job_form_data
+                )
 
-        return await process_chat_response(
-            request, response, form_data, user, metadata, model, events, tasks
-        )
-    except Exception as e:
-        if LANGFUSE_ENABLED:
-            end_chat_trace(error=e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+            response = await chat_completion_handler(request, job_form_data, user)
+            await process_chat_response(
+                request,
+                response,
+                job_form_data,
+                user,
+                job_metadata,
+                model,
+                events,
+                tasks,
+                detach=False,
+            )
+        except asyncio.CancelledError:
+            log.warning(
+                "Chat job cancelled chat_id=%s message_id=%s",
+                job_metadata.get("chat_id"),
+                job_metadata.get("message_id"),
+            )
+            event_emitter = get_event_emitter(job_metadata)
+            if event_emitter:
+                try:
+                    await event_emitter(
+                        {
+                            "type": "status",
+                            "data": {
+                                "action": "web_search",
+                                "description": "Cancelled",
+                                "done": True,
+                            },
+                        }
+                    )
+                    await event_emitter(
+                        {
+                            "type": "chat:completion",
+                            "data": {"done": True},
+                        }
+                    )
+                    await event_emitter({"type": "task-cancelled"})
+                except Exception:
+                    log.debug("Failed to emit cancel events", exc_info=True)
+            if job_metadata.get("chat_id") and job_metadata.get("message_id"):
+                try:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        job_metadata["chat_id"],
+                        job_metadata["message_id"],
+                        {"done": True},
+                    )
+                except Exception:
+                    log.debug("Failed to persist cancel state", exc_info=True)
+                try:
+                    await emit_chat_title_if_needed(
+                        request,
+                        job_form_data,
+                        user,
+                        job_metadata,
+                        tasks=tasks,
+                    )
+                except Exception:
+                    log.debug("Title generation after cancel failed", exc_info=True)
+            if LANGFUSE_ENABLED:
+                end_chat_trace(error="cancelled")
+            raise
+        except Exception as e:
+            log.exception(
+                "Chat job failed chat_id=%s message_id=%s",
+                job_metadata.get("chat_id"),
+                job_metadata.get("message_id"),
+            )
+            event_emitter = get_event_emitter(job_metadata)
+            if event_emitter:
+                try:
+                    await event_emitter(
+                        {
+                            "type": "chat:completion",
+                            "data": {
+                                "done": True,
+                                "error": {"content": str(e)},
+                            },
+                        }
+                    )
+                except Exception:
+                    log.debug("Failed to emit chat error event", exc_info=True)
+            if job_metadata.get("chat_id") and job_metadata.get("message_id"):
+                try:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        job_metadata["chat_id"],
+                        job_metadata["message_id"],
+                        {
+                            "done": True,
+                            "error": {"content": str(e)},
+                        },
+                    )
+                except Exception:
+                    log.debug("Failed to persist chat error", exc_info=True)
+            if LANGFUSE_ENABLED:
+                end_chat_trace(error=e)
+
+    # Return task_id immediately so Stop works during web search / payload prep.
+    # Without a chat_id (raw API use), fall back to inline execution.
+    if metadata.get("chat_id"):
+        task_id, _ = create_task(run_chat_job(), id=metadata["chat_id"])
+        return {"status": True, "task_id": task_id}
+
+    await run_chat_job()
+    return {"status": True}
 
 
 # Alias for chat_completion (Legacy)

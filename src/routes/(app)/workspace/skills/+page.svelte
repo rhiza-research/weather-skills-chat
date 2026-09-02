@@ -2,7 +2,8 @@
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
-	import { user } from '$lib/stores';
+	import { tools as toolsStore, user } from '$lib/stores';
+	import { getTools } from '$lib/apis/tools';
 	import {
 		deleteSkillPack,
 		getSkillPacks,
@@ -16,8 +17,7 @@
 	import AccessControlModal from '$lib/components/workspace/common/AccessControlModal.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
-	import { tools as toolsStore } from '$lib/stores';
-	import { getTools } from '$lib/apis/tools';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 
 	const i18n = getContext('i18n');
 
@@ -79,6 +79,13 @@
 			})) || [];
 	};
 
+	/** Keep chat's shared tools list in sync after pack install/update/delete/toggle. */
+	const refreshTools = async () => {
+		try {
+			await toolsStore.set(await getTools(localStorage.token));
+		} catch (_) {}
+	};
+
 	const installHandler = async () => {
 		if (!gitUrl.trim()) {
 			toast.error('Git URL is required');
@@ -99,6 +106,7 @@
 			gitUrl = '';
 			gitRef = 'main';
 			await refresh();
+			await refreshTools();
 		}
 	};
 
@@ -112,6 +120,7 @@
 		if (updated) {
 			toast.success(`Updated to ${shortSha(updated.commit_sha)} on ${updated.git_ref}`);
 			await refresh();
+			await refreshTools();
 		}
 	};
 
@@ -122,10 +131,23 @@
 		}
 		pendingAccessAcl = undefined;
 		accessPack = pack;
+		// Expand private `{}` before the modal mounts so AccessControl never
+		// renders against a missing .read / .write shape.
 		accessControl =
 			pack.access_control === null
 				? null
-				: structuredClone(pack.access_control ?? {});
+				: {
+						read: {
+							group_ids: pack.access_control?.read?.group_ids ?? [],
+							team_ids: pack.access_control?.read?.team_ids ?? [],
+							user_ids: pack.access_control?.read?.user_ids ?? []
+						},
+						write: {
+							group_ids: pack.access_control?.write?.group_ids ?? [],
+							team_ids: pack.access_control?.write?.team_ids ?? [],
+							user_ids: pack.access_control?.write?.user_ids ?? []
+						}
+					};
 		lastSavedAccessKey = accessKey(accessControl);
 		showAccessModal = true;
 	};
@@ -157,6 +179,7 @@
 			lastSavedAccessKey = accessKey(updated.access_control);
 			toast.success('Pack access updated for all skills');
 			await refresh();
+			await refreshTools();
 			if (accessPack?.id === packId) {
 				accessPack = { ...accessPack, access_control: updated.access_control };
 			}
@@ -195,6 +218,7 @@
 		if (ok) {
 			toast.success('Skill pack removed');
 			await refresh();
+			await refreshTools();
 		}
 	};
 
@@ -228,10 +252,7 @@
 			packs[idx] = updated;
 			packs = packs;
 		}
-		// Refresh tools store so new chats pick up the default.
-		try {
-			await toolsStore.set(await getTools(localStorage.token));
-		} catch (_) {}
+		await refreshTools();
 	};
 
 	onMount(async () => {
@@ -254,6 +275,12 @@
 <AccessControlModal
 	bind:show={showAccessModal}
 	bind:accessControl
+	allowPublic={userCanSetSharingAccess(
+		$user,
+		accessPack?.user_id,
+		accessControl,
+		'public_skills'
+	)}
 	onChange={saveAccess}
 />
 

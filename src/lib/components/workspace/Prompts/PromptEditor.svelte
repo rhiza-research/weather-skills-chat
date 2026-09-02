@@ -8,6 +8,7 @@
 	import LockClosed from '$lib/components/icons/LockClosed.svelte';
 	import AccessControlModal from '../common/AccessControlModal.svelte';
 	import { user } from '$lib/stores';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 
 	export let onSubmit: Function;
 	export let edit = false;
@@ -73,7 +74,12 @@
 	bind:show={showAccessControlModal}
 	bind:accessControl
 	accessRoles={['read', 'write']}
-	allowPublic={$user?.permissions?.sharing?.public_prompts || $user?.role === 'admin'}
+	allowPublic={userCanSetSharingAccess(
+		$user,
+		prompt?.user_id ?? $user?.id,
+		accessControl,
+		'public_prompts'
+	)}
 />
 
 <div class="w-full max-h-full flex justify-center">

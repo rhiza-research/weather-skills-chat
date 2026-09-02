@@ -2,6 +2,7 @@
 	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
 	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
+	import { parseApiError } from '$lib/apis/response';
 
 	let loadingProgress = spring(0, {
 		stiffness: 0.05
@@ -346,7 +347,7 @@
 							if (res) {
 								// raise if the response is not ok
 								if (!res.ok) {
-									throw await res.json();
+									throw await parseApiError(res);
 								}
 
 								if (form_data?.stream ?? false) {

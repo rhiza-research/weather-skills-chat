@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount, getContext, tick } from 'svelte';
+	import { onMount, onDestroy, getContext, tick } from 'svelte';
+	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
 	import { models, functions, knowledge as knowledgeCollections, user } from '$lib/stores';
 
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
@@ -12,7 +13,7 @@
 	import { getFunctions } from '$lib/apis/functions';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
 	import AccessControl from '../common/AccessControl.svelte';
-	import { stringify } from 'postcss';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
@@ -35,6 +36,7 @@
 	let showPreview = false;
 
 	let loaded = false;
+	let active = true;
 
 	// ///////////
 	// model
@@ -85,7 +87,7 @@
 	let accessControl = {};
 
 	const addUsage = (base_model_id) => {
-		const baseModel = $models.find((m) => m.id === base_model_id);
+		const baseModel = ($models ?? []).find((m) => m.id === base_model_id);
 
 		if (baseModel) {
 			if (baseModel.owned_by === 'openai') {
@@ -111,11 +113,21 @@
 			toast.error('Model Name is required.');
 		}
 
+		if (!info.meta || typeof info.meta !== 'object') {
+			info.meta = {
+				profile_image_url: '/static/favicon.png',
+				description: '',
+				suggestion_prompts: null,
+				tags: []
+			};
+		}
+
 		info.access_control = accessControl;
 		info.meta.capabilities = capabilities;
 
 		if (enableDescription) {
-			info.meta.description = info.meta.description.trim() === '' ? null : info.meta.description;
+			const description = (info.meta?.description ?? '').trim();
+			info.meta.description = description === '' ? null : description;
 		} else {
 			info.meta.description = null;
 		}
@@ -163,123 +175,138 @@
 		success = false;
 	};
 
-	onMount(async () => {
-		await functions.set(await getFunctions(localStorage.token));
-		await knowledgeCollections.set(await getKnowledgeBases(localStorage.token));
+	onMount(() => {
+		active = true;
 
-		// Scroll to top 'workspace-container' element
-		const workspaceContainer = document.getElementById('workspace-container');
-		if (workspaceContainer) {
-			workspaceContainer.scrollTop = 0;
-		}
+		(async () => {
+			try {
+				const [fnList, kbList] = await Promise.all([
+					getFunctions(localStorage.token).catch((error) => {
+						console.error(error);
+						return [];
+					}),
+					getKnowledgeBases(localStorage.token).catch((error) => {
+						console.error(error);
+						return [];
+					})
+				]);
+				if (!active) return;
 
-		if (model) {
-			name = model.name;
-			await tick();
+				await functions.set(fnList);
+				if (!active) return;
+				await knowledgeCollections.set(kbList);
+				if (!active) return;
 
-			id = model.id;
+				// Scroll to top 'workspace-container' element
+				const workspaceContainer = document.getElementById('workspace-container');
+				if (workspaceContainer) {
+					workspaceContainer.scrollTop = 0;
+				}
 
-			enableDescription = model?.meta?.description !== null;
+				if (model) {
+				if (!model.meta || typeof model.meta !== 'object') {
+					model.meta = {
+						profile_image_url: '/static/favicon.png',
+						description: '',
+						suggestion_prompts: null,
+						tags: []
+					};
+				}
 
-			if (model.base_model_id) {
-				const base_model = $models
-					.filter((m) => !m?.preset && !(m?.arena ?? false))
-					.find((m) => [model.base_model_id, `${model.base_model_id}:latest`].includes(m.id));
+				name = model.name;
+				await tick();
 
-				console.log('base_model', base_model);
+				id = model.id;
 
-				if (base_model) {
-					model.base_model_id = base_model.id;
-				} else {
-					model.base_model_id = null;
+				enableDescription = model?.meta?.description !== null;
+
+				if (model.base_model_id) {
+					const base_model = ($models ?? [])
+						.filter((m) => !m?.preset && !(m?.arena ?? false))
+						.find((m) => [model.base_model_id, `${model.base_model_id}:latest`].includes(m.id));
+
+					if (base_model) {
+						model.base_model_id = base_model.id;
+					} else {
+						model.base_model_id = null;
+					}
+				}
+
+				params = { ...params, ...model?.params };
+				params.stop = params?.stop
+					? (typeof params.stop === 'string' ? params.stop.split(',') : (params?.stop ?? [])).join(
+							','
+						)
+					: null;
+
+				filterIds = model?.meta?.filterIds ?? [];
+				actionIds = model?.meta?.actionIds ?? [];
+				knowledge = (model?.meta?.knowledge ?? []).map((item) => {
+					if (item?.collection_name) {
+						return {
+							id: item.collection_name,
+							name: item.name,
+							legacy: true
+						};
+					} else if (item?.collection_names) {
+						return {
+							name: item.name,
+							type: 'collection',
+							collection_names: item.collection_names,
+							legacy: true
+						};
+					} else {
+						return item;
+					}
+				});
+				capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
+
+				accessControl = 'access_control' in model ? (model.access_control ?? {}) : {};
+
+				info = {
+					...info,
+					...JSON.parse(JSON.stringify(model))
+				};
+
+				if (!info.meta || typeof info.meta !== 'object') {
+					info.meta = {
+						profile_image_url: '/static/favicon.png',
+						description: '',
+						suggestion_prompts: null,
+						tags: []
+					};
+				}
+
+				if (!edit) {
+					delete info.user_id;
+					delete info.user;
+					delete info.created_at;
+					delete info.updated_at;
+				}
+				}
+			} catch (error) {
+				console.error(error);
+				if (active) {
+					toast.error($i18n.t('Failed to load model editor'));
+				}
+			} finally {
+				if (active) {
+					loaded = true;
 				}
 			}
+		})();
 
-			params = { ...params, ...model?.params };
-			params.stop = params?.stop
-				? (typeof params.stop === 'string' ? params.stop.split(',') : (params?.stop ?? [])).join(
-						','
-					)
-				: null;
+		return () => {
+			active = false;
+		};
+	});
 
-			filterIds = model?.meta?.filterIds ?? [];
-			actionIds = model?.meta?.actionIds ?? [];
-			knowledge = (model?.meta?.knowledge ?? []).map((item) => {
-				if (item?.collection_name) {
-					return {
-						id: item.collection_name,
-						name: item.name,
-						legacy: true
-					};
-				} else if (item?.collection_names) {
-					return {
-						name: item.name,
-						type: 'collection',
-						collection_names: item.collection_names,
-						legacy: true
-					};
-				} else {
-					return item;
-				}
-			});
-			capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
-
-			if ('access_control' in model) {
-				accessControl = model.access_control;
-			} else {
-				accessControl = {};
-			}
-
-			console.log(model?.access_control);
-			console.log(accessControl);
-
-			info = {
-				...info,
-				...JSON.parse(
-					JSON.stringify(
-						model
-							? model
-							: {
-									id: model.id,
-									name: model.name
-								}
-					)
-				)
-			};
-
-			console.log(model);
-		}
-
-		loaded = true;
+	onDestroy(() => {
+		active = false;
 	});
 </script>
 
 {#if loaded}
-	{#if onBack}
-		<button
-			class="flex space-x-1"
-			on:click={() => {
-				onBack();
-			}}
-		>
-			<div class=" self-center">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="h-4 w-4"
-				>
-					<path
-						fill-rule="evenodd"
-						d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-						clip-rule="evenodd"
-					/>
-				</svg>
-			</div>
-			<div class=" self-center text-sm font-medium">{'Back'}</div>
-		</button>
-	{/if}
-
 	<div class="w-full max-h-full flex justify-center">
 		<input
 			bind:this={filesInputElement}
@@ -465,8 +492,10 @@
 									<option value={null} class=" text-gray-900"
 										>{$i18n.t('Select a base model')}</option
 									>
-									{#each $models.filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as model}
-										<option value={model.id} class=" text-gray-900">{model.name}</option>
+									{#each ($models ?? []).filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
+										<option value={baseModelOption.id} class=" text-gray-900"
+											>{baseModelOption.name}</option
+										>
 									{/each}
 								</select>
 							</div>
@@ -526,7 +555,12 @@
 							<AccessControl
 								bind:accessControl
 								accessRoles={['read', 'write']}
-								allowPublic={$user?.permissions?.sharing?.public_models || $user?.role === 'admin'}
+								allowPublic={userCanSetSharingAccess(
+									$user,
+									edit ? (info.user_id ?? $user?.id) : $user?.id,
+									accessControl,
+									'public_models'
+								)}
 							/>
 						</div>
 					</div>
@@ -685,7 +719,10 @@
 					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
 
 					<div class="my-2">
-						<Knowledge bind:selectedKnowledge={knowledge} collections={$knowledgeCollections} />
+						<Knowledge
+							bind:selectedKnowledge={knowledge}
+							collections={$knowledgeCollections ?? []}
+						/>
 					</div>
 
 					<div class="my-2 text-xs text-gray-500 dark:text-gray-400">
@@ -697,14 +734,14 @@
 					<div class="my-2">
 						<FiltersSelector
 							bind:selectedFilterIds={filterIds}
-							filters={$functions.filter((func) => func.type === 'filter')}
+							filters={($functions ?? []).filter((func) => func.type === 'filter')}
 						/>
 					</div>
 
 					<div class="my-2">
 						<ActionsSelector
 							bind:selectedActionIds={actionIds}
-							actions={$functions.filter((func) => func.type === 'action')}
+							actions={($functions ?? []).filter((func) => func.type === 'action')}
 						/>
 					</div>
 
@@ -792,5 +829,9 @@
 				</div>
 			</form>
 		{/if}
+	</div>
+{:else}
+	<div class="flex items-center justify-center h-full min-h-[40vh]">
+		<Spinner />
 	</div>
 {/if}

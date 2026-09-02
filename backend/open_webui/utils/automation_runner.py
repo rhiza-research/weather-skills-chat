@@ -65,7 +65,7 @@ def _accessible_tool_ids(user) -> list[str]:
     ids: list[str] = []
     for tool in Tools.get_tools():
         if not user_owns_or_has_access(
-            user.id, tool.user_id, tool.access_control, "read"
+            user.id, tool.user_id, tool.access_control, "read", user.role
         ):
             continue
         manifest = (tool.meta.manifest if tool.meta else None) or {}

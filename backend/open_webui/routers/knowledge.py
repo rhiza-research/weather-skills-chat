@@ -21,7 +21,11 @@ from open_webui.storage.provider import Storage
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.access_control import has_access, has_permission
+from open_webui.utils.access_control import (
+    can_update_access_control,
+    has_permission,
+    user_owns_or_has_access,
+)
 
 
 from open_webui.env import SRC_LOG_LEVELS
@@ -33,6 +37,21 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 
 router = APIRouter()
 
+SHARING_PERMISSION_KEY = "sharing.public_knowledge"
+
+
+def _can_read(user, knowledge) -> bool:
+    return user_owns_or_has_access(
+        user.id, knowledge.user_id, knowledge.access_control, "read", user.role
+    )
+
+
+def _can_write(user, knowledge) -> bool:
+    return user_owns_or_has_access(
+        user.id, knowledge.user_id, knowledge.access_control, "write", user.role
+    )
+
+
 ############################
 # getKnowledgeBases
 ############################
@@ -40,12 +59,9 @@ router = APIRouter()
 
 @router.get("/", response_model=list[KnowledgeUserResponse])
 async def get_knowledge(user=Depends(get_verified_user)):
-    knowledge_bases = []
-
-    if user.role == "admin":
-        knowledge_bases = Knowledges.get_knowledge_bases()
-    else:
-        knowledge_bases = Knowledges.get_knowledge_bases_by_user_id(user.id, "read")
+    knowledge_bases = [
+        kb for kb in Knowledges.get_knowledge_bases() if _can_read(user, kb)
+    ]
 
     # Get files for each knowledge base
     knowledge_with_files = []
@@ -88,12 +104,9 @@ async def get_knowledge(user=Depends(get_verified_user)):
 
 @router.get("/list", response_model=list[KnowledgeUserResponse])
 async def get_knowledge_list(user=Depends(get_verified_user)):
-    knowledge_bases = []
-
-    if user.role == "admin":
-        knowledge_bases = Knowledges.get_knowledge_bases()
-    else:
-        knowledge_bases = Knowledges.get_knowledge_bases_by_user_id(user.id, "write")
+    knowledge_bases = [
+        kb for kb in Knowledges.get_knowledge_bases() if _can_write(user, kb)
+    ]
 
     # Get files for each knowledge base
     knowledge_with_files = []
@@ -244,11 +257,7 @@ async def get_knowledge_by_id(id: str, user=Depends(get_verified_user)):
 
     if knowledge:
 
-        if (
-            user.role == "admin"
-            or knowledge.user_id == user.id
-            or has_access(user.id, "read", knowledge.access_control)
-        ):
+        if _can_read(user, knowledge):
 
             file_ids = knowledge.data.get("file_ids", []) if knowledge.data else []
             files = Files.get_files_by_ids(file_ids)
@@ -271,6 +280,7 @@ async def get_knowledge_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/{id}/update", response_model=Optional[KnowledgeFilesResponse])
 async def update_knowledge_by_id(
+    request: Request,
     id: str,
     form_data: KnowledgeForm,
     user=Depends(get_verified_user),
@@ -281,11 +291,21 @@ async def update_knowledge_by_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
-    # Is the user the original creator, in a group with write access, or an admin
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
+
+    if not _can_write(user, knowledge):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+    if not can_update_access_control(
+        user.id,
+        user.role,
+        knowledge.user_id,
+        knowledge.access_control,
+        form_data.access_control,
+        SHARING_PERMISSION_KEY,
+        request.app.state.config.USER_PERMISSIONS,
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -332,11 +352,7 @@ def add_file_to_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -416,11 +432,7 @@ def update_file_from_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -487,11 +499,7 @@ def remove_file_from_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -575,11 +583,7 @@ async def delete_knowledge_by_id(id: str, user=Depends(get_verified_user)):
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -638,11 +642,7 @@ async def reset_knowledge_by_id(id: str, user=Depends(get_verified_user)):
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -681,11 +681,7 @@ def add_files_to_knowledge_batch(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    if (
-        knowledge.user_id != user.id
-        and not has_access(user.id, "write", knowledge.access_control)
-        and user.role != "admin"
-    ):
+    if not _can_write(user, knowledge):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
