@@ -248,6 +248,8 @@ Secret key: `OAUTH_CLIENT_SECRET`. Microsoft and GitHub follow the same pattern 
 | `oauth.github.clientId` / `scope` / `redirectUri` | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SCOPE` / `GITHUB_CLIENT_REDIRECT_URI` |
 | `oauth.oidc.clientId` / `providerUrl` / `redirectUri` / `scopes` / `providerName` / `codeChallengeMethod` | `OAUTH_CLIENT_ID` / `OPENID_PROVIDER_URL` / `OPENID_REDIRECT_URI` / `OAUTH_SCOPES` / `OAUTH_PROVIDER_NAME` / `OAUTH_CODE_CHALLENGE_METHOD` |
 | `emailTool.smtpHost` / `smtpPort` / `smtpUsername` / `smtpUseTls` / `fromEmail` | `EMAIL_TOOL_SMTP_HOST` / `EMAIL_TOOL_SMTP_PORT` / `EMAIL_TOOL_SMTP_USERNAME` / `EMAIL_TOOL_SMTP_USE_TLS` / `EMAIL_TOOL_FROM_EMAIL` |
+| `webSearch.enabled` / `engine` | `ENABLE_WEB_SEARCH` / `WEB_SEARCH_ENGINE` |
+| `webSearch.tavilyApiKey` | injects `TAVILY_API_KEY` from the external Secret |
 
 Empty strings, empty lists, and `null` omit the env var (UI persist / app default). A boolean `true`/`false` pins that flag.
 

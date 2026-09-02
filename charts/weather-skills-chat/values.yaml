@@ -8,7 +8,8 @@ replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
 # Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
 #   DATABASE_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
 #   BOOTSTRAP_ADMIN_PASSWORD, GOOGLE_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET,
-#   GITHUB_CLIENT_SECRET, OAUTH_CLIENT_SECRET, EMAIL_TOOL_SMTP_PASSWORD
+#   GITHUB_CLIENT_SECRET, OAUTH_CLIENT_SECRET, EMAIL_TOOL_SMTP_PASSWORD,
+#   TAVILY_API_KEY
 secretName: ""
 
 # Override Secret data key names if your Secret uses different field names.
@@ -24,6 +25,7 @@ secretKeys:
   githubClientSecret: GITHUB_CLIENT_SECRET
   oidcClientSecret: OAUTH_CLIENT_SECRET
   emailToolSmtpPassword: EMAIL_TOOL_SMTP_PASSWORD
+  tavilyApiKey: TAVILY_API_KEY
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
@@ -123,6 +125,15 @@ sandbox:
 openai:
   enabled: true
   apiBaseUrl: ""
+
+# Web search (Open WebUI RAG web search). Put TAVILY_API_KEY in the Secret when
+# engine is tavily. Env pins override DB-persisted admin settings.
+webSearch:
+  # null = omit ENABLE_WEB_SEARCH (UI/DB). true/false pins the flag.
+  enabled: null
+  engine: "" # e.g. tavily
+  # When true, inject TAVILY_API_KEY from the external Secret.
+  tavilyApiKey: false
 
 bootstrapAdmin:
   enabled: false

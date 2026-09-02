@@ -143,6 +143,18 @@ spec:
             - name: OPENAI_API_BASE_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- include "weather-skills-chat.optionalEnv" (dict "name" "ENABLE_WEB_SEARCH" "value" .Values.webSearch.enabled) | nindent 12 }}
+            {{- with .Values.webSearch.engine }}
+            - name: WEB_SEARCH_ENGINE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.webSearch.tavilyApiKey }}
+            - name: TAVILY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.tavilyApiKey | quote }}
+            {{- end }}
             {{- with .Values.otel.exporterEndpoint }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ . | quote }}
