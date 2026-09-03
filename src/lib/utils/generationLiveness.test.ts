@@ -31,6 +31,14 @@ test('clearSpinningToolCalls marks incomplete tool details done', () => {
 	expect(out).not.toContain('done="false"');
 });
 
+test('clearSpinningToolCalls marks incomplete reasoning details done', () => {
+	const input =
+		'<details type="reasoning" done="false"><summary>Thinking…</summary>\npartial</details>';
+	const out = clearSpinningToolCalls(input);
+	expect(out).toContain('type="reasoning" done="true"');
+	expect(out).not.toContain('done="false"');
+});
+
 test('finalizeOrphanAssistantMessages fails incomplete assistants when no live task', () => {
 	const messages = {
 		a: {

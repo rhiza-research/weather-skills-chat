@@ -448,15 +448,19 @@
 
 				<div class="">
 					{#if attributes?.type === 'reasoning'}
-						{#if attributes?.done === 'true' && attributes?.duration}
-							{#if attributes.duration < 60}
-								{$i18n.t('Thought for {{DURATION}} seconds', {
-									DURATION: attributes.duration
-								})}
+						{#if attributes?.done === 'true'}
+							{#if attributes?.duration}
+								{#if attributes.duration < 60}
+									{$i18n.t('Thought for {{DURATION}} seconds', {
+										DURATION: attributes.duration
+									})}
+								{:else}
+									{$i18n.t('Thought for {{DURATION}}', {
+										DURATION: dayjs.duration(attributes.duration, 'seconds').humanize()
+									})}
+								{/if}
 							{:else}
-								{$i18n.t('Thought for {{DURATION}}', {
-									DURATION: dayjs.duration(attributes.duration, 'seconds').humanize()
-								})}
+								{$i18n.t('Thought')}
 							{/if}
 						{:else}
 							{$i18n.t('Thinking...')}

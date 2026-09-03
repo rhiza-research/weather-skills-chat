@@ -71,8 +71,11 @@ class FileModelResponse(BaseModel):
     hash: Optional[str] = None
 
     filename: str
+    path: Optional[str] = None
     data: Optional[dict] = None
     meta: FileMeta
+    access_control: Optional[dict] = None
+    error: Optional[str] = None
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch

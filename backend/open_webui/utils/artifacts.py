@@ -576,6 +576,15 @@ def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
     return target
 
 
+def copy_upload_into_chat_sandbox(chat_id: str, filename: str, data: bytes) -> str:
+    """Write an uploaded file at the sandbox root (skills cwd) under a safe basename."""
+    name = Path(filename or "upload").name.replace("\x00", "").strip()
+    if not name or name in (".", ".."):
+        name = "upload"
+    dest = write_bytes(chat_id, name, data)
+    return dest.relative_to(chat_sandbox(chat_id)).as_posix()
+
+
 EXECUTE_CODE_MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
 
 

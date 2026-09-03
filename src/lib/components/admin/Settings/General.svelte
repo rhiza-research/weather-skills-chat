@@ -2,7 +2,7 @@
 	import DOMPurify from 'dompurify';
 
 	import { getBackendConfig, getWebhookUrl, updateWebhookUrl } from '$lib/apis';
-import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
+import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderingConfig } from '$lib/apis/configs';
 	import {
 		getAdminConfig,
 		getLdapConfig,
@@ -14,6 +14,7 @@ import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import Textarea from '$lib/components/common/Textarea.svelte';
 	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
 	import { config } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
@@ -32,6 +33,9 @@ import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 		EMAIL_TOOL_SMTP_PASSWORD: '',
 		EMAIL_TOOL_SMTP_USE_TLS: true,
 		EMAIL_TOOL_FROM_EMAIL: ''
+	};
+	let renderingConfig = {
+		RENDERING_PROMPT: ''
 	};
 
 	// LDAP
@@ -69,9 +73,15 @@ import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 			toast.error(`${error}`);
 			return null;
 		});
+		const renderingRes = await setRenderingConfig(localStorage.token, renderingConfig).catch(
+			(error) => {
+				toast.error(`${error}`);
+				return null;
+			}
+		);
 		await updateLdapServerHandler();
 
-		if (res && emailRes) {
+		if (res && emailRes && renderingRes) {
 			saveHandler();
 		} else {
 			toast.error(i18n.t('Failed to update settings'));
@@ -94,6 +104,12 @@ import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 				const res = await getEmailToolConfig(localStorage.token);
 				if (res) {
 					emailToolConfig = { ...emailToolConfig, ...res };
+				}
+			})(),
+			(async () => {
+				const res = await getRenderingConfig(localStorage.token);
+				if (res) {
+					renderingConfig = { ...renderingConfig, ...res };
 				}
 			})()
 		]);
@@ -689,6 +705,21 @@ import { getEmailToolConfig, setEmailToolConfig } from '$lib/apis/configs';
 						</div>
 
 						<Switch bind:state={adminConfig.ENABLE_USER_WEBHOOKS} />
+					</div>
+
+					<div class="mb-2.5 w-full justify-between">
+						<div class="mb-1 text-xs font-medium">{$i18n.t('Rendering Prompt')}</div>
+						<div class="text-xs text-gray-500 mb-2">
+							{$i18n.t(
+								'Injected into every chat so the model knows responses are rendered as GitHub-flavored Markdown. Leave empty to disable.'
+							)}
+						</div>
+						<Textarea
+							bind:value={renderingConfig.RENDERING_PROMPT}
+							placeholder={$i18n.t(
+								'Responses will be interpreted as github markdown. Please use proper escape sequences if you would like to use markdown-specific characters but not render them as markdown'
+							)}
+						/>
 					</div>
 
 					<div class="mb-2.5 w-full justify-between">

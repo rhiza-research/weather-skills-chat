@@ -29,6 +29,17 @@ def inject_headless_context(form_data: dict) -> dict:
     return form_data
 
 
+def inject_rendering_prompt(form_data: dict, prompt: Optional[str]) -> dict:
+    """Tell the model how chat responses are rendered in the UI (e.g. Markdown)."""
+    text = (prompt or "").strip()
+    if not text:
+        return form_data
+
+    messages = form_data.get("messages") or []
+    form_data["messages"] = add_or_update_system_message(text, messages)
+    return form_data
+
+
 # inplace function: form_data is modified
 def apply_model_system_prompt_to_body(
     params: dict, form_data: dict, metadata: Optional[dict] = None, user=None

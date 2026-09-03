@@ -303,6 +303,29 @@ async def set_email_tool_config(
 
 
 ############################
+# Rendering Prompt Config
+############################
+
+
+class RenderingConfigForm(BaseModel):
+    RENDERING_PROMPT: Optional[str] = None
+
+
+@router.get("/rendering", response_model=RenderingConfigForm)
+async def get_rendering_config(request: Request, user=Depends(get_admin_user)):
+    return {"RENDERING_PROMPT": request.app.state.config.RENDERING_PROMPT}
+
+
+@router.post("/rendering", response_model=RenderingConfigForm)
+async def set_rendering_config(
+    request: Request, form_data: RenderingConfigForm, user=Depends(get_admin_user)
+):
+    if form_data.RENDERING_PROMPT is not None:
+        request.app.state.config.RENDERING_PROMPT = form_data.RENDERING_PROMPT
+    return {"RENDERING_PROMPT": request.app.state.config.RENDERING_PROMPT}
+
+
+############################
 # SetDefaultModels
 ############################
 class ModelsConfigForm(BaseModel):

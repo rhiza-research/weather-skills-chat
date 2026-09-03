@@ -473,6 +473,103 @@ CREATE_FOLDER_SPEC = {
 }
 
 
+async def list_artifacts(
+    path: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """List files and folders in the current chat artifact sandbox."""
+    from open_webui.utils.artifacts import (
+        list_artifacts as _list,
+        resolve_in_sandbox,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot list artifacts in a temporary chat."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_read_chat(user, chat):
+        return "You do not have access to this chat."
+
+    prefix = (path or "").strip().lstrip("/")
+    if prefix in (".",):
+        prefix = ""
+    if prefix:
+        try:
+            target = resolve_in_sandbox(chat_id, prefix)
+        except Exception as e:
+            return f"Invalid path: {e}"
+        if not target.exists():
+            return f"Path not found: `{prefix}`"
+        if not target.is_dir():
+            size = target.stat().st_size
+            return f"`{prefix}` (file, {size} bytes)"
+
+    try:
+        entries = _list(chat_id)
+    except Exception as e:
+        return f"Failed to list artifacts: {e}"
+
+    if prefix:
+        prefix_slash = prefix.rstrip("/") + "/"
+        entries = [
+            e
+            for e in entries
+            if e.get("path") == prefix or (e.get("path") or "").startswith(prefix_slash)
+        ]
+
+    if not entries:
+        where = f" under `{prefix}`" if prefix else ""
+        return f"No files in the chat artifact sandbox{where}."
+
+    lines = [
+        "Chat artifact sandbox contents"
+        + (f" under `{prefix}`:" if prefix else ":")
+    ]
+    for item in entries:
+        rel = item.get("path") or ""
+        kind = item.get("kind") or ("directory" if item.get("is_dir") else "file")
+        size = item.get("size")
+        if kind in ("directory",) or item.get("is_dir"):
+            lines.append(f"- `{rel}/` ({kind})")
+        elif size is not None:
+            lines.append(f"- `{rel}` ({kind}, {size} bytes)")
+        else:
+            lines.append(f"- `{rel}` ({kind})")
+    lines.append(
+        "Paths are relative to the chat sandbox (skills cwd). "
+        "Use these paths with other tools (e.g. skills, display_image, execute_code)."
+    )
+    return "\n".join(lines)
+
+
+LIST_ARTIFACTS_SPEC = {
+    "name": "list_artifacts",
+    "description": (
+        "List files and folders in the current chat artifact sandbox (skills working "
+        "directory). Use when the user uploaded files, after skills write outputs, "
+        "or to discover available paths before reading/plotting/attaching them. "
+        "Optionally pass a relative folder path to list only that subtree."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Optional relative folder under the sandbox to list "
+                    "(e.g. `intermediate_results` or `plots`). Omit for the full tree."
+                ),
+            },
+        },
+        "required": [],
+    },
+}
+
+
 DISPLAY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
 DISPLAY_IMAGE_TYPES = {
     ".png": "image/png",
@@ -1084,6 +1181,13 @@ async def list_available_tools(
     )
     lines.append(
         _tool_summary_line(
+            "list_artifacts",
+            "List files/folders in the chat artifact sandbox.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
             "list_email_recipients",
             "List your email and teammate emails allowed for send_email.",
             kind="builtin",
@@ -1549,6 +1653,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
+        "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
         "list_email_recipients": _tool(
             list_email_recipients, LIST_EMAIL_RECIPIENTS_SPEC

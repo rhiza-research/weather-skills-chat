@@ -43,10 +43,16 @@
 
 	let tools = {};
 	let show = false;
+	let toolQuery = '';
+	let toolSearchEl: HTMLInputElement | null = null;
+	let menuReady = false;
 
-	$: if (show) {
-		init();
-	}
+	$: filteredToolIds = (() => {
+		const q = toolQuery.trim().toLowerCase();
+		const ids = Object.keys(tools);
+		if (!q) return ids;
+		return ids.filter((toolId) => toolBaseName(tools[toolId]).toLowerCase().includes(q));
+	})();
 
 	let fileUploadEnabled = true;
 	$: fileUploadEnabled = $user?.role === 'admin' || $user?.permissions?.chat?.file_upload;
@@ -70,6 +76,22 @@
 			return a;
 		}, {});
 	};
+
+	const openMenu = async () => {
+		if (menuReady) return;
+		menuReady = true;
+		toolQuery = '';
+		await init();
+		await tick();
+		toolSearchEl?.focus();
+	};
+
+	$: if (show) {
+		void openMenu();
+	} else if (menuReady) {
+		menuReady = false;
+		toolQuery = '';
+	}
 
 	const detectMobile = () => {
 		const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -117,8 +139,20 @@
 			transition={flyAndScale}
 		>
 			{#if Object.keys(tools).length > 0}
-				<div class="  max-h-40 overflow-y-auto scrollbar-hidden">
-					{#each Object.keys(tools) as toolId}
+				<div class="px-2 pt-1 pb-1">
+					<input
+						bind:this={toolSearchEl}
+						bind:value={toolQuery}
+						type="search"
+						placeholder={$i18n.t('Search skills')}
+						class="w-full rounded-lg px-2.5 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 outline-hidden border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
+						on:click|stopPropagation
+						on:pointerdown|stopPropagation
+						on:keydown|stopPropagation
+					/>
+				</div>
+				<div class="max-h-40 overflow-y-auto scrollbar-hidden">
+					{#each filteredToolIds as toolId}
 						{@const item = tools[toolId]}
 						{@const version = toolSkillVersion(item)}
 						{@const repoRef = toolSkillRepoRef(item)}
@@ -171,6 +205,11 @@
 							</div>
 						</button>
 					{/each}
+					{#if filteredToolIds.length === 0}
+						<div class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+							{$i18n.t('No skills match your search')}
+						</div>
+					{/if}
 				</div>
 
 				<hr class="border-black/5 dark:border-white/5 my-1" />

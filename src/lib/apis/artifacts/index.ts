@@ -40,6 +40,24 @@ export const createZarrView = async (token: string, chatId: string, view: object
 	return res.json();
 };
 
+export const fileFromDataUrl = async (dataUrl: string, name: string) => {
+	const res = await fetch(dataUrl);
+	const blob = await res.blob();
+	const subtype = (blob.type.split('/')[1] || 'png').split(';')[0] || 'png';
+	const filename = name.includes('.') ? name : `${name}.${subtype}`;
+	return new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+};
+
+export const copyFileIntoChatArtifacts = async (
+	token: string,
+	chatId: string | undefined | null,
+	file: File
+) => {
+	if (!chatId || chatId === 'local') return null;
+	const res = await uploadChatArtifact(token, chatId, file.name, file);
+	return res?.path || file.name;
+};
+
 export const uploadChatArtifact = async (
 	token: string,
 	chatId: string,

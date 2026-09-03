@@ -18,7 +18,9 @@
 		tools,
 		user as _user,
 		showControls,
-		TTSWorker
+		TTSWorker,
+		chatId,
+		artifactsRefresh
 	} from '$lib/stores';
 
 	import {
@@ -33,6 +35,7 @@
 	import { deleteFileById } from '$lib/apis/files';
 
 	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
+	import { copyFileIntoChatArtifacts, fileFromDataUrl } from '$lib/apis/artifacts';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -152,14 +155,39 @@
 
 			// Convert the canvas to a Base64 image URL
 			const imageUrl = canvas.toDataURL('image/png');
-			// Add the captured image to the files array to render it
-			files = [...files, { type: 'image', url: imageUrl }];
+			const captureFile = await fileFromDataUrl(imageUrl, `capture-${Date.now()}.png`);
+			await attachImage(captureFile, imageUrl);
 			// Clean memory: Clear video srcObject
 			video.srcObject = null;
 		} catch (error) {
 			// Handle any errors (e.g., user cancels screen sharing)
 			console.error('Error capturing screen:', error);
 		}
+	};
+
+	const copyIntoArtifacts = async (file: File) => {
+		try {
+			const path = await copyFileIntoChatArtifacts(localStorage.token, $chatId, file);
+			if (path) artifactsRefresh.update((n) => n + 1);
+			return path;
+		} catch (e) {
+			console.error('Failed to copy chat-bar file into artifacts', e);
+			return null;
+		}
+	};
+
+	const attachImage = async (file: File, imageUrl: string) => {
+		const sandboxPath = await copyIntoArtifacts(file);
+		files = [
+			...files,
+			{
+				type: 'image',
+				url: imageUrl,
+				name: file.name,
+				sandboxPath,
+				sourceFile: file
+			}
+		];
 	};
 
 	const uploadFileHandler = async (file, fullContext: boolean = false) => {
@@ -212,6 +240,8 @@
 				fileItem.collection_name =
 					uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
 				fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
+				fileItem.sourceFile = file;
+				fileItem.sandboxPath = await copyIntoArtifacts(file);
 
 				files = files;
 			} else {
@@ -269,13 +299,7 @@
 						}
 					}
 
-					files = [
-						...files,
-						{
-							type: 'image',
-							url: `${imageUrl}`
-						}
-					];
+					await attachImage(file, `${imageUrl}`);
 				};
 				reader.readAsDataURL(file);
 			} else {
@@ -790,14 +814,14 @@
 																const blob = item.getAsFile();
 																const reader = new FileReader();
 
-																reader.onload = function (e) {
-																	files = [
-																		...files,
-																		{
-																			type: 'image',
-																			url: `${e.target.result}`
-																		}
-																	];
+																reader.onload = async (e) => {
+																	if (!blob) return;
+																	const pasteFile = new File(
+																		[blob],
+																		blob.name || `paste-${Date.now()}.png`,
+																		{ type: blob.type || 'image/png' }
+																	);
+																	await attachImage(pasteFile, `${e.target.result}`);
 																};
 
 																reader.readAsDataURL(blob);
@@ -1004,14 +1028,14 @@
 															const blob = item.getAsFile();
 															const reader = new FileReader();
 
-															reader.onload = function (e) {
-																files = [
-																	...files,
-																	{
-																		type: 'image',
-																		url: `${e.target.result}`
-																	}
-																];
+															reader.onload = async (e) => {
+																if (!blob) return;
+																const pasteFile = new File(
+																	[blob],
+																	blob.name || `paste-${Date.now()}.png`,
+																	{ type: blob.type || 'image/png' }
+																);
+																await attachImage(pasteFile, `${e.target.result}`);
 															};
 
 															reader.readAsDataURL(blob);

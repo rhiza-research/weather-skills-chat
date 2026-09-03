@@ -42,12 +42,15 @@ export const formatGenerationRequestError = (error: unknown): string => {
 	return String(error ?? 'Unknown error');
 };
 
-/** Mark incomplete tool-call collapsibles as done so spinners stop. */
+/** Mark incomplete tool/reasoning/code details as done so spinners stop. */
 export const clearSpinningToolCalls = (content: string) => {
 	if (typeof content !== 'string') {
 		return content;
 	}
-	return content.replace(/(<details type="tool_calls" )done="false"/g, '$1done="true"');
+	return content.replace(
+		/(<details type="(?:tool_calls|reasoning|code_interpreter)" )done="false"/g,
+		'$1done="true"'
+	);
 };
 
 /**

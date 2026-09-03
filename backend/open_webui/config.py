@@ -1598,6 +1598,20 @@ CODE_INTERPRETER_PROMPT_TEMPLATE = PersistentConfig(
     os.environ.get("CODE_INTERPRETER_PROMPT_TEMPLATE", ""),
 )
 
+# Injected into every chat's system context so the model knows UI rendering rules.
+# Set RENDERING_PROMPT="" to disable. Override via env or admin PersistentConfig.
+DEFAULT_RENDERING_PROMPT = (
+    "Responses will be interpreted as github markdown. Please use proper escape "
+    "sequences if you would like to use markdown-specific characters but not "
+    "render them as markdown"
+)
+
+RENDERING_PROMPT = PersistentConfig(
+    "RENDERING_PROMPT",
+    "chat.rendering_prompt",
+    os.environ.get("RENDERING_PROMPT", DEFAULT_RENDERING_PROMPT),
+)
+
 CODE_INTERPRETER_JUPYTER_URL = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_URL",
     "code_interpreter.jupyter.url",

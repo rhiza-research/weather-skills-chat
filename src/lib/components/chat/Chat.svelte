@@ -12,7 +12,7 @@
 
 	import { get, type Unsubscriber, type Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import {
 		chatId,
@@ -88,6 +88,8 @@
 		getTaskIdsByChatId
 	} from '$lib/apis';
 	import { getTools } from '$lib/apis/tools';
+	import { uploadFile } from '$lib/apis/files';
+	import { copyFileIntoChatArtifacts, fileFromDataUrl } from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 
 	import Banner from '../common/Banner.svelte';
@@ -259,6 +261,45 @@
 		controlPaneComponent?.openPane?.();
 		await tick();
 		controlPaneComponent?.openPane?.();
+	};
+
+	let pendingArtifactFiles: File[] = [];
+
+	const copyPendingArtifacts = async (destChatId, fileItems = []) => {
+		if (!destChatId || destChatId === 'local' || !pendingArtifactFiles.length) {
+			pendingArtifactFiles = [];
+			return;
+		}
+		const byName = new Map(pendingArtifactFiles.map((file) => [file.name, file]));
+		for (const item of fileItems) {
+			const file =
+				item?.sourceFile instanceof File
+					? item.sourceFile
+					: item?.name
+						? byName.get(item.name)
+						: null;
+			if (!file) continue;
+			try {
+				const path = await copyFileIntoChatArtifacts(localStorage.token, destChatId, file);
+				if (path) item.sandboxPath = path;
+			} catch (e) {
+				console.error('Failed to copy chat-bar file into artifacts', e);
+			}
+		}
+		// Any leftovers not tied to a message item (still copy by filename).
+		for (const file of pendingArtifactFiles) {
+			const already = fileItems.some(
+				(item) => item?.sandboxPath && (item.name === file.name || item.sandboxPath === file.name)
+			);
+			if (already) continue;
+			try {
+				await copyFileIntoChatArtifacts(localStorage.token, destChatId, file);
+			} catch (e) {
+				console.error('Failed to copy chat-bar file into artifacts', e);
+			}
+		}
+		pendingArtifactFiles = [];
+		artifactsRefresh.update((n) => n + 1);
 	};
 
 	const loadChatForProp = async (id: string) => {
@@ -762,13 +803,23 @@
 
 			console.log('File uploaded successfully:', uploadedFile);
 
-			// Update file item with upload results
 			fileItem.status = 'uploaded';
 			fileItem.file = uploadedFile;
 			fileItem.id = uploadedFile.id;
 			fileItem.size = file.size;
 			fileItem.collection_name = uploadedFile?.meta?.collection_name;
 			fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
+			fileItem.sourceFile = file;
+			try {
+				fileItem.sandboxPath = await copyFileIntoChatArtifacts(
+					localStorage.token,
+					$chatId,
+					file
+				);
+				if (fileItem.sandboxPath) artifactsRefresh.update((n) => n + 1);
+			} catch (e) {
+				console.error('Failed to copy chat-bar file into artifacts', e);
+			}
 
 			files = files;
 			toast.success($i18n.t('File uploaded successfully'));
@@ -1546,7 +1597,21 @@
 			}
 		}
 
-		const _files = JSON.parse(JSON.stringify(files));
+		pendingArtifactFiles = [];
+		for (const item of files) {
+			if (item.sandboxPath) continue;
+			if (item.sourceFile instanceof File) {
+				pendingArtifactFiles.push(item.sourceFile);
+			} else if (item.type === 'image' && item.url) {
+				pendingArtifactFiles.push(
+					await fileFromDataUrl(item.url, item.name || `image-${Date.now()}`)
+				);
+			}
+		}
+
+		const _files = JSON.parse(
+			JSON.stringify(files, (key, value) => (key === 'sourceFile' ? undefined : value))
+		);
 		chatFiles.push(..._files.filter((item) => ['doc', 'file', 'collection'].includes(item.type)));
 		chatFiles = chatFiles.filter(
 			// Remove duplicates
@@ -1670,6 +1735,29 @@
 			}
 			history = history;
 			return;
+		}
+
+		const userMessage = _history.messages[parentId];
+		await copyPendingArtifacts(_chatId, userMessage?.files || []);
+		const sandboxPaths = (userMessage?.files ?? [])
+			.map((item) => item?.sandboxPath)
+			.filter(Boolean);
+		if (sandboxPaths.length) {
+			const note =
+				sandboxPaths.length === 1
+					? `\n\n[Uploaded to artifact sandbox: \`${sandboxPaths[0]}\`]`
+					: `\n\n[Uploaded to artifact sandbox: ${sandboxPaths.map((p) => `\`${p}\``).join(', ')}]`;
+			if (!(userMessage.content || '').includes('[Uploaded to artifact sandbox:')) {
+				userMessage.content = `${userMessage.content || ''}${note}`;
+			}
+		}
+		if (userMessage && history.messages[parentId]) {
+			history.messages[parentId] = {
+				...history.messages[parentId],
+				files: userMessage.files,
+				content: userMessage.content
+			};
+			history = history;
 		}
 
 		await Promise.all(
@@ -1893,7 +1981,7 @@
 				model_item: $models.find((m) => m.id === model.id),
 
 				session_id: $socket?.id,
-				chat_id: $chatId,
+				chat_id: _chatId,
 				id: responseMessageId,
 
 				...(!$temporaryChatEnabled &&
@@ -2021,42 +2109,56 @@
 			const message = history.messages[messageId];
 			if (message?.role === 'assistant') {
 				message.done = true;
+				message.content = clearSpinningToolCalls(message.content ?? '');
+				if (message.statusHistory?.length) {
+					message.statusHistory = message.statusHistory.map((status) =>
+						status?.done === false ? { ...status, done: true, hidden: true } : status
+					);
+				}
 			}
 		}
 	};
 
 	const stopResponse = async () => {
+		// Optimistic UI: flip the stop button / spinners immediately.
+		// The backend stop endpoint awaits task cancellation, which can stall
+		// while the model is mid-think / mid-stream.
 		stopRequested = true;
-		if (taskIds) {
-			for (const taskId of taskIds) {
-				await stopTask(localStorage.token, taskId).catch((error) => {
-					toast.error(`${error}`);
-					return null;
-				});
-			}
-			taskIds = null;
-		}
+		const idsToStop = taskIds ? [...taskIds] : [];
+		taskIds = null;
 		stopGenerationWatchdogs();
 
 		const responseMessage = history.messages[history.currentId];
 		if (responseMessage?.role === 'assistant' && responseMessage.done !== true) {
-			markAssistantResponsesDone(responseMessage.parentId);
-			responseMessage.done = true;
-			// Clear tool-call spinners immediately even if the socket update races.
-			responseMessage.content = clearSpinningToolCalls(responseMessage.content ?? '');
-			// Mark in-flight web search / status rows complete so the UI stops spinning.
-			if (responseMessage.statusHistory?.length) {
-				responseMessage.statusHistory = responseMessage.statusHistory.map((status) =>
-					status?.done === false ? { ...status, done: true, hidden: true } : status
-				);
+			if (responseMessage.parentId) {
+				markAssistantResponsesDone(responseMessage.parentId);
+			} else {
+				responseMessage.done = true;
+				responseMessage.content = clearSpinningToolCalls(responseMessage.content ?? '');
+				if (responseMessage.statusHistory?.length) {
+					responseMessage.statusHistory = responseMessage.statusHistory.map((status) =>
+						status?.done === false ? { ...status, done: true, hidden: true } : status
+					);
+				}
+				history.messages[history.currentId] = responseMessage;
 			}
-			history.messages[history.currentId] = responseMessage;
 			history = history;
-			await saveChatHandler($chatId, history);
 		}
 
 		if (autoScroll) {
 			scrollToBottom();
+		}
+
+		await tick();
+
+		for (const taskId of idsToStop) {
+			stopTask(localStorage.token, taskId).catch((error) => {
+				toast.error(`${error}`);
+			});
+		}
+
+		if ($chatId && responseMessage?.role === 'assistant') {
+			saveChatHandler($chatId, history).catch(() => {});
 		}
 	};
 

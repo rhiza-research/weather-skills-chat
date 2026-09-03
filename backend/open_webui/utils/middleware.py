@@ -68,8 +68,13 @@ from open_webui.utils.misc import (
     prepend_to_first_user_message_content,
     convert_logit_bias_input_to_json,
 )
-from open_webui.utils.payload import inject_headless_context
+from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
 from open_webui.utils.tools import get_tools
+from open_webui.utils.tool_parallel import (
+    execution_waves,
+    inject_depends_on_spec,
+    strip_depends_on,
+)
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
     get_sorted_filter_ids,
@@ -1211,7 +1216,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             metadata["tools"] = tools_dict
             form_data["tools"] = sorted(
                 [
-                    {"type": "function", "function": tool.get("spec", {})}
+                    {"type": "function", "function": inject_depends_on_spec(tool.get("spec", {}))}
                     for tool in tools_dict.values()
                 ],
                 key=lambda t: ((t.get("function") or {}).get("name") or ""),
@@ -1243,6 +1248,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         + ". If the user asks what you can use, call "
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
+                    )
+                    hints.append(
+                        "Tool calls issued in the same turn run in parallel. "
+                        "If a call needs another call's output, set its "
+                        "`depends_on` argument to that sibling's function name "
+                        "or tool_call id, or wait and call it in a later turn. "
+                        "Omit `depends_on` for independent work."
                     )
                 if hints:
                     combined = "\n\n".join(hints)
@@ -1357,6 +1369,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             )
     except Exception:
         log.debug("Early model system prompt apply skipped", exc_info=True)
+
+    # Universal rendering rules for every chat (Markdown escape guidance, etc.).
+    try:
+        form_data = inject_rendering_prompt(
+            form_data, request.app.state.config.RENDERING_PROMPT
+        )
+    except Exception:
+        log.debug("Rendering prompt inject skipped", exc_info=True)
 
     return form_data, metadata, events
 
@@ -2548,9 +2568,12 @@ async def process_chat_response(
                     )
 
                     prepared_calls = []
+                    depends_list = []
                     for tool_call in response_tool_calls:
                         real_params = scrub_tool_call_in_place(tool_call)
+                        real_params, deps = strip_depends_on(real_params)
                         prepared_calls.append((tool_call, real_params))
+                        depends_list.append(deps)
 
                     close_open_reasoning_block(content_blocks)
                     content_blocks.append(
@@ -2573,15 +2596,15 @@ async def process_chat_response(
 
                     tools = metadata.get("tools", {})
 
-                    results = []
+                    results = [None] * len(prepared_calls)
                     tool_timing = content_blocks[-1].setdefault("tool_timing", {})
-                    for tool_call, tool_function_params in prepared_calls:
-                        tool_call_id = tool_call.get("id", "")
-                        tool_name = tool_call.get("function", {}).get("name", "")
-                        tool_started_at = time.time()
-                        tool_timing[tool_call_id] = {"started_at": tool_started_at}
-                        content_blocks[-1]["tool_timing"] = tool_timing
+                    tool_ui_lock = asyncio.Lock()
 
+                    async def emit_tool_progress():
+                        content_blocks[-1]["results"] = [
+                            item for item in results if item is not None
+                        ]
+                        content_blocks[-1]["tool_timing"] = tool_timing
                         await event_emitter(
                             {
                                 "type": "chat:completion",
@@ -2590,6 +2613,14 @@ async def process_chat_response(
                                 },
                             }
                         )
+
+                    async def run_one_tool(idx, tool_call, tool_function_params):
+                        tool_call_id = tool_call.get("id", "")
+                        tool_name = tool_call.get("function", {}).get("name", "")
+                        tool_started_at = time.time()
+                        async with tool_ui_lock:
+                            tool_timing[tool_call_id] = {"started_at": tool_started_at}
+                            await emit_tool_progress()
 
                         tool_result = None
 
@@ -2607,7 +2638,7 @@ async def process_chat_response(
                                 tool_function_params = {
                                     k: v
                                     for k, v in tool_function_params.items()
-                                    if k in allowed_params
+                                    if k in allowed_params and k != "depends_on"
                                 }
 
                                 used_secrets = sensitive_values_from_params(
@@ -2663,8 +2694,7 @@ async def process_chat_response(
 
                         tool_result_files = []
                         if isinstance(tool_result, list):
-                            for item in tool_result:
-                                # check if string
+                            for item in list(tool_result):
                                 if isinstance(item, str) and item.startswith("data:"):
                                     tool_result_files.append(item)
                                     tool_result.remove(item)
@@ -2677,14 +2707,12 @@ async def process_chat_response(
                         tool_duration = max(
                             0, int(round(time.time() - tool_started_at))
                         )
-                        tool_timing[tool_call_id] = {
-                            "started_at": tool_started_at,
-                            "duration": tool_duration,
-                        }
-                        content_blocks[-1]["tool_timing"] = tool_timing
-
-                        results.append(
-                            {
+                        async with tool_ui_lock:
+                            tool_timing[tool_call_id] = {
+                                "started_at": tool_started_at,
+                                "duration": tool_duration,
+                            }
+                            results[idx] = {
                                 "tool_call_id": tool_call_id,
                                 "content": tool_result,
                                 "duration": tool_duration,
@@ -2694,19 +2722,26 @@ async def process_chat_response(
                                     else {}
                                 ),
                             }
-                        )
-                        content_blocks[-1]["results"] = list(results)
+                            await emit_tool_progress()
 
-                        await event_emitter(
-                            {
-                                "type": "chat:completion",
-                                "data": {
-                                    "content": serialize_content_blocks(content_blocks),
-                                },
-                            }
+                    call_ids = [
+                        tool_call.get("id", "") for tool_call, _ in prepared_calls
+                    ]
+                    call_names = [
+                        tool_call.get("function", {}).get("name", "")
+                        for tool_call, _ in prepared_calls
+                    ]
+                    for wave in execution_waves(call_ids, call_names, depends_list):
+                        await asyncio.gather(
+                            *(
+                                run_one_tool(i, prepared_calls[i][0], prepared_calls[i][1])
+                                for i in wave
+                            )
                         )
 
-                    content_blocks[-1]["results"] = results
+                    content_blocks[-1]["results"] = [
+                        item for item in results if item is not None
+                    ]
 
                     content_blocks.append(
                         {

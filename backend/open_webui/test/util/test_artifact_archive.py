@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.artifacts import (
+    copy_upload_into_chat_sandbox,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
@@ -170,6 +171,20 @@ class ArchiveRoundTripTest(unittest.TestCase):
                     members = set(zf.namelist())
                 self.assertIn("notes.csv", members)
                 self.assertIn("kenya.zarr/.zgroup", members)
+
+
+class CopyUploadIntoSandboxTest(unittest.TestCase):
+    def test_writes_basename_at_sandbox_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                rel = copy_upload_into_chat_sandbox(
+                    "chat-up", "../secret/notes.csv", b"a,b\n"
+                )
+                self.assertEqual(rel, "notes.csv")
+                dest = artifacts / "chat-up" / "notes.csv"
+                self.assertTrue(dest.is_file())
+                self.assertEqual(dest.read_bytes(), b"a,b\n")
 
 
 def json_bytes(payload: dict) -> bytes:
