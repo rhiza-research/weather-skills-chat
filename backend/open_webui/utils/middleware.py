@@ -72,6 +72,7 @@ from open_webui.utils.payload import inject_headless_context, inject_rendering_p
 from open_webui.utils.tools import interface_catalog
 from open_webui.utils.tool_surfaces import INTERFACE_ONLY, SURFACES_KEY
 from open_webui.utils.chat_timing import StageClock, log_timing
+from open_webui.utils.tool_call_details import completed_tool_call_details
 from open_webui.utils.tool_parallel import (
     execution_waves,
     inject_depends_on_spec,
@@ -1836,18 +1837,23 @@ async def process_chat_response(
                                     display_files = tool_call_files_for_display(
                                         tool_name, tool_result_files
                                     )
-                                    files_attr = (
-                                        html.escape(json.dumps(display_files))
-                                        if display_files
-                                        else ""
-                                    )
                                     duration_attr = tool_timing_attr(
                                         block,
                                         tool_call_id,
                                         done=True,
                                         result=matched_result,
                                     )
-                                    tool_calls_display_content = f'{tool_calls_display_content}\n<details type="tool_calls" done="true" id="{tool_call_id}" name="{tool_name}" arguments="{html.escape(json.dumps(tool_arguments))}" result="{html.escape(json.dumps(tool_result))}" files="{files_attr}"{duration_attr}>\n<summary>Tool Executed</summary>\n</details>\n'
+                                    tool_calls_display_content = (
+                                        tool_calls_display_content
+                                        + completed_tool_call_details(
+                                            call_id=tool_call_id,
+                                            name=tool_name,
+                                            arguments=tool_arguments,
+                                            result=tool_result,
+                                            files=display_files,
+                                            timing_attr=duration_attr,
+                                        )
+                                    )
                                 else:
                                     started_attr = tool_timing_attr(
                                         block, tool_call_id, done=False
