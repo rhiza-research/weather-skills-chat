@@ -77,6 +77,7 @@ from open_webui.routers import (
     organizations,
     invitations,
     automations,
+    artifact_handoff,
     artifacts,
     tool_runner,
     secrets,
@@ -1102,6 +1103,12 @@ app.include_router(
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
 app.include_router(tool_runner.router, prefix="/api/v1/chats", tags=["tool-runner"])
+# No authentication: the one-time nonce in the URL is the credential.
+app.include_router(
+    artifact_handoff.router,
+    prefix="/api/v1/artifact-handoff",
+    tags=["artifact-handoff"],
+)
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
 app.include_router(
     preferences.router, prefix="/api/v1/preferences", tags=["preferences"]
