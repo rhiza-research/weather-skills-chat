@@ -2,7 +2,9 @@ services:
   ollama:
     volumes:
       - ollama:/root/.ollama
-    container_name: ollama
+    # Overridable so it does not collide with a container of the same name on the same Docker
+    # daemon. Defaults to ollama.
+    container_name: ${OLLAMA_CONTAINER_NAME-ollama}
     pull_policy: always
     tty: true
     restart: unless-stopped
@@ -14,8 +16,11 @@ services:
       args:
         OLLAMA_BASE_URL: '/ollama'
       dockerfile: Dockerfile
-    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG-main}
-    container_name: open-webui
+    # Image and container name are overridable. A local build tags the image name, which would
+    # retag an image used by another stack on the same Docker daemon, and a fixed container name
+    # collides with a container of the same name. Defaults are the upstream values.
+    image: ${WEBUI_IMAGE-ghcr.io/open-webui/open-webui}:${WEBUI_DOCKER_TAG-main}
+    container_name: ${WEBUI_CONTAINER_NAME-open-webui}
     volumes:
       - open-webui:/app/backend/data
     depends_on:
