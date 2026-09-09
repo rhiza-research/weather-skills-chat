@@ -34,7 +34,10 @@ READS_BUT_WITHHELD = (
     "display_image",
 )
 
-PUBLISHED_OUTWARD = ("list_artifacts",)
+PUBLISHED_OUTWARD = ("get_artifact", "list_artifacts")
+
+# Published to the endpoint only, not to the chat interface.
+ENDPOINT_ONLY_NAMES = ("get_artifact",)
 
 CODE_INTERPRETER_ENABLED = {"__metadata__": {"features": {"code_interpreter": True}}}
 
@@ -72,16 +75,22 @@ class BuiltinSurfaceTest(unittest.TestCase):
         for name in PUBLISHED_OUTWARD:
             self.assertTrue(self.published(name), name)
 
-    def test_exactly_one_builtin_goes_outward(self):
+    def test_only_the_expected_builtins_go_outward(self):
         outward = sorted(
             name for name in self.catalog if self.published(name)
         )
-        self.assertEqual(outward, list(PUBLISHED_OUTWARD))
+        self.assertEqual(outward, sorted(PUBLISHED_OUTWARD))
 
-    def test_every_builtin_is_published_to_the_interface(self):
-        # Every built-in is published to the interface.
-        for name in self.catalog:
-            self.assertTrue(
+    def test_no_existing_builtin_is_taken_away_from_the_chat_window(self):
+        # Every built-in except the endpoint-only ones is published to the interface.
+        for name, entry in self.catalog.items():
+            if name in ENDPOINT_ONLY_NAMES:
+                continue
+            self.assertTrue(publishes_to(name, entry, Surface.INTERFACE), name)
+
+    def test_the_endpoint_only_tools_are_absent_from_the_interface(self):
+        for name in ENDPOINT_ONLY_NAMES:
+            self.assertFalse(
                 publishes_to(name, self.catalog[name], Surface.INTERFACE), name
             )
 

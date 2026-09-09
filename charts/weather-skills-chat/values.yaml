@@ -126,6 +126,12 @@ skillVenvs:
 database:
   url: ""
 
+# Sets REDIS_URL. This chart does not install Redis. The MCP endpoint's one-time artifact link
+# claims each nonce in this store with GETDEL; when this is empty, the endpoint refuses that link.
+# Open WebUI also stores its persistent configuration here when this is set.
+redis:
+  url: ""
+
 langfuse:
   enabled: false
   host: ""
