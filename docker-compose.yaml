@@ -38,6 +38,9 @@ services:
       # default, http://localhost:3000, applies. A .env file is optional: copy .env.example to .env
       # to override these defaults.
       - WEBUI_URL
+      # Redis address. The one-time artifact link claims its nonce here, and the web interface
+      # stores its persistent configuration here. When empty, the endpoint refuses the one-time
+      # link. docker-compose.redis.yaml sets it to the redis service it adds.
       - 'REDIS_URL=${REDIS_URL-}'
     extra_hosts:
       - host.docker.internal:host-gateway
