@@ -26,6 +26,12 @@ services:
     init: true
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
+      # Passed through from the environment to select ollama or an OpenAI-compatible provider.
+      # The defaults match the application's own defaults.
+      - 'ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API-true}'
+      - 'ENABLE_OPENAI_API=${ENABLE_OPENAI_API-true}'
+      - 'OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL-}'
+      - 'OPENAI_API_KEY=${OPENAI_API_KEY-}'
       - 'WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY-}'
       # The address clients use to reach this service. The MCP endpoint uses it as its resource
       # identifier. It is passed only when set in .env or the shell; otherwise the application's
