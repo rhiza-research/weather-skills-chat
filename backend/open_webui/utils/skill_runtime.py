@@ -10,7 +10,7 @@ import signal
 from pathlib import Path
 from typing import Any, Optional
 
-from open_webui.env import SRC_LOG_LEVELS, SKILLS_DIR, UV_CACHE_DIR
+from open_webui.env import SRC_LOG_LEVELS, SKILLS_DIR, USER_CACHES_DIR, UV_CACHE_DIR
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
 
 log = logging.getLogger(__name__)
@@ -21,6 +21,8 @@ DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
 SKILL_SANDLOCK = os.getenv("SKILL_SANDLOCK", "true").lower() in ("1", "true", "yes")
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
 SAFE_ENV_SECRET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Path segment for DATA_DIR/user_caches/<id> — reject traversal / separators.
+SAFE_USER_CACHE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 async def _terminate_skill_process(proc: asyncio.subprocess.Process) -> None:
@@ -142,6 +144,48 @@ def _redact_skill_result(result: dict, used_secrets: dict[str, str]) -> dict:
     return redact_secrets(result, used_secrets)
 
 
+def normalize_user_cache_id(user_id: Optional[str]) -> str:
+    """Validate a user id for use as a per-user cache directory name."""
+    raw = (user_id or "").strip()
+    if not raw or raw in (".", "..") or not SAFE_USER_CACHE_ID_RE.match(raw):
+        raise ValueError(
+            "Invalid or missing user id for skill cache "
+            "(expected a short alphanumeric id)."
+        )
+    if "/" in raw or "\\" in raw or "\x00" in raw:
+        raise ValueError("Invalid user id for skill cache.")
+    return raw
+
+
+def user_skill_cache_dir(user_id: str, *, caches_root: Optional[Path] = None) -> Path:
+    """Return ``{USER_CACHES_DIR}/{user_id}``, creating it if needed.
+
+    Landlock-confined skill runs persist uv state here across chats. Callers
+    should point ``UV_CACHE_DIR`` and ``UV_PYTHON_INSTALL_DIR`` at *different*
+    subdirectories (see ``user_skill_uv_dirs``) — pointing both at the same
+    path can hang ``uv`` under Landlock.
+    """
+    safe_id = normalize_user_cache_id(user_id)
+    root = Path(caches_root) if caches_root is not None else Path(USER_CACHES_DIR)
+    path = (root / safe_id).resolve()
+    try:
+        path.relative_to(root.resolve())
+    except ValueError as e:
+        raise ValueError("User cache path escapes the user_caches root.") from e
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def user_skill_uv_dirs(user_id: str, *, caches_root: Optional[Path] = None) -> tuple[Path, Path]:
+    """Return ``(uv_cache_dir, uv_python_dir)`` under the per-user cache root."""
+    root = user_skill_cache_dir(user_id, caches_root=caches_root)
+    uv_cache = root / "uv-cache"
+    uv_python = root / "python"
+    uv_cache.mkdir(parents=True, exist_ok=True)
+    uv_python.mkdir(parents=True, exist_ok=True)
+    return uv_cache, uv_python
+
+
 async def run_skill(
     skill_dir: str | Path,
     argv: Optional[list] = None,
@@ -198,11 +242,11 @@ async def run_skill(
 
     sandboxed = False
     landlock_backend: str | None = None
+    user_cache: Path | None = None
     if use_chat_sandbox and SKILL_SANDLOCK:
         from open_webui.utils.skill_sandlock import (
             default_readable_paths,
             default_writable_paths,
-            landlock_confinement_available,
             launcher_command,
             select_landlock_backend,
             skill_pack_readable_roots,
@@ -218,19 +262,32 @@ async def run_skill(
                 argv=args,
             )
 
-        # Keep uv's cache inside the writable sandbox (not the shared host cache).
-        uv_cache = cwd / ".uv-cache"
-        uv_cache.mkdir(parents=True, exist_ok=True)
-        env["UV_CACHE_DIR"] = str(uv_cache)
+        try:
+            uv_cache_dir, uv_python_dir = user_skill_uv_dirs((__user__ or {}).get("id"))
+            user_cache = uv_cache_dir.parent
+        except ValueError as e:
+            return _error_result(
+                str(e),
+                script=script_path.name,
+                cwd=str(cwd),
+                argv=args,
+            )
+
+        # Persist package cache + managed CPython across chats for this user.
+        # These MUST be distinct directories — uv can hang under Landlock when
+        # UV_CACHE_DIR and UV_PYTHON_INSTALL_DIR are the same path.
+        env["UV_CACHE_DIR"] = str(uv_cache_dir)
+        env["UV_PYTHON_INSTALL_DIR"] = str(uv_python_dir)
 
         # Per-skill dir + pack root(s) with pyproject.toml (uv walks parents).
         readable_extra = [
             skill_path,
+            user_cache,
             *skill_pack_readable_roots(skill_path, skills_root=SKILLS_DIR),
         ]
         inner_cmd = ["uv", "run", "--script", str(script_path), *args]
         cmd = launcher_command(
-            writable=default_writable_paths(cwd, "/tmp"),
+            writable=default_writable_paths(cwd, "/tmp", user_cache),
             readable=default_readable_paths(extra=readable_extra),
             cwd=cwd,
             argv=inner_cmd,
@@ -244,11 +301,13 @@ async def run_skill(
         spawn_cwd = str(cwd)
 
     log.info(
-        "Running skill script: %s (cwd=%s, sandlock=%s, landlock_backend=%s, env_secrets=%s)",
+        "Running skill script: %s (cwd=%s, sandlock=%s, landlock_backend=%s, "
+        "user_cache=%s, env_secrets=%s)",
         " ".join(["uv", "run", "--script", script_path.name, *args]),
         cwd,
         sandboxed,
         landlock_backend,
+        str(user_cache) if user_cache else None,
         list(used_secrets.keys()),
     )
 
@@ -313,6 +372,8 @@ async def run_skill(
         "sandlock": sandboxed,
         "landlock_backend": landlock_backend,
     }
+    if user_cache is not None:
+        result["user_cache"] = str(user_cache)
     if used_secrets:
         result["env_secrets"] = list(used_secrets.keys())
     return _redact_skill_result(result, used_secrets)

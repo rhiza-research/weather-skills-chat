@@ -109,6 +109,7 @@ class SkillSandlockBreakoutTest(unittest.TestCase):
 
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
+                patch("open_webui.utils.skill_runtime.USER_CACHES_DIR", tmp_path / "user_caches"),
                 patch(
                     "open_webui.utils.skill_runtime.chat_sandbox",
                     side_effect=_sandbox,
@@ -190,6 +191,7 @@ class SkillSandlockBreakoutTest(unittest.TestCase):
 
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
+                patch("open_webui.utils.skill_runtime.USER_CACHES_DIR", tmp_path / "user_caches"),
                 patch(
                     "open_webui.utils.skill_runtime.chat_sandbox",
                     side_effect=_sandbox,

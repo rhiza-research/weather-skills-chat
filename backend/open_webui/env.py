@@ -249,6 +249,13 @@ UV_CACHE_DIR = Path(os.getenv("UV_CACHE_DIR", Path(DATA_DIR) / "uv-cache")).reso
 UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("UV_CACHE_DIR", str(UV_CACHE_DIR))
 
+# Per-user uv cache + managed Python installs for Landlock-confined skill runs.
+# Sibling of artifacts/: {DATA_DIR}/user_caches/{user_id}/
+USER_CACHES_DIR = Path(
+    os.getenv("USER_CACHES_DIR", Path(DATA_DIR) / "user_caches")
+).resolve()
+USER_CACHES_DIR.mkdir(parents=True, exist_ok=True)
+
 # Baked Whisper / embedding / tiktoken weights. Kept off DATA_DIR so a PVC
 # mounted at /app/backend/data does not hide image-local models.
 MODEL_CACHE_DIR = Path(os.getenv("MODEL_CACHE_DIR", BACKEND_DIR / "cache")).resolve()
