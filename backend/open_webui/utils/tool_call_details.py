@@ -1,7 +1,7 @@
 """Builds the completed tool-call <details> element that the interface renders.
 
-The frontend parses this element with a regular expression. The in-progress form is built only in
-the chat loop.
+The frontend parses this element with a regular expression. The chat loop and the MCP endpoint both
+use this function. The in-progress form is built only in the chat loop.
 """
 
 import html

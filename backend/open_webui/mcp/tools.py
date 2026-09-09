@@ -15,7 +15,8 @@ from open_webui.mcp.catalog import endpoint_catalog
 from open_webui.mcp.identity import resolve_caller
 from open_webui.mcp.organization import call_organization_id
 from open_webui.mcp.run import caller_only_context, run_context
-from open_webui.mcp.session import session_id
+from open_webui.mcp.session import owned_session
+from open_webui.mcp.transcript import record_tool_call
 
 log = logging.getLogger(__name__)
 
@@ -101,17 +102,19 @@ class AccountCatalogMiddleware(Middleware):
         account = resolve_caller()
         organization_id = call_organization_id(account)
         # The session is resolved before the tool runs, so the run has its own directory.
+        session = owned_session(account, organization_id)
         entries = endpoint_catalog(
             self._app,
             account,
             organization_id,
-            run_context(
-                account, session_id(account, organization_id), organization_id
-            ),
+            run_context(account, session.id, organization_id),
         )
         name = context.message.name
         entry = entries.get(name)
         if entry is None:
             raise ToolError(UNKNOWN_TOOL_MESSAGE.format(name=name))
-        returned = await entry["callable"](**_caller_arguments(context.message.arguments))
+        arguments = _caller_arguments(context.message.arguments)
+        returned = await entry["callable"](**arguments)
+        # Records the call after it completes. record_tool_call does not raise.
+        record_tool_call(session, name=name, arguments=arguments, result=returned)
         return _as_result(returned)

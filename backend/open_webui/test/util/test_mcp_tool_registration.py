@@ -16,7 +16,8 @@ ACCOUNT = SimpleNamespace(
     id="account-1", email="priya@example.com", name="Priya", role="user"
 )
 APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
-SESSION = "b2c3d4e5-0000-4000-8000-000000000000"
+SESSION_ID = "b2c3d4e5-0000-4000-8000-000000000000"
+SESSION = SimpleNamespace(id=SESSION_ID, user_id=ACCOUNT.id, chat={"history": {}})
 ORG = "org-1"
 
 RAIN_SPEC = {
@@ -46,7 +47,7 @@ class ListToolsTest(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.mcp.tools.endpoint_catalog", return_value=entries
         ), patch(
-            "open_webui.mcp.tools.session_id"
+            "open_webui.mcp.tools.owned_session"
         ) as session:
             tools = await middleware.on_list_tools(message("ignored"), AsyncMock())
         return tools, session
@@ -88,19 +89,24 @@ class CallToolTest(unittest.IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.mcp.tools.endpoint_catalog", return_value=entries
         ), patch(
-            "open_webui.mcp.tools.session_id", return_value=SESSION
+            "open_webui.mcp.tools.owned_session", return_value=SESSION
         ), patch(
+            "open_webui.mcp.tools.record_tool_call"
+        ) as recorded, patch(
             "open_webui.mcp.tools.run_context", return_value={}
         ) as context:
             result = await middleware.on_call_tool(
                 message(name, arguments), AsyncMock()
             )
-        return result, context
+        return result, context, recorded
 
     async def test_a_call_reaches_the_entry_callable(self):
         target = AsyncMock(return_value={"ok": True, "stdout": "done"})
-        result, _ = await self.call({"fetch_rain": entry(target)}, "fetch_rain")
+        result, _, recorded = await self.call(
+            {"fetch_rain": entry(target)}, "fetch_rain"
+        )
         target.assert_awaited_once()
+        recorded.assert_called_once()
         self.assertEqual(result.structured_content["stdout"], "done")
 
     async def test_arguments_are_passed_through(self):
@@ -123,9 +129,19 @@ class CallToolTest(unittest.IsolatedAsyncioTestCase):
         )
         target.assert_awaited_once_with(bbox="0,0,1,1")
 
+    async def test_the_recorded_arguments_leave_out_context_parameter_names(self):
+        _, _, recorded = await self.call(
+            {"fetch_rain": entry()},
+            "fetch_rain",
+            {"bbox": "0,0,1,1", "__metadata__": {"chat_id": "another-chat"}},
+        )
+        self.assertEqual(recorded.call_args.kwargs["arguments"], {"bbox": "0,0,1,1"})
+
     async def test_a_call_resolves_a_session_first(self):
-        _, context = await self.call({"fetch_rain": entry()}, "fetch_rain")
-        self.assertEqual(context.call_args.args[1], SESSION)
+        _, context, _recorded = await self.call(
+            {"fetch_rain": entry()}, "fetch_rain"
+        )
+        self.assertEqual(context.call_args.args[1], SESSION_ID)
 
     async def test_an_unpublished_name_is_refused(self):
         with self.assertRaises(ToolError):
@@ -134,18 +150,24 @@ class CallToolTest(unittest.IsolatedAsyncioTestCase):
     async def test_a_failed_run_is_a_readable_result_not_a_raise(self):
         # The runner reports failure in its return value. The result keeps stderr and sets is_error.
         target = AsyncMock(return_value={"ok": False, "stderr": "boom", "exit_code": 1})
-        result, _ = await self.call({"fetch_rain": entry(target)}, "fetch_rain")
+        result, _, _recorded = await self.call(
+            {"fetch_rain": entry(target)}, "fetch_rain"
+        )
         self.assertTrue(result.is_error)
         self.assertEqual(result.structured_content["stderr"], "boom")
 
     async def test_a_successful_run_is_not_flagged_as_an_error(self):
         target = AsyncMock(return_value={"ok": True})
-        result, _ = await self.call({"fetch_rain": entry(target)}, "fetch_rain")
+        result, _, _recorded = await self.call(
+            {"fetch_rain": entry(target)}, "fetch_rain"
+        )
         self.assertFalse(result.is_error)
 
     async def test_a_string_returning_tool_comes_back_as_content(self):
         target = AsyncMock(return_value="two artifacts")
-        result, _ = await self.call({"list_artifacts": entry(target)}, "list_artifacts")
+        result, _, _recorded = await self.call(
+            {"list_artifacts": entry(target)}, "list_artifacts"
+        )
         self.assertIsNone(result.structured_content)
 
 
@@ -163,7 +185,8 @@ class OrganizationTest(unittest.IsolatedAsyncioTestCase):
                 {"side_effect": refused} if refused else {"return_value": ORG},
             ),
             ("endpoint_catalog", {"return_value": {"fetch_rain": entry(target)}}),
-            ("session_id", {"return_value": SESSION}),
+            ("owned_session", {"return_value": SESSION}),
+            ("record_tool_call", {}),
             ("run_context", {"return_value": {}}),
         ]
         for name, kwargs in stack:
@@ -183,7 +206,7 @@ class OrganizationTest(unittest.IsolatedAsyncioTestCase):
         await AccountCatalogMiddleware(APP).on_call_tool(
             message("fetch_rain"), AsyncMock()
         )
-        mocks["session_id"].assert_called_once_with(ACCOUNT, ORG)
+        mocks["owned_session"].assert_called_once_with(ACCOUNT, ORG)
         self.assertEqual(mocks["endpoint_catalog"].call_args.args[2], ORG)
         self.assertEqual(mocks["run_context"].call_args.args[2], ORG)
 
@@ -201,7 +224,7 @@ class OrganizationTest(unittest.IsolatedAsyncioTestCase):
             await AccountCatalogMiddleware(APP).on_call_tool(
                 message("fetch_rain"), AsyncMock()
             )
-        mocks["session_id"].assert_not_called()
+        mocks["owned_session"].assert_not_called()
         self.target.assert_not_awaited()
 
 
