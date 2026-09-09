@@ -11,6 +11,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import Middleware
 from fastmcp.tools import Tool, ToolResult
 
+from open_webui.mcp.bounds import within_bounds, within_run_output_bound
 from open_webui.mcp.catalog import endpoint_catalog
 from open_webui.mcp.identity import resolve_caller
 from open_webui.mcp.organization import call_organization_id
@@ -57,15 +58,26 @@ def _reports_failure(returned) -> bool:
     return isinstance(returned, BaseException)
 
 
-def _as_result(returned) -> ToolResult:
-    """A tool's return value as a ToolResult.
+def _bounded(returned):
+    """Apply the run output limit, then the result size limit.
+
+    Truncating stdout and stderr first can bring a result under the size limit, so it is returned
+    as structured content instead of a truncated string.
+    """
+    return within_bounds(within_run_output_bound(returned))
+
+
+def _as_result(bounded, shortened, is_error) -> ToolResult:
+    """A bounded return value as a ToolResult.
 
     A failed run is returned as a normal result with is_error set, not as a protocol error.
     """
-    is_error = _reports_failure(returned)
-    if isinstance(returned, dict):
-        return ToolResult(structured_content=returned, is_error=is_error)
-    return ToolResult(content=returned, is_error=is_error)
+    if shortened:
+        # A shortened result is a string ending in the notice.
+        return ToolResult(content=bounded, is_error=is_error)
+    if isinstance(bounded, dict):
+        return ToolResult(structured_content=bounded, is_error=is_error)
+    return ToolResult(content=bounded, is_error=is_error)
 
 
 def _caller_arguments(arguments) -> dict:
@@ -115,6 +127,8 @@ class AccountCatalogMiddleware(Middleware):
             raise ToolError(UNKNOWN_TOOL_MESSAGE.format(name=name))
         arguments = _caller_arguments(context.message.arguments)
         returned = await entry["callable"](**arguments)
-        # Records the call after it completes. record_tool_call does not raise.
-        record_tool_call(session, name=name, arguments=arguments, result=returned)
-        return _as_result(returned)
+        bounded, shortened = _bounded(returned)
+        # Records the call after it completes, with the bounded result the caller receives.
+        # record_tool_call does not raise.
+        record_tool_call(session, name=name, arguments=arguments, result=bounded)
+        return _as_result(bounded, shortened, _reports_failure(returned))
