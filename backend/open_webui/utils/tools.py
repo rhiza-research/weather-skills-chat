@@ -154,6 +154,36 @@ def accessible_skill_records(
     return records
 
 
+def accessible_tool_ids(
+    user: UserModel,
+    organization_id: Optional[str] = None,
+    catalog: Optional[list[ToolCatalogModel]] = None,
+) -> list[str]:
+    """Tool/skill IDs the user can use in this organization (automation default).
+
+    Skill listing follows org-admin enablement (catalog default only seeds
+    that toggle). Chat can still send explicit IDs.
+    """
+    tools = catalog if catalog is not None else Tools.get_tool_catalog()
+    usable_skill_ids = {
+        record["id"]
+        for record in accessible_skill_records(user, organization_id, catalog=tools)
+    }
+
+    ids: list[str] = []
+    for tool in tools:
+        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        if manifest.get("kind") == "skill":
+            if tool.id not in usable_skill_ids:
+                continue
+        elif not user_owns_or_has_access(
+            user.id, tool.user_id, tool.access_control, "read", user.role
+        ):
+            continue
+        ids.append(tool.id)
+    return ids
+
+
 def get_tools(
     request: Request,
     tool_ids: list[str],
