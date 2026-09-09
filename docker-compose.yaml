@@ -29,6 +29,33 @@ services:
       - host.docker.internal:host-gateway
     restart: unless-stopped
 
+  # Runs the backend test suite in the application image. It is behind the suite profile, so `up`
+  # does not start it. Run with:
+  #   docker compose --profile suite run --rm --build test
+  # It has no container_name, ports, volumes, or Docker socket.
+  test:
+    profiles:
+      - suite
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Reaps killed skill subprocesses. A zombie still answers os.kill(pid, 0), so without this the
+    # cancellation test sees the killed process as alive.
+    init: true
+    working_dir: /app/backend
+    command:
+      - python
+      - -m
+      - pytest
+      - -rf
+      # One test module builds a GCS client at import time and fails without Application Default
+      # Credentials. This flag lets the other modules run. The collection error is still reported.
+      - --continue-on-collection-errors
+    environment:
+      # The application refuses to import without a secret key. This value is used only by the
+      # test run.
+      - 'WEBUI_SECRET_KEY=suite-run-not-a-deployment'
+
 volumes:
   ollama: {}
   open-webui: {}

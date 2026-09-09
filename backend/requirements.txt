@@ -115,6 +115,8 @@ google-auth-oauthlib
 
 ## Tests
 docker~=7.1.0
+gcp-storage-emulator==2026.7.19
+moto~=5.2.3
 pytest~=8.3.2
 pytest-docker~=3.1.1
 
