@@ -1729,7 +1729,13 @@ EXECUTE_CODE_SPEC = {
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
-    def _tool(fn, spec):
+    from open_webui.utils.tool_surfaces import (
+        BOTH_SURFACES,
+        INTERFACE_ONLY,
+        SURFACES_KEY,
+    )
+
+    def _tool(fn, spec, surfaces=INTERFACE_ONLY):
         return {
             "toolkit_id": "builtin",
             "callable": get_async_tool_function_and_apply_extra_params(fn, extra_params),
@@ -1737,8 +1743,16 @@ def get_builtin_tools(extra_params: dict) -> dict:
             "pydantic_model": None,
             "file_handler": False,
             "citation": False,
+            SURFACES_KEY: surfaces,
         }
 
+    # Built-ins are interface only by default. create_automation, create_preference,
+    # create_zarr_view, copy_intermediate_result, create_folder and send_email write to the account.
+    # Of the read-only ones,
+    # list_available_tools describes tools the endpoint does not publish, list_email_recipients
+    # returns organization rosters, secrets_page and list_preferences return instructions for the
+    # chat model to give the user in the interface, and display_image is replaced on the endpoint
+    # by get_artifact.
     tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
         "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
@@ -1750,7 +1764,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
-        "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC),
+        "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC, BOTH_SURFACES),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
         "list_email_recipients": _tool(
             list_email_recipients, LIST_EMAIL_RECIPIENTS_SPEC

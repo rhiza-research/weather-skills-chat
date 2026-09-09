@@ -42,6 +42,13 @@ from open_webui.utils.skill_version import (
     resolve_tool_ids_by_skill_version,
     tool_version_from_record,
 )
+from open_webui.utils.tool_surfaces import (
+    INTERFACE_ONLY,
+    SURFACES_KEY,
+    Surface,
+    published_to,
+    surfaces_for_tool_record,
+)
 from open_webui.env import AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA
 from open_webui.utils.chat_timing import log_timing
 
@@ -242,6 +249,8 @@ def get_tools(
                         "callable": callable,
                         "spec": spec,
                         "version": None,
+                        # Tool server operations are not published to the endpoint.
+                        SURFACES_KEY: INTERFACE_ONLY,
                     }
                     register_tool_by_function_name(tools_dict, function_name, tool_dict)
             else:
@@ -262,7 +271,13 @@ def get_tools(
             else:
                 cache_hits += 1
 
-            extra_params["__id__"] = tool_id
+            # A separate copy per tool, including __user__. The callables hold a reference to this
+            # dict, so sharing one dict gave every tool the last tool's __id__ and user valves.
+            tool_params = {
+                **extra_params,
+                "__id__": tool_id,
+                "__user__": {**(extra_params.get("__user__") or {})},
+            }
 
             # Set valves for the tool
             if hasattr(module, "valves") and hasattr(module, "Valves"):
@@ -270,11 +285,9 @@ def get_tools(
                 valves = tool.valves if getattr(tool, "valves", None) else {}
                 valves_s += time.perf_counter() - t_valves
                 module.valves = module.Valves(**(valves or {}))
-            if hasattr(module, "UserValves") and isinstance(
-                extra_params.get("__user__"), dict
-            ):
+            if hasattr(module, "UserValves"):
                 t_valves = time.perf_counter()
-                extra_params["__user__"]["valves"] = module.UserValves(  # type: ignore
+                tool_params["__user__"]["valves"] = module.UserValves(  # type: ignore
                     **_user_tool_valves(user, tool_id)
                 )
                 valves_s += time.perf_counter() - t_valves
@@ -297,7 +310,7 @@ def get_tools(
                 function_name = spec["name"]
                 tool_function = getattr(module, function_name)
                 callable = get_async_tool_function_and_apply_extra_params(
-                    tool_function, extra_params
+                    tool_function, tool_params
                 )
 
                 # TODO: Support Pydantic models as parameters
@@ -312,6 +325,7 @@ def get_tools(
                     "callable": callable,
                     "spec": spec,
                     "version": tool_version_from_record(tool),
+                    SURFACES_KEY: surfaces_for_tool_record(tool),
                     # Misc info
                     "metadata": {
                         "file_handler": hasattr(module, "file_handler")
@@ -334,6 +348,51 @@ def get_tools(
         cache_misses=cache_misses,
     )
     return tools_dict
+
+
+def merged_catalog(
+    request,
+    tool_ids: list[str],
+    user: UserModel,
+    extra_params: dict,
+    catalog: Optional[list[ToolCatalogModel]] = None,
+) -> dict:
+    """Built-in tools merged with the tools for tool_ids, keyed by function name.
+
+    Used by both the chat loop and the MCP endpoint. A tool from tool_ids replaces a built-in with
+    the same name. If the built-ins fail to load, the error is logged and only the tool_ids tools
+    are returned.
+    """
+    from open_webui.utils.builtin_tools import get_builtin_tools
+
+    generated = (
+        get_tools(request, tool_ids, user, extra_params, catalog=catalog)
+        if tool_ids
+        else {}
+    )
+    try:
+        builtins = get_builtin_tools(extra_params)
+    except Exception:
+        log.exception("Failed to load built-in tools")
+        builtins = {}
+    return {**builtins, **generated}
+
+
+def interface_catalog(
+    request,
+    tool_ids: list[str],
+    user: UserModel,
+    extra_params: dict,
+    catalog: Optional[list[ToolCatalogModel]] = None,
+) -> dict:
+    """merged_catalog filtered to entries published to the chat interface.
+
+    Endpoint-only tools, such as get_artifact, are excluded from the chat model's tool list.
+    """
+    return published_to(
+        merged_catalog(request, tool_ids, user, extra_params, catalog=catalog),
+        Surface.INTERFACE,
+    )
 
 
 def parse_description(docstring: str | None) -> str:

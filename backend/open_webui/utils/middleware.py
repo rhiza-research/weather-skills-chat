@@ -69,7 +69,8 @@ from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
 )
 from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
-from open_webui.utils.tools import get_tools
+from open_webui.utils.tools import interface_catalog
+from open_webui.utils.tool_surfaces import INTERFACE_ONLY, SURFACES_KEY
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.tool_parallel import (
     execution_waves,
@@ -1189,7 +1190,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     log.debug(f"{tool_ids=}")
     log.debug(f"{tool_servers=}")
 
-    tools_dict = {}
     tool_extra = {
         **extra_params,
         "__model__": models.get(task_model_id) if isinstance(models, dict) else None,
@@ -1197,6 +1197,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         "__files__": metadata.get("files", []),
     }
 
+    catalog = None
     if tool_ids:
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
@@ -1214,22 +1215,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
         metadata["tool_ids"] = tool_ids
         clock.mark("resolve_tool_ids", n=len(tool_ids))
-        tools_dict = get_tools(
-            request,
-            tool_ids,
-            user,
-            tool_extra,
-            catalog=catalog,
-        )
-        clock.mark("get_tools", n_out=len(tools_dict))
 
-    try:
-        from open_webui.utils.builtin_tools import get_builtin_tools
-
-        tools_dict = {**get_builtin_tools(tool_extra), **tools_dict}
-    except Exception:
-        log.exception("Failed to load built-in tools")
-    clock.mark("builtins", n_tools=len(tools_dict))
+    # Built-in and skill tools merged, filtered to entries published to the interface.
+    tools_dict = interface_catalog(
+        request, list(tool_ids or []), user, tool_extra, catalog=catalog
+    )
+    clock.mark("interface_catalog", n_tools=len(tools_dict))
 
     if tool_servers:
         for tool_server in tool_servers:
@@ -1240,6 +1231,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     "spec": tool,
                     "direct": True,
                     "server": tool_server,
+                    # Client-side tool servers exist only in the chat loop.
+                    SURFACES_KEY: INTERFACE_ONLY,
                 }
 
     if tools_dict:
