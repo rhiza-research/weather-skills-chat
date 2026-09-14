@@ -168,8 +168,37 @@ spec:
             - name: ARTIFACTS_DIR
               value: {{ $artifactsDir | quote }}
             {{- end }}
+            {{- $skillsDir := include "weather-skills-chat.skillsDir" . }}
+            {{- if $skillsDir }}
+            - name: SKILLS_DIR
+              value: {{ $skillsDir | quote }}
+            {{- end }}
+            {{- $userCachesDir := include "weather-skills-chat.userCachesDir" . }}
+            {{- if $userCachesDir }}
+            - name: USER_CACHES_DIR
+              value: {{ $userCachesDir | quote }}
+            {{- end }}
             - name: SKILL_SANDLOCK
               value: {{ .Values.sandbox.skillSandlock | quote }}
+            {{- with .Values.vectorDb }}
+            - name: VECTOR_DB
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.storage.provider }}
+            - name: STORAGE_PROVIDER
+              value: {{ . | quote }}
+            {{- end }}
+            {{- $gcsBucket := include "weather-skills-chat.gcsBucket" . }}
+            {{- if and (eq (.Values.storage.provider | default "") "gcs") $gcsBucket }}
+            - name: GCS_BUCKET_NAME
+              value: {{ $gcsBucket | quote }}
+            {{- end }}
+            - name: SECRETS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "weather-skills-chat.secretName" . }}
+                  key: {{ .Values.secretKeys.secretsEncryptionKey | quote }}
+                  optional: true
             {{- include "weather-skills-chat.oauthEnv" . | nindent 12 }}
             - name: LANGFUSE_ENABLED
               value: {{ .Values.langfuse.enabled | quote }}

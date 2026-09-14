@@ -75,10 +75,36 @@ Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 {{- end }}
 
 {{- define "weather-skills-chat.artifactsDir" -}}
-{{- if .Values.sandbox.gcs.enabled }}
-{{- .Values.sandbox.gcs.mountPath }}
+{{- if .Values.sandbox.artifactsDir }}
+{{- .Values.sandbox.artifactsDir }}
+{{- else if .Values.sandbox.gcs.enabled }}
+{{- printf "%s/artifacts" .Values.sandbox.gcs.mountPath }}
 {{- else }}
 {{- .Values.sandbox.artifactsDir }}
+{{- end }}
+{{- end }}
+
+{{- define "weather-skills-chat.skillsDir" -}}
+{{- if .Values.sandbox.skillsDir }}
+{{- .Values.sandbox.skillsDir }}
+{{- else if .Values.sandbox.gcs.enabled }}
+{{- printf "%s/skills" .Values.sandbox.gcs.mountPath }}
+{{- end }}
+{{- end }}
+
+{{- define "weather-skills-chat.userCachesDir" -}}
+{{- if .Values.sandbox.userCachesDir }}
+{{- .Values.sandbox.userCachesDir }}
+{{- else if .Values.sandbox.gcs.enabled }}
+{{- printf "%s/user_caches" .Values.sandbox.gcs.mountPath }}
+{{- end }}
+{{- end }}
+
+{{- define "weather-skills-chat.gcsBucket" -}}
+{{- if .Values.storage.gcsBucket }}
+{{- .Values.storage.gcsBucket }}
+{{- else if .Values.sandbox.gcs.bucket }}
+{{- .Values.sandbox.gcs.bucket }}
 {{- end }}
 {{- end }}
 
