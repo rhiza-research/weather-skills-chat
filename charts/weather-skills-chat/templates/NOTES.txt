@@ -18,7 +18,7 @@ SQLite lives on the data PVC at {{ .Values.persistence.mountPath }} (empty DATAB
 Whisper and embedding models stay in the image at {{ .Values.modelCache.dir }} — they are not on the PVC.
 {{- if .Values.sandbox.gcs.enabled }}
 Shared skill data on GCS bucket {{ .Values.sandbox.gcs.bucket }} at {{ .Values.sandbox.gcs.mountPath }}
-(artifacts/, skills/, user_caches/).
+(artifacts/, skills/, user_caches/, uploads/).
 {{- else }}
 Skill artifacts default to {{ .Values.persistence.mountPath }}/artifacts on the data PVC.
 {{- end }}

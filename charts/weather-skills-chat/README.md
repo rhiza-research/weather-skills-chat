@@ -125,13 +125,14 @@ A PVC on `/app/backend/data` does not hide these files.
 
 By default `ARTIFACTS_DIR` is `{DATA_DIR}/artifacts` on the data PVC (`chat_sandbox()` → `{ARTIFACTS_DIR}/{chat_id}`).
 
-To put **artifacts, skills, and user_caches** on a GCS bucket, use a **separate** CSI mount (not nested on the data PVC). Subdirs are created under `mountPath`:
+To put **artifacts, skills, user_caches, and uploads** on a GCS bucket, use a **separate** CSI mount (not nested on the data PVC). Subdirs under `mountPath`:
 
 - `ARTIFACTS_DIR={mountPath}/artifacts`
 - `SKILLS_DIR={mountPath}/skills`
 - `USER_CACHES_DIR={mountPath}/user_caches`
+- `UPLOAD_DIR={mountPath}/uploads` (local `STORAGE_PROVIDER`; files go through the FUSE mount)
 
-`uv-cache` stays on local/`DATA_DIR` (ephemeral OK). This does **not** set `STORAGE_PROVIDER=gcs` by itself (that Open WebUI path is chat file uploads); set `storage.provider: gcs` to use the same bucket for uploads.
+`uv-cache` stays on local/`DATA_DIR` (ephemeral OK). Prefer this over `storage.provider: gcs` (the Open WebUI object-storage API path).
 
 Cluster prerequisites:
 
@@ -162,13 +163,10 @@ sandbox:
     bucket: my-data-bucket
     mountPath: /mnt/gcs-data
 
-storage:
-  provider: gcs
-
 vectorDb: pgvector
 ```
 
-The chart sets the three dir env vars under `/mnt/gcs-data` and annotates the pod with `gke-gcsfuse/volumes: "true"`.
+The chart sets the dir env vars under `/mnt/gcs-data` and annotates the pod with `gke-gcsfuse/volumes: "true"`. Uploads use the local storage provider on `{mountPath}/uploads`.
 
 ## OpenAI-compatible API (Anthropic, OpenAI, …)
 

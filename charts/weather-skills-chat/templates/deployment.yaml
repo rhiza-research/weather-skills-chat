@@ -178,6 +178,11 @@ spec:
             - name: USER_CACHES_DIR
               value: {{ $userCachesDir | quote }}
             {{- end }}
+            {{- $uploadDir := include "weather-skills-chat.uploadDir" . }}
+            {{- if $uploadDir }}
+            - name: UPLOAD_DIR
+              value: {{ $uploadDir | quote }}
+            {{- end }}
             - name: SKILL_SANDLOCK
               value: {{ .Values.sandbox.skillSandlock | quote }}
             {{- with .Values.vectorDb }}

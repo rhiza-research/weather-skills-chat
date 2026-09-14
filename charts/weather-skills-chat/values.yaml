@@ -111,6 +111,9 @@ sandbox:
   skillsDir: ""
   # Empty → app default {DATA_DIR}/user_caches
   userCachesDir: ""
+  # Empty → app default {DATA_DIR}/uploads (local Storage provider).
+  # When sandbox.gcs.enabled, defaults to {mountPath}/uploads on the FUSE mount.
+  uploadDir: ""
   # Landlock confinement for skill subprocesses; requires host Landlock (not GKE pods).
   skillSandlock: false
   # Shared GCS FUSE mount for artifacts + skills + user_caches.
@@ -133,7 +136,8 @@ sandbox:
 # Vector DB. Use "pgvector" when DATABASE_URL points at Postgres with the vector extension.
 vectorDb: ""
 
-# Chat file uploads. "gcs" requires GCS_BUCKET_NAME (defaults to sandbox.gcs.bucket when set).
+# Optional explicit Storage backend. Prefer leaving empty (local) and putting
+# uploads on the GCS FUSE mount via sandbox.uploadDir / sandbox.gcs.
 storage:
   provider: "" # local | gcs | s3 | azure
   gcsBucket: ""

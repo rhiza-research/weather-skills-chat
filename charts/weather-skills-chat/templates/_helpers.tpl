@@ -100,6 +100,14 @@ Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 {{- end }}
 {{- end }}
 
+{{- define "weather-skills-chat.uploadDir" -}}
+{{- if .Values.sandbox.uploadDir }}
+{{- .Values.sandbox.uploadDir }}
+{{- else if .Values.sandbox.gcs.enabled }}
+{{- printf "%s/uploads" .Values.sandbox.gcs.mountPath }}
+{{- end }}
+{{- end }}
+
 {{- define "weather-skills-chat.gcsBucket" -}}
 {{- if .Values.storage.gcsBucket }}
 {{- .Values.storage.gcsBucket }}
