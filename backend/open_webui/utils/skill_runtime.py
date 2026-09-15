@@ -20,10 +20,9 @@ from open_webui.env import (
 )
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
 from open_webui.utils.skill_venvs import (
-    SkillVenvError,
     chat_venv_dir,
-    ensure_chat_script_venv,
     lru_cleanup_skill_venvs,
+    prepare_chat_uv_cache,
     skill_venvs_enabled,
 )
 
@@ -288,16 +287,16 @@ async def run_skill(
                 argv=args,
             )
 
-        # Persist package cache + managed CPython on JuiceFS for this user.
-        # These MUST be distinct directories — uv can hang under Landlock when
-        # UV_CACHE_DIR and UV_PYTHON_INSTALL_DIR are the same path.
-        #
-        # When SKILL_VENV_ROOT is mounted (pd-ssd PVC), create an explicit
-        # chat-local venv for this script (uv venv + pip install from export)
-        # so site-packages live on local disk. UV_CACHE_DIR stays on JuiceFS
-        # so new wheels write back to the durable user cache.
-        env["UV_CACHE_DIR"] = str(uv_cache_dir)
+        # Managed CPython stays on JuiceFS for this user. Package layers also
+        # live on JuiceFS, but when SKILL_VENV_ROOT is mounted we point
+        # UV_CACHE_DIR at a chat-local directory on the SSD whose
+        # environments-v2 is real local disk and whose package buckets symlink
+        # into the JuiceFS user cache. uv run --script then manages per-script
+        # environments on the SSD. UV_LINK_MODE=copy is required (EXDEV across
+        # JuiceFS → SSD). UV_CACHE_DIR and UV_PYTHON_INSTALL_DIR must stay
+        # distinct — uv can hang under Landlock when they are the same path.
         env["UV_PYTHON_INSTALL_DIR"] = str(uv_python_dir)
+        env["UV_LINK_MODE"] = "copy"
 
         inner_cmd = ["uv", "run", "--script", str(script_path), *args]
         if skill_venvs_enabled(root=SKILL_VENV_ROOT):
@@ -307,30 +306,22 @@ async def run_skill(
                     max_bytes=SKILL_VENV_MAX_BYTES or None,
                     protect_chat_id=str(chat_id),
                 )
-                venv_path = ensure_chat_script_venv(
+                chat_uv_cache = prepare_chat_uv_cache(
                     str(chat_id),
-                    script_path,
-                    uv_env={
-                        "UV_CACHE_DIR": str(uv_cache_dir),
-                        "UV_PYTHON_INSTALL_DIR": str(uv_python_dir),
-                        "HOME": env["HOME"],
-                        "TMPDIR": env["TMPDIR"],
-                    },
+                    uv_cache_dir,
                     root=SKILL_VENV_ROOT,
                 )
                 chat_venv_root = chat_venv_dir(str(chat_id), root=SKILL_VENV_ROOT)
-                inner_cmd = [
-                    str(venv_path / "bin" / "python"),
-                    str(script_path),
-                    *args,
-                ]
-            except (ValueError, SkillVenvError) as e:
+                env["UV_CACHE_DIR"] = str(chat_uv_cache)
+            except ValueError as e:
                 return _error_result(
                     str(e),
                     script=script_path.name,
                     cwd=str(cwd),
                     argv=args,
                 )
+        else:
+            env["UV_CACHE_DIR"] = str(uv_cache_dir)
 
         # Per-skill dir + pack root(s) with pyproject.toml (uv walks parents).
         readable_extra = [
@@ -357,11 +348,7 @@ async def run_skill(
         cmd = ["uv", "run", "--script", str(script_path), *args]
         spawn_cwd = str(cwd)
 
-    log_cmd = (
-        [Path(cmd[0]).name, script_path.name, *args]
-        if chat_venv_root is not None and cmd and Path(cmd[0]).name.startswith("python")
-        else ["uv", "run", "--script", script_path.name, *args]
-    )
+    log_cmd = ["uv", "run", "--script", script_path.name, *args]
     log.info(
         "Running skill script: %s (cwd=%s, sandlock=%s, landlock_backend=%s, "
         "user_cache=%s, chat_venv=%s, env_secrets=%s)",
