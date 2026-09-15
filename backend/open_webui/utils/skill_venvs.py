@@ -1,6 +1,7 @@
-"""Chat-local uv cache + environments on the skill-venvs SSD PVC.
+"""Chat-local uv cache + environments on the pod's skill-venvs SSD.
 
-Each chat gets its own uv state under::
+Each replica mounts a generic ephemeral volume at ``SKILL_VENV_ROOT``. Each
+chat gets its own uv state under::
 
     {SKILL_VENV_ROOT}/{chat_id}/
       uv-cache/     # UV_CACHE_DIR (wheels, environments-v2, …)
@@ -8,7 +9,8 @@ Each chat gets its own uv state under::
 
 Callers run ``uv run --script`` with those paths. uv manages per-script
 environments under ``uv-cache/environments-v2/``. No per-user JuiceFS package
-cache and no cross-device ``UV_LINK_MODE=copy``.
+cache and no cross-device ``UV_LINK_MODE=copy``. The disk is pod-lifetime:
+lost on reschedule, not shared across replicas.
 
 Future (horizontal scale): publish chat_id → pod affinity in Redis so tool
 calls land on the replica that already holds that chat's local cache.

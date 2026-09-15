@@ -1,4 +1,4 @@
-"""Chat-local uv cache on the skill-venvs SSD PVC."""
+"""Chat-local uv cache on the skill-venvs SSD."""
 
 from __future__ import annotations
 

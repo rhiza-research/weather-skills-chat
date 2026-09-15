@@ -67,10 +67,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-pv" (include "weather-skills-chat.fullname" .) }}
 {{- end }}
 
-{{- define "weather-skills-chat.skillVenvsPvcName" -}}
-{{- printf "%s-skill-venvs" (include "weather-skills-chat.fullname" .) }}
-{{- end }}
-
 {{/*
 Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 */}}

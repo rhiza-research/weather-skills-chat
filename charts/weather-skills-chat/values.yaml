@@ -95,9 +95,11 @@ persistence:
   annotations: {}
   keep: false
 
-# Dynamically provisioned pd-ssd for chat-scoped uv environments (environments-v2).
+# Per-pod generic ephemeral pd-ssd for chat-scoped uv environments.
+# Kubernetes creates `{pod}-skill-venvs` on schedule and deletes it with the pod,
+# so replicas can scale without a shared RWO claim. Safe to lose on pod delete.
 # Package wheels stay on JuiceFS via USER_CACHES_DIR. LRU uses SKILL_VENV_MAX_BYTES
-# (0 → ~85% of this volume). Safe to lose on PVC delete; no Terraform disk.
+# (0 → ~85% of this volume).
 skillVenvs:
   enabled: false
   mountPath: /var/skill-venvs

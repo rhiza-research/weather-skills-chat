@@ -323,8 +323,21 @@ spec:
         {{- end }}
         {{- if .Values.skillVenvs.enabled }}
         - name: skill-venvs
-          persistentVolumeClaim:
-            claimName: {{ include "weather-skills-chat.skillVenvsPvcName" . }}
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  {{- include "weather-skills-chat.labels" . | nindent 18 }}
+                  role: skill-venvs
+              spec:
+                accessModes:
+                  {{- toYaml .Values.skillVenvs.accessModes | nindent 18 }}
+                resources:
+                  requests:
+                    storage: {{ .Values.skillVenvs.size }}
+                {{- with .Values.skillVenvs.storageClass }}
+                storageClassName: {{ . | quote }}
+                {{- end }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
