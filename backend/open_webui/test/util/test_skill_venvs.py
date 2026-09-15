@@ -74,6 +74,45 @@ class SkillVenvPathTest(unittest.TestCase):
             self.assertTrue((root / "mid").exists())
             self.assertTrue((root / "new").exists())
 
+    def test_lru_evicts_per_chat_uv_cache_trees_when_disk_over_budget(self):
+        """Mirrors prod layout: each chat owns uv-cache/ + python/ on the SSD."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "skill-venvs"
+            root.mkdir()
+
+            def _plant(chat_id: str, mtime: float, payload: bytes) -> None:
+                uv_cache, uv_python = ensure_chat_uv_dirs(chat_id, root=root)
+                env = uv_cache / "environments-v2" / f"hash-{chat_id}"
+                env.mkdir(parents=True)
+                (env / "lib.bin").write_bytes(payload)
+                (uv_python / "cpython.bin").write_bytes(b"py" * 50)
+                os.utime(root / chat_id, (mtime, mtime))
+
+            _plant("chat-old", 1000.0, b"o" * 4000)
+            _plant("chat-mid", 2000.0, b"m" * 4000)
+            _plant("chat-new", 3000.0, b"n" * 4000)
+
+            class _FullDisk:
+                total = 20_000
+                used = 19_000
+                free = 1_000
+
+            with patch(
+                "open_webui.utils.skill_venvs.shutil.disk_usage",
+                return_value=_FullDisk(),
+            ):
+                removed = lru_cleanup_skill_venvs(
+                    root=root,
+                    max_bytes=5_000,
+                    protect_chat_id="chat-new",
+                )
+
+            self.assertEqual(removed, ["chat-old", "chat-mid"])
+            self.assertFalse((root / "chat-old").exists())
+            self.assertFalse((root / "chat-mid").exists())
+            self.assertTrue((root / "chat-new" / "uv-cache").is_dir())
+            self.assertTrue((root / "chat-new" / "python").is_dir())
+
     def test_lru_skips_walk_when_disk_used_under_budget(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "venvs"
