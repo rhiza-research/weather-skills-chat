@@ -132,6 +132,12 @@ sandbox:
       cpuLimit: ""
       memoryLimit: ""
       ephemeralStorageLimit: ""
+  # JuiceFS CSI PVC (preferred over sandbox.gcs for shared skill data).
+  # Mutually exclusive with sandbox.gcs in practice.
+  juicefs:
+    enabled: false
+    pvcName: ""
+    mountPath: /mnt/gcs-data
 
 # Vector DB. Use "pgvector" when DATABASE_URL points at Postgres with the vector extension.
 vectorDb: ""

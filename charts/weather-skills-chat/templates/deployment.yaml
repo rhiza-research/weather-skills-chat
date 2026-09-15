@@ -1,6 +1,12 @@
 {{- if and .Values.sandbox.gcs.enabled (not .Values.sandbox.gcs.bucket) }}
 {{- fail "sandbox.gcs.bucket is required when sandbox.gcs.enabled is true" }}
 {{- end }}
+{{- if and .Values.sandbox.juicefs.enabled (not .Values.sandbox.juicefs.pvcName) }}
+{{- fail "sandbox.juicefs.pvcName is required when sandbox.juicefs.enabled is true" }}
+{{- end }}
+{{- if and .Values.sandbox.gcs.enabled .Values.sandbox.juicefs.enabled }}
+{{- fail "sandbox.gcs and sandbox.juicefs cannot both be enabled" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -277,6 +283,10 @@ spec:
             - name: gcs-artifacts
               mountPath: {{ .Values.sandbox.gcs.mountPath }}
             {{- end }}
+            {{- if .Values.sandbox.juicefs.enabled }}
+            - name: juicefs-data
+              mountPath: {{ .Values.sandbox.juicefs.mountPath }}
+            {{- end }}
       volumes:
         {{- if .Values.persistence.enabled }}
         - name: data
@@ -295,6 +305,11 @@ spec:
               {{- with .Values.sandbox.gcs.volumeAttributes }}
               {{- toYaml . | nindent 14 }}
               {{- end }}
+        {{- end }}
+        {{- if .Values.sandbox.juicefs.enabled }}
+        - name: juicefs-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.sandbox.juicefs.pvcName | quote }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
