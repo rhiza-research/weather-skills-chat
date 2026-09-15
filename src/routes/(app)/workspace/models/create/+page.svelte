@@ -22,7 +22,7 @@
 			const { user: _user, user_id, created_at, updated_at, ...rest } = parsed;
 			return {
 				...rest,
-				access_control: rest.access_control ?? {}
+				access_control: 'access_control' in rest ? rest.access_control : {}
 			};
 		} catch (error) {
 			console.error(error);
@@ -47,7 +47,7 @@
 		if (modelInfo) {
 			const res = await createNewModel(localStorage.token, {
 				...modelInfo,
-				access_control: modelInfo.access_control ?? {},
+				access_control: 'access_control' in modelInfo ? modelInfo.access_control : {},
 				meta: {
 					...modelInfo.meta,
 					profile_image_url: modelInfo.meta.profile_image_url ?? '/static/favicon.png',
