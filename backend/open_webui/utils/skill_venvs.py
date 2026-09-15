@@ -1,23 +1,17 @@
-"""Chat-local uv environments with a JuiceFS-backed package cache.
+"""Chat-local uv cache + environments on the skill-venvs SSD PVC.
 
-``UV_CACHE_DIR`` for each chat is a directory on the local SSD PVC::
+Each chat gets its own uv state under::
 
-    {SKILL_VENV_ROOT}/{chat_id}/uv-cache/
-      environments-v2/     # real local dir — uv manages per-script envs here
-      .lock / .temp        # real local (do not share locks across chats)
-      wheels-v*/ -> JuiceFS
-      archive-v*/ -> JuiceFS
-      ...
+    {SKILL_VENV_ROOT}/{chat_id}/
+      uv-cache/     # UV_CACHE_DIR (wheels, environments-v2, …)
+      python/       # UV_PYTHON_INSTALL_DIR (must differ from uv-cache)
 
-Package layers symlink into the per-user JuiceFS uv-cache so downloads persist.
-``UV_LINK_MODE=copy`` is required when uv materializes an environment on the
-SSD from those JuiceFS-backed layers (hardlinks raise EXDEV).
-
-Callers run ``uv run --script`` with that chat ``UV_CACHE_DIR``; we do not
-create per-script venvs ourselves.
+Callers run ``uv run --script`` with those paths. uv manages per-script
+environments under ``uv-cache/environments-v2/``. No per-user JuiceFS package
+cache and no cross-device ``UV_LINK_MODE=copy``.
 
 Future (horizontal scale): publish chat_id → pod affinity in Redis so tool
-calls land on the replica that already holds that chat's local environments.
+calls land on the replica that already holds that chat's local cache.
 """
 
 from __future__ import annotations
@@ -30,18 +24,6 @@ from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger(__name__)
-
-ENVIRONMENTS_DIRNAME = "environments-v2"
-
-# Keep these local to each chat cache — never symlink to the shared JuiceFS
-# cache (shared .lock serializes/hangs concurrent chats).
-_LOCAL_ONLY_NAMES = frozenset(
-    {
-        ENVIRONMENTS_DIRNAME,
-        ".lock",
-        ".temp",
-    }
-)
 
 _SAFE_CHAT_ID_RE = __import__("re").compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
@@ -103,59 +85,23 @@ def touch_chat_venv(chat_id: str, *, root: Optional[Path] = None) -> Path:
     return chat_root
 
 
-def _symlink_to_shared(dest: Path, shared: Path) -> None:
-    """Ensure *dest* is a symlink to *shared* (replace wrong links)."""
-    if dest.is_symlink():
-        try:
-            if dest.resolve() == shared.resolve():
-                return
-        except OSError:
-            pass
-        dest.unlink()
-    elif dest.exists():
-        log.warning(
-            "skill venv cache entry %s exists and is not a symlink; leaving it",
-            dest,
-        )
-        return
-    dest.symlink_to(shared)
-
-
-def prepare_chat_uv_cache(
+def ensure_chat_uv_dirs(
     chat_id: str,
-    shared_uv_cache: Path,
     *,
     root: Optional[Path] = None,
-) -> Path:
-    """Create/refresh a chat-local ``UV_CACHE_DIR`` with JuiceFS package links.
+) -> tuple[Path, Path]:
+    """Return ``(uv_cache_dir, uv_python_dir)`` under the chat skill-venv root.
 
-    Returns the chat-local cache path to set as ``UV_CACHE_DIR``. uv will create
-    and reuse per-script environments under ``environments-v2/`` on local disk.
+    Both directories are created on the local SSD. They must stay distinct —
+    uv can hang under Landlock when ``UV_CACHE_DIR`` and
+    ``UV_PYTHON_INSTALL_DIR`` are the same path.
     """
-    shared = Path(shared_uv_cache).resolve()
-    shared.mkdir(parents=True, exist_ok=True)
-
     chat_root = touch_chat_venv(chat_id, root=root)
-    chat_cache = chat_root / "uv-cache"
-    chat_cache.mkdir(parents=True, exist_ok=True)
-
-    try:
-        shared_entries = list(shared.iterdir())
-    except OSError as e:
-        log.warning("Could not list shared uv cache %s: %s", shared, e)
-        shared_entries = []
-
-    for entry in shared_entries:
-        if entry.name in _LOCAL_ONLY_NAMES:
-            continue
-        _symlink_to_shared(chat_cache / entry.name, entry)
-
-    env_dir = chat_cache / ENVIRONMENTS_DIRNAME
-    if env_dir.is_symlink():
-        env_dir.unlink()
-    env_dir.mkdir(parents=True, exist_ok=True)
-
-    return chat_cache.resolve()
+    uv_cache = (chat_root / "uv-cache").resolve()
+    uv_python = (chat_root / "python").resolve()
+    uv_cache.mkdir(parents=True, exist_ok=True)
+    uv_python.mkdir(parents=True, exist_ok=True)
+    return uv_cache, uv_python
 
 
 def local_dir_size_bytes(path: Path) -> int:

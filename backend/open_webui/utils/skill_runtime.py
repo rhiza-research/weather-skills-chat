@@ -21,8 +21,8 @@ from open_webui.env import (
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
 from open_webui.utils.skill_venvs import (
     chat_venv_dir,
+    ensure_chat_uv_dirs,
     lru_cleanup_skill_venvs,
-    prepare_chat_uv_cache,
     skill_venvs_enabled,
 )
 
@@ -173,10 +173,9 @@ def normalize_user_cache_id(user_id: Optional[str]) -> str:
 def user_skill_cache_dir(user_id: str, *, caches_root: Optional[Path] = None) -> Path:
     """Return ``{USER_CACHES_DIR}/{user_id}``, creating it if needed.
 
-    Landlock-confined skill runs persist uv state here across chats. Callers
-    should point ``UV_CACHE_DIR`` and ``UV_PYTHON_INSTALL_DIR`` at *different*
-    subdirectories (see ``user_skill_uv_dirs``) — pointing both at the same
-    path can hang ``uv`` under Landlock.
+    Used as a Landlock-readable/writable root for optional per-user state.
+    When ``SKILL_VENV_ROOT`` is mounted, uv cache/python live under the
+    per-chat SSD dir instead (see ``ensure_chat_uv_dirs``).
     """
     safe_id = normalize_user_cache_id(user_id)
     root = Path(caches_root) if caches_root is not None else Path(USER_CACHES_DIR)
@@ -190,7 +189,11 @@ def user_skill_cache_dir(user_id: str, *, caches_root: Optional[Path] = None) ->
 
 
 def user_skill_uv_dirs(user_id: str, *, caches_root: Optional[Path] = None) -> tuple[Path, Path]:
-    """Return ``(uv_cache_dir, uv_python_dir)`` under the per-user cache root."""
+    """Return ``(uv_cache_dir, uv_python_dir)`` under the per-user cache root.
+
+    Fallback when chat-local skill-venvs are unavailable. Prefer
+    ``ensure_chat_uv_dirs`` when ``SKILL_VENV_ROOT`` is mounted.
+    """
     root = user_skill_cache_dir(user_id, caches_root=caches_root)
     uv_cache = root / "uv-cache"
     uv_python = root / "python"
@@ -277,8 +280,7 @@ async def run_skill(
             )
 
         try:
-            uv_cache_dir, uv_python_dir = user_skill_uv_dirs((__user__ or {}).get("id"))
-            user_cache = uv_cache_dir.parent
+            user_cache = user_skill_cache_dir((__user__ or {}).get("id"))
         except ValueError as e:
             return _error_result(
                 str(e),
@@ -287,17 +289,10 @@ async def run_skill(
                 argv=args,
             )
 
-        # Managed CPython stays on JuiceFS for this user. Package layers also
-        # live on JuiceFS, but when SKILL_VENV_ROOT is mounted we point
-        # UV_CACHE_DIR at a chat-local directory on the SSD whose
-        # environments-v2 is real local disk and whose package buckets symlink
-        # into the JuiceFS user cache. uv run --script then manages per-script
-        # environments on the SSD. UV_LINK_MODE=copy is required (EXDEV across
-        # JuiceFS → SSD). UV_CACHE_DIR and UV_PYTHON_INSTALL_DIR must stay
-        # distinct — uv can hang under Landlock when they are the same path.
-        env["UV_PYTHON_INSTALL_DIR"] = str(uv_python_dir)
-        env["UV_LINK_MODE"] = "copy"
-
+        # Prefer per-chat UV_CACHE_DIR + UV_PYTHON_INSTALL_DIR on the local SSD
+        # PVC. uv run --script manages per-script environments there. The two
+        # paths must stay distinct (uv can hang under Landlock if equal).
+        # Fallback: per-user dirs under USER_CACHES_DIR when skill-venvs is off.
         inner_cmd = ["uv", "run", "--script", str(script_path), *args]
         if skill_venvs_enabled(root=SKILL_VENV_ROOT):
             try:
@@ -306,13 +301,11 @@ async def run_skill(
                     max_bytes=SKILL_VENV_MAX_BYTES or None,
                     protect_chat_id=str(chat_id),
                 )
-                chat_uv_cache = prepare_chat_uv_cache(
+                uv_cache_dir, uv_python_dir = ensure_chat_uv_dirs(
                     str(chat_id),
-                    uv_cache_dir,
                     root=SKILL_VENV_ROOT,
                 )
                 chat_venv_root = chat_venv_dir(str(chat_id), root=SKILL_VENV_ROOT)
-                env["UV_CACHE_DIR"] = str(chat_uv_cache)
             except ValueError as e:
                 return _error_result(
                     str(e),
@@ -321,7 +314,14 @@ async def run_skill(
                     argv=args,
                 )
         else:
-            env["UV_CACHE_DIR"] = str(uv_cache_dir)
+            uv_cache_dir, uv_python_dir = user_skill_uv_dirs(
+                (__user__ or {}).get("id")
+            )
+        env["UV_CACHE_DIR"] = str(uv_cache_dir)
+        env["UV_PYTHON_INSTALL_DIR"] = str(uv_python_dir)
+        # Same-filesystem chat cache: allow uv's default hardlink/clone. Drop any
+        # inherited UV_LINK_MODE=copy from the parent process.
+        env.pop("UV_LINK_MODE", None)
 
         # Per-skill dir + pack root(s) with pyproject.toml (uv walks parents).
         readable_extra = [

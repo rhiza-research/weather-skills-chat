@@ -1,4 +1,4 @@
-"""Chat-local uv environments with JuiceFS package cache symlinks."""
+"""Chat-local uv cache on the skill-venvs SSD PVC."""
 
 from __future__ import annotations
 
@@ -10,12 +10,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from open_webui.utils.skill_venvs import (
-    ENVIRONMENTS_DIRNAME,
     chat_venv_dir,
+    ensure_chat_uv_dirs,
     local_dir_size_bytes,
     lru_cleanup_skill_venvs,
     normalize_chat_venv_id,
-    prepare_chat_uv_cache,
     skill_venvs_enabled,
 )
 
@@ -30,33 +29,18 @@ class SkillVenvPathTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 normalize_chat_venv_id(bad)
 
-    def test_prepare_chat_uv_cache_symlinks_packages_keeps_envs_local(self):
+    def test_ensure_chat_uv_dirs_are_distinct_under_chat(self):
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            venvs = tmp_path / "venvs"
-            shared = tmp_path / "shared-uv"
+            venvs = Path(tmp) / "venvs"
             venvs.mkdir()
-            shared.mkdir()
-            (shared / "wheels-v6").mkdir()
-            (shared / "archive-v0").mkdir()
-            (shared / ".lock").write_text("", encoding="utf-8")
-            (shared / ENVIRONMENTS_DIRNAME).mkdir()
-            (shared / ENVIRONMENTS_DIRNAME / "should-not-link").mkdir()
-
-            chat_cache = prepare_chat_uv_cache("chat-1", shared, root=venvs)
-            self.assertEqual(chat_cache, (venvs / "chat-1" / "uv-cache").resolve())
-            self.assertTrue((chat_cache / "wheels-v6").is_symlink())
-            self.assertEqual(
-                (chat_cache / "wheels-v6").resolve(), (shared / "wheels-v6").resolve()
-            )
-            self.assertTrue((chat_cache / "archive-v0").is_symlink())
-            # environments-v2 must be a real local directory, not a JuiceFS link.
-            env_dir = chat_cache / ENVIRONMENTS_DIRNAME
-            self.assertTrue(env_dir.is_dir())
-            self.assertFalse(env_dir.is_symlink())
-            self.assertFalse((env_dir / "should-not-link").exists())
-            # .lock must stay local (not shared across chats).
-            self.assertFalse((chat_cache / ".lock").exists())
+            uv_cache, uv_python = ensure_chat_uv_dirs("chat-1", root=venvs)
+            self.assertEqual(uv_cache, (venvs / "chat-1" / "uv-cache").resolve())
+            self.assertEqual(uv_python, (venvs / "chat-1" / "python").resolve())
+            self.assertNotEqual(uv_cache, uv_python)
+            self.assertTrue(uv_cache.is_dir())
+            self.assertTrue(uv_python.is_dir())
+            # No JuiceFS symlinks — fully local.
+            self.assertFalse(any(p.is_symlink() for p in uv_cache.iterdir()))
 
     def test_local_dir_size_skips_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,7 +110,7 @@ class SkillVenvPathTest(unittest.TestCase):
 
 
 class RunSkillChatVenvWiringTest(unittest.TestCase):
-    def test_sandboxed_run_uses_chat_uv_cache_and_uv_run(self):
+    def test_sandboxed_run_uses_chat_local_uv_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             artifacts = tmp_path / "artifacts"
@@ -209,12 +193,16 @@ class RunSkillChatVenvWiringTest(unittest.TestCase):
 
             expected_chat = chat_venv_dir("chat-9", root=venvs)
             expected_uv = (expected_chat / "uv-cache").resolve()
-            shared_uv = (caches / "user-42" / "uv-cache").resolve()
+            expected_py = (expected_chat / "python").resolve()
+            user_uv = (caches / "user-42" / "uv-cache").resolve()
             self.assertTrue(result.get("ok"), result)
             self.assertEqual(result.get("chat_venv"), str(expected_chat))
             self.assertEqual(captured["env"].get("UV_CACHE_DIR"), str(expected_uv))
-            self.assertEqual(captured["env"].get("UV_LINK_MODE"), "copy")
-            self.assertNotEqual(captured["env"].get("UV_CACHE_DIR"), str(shared_uv))
+            self.assertEqual(
+                captured["env"].get("UV_PYTHON_INSTALL_DIR"), str(expected_py)
+            )
+            self.assertNotEqual(captured["env"].get("UV_CACHE_DIR"), str(user_uv))
+            self.assertNotIn("UV_LINK_MODE", captured["env"])
             self.assertEqual(
                 captured["argv"][:3],
                 ["uv", "run", "--script"],
