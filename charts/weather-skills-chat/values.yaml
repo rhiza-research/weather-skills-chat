@@ -95,6 +95,20 @@ persistence:
   annotations: {}
   keep: false
 
+# Dynamically provisioned pd-ssd for chat-scoped uv environments (environments-v2).
+# Package wheels stay on JuiceFS via USER_CACHES_DIR. LRU uses SKILL_VENV_MAX_BYTES
+# (0 → ~85% of this volume). Safe to lose on PVC delete; no Terraform disk.
+skillVenvs:
+  enabled: false
+  mountPath: /var/skill-venvs
+  size: 100Gi
+  # GKE: premium-rwo = pd-ssd, standard-rwo = pd-balanced.
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+  # 0 → app uses ~85% of the mounted filesystem capacity.
+  maxBytes: 0
+
 # Empty url → SQLite at {DATA_DIR}/webui.db on the PVC.
 # Postgres: put the full URL (including password) in the Secret as DATABASE_URL.
 database:

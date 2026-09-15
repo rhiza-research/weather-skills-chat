@@ -1,0 +1,18 @@
+{{- if .Values.skillVenvs.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "weather-skills-chat.skillVenvsPvcName" . }}
+  labels:
+    {{- include "weather-skills-chat.labels" . | nindent 4 }}
+    role: skill-venvs
+spec:
+  accessModes:
+    {{- toYaml .Values.skillVenvs.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.skillVenvs.size }}
+  {{- with .Values.skillVenvs.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

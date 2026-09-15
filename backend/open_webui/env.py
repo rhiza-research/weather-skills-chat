@@ -256,6 +256,16 @@ USER_CACHES_DIR = Path(
 ).resolve()
 USER_CACHES_DIR.mkdir(parents=True, exist_ok=True)
 
+# Chat-scoped uv environments on a dynamically provisioned local SSD PVC.
+# Package layers symlink into USER_CACHES_DIR. Disabled when the mount is absent.
+SKILL_VENV_ROOT = Path(os.getenv("SKILL_VENV_ROOT", "/var/skill-venvs"))
+# 0 / unset → ~85% of the filesystem that holds SKILL_VENV_ROOT.
+_skill_venv_max = os.getenv("SKILL_VENV_MAX_BYTES", "").strip()
+try:
+    SKILL_VENV_MAX_BYTES = int(_skill_venv_max) if _skill_venv_max else 0
+except ValueError:
+    SKILL_VENV_MAX_BYTES = 0
+
 # Baked Whisper / embedding / tiktoken weights. Kept off DATA_DIR so a PVC
 # mounted at /app/backend/data does not hide image-local models.
 MODEL_CACHE_DIR = Path(os.getenv("MODEL_CACHE_DIR", BACKEND_DIR / "cache")).resolve()

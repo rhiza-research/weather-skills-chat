@@ -10,8 +10,20 @@ import signal
 from pathlib import Path
 from typing import Any, Optional
 
-from open_webui.env import SRC_LOG_LEVELS, SKILLS_DIR, USER_CACHES_DIR, UV_CACHE_DIR
+from open_webui.env import (
+    SRC_LOG_LEVELS,
+    SKILLS_DIR,
+    SKILL_VENV_MAX_BYTES,
+    SKILL_VENV_ROOT,
+    USER_CACHES_DIR,
+    UV_CACHE_DIR,
+)
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
+from open_webui.utils.skill_venvs import (
+    lru_cleanup_skill_venvs,
+    prepare_chat_uv_cache,
+    skill_venvs_enabled,
+)
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -243,6 +255,7 @@ async def run_skill(
     sandboxed = False
     landlock_backend: str | None = None
     user_cache: Path | None = None
+    chat_venv_root: Path | None = None
     if use_chat_sandbox and SKILL_SANDLOCK:
         from open_webui.utils.skill_sandlock import (
             default_readable_paths,
@@ -276,7 +289,34 @@ async def run_skill(
         # Persist package cache + managed CPython across chats for this user.
         # These MUST be distinct directories — uv can hang under Landlock when
         # UV_CACHE_DIR and UV_PYTHON_INSTALL_DIR are the same path.
-        env["UV_CACHE_DIR"] = str(uv_cache_dir)
+        #
+        # When SKILL_VENV_ROOT is mounted (pd-ssd PVC), point UV_CACHE_DIR at
+        # a chat-scoped local cache whose wheel/archive layers symlink into the
+        # JuiceFS user cache; environments-v2 stays on local disk for fast
+        # imports. LRU eviction runs before prepare.
+        effective_uv_cache = uv_cache_dir
+        if skill_venvs_enabled(root=SKILL_VENV_ROOT):
+            try:
+                lru_cleanup_skill_venvs(
+                    root=SKILL_VENV_ROOT,
+                    max_bytes=SKILL_VENV_MAX_BYTES or None,
+                    protect_chat_id=str(chat_id),
+                )
+                effective_uv_cache = prepare_chat_uv_cache(
+                    str(chat_id),
+                    uv_cache_dir,
+                    root=SKILL_VENV_ROOT,
+                )
+                chat_venv_root = effective_uv_cache.parent
+            except ValueError as e:
+                return _error_result(
+                    str(e),
+                    script=script_path.name,
+                    cwd=str(cwd),
+                    argv=args,
+                )
+
+        env["UV_CACHE_DIR"] = str(effective_uv_cache)
         env["UV_PYTHON_INSTALL_DIR"] = str(uv_python_dir)
 
         # Per-skill dir + pack root(s) with pyproject.toml (uv walks parents).
@@ -285,9 +325,14 @@ async def run_skill(
             user_cache,
             *skill_pack_readable_roots(skill_path, skills_root=SKILLS_DIR),
         ]
+        if chat_venv_root is not None:
+            readable_extra.append(chat_venv_root)
+        writable_extra = [cwd, "/tmp", user_cache]
+        if chat_venv_root is not None:
+            writable_extra.append(chat_venv_root)
         inner_cmd = ["uv", "run", "--script", str(script_path), *args]
         cmd = launcher_command(
-            writable=default_writable_paths(cwd, "/tmp", user_cache),
+            writable=default_writable_paths(*writable_extra),
             readable=default_readable_paths(extra=readable_extra),
             cwd=cwd,
             argv=inner_cmd,
@@ -302,12 +347,13 @@ async def run_skill(
 
     log.info(
         "Running skill script: %s (cwd=%s, sandlock=%s, landlock_backend=%s, "
-        "user_cache=%s, env_secrets=%s)",
+        "user_cache=%s, chat_venv=%s, env_secrets=%s)",
         " ".join(["uv", "run", "--script", script_path.name, *args]),
         cwd,
         sandboxed,
         landlock_backend,
         str(user_cache) if user_cache else None,
+        str(chat_venv_root) if chat_venv_root else None,
         list(used_secrets.keys()),
     )
 
@@ -374,6 +420,8 @@ async def run_skill(
     }
     if user_cache is not None:
         result["user_cache"] = str(user_cache)
+    if chat_venv_root is not None:
+        result["chat_venv"] = str(chat_venv_root)
     if used_secrets:
         result["env_secrets"] = list(used_secrets.keys())
     return _redact_skill_result(result, used_secrets)

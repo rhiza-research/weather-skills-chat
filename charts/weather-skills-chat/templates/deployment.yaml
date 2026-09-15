@@ -191,6 +191,12 @@ spec:
             {{- end }}
             - name: SKILL_SANDLOCK
               value: {{ .Values.sandbox.skillSandlock | quote }}
+            {{- if .Values.skillVenvs.enabled }}
+            - name: SKILL_VENV_ROOT
+              value: {{ .Values.skillVenvs.mountPath | quote }}
+            - name: SKILL_VENV_MAX_BYTES
+              value: {{ .Values.skillVenvs.maxBytes | quote }}
+            {{- end }}
             {{- with .Values.vectorDb }}
             - name: VECTOR_DB
               value: {{ . | quote }}
@@ -287,6 +293,10 @@ spec:
             - name: juicefs-data
               mountPath: {{ .Values.sandbox.juicefs.mountPath }}
             {{- end }}
+            {{- if .Values.skillVenvs.enabled }}
+            - name: skill-venvs
+              mountPath: {{ .Values.skillVenvs.mountPath }}
+            {{- end }}
       volumes:
         {{- if .Values.persistence.enabled }}
         - name: data
@@ -310,6 +320,11 @@ spec:
         - name: juicefs-data
           persistentVolumeClaim:
             claimName: {{ .Values.sandbox.juicefs.pvcName | quote }}
+        {{- end }}
+        {{- if .Values.skillVenvs.enabled }}
+        - name: skill-venvs
+          persistentVolumeClaim:
+            claimName: {{ include "weather-skills-chat.skillVenvsPvcName" . }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
