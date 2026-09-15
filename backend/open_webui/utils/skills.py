@@ -6,6 +6,7 @@ import logging
 import re
 import shutil
 import subprocess
+import tempfile
 import textwrap
 import time
 from dataclasses import dataclass
@@ -134,29 +135,35 @@ def _run_git(args: list[str], cwd: Optional[Path] = None) -> str:
 
 
 def checkout_ref(local_path: Path, git_url: str, git_ref: str) -> str:
-    """Clone or update a working tree to origin/<ref> (or commit). Returns HEAD sha."""
+    """Shallow-fetch a ref into a local temp dir, then publish the working tree.
+
+    Git runs on local disk (fast; supports hardlinks). Only the checked-out
+    files are copied to ``local_path`` — ``.git`` is omitted so durable mounts
+    like GCS FUSE are not flooded with tiny object writes. Returns HEAD sha.
+    """
     local_path = Path(local_path)
     local_path.parent.mkdir(parents=True, exist_ok=True)
     git_ref = (git_ref or "").strip()
     if not git_ref:
         raise SkillInstallError("git ref (branch/tag/commit) is required")
 
-    if not (local_path / ".git").exists():
-        if local_path.exists() and any(local_path.iterdir()):
-            raise SkillInstallError(f"Skill path is not empty: {local_path}")
-        local_path.mkdir(parents=True, exist_ok=True)
-        _run_git(["init"], cwd=local_path)
-        _run_git(["remote", "add", "origin", git_url], cwd=local_path)
+    with tempfile.TemporaryDirectory(prefix="skill-pack-") as tmp:
+        staging = Path(tmp) / "repo"
+        staging.mkdir()
+        _run_git(["init"], cwd=staging)
+        _run_git(["remote", "add", "origin", git_url], cwd=staging)
+        _run_git(["fetch", "--depth", "1", "origin", git_ref], cwd=staging)
+        _run_git(["checkout", "--force", "FETCH_HEAD"], cwd=staging)
+        sha = _run_git(["rev-parse", "HEAD"], cwd=staging)
 
-    # Ensure remote URL is current
-    try:
-        _run_git(["remote", "set-url", "origin", git_url], cwd=local_path)
-    except SkillInstallError:
-        _run_git(["remote", "add", "origin", git_url], cwd=local_path)
-
-    _run_git(["fetch", "--depth", "1", "origin", git_ref], cwd=local_path)
-    _run_git(["checkout", "--force", "FETCH_HEAD"], cwd=local_path)
-    sha = _run_git(["rev-parse", "HEAD"], cwd=local_path)
+        if local_path.exists():
+            shutil.rmtree(local_path)
+        shutil.copytree(
+            staging,
+            local_path,
+            ignore=shutil.ignore_patterns(".git"),
+            symlinks=True,
+        )
     return sha
 
 
