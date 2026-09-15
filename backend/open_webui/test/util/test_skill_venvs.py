@@ -1,4 +1,4 @@
-"""Chat-scoped local uv environments (JuiceFS package cache via symlinks)."""
+"""Chat-scoped local skill venvs (JuiceFS UV_CACHE_DIR, local site-packages)."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from open_webui.utils.skill_venvs import (
-    ENVIRONMENTS_DIRNAME,
     chat_venv_dir,
+    ensure_chat_script_venv,
     local_dir_size_bytes,
     lru_cleanup_skill_venvs,
     normalize_chat_venv_id,
-    prepare_chat_uv_cache,
+    script_env_key,
     skill_venvs_enabled,
 )
 
@@ -30,34 +30,20 @@ class SkillVenvPathTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 normalize_chat_venv_id(bad)
 
-    def test_prepare_symlinks_shared_layers_keeps_environments_local(self):
+    def test_script_env_key_stable_and_lock_sensitive(self):
         with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            venv_root = tmp_path / "venvs"
-            shared = tmp_path / "user" / "uv-cache"
-            venv_root.mkdir()
-            shared.mkdir(parents=True)
-            (shared / "wheels-v3").mkdir()
-            (shared / "archive-v0").mkdir()
-            (shared / "CACHEDIR.TAG").write_text("tag\n", encoding="utf-8")
-            (shared / ENVIRONMENTS_DIRNAME).mkdir()
-            (shared / ENVIRONMENTS_DIRNAME / "should-not-link").write_text(
-                "x", encoding="utf-8"
+            script = Path(tmp) / "s.py"
+            script.write_text(
+                "# /// script\n# requires-python = \">=3.11\"\n# dependencies = []\n# ///\n"
+                "print(1)\n",
+                encoding="utf-8",
             )
-
-            cache = prepare_chat_uv_cache("chat-1", shared, root=venv_root)
-            self.assertEqual(cache, (venv_root / "chat-1" / "uv-cache").resolve())
-            self.assertTrue((cache / "wheels-v3").is_symlink())
-            self.assertEqual((cache / "wheels-v3").resolve(), (shared / "wheels-v3").resolve())
-            self.assertTrue((cache / "archive-v0").is_symlink())
-            env_dir = cache / ENVIRONMENTS_DIRNAME
-            self.assertTrue(env_dir.is_dir())
-            self.assertFalse(env_dir.is_symlink())
-            self.assertFalse((env_dir / "should-not-link").exists())
-
-            # Idempotent refresh
-            prepare_chat_uv_cache("chat-1", shared, root=venv_root)
-            self.assertTrue((cache / "wheels-v3").is_symlink())
+            k1 = script_env_key(script)
+            k2 = script_env_key(script)
+            self.assertEqual(k1, k2)
+            lock = Path(str(script) + ".lock")
+            lock.write_text("version = 1\n", encoding="utf-8")
+            self.assertNotEqual(script_env_key(script), k1)
 
     def test_local_dir_size_skips_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,9 +84,59 @@ class SkillVenvPathTest(unittest.TestCase):
             root.mkdir()
             self.assertTrue(skill_venvs_enabled(root=root))
 
+    def test_ensure_chat_script_venv_creates_and_reuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            venvs = tmp_path / "venvs"
+            cache = tmp_path / "uv-cache"
+            py = tmp_path / "python"
+            venvs.mkdir()
+            cache.mkdir()
+            py.mkdir()
+            script = tmp_path / "hello.py"
+            script.write_text(
+                "# /// script\n# requires-python = \">=3.11\"\n# dependencies = []\n# ///\n"
+                "print('hi')\n",
+                encoding="utf-8",
+            )
+
+            calls: list[list[str]] = []
+
+            def _fake_run(args, *, env, cwd=None):
+                calls.append(list(args))
+                if args[0] == "venv":
+                    venv = Path(args[1])
+                    (venv / "bin").mkdir(parents=True)
+                    (venv / "bin" / "python").write_text("#!/bin/sh\n", encoding="utf-8")
+                    (venv / "bin" / "python").chmod(0o755)
+                elif args[0] == "export":
+                    out = Path(args[args.index("-o") + 1])
+                    out.write_text("#\n", encoding="utf-8")
+                elif args[0] == "pip":
+                    return
+                else:
+                    raise AssertionError(args)
+
+            with patch("open_webui.utils.skill_venvs._run_uv", side_effect=_fake_run):
+                uv_env = {
+                    "UV_CACHE_DIR": str(cache),
+                    "UV_PYTHON_INSTALL_DIR": str(py),
+                }
+                v1 = ensure_chat_script_venv(
+                    "chat-1", script, uv_env=uv_env, root=venvs
+                )
+                v2 = ensure_chat_script_venv(
+                    "chat-1", script, uv_env=uv_env, root=venvs
+                )
+            self.assertEqual(v1, v2)
+            self.assertTrue((v1 / "bin" / "python").is_file())
+            # First call: venv + export + pip; second should reuse (no new uv calls).
+            self.assertEqual([c[0] for c in calls], ["venv", "export", "pip"])
+            self.assertTrue(str(v1).startswith(str((venvs / "chat-1" / "envs").resolve())))
+
 
 class RunSkillChatVenvWiringTest(unittest.TestCase):
-    def test_sandboxed_run_uses_chat_local_uv_cache_when_root_mounted(self):
+    def test_sandboxed_run_uses_local_python_keeps_juicefs_uv_cache(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             artifacts = tmp_path / "artifacts"
@@ -120,10 +156,15 @@ class RunSkillChatVenvWiringTest(unittest.TestCase):
             )
 
             captured: dict = {}
+            fake_venv = venvs / "chat-9" / "envs" / "abc"
+            fake_venv.mkdir(parents=True)
+            (fake_venv / "bin").mkdir()
+            (fake_venv / "bin" / "python").write_text("#!/bin/sh\n", encoding="utf-8")
 
             def _fake_launcher(**kwargs):
                 captured["writable"] = list(kwargs.get("writable") or [])
                 captured["readable"] = list(kwargs.get("readable") or [])
+                captured["argv"] = list(kwargs.get("argv") or [])
                 return ["true"]
 
             async def _fake_create(*_a, **kwargs):
@@ -166,6 +207,10 @@ class RunSkillChatVenvWiringTest(unittest.TestCase):
                     "open_webui.utils.skill_sandlock.launcher_command",
                     side_effect=_fake_launcher,
                 ),
+                patch(
+                    "open_webui.utils.skill_runtime.ensure_chat_script_venv",
+                    return_value=fake_venv,
+                ),
                 patch("asyncio.create_subprocess_exec", side_effect=_fake_create),
             ):
                 from open_webui.utils.skill_runtime import run_skill
@@ -181,13 +226,14 @@ class RunSkillChatVenvWiringTest(unittest.TestCase):
                 )
 
             expected_chat = chat_venv_dir("chat-9", root=venvs)
-            expected_uv = expected_chat / "uv-cache"
             shared_uv = (caches / "user-42" / "uv-cache").resolve()
             self.assertTrue(result.get("ok"), result)
             self.assertEqual(result.get("chat_venv"), str(expected_chat))
-            self.assertEqual(captured["env"].get("UV_CACHE_DIR"), str(expected_uv.resolve()))
-            self.assertNotEqual(captured["env"].get("UV_CACHE_DIR"), str(shared_uv))
-            self.assertTrue((expected_uv / ENVIRONMENTS_DIRNAME).is_dir())
+            self.assertEqual(captured["env"].get("UV_CACHE_DIR"), str(shared_uv))
+            self.assertEqual(
+                captured["argv"][:2],
+                [str(fake_venv / "bin" / "python"), str((scripts / "hello.py").resolve())],
+            )
             writable = [str(Path(p).resolve()) for p in captured["writable"]]
             self.assertIn(str(expected_chat.resolve()), writable)
 

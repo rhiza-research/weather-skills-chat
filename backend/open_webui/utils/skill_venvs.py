@@ -1,43 +1,40 @@
-"""Chat-scoped local uv environments with a JuiceFS-backed package cache.
+"""Chat-scoped local skill venvs with JuiceFS-backed UV_CACHE_DIR.
 
-Skill runs need fast imports (local disk) but durable shared wheels (JuiceFS).
-uv stores both under ``UV_CACHE_DIR`` (``environments-v2`` + wheel/archive
-dirs). We give each chat a local cache directory whose package layers symlink
-into the per-user JuiceFS cache, while ``environments-v2`` stays a real local
-directory on a local SSD PVC (dynamically provisioned).
+``UV_CACHE_DIR`` / ``UV_PYTHON_INSTALL_DIR`` stay on the per-user JuiceFS
+cache so package downloads persist across chats and pods. Unpacked script
+environments live on a local SSD PVC under::
 
-Layout::
+    {SKILL_VENV_ROOT}/{chat_id}/envs/{script_key}/
 
-    {SKILL_VENV_ROOT}/{chat_id}/uv-cache/
-      environments-v2/          # local (venv trees; LRU-evicted with the chat)
-      wheels-v*/ -> JuiceFS     # symlinks into user uv-cache
-      archive-v*/ -> JuiceFS
-      ...
+Created with ``uv venv`` + ``uv export --script`` + ``uv pip install``, then
+the skill is run with that venv's interpreter (not ``uv run --script``, which
+would ignore a local venv and re-isolate under the cache).
 
 Future (horizontal scale): publish chat_id → pod affinity in Redis so tool
-calls land on the replica that already holds that chat's local venvs. Not
-wired yet — single replica today.
+calls land on the replica that already holds that chat's local venvs.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 log = logging.getLogger(__name__)
 
-# uv's cached script/tool environments live here under UV_CACHE_DIR.
-ENVIRONMENTS_DIRNAME = "environments-v2"
-
-# Keep in sync with skill_runtime.SAFE_USER_CACHE_ID_RE intent (chat ids are
-# UUID-like; reject traversal).
 _SAFE_CHAT_ID_RE = __import__("re").compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
 )
+_STAMP_NAME = ".skill-venv-stamp"
+
+
+class SkillVenvError(RuntimeError):
+    """Failed to create or sync a chat-local skill venv."""
 
 
 def normalize_chat_venv_id(chat_id: Optional[str]) -> str:
@@ -86,64 +83,143 @@ def chat_venv_dir(
     return path
 
 
-def _symlink_to_shared(dest: Path, shared: Path) -> None:
-    """Ensure *dest* is a symlink to *shared* (replace wrong links)."""
-    if dest.is_symlink():
-        try:
-            if dest.resolve() == shared.resolve():
-                return
-        except OSError:
-            pass
-        dest.unlink()
-    elif dest.exists():
-        # Real dir/file left behind — leave it; do not destroy local data.
-        log.warning(
-            "skill venv cache entry %s exists and is not a symlink; leaving it",
-            dest,
-        )
-        return
-    dest.symlink_to(shared)
+def script_env_key(script_path: Path) -> str:
+    """Stable key for a script's local venv (content + optional ``.lock``)."""
+    path = Path(script_path)
+    h = hashlib.sha256()
+    h.update(path.read_bytes())
+    lock = Path(str(path) + ".lock")
+    if lock.is_file():
+        h.update(b"\0lock\0")
+        h.update(lock.read_bytes())
+    return h.hexdigest()[:20]
 
 
-def prepare_chat_uv_cache(
-    chat_id: str,
-    shared_uv_cache: Path,
-    *,
-    root: Optional[Path] = None,
-) -> Path:
-    """Create/refresh a chat-local ``UV_CACHE_DIR`` with JuiceFS package links.
-
-    Returns the chat-local cache path to set as ``UV_CACHE_DIR``.
-    """
-    shared = Path(shared_uv_cache).resolve()
-    shared.mkdir(parents=True, exist_ok=True)
-
+def touch_chat_venv(chat_id: str, *, root: Optional[Path] = None) -> Path:
+    """Create/update the chat venv root mtime (LRU key) and return it."""
     chat_root = chat_venv_dir(chat_id, root=root)
     chat_root.mkdir(parents=True, exist_ok=True)
-    chat_cache = chat_root / "uv-cache"
-    chat_cache.mkdir(parents=True, exist_ok=True)
-
-    # Link every shared cache layer except environments (those stay local).
-    try:
-        shared_entries = list(shared.iterdir())
-    except OSError as e:
-        log.warning("Could not list shared uv cache %s: %s", shared, e)
-        shared_entries = []
-
-    for entry in shared_entries:
-        if entry.name == ENVIRONMENTS_DIRNAME:
-            continue
-        _symlink_to_shared(chat_cache / entry.name, entry)
-
-    env_dir = chat_cache / ENVIRONMENTS_DIRNAME
-    if env_dir.is_symlink():
-        env_dir.unlink()
-    env_dir.mkdir(parents=True, exist_ok=True)
-
-    # LRU key: directory mtime.
     now = time.time()
     os.utime(chat_root, (now, now))
-    return chat_cache.resolve()
+    return chat_root
+
+
+def _run_uv(
+    args: list[str],
+    *,
+    env: Mapping[str, str],
+    cwd: Optional[Path] = None,
+) -> None:
+    cmd = ["uv", *args]
+    log.info("skill venv: %s", " ".join(cmd))
+    proc = subprocess.run(
+        cmd,
+        env=dict(env),
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise SkillVenvError(
+            f"uv {' '.join(args[:3])} failed (exit {proc.returncode}): {detail[-2000:]}"
+        )
+
+
+def ensure_chat_script_venv(
+    chat_id: str,
+    script_path: Path,
+    *,
+    uv_env: Mapping[str, str],
+    root: Optional[Path] = None,
+) -> Path:
+    """Ensure a local venv for *script_path* under the chat dir; return venv path.
+
+    ``uv_env`` must include ``UV_CACHE_DIR`` / ``UV_PYTHON_INSTALL_DIR`` pointing
+    at the durable JuiceFS user cache (not the local venv root).
+    """
+    script_path = Path(script_path).resolve()
+    if not script_path.is_file():
+        raise SkillVenvError(f"Skill script not found: {script_path}")
+
+    chat_root = touch_chat_venv(chat_id, root=root)
+    key = script_env_key(script_path)
+    venv_path = (chat_root / "envs" / key).resolve()
+    try:
+        venv_path.relative_to(chat_root.resolve())
+    except ValueError as e:
+        raise SkillVenvError("Script venv path escapes chat venv root.") from e
+
+    python = venv_path / "bin" / "python"
+    stamp = venv_path / _STAMP_NAME
+    if python.is_file() and stamp.is_file():
+        try:
+            if stamp.read_text(encoding="utf-8").strip() == key:
+                return venv_path
+        except OSError:
+            pass
+
+    venv_path.parent.mkdir(parents=True, exist_ok=True)
+    if venv_path.exists():
+        shutil.rmtree(venv_path)
+
+    # Keep caller UV_* cache paths; force copy so installs into the local venv
+    # from a JuiceFS cache never depend on cross-device hardlinks.
+    run_env = {
+        **os.environ,
+        **dict(uv_env),
+        "UV_LINK_MODE": "copy",
+        "UV_NO_PROGRESS": "1",
+    }
+
+    python_spec = _requires_python_hint(script_path)
+    venv_args = ["venv", str(venv_path)]
+    if python_spec:
+        venv_args.extend(["--python", python_spec])
+    _run_uv(venv_args, env=run_env)
+
+    reqs = venv_path / "requirements.script.txt"
+    _run_uv(
+        [
+            "export",
+            "--script",
+            str(script_path),
+            "--no-hashes",
+            "-o",
+            str(reqs),
+        ],
+        env=run_env,
+    )
+    _run_uv(
+        [
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "-r",
+            str(reqs),
+        ],
+        env=run_env,
+    )
+
+    if not python.is_file():
+        raise SkillVenvError(f"venv python missing after sync: {python}")
+    stamp.write_text(key + "\n", encoding="utf-8")
+    touch_chat_venv(chat_id, root=root)
+    return venv_path
+
+
+def _requires_python_hint(script_path: Path) -> Optional[str]:
+    """Best-effort PEP 723 requires-python for ``uv venv --python``."""
+    try:
+        head = script_path.read_text(encoding="utf-8", errors="replace")[:8000]
+    except OSError:
+        return None
+    m = __import__("re").search(
+        r"""requires-python\s*=\s*["']([^"']+)["']""",
+        head,
+    )
+    return m.group(1).strip() if m else None
 
 
 def local_dir_size_bytes(path: Path) -> int:
@@ -151,7 +227,6 @@ def local_dir_size_bytes(path: Path) -> int:
     total = 0
     try:
         for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
-            # Do not descend into symlinked package-cache dirs.
             dirnames[:] = [
                 d
                 for d in dirnames
