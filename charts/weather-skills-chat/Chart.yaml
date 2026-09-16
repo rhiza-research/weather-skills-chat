@@ -3,6 +3,7 @@ name: weather-skills-chat
 description: Weather Skills chat (Open WebUI fork) — SQLite-on-PVC by default, optional GCS FUSE for skill artifacts
 type: application
 version: 0.1.1
+# Docker Publish sets this to sha-<short> on the branch that was built.
 appVersion: "main"
 keywords:
   - weather-skills

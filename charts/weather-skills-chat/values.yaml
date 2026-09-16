@@ -30,9 +30,9 @@ secretKeys:
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
-  # Empty uses Chart.appVersion (currently "main").
+  # Empty uses Chart.appVersion (CI pins sha-<gitsha> on this branch after each build).
   tag: ""
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
