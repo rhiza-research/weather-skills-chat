@@ -58,41 +58,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Pin Chart.appVersion to image sha
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          TAG="sha-${GITHUB_SHA:0:7}"
-          export TAG
-          FILE=charts/weather-skills-chat/Chart.yaml
-          git fetch origin "$BRANCH"
-          git checkout -B "$BRANCH" "origin/$BRANCH"
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          import re
+        run: echo "IMAGE_TAG=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
 
-          tag = os.environ["TAG"]
-          path = Path("charts/weather-skills-chat/Chart.yaml")
-          text = path.read_text()
-          updated, n = re.subn(
-              r"^appVersion:.*$",
-              f'appVersion: "{tag}"',
-              text,
-              count=1,
-              flags=re.M,
-          )
-          if n != 1:
-              raise SystemExit(f"failed to replace appVersion in {path}")
-          path.write_text(updated)
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$FILE"
-          if git diff --cached --quiet; then
-            echo "Chart.appVersion already ${TAG}"
-            exit 0
-          fi
-          git commit -m "chore: pin image to ${TAG} [skip ci]"
-          git pull --rebase origin "$BRANCH"
-          git push origin "$BRANCH"
+      - uses: mikefarah/yq@v4
+        with:
+          cmd: yq -i '.appVersion = strenv(IMAGE_TAG)' charts/weather-skills-chat/Chart.yaml
+
+      - uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: chore: pin image to ${{ env.IMAGE_TAG }} [skip ci]
+          file_pattern: charts/weather-skills-chat/Chart.yaml
