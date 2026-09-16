@@ -4,7 +4,7 @@ description: Weather Skills chat (Open WebUI fork) — SQLite-on-PVC by default,
 type: application
 version: 0.1.1
 # CI writes sha-<short> on the Argo branch (prod from main, staging from dev).
-appVersion: "sha-41287b7"
+appVersion: "sha-4920609"
 keywords:
   - weather-skills
   - open-webui
