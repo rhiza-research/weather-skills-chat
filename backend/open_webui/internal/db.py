@@ -1,8 +1,8 @@
-import json
 import logging
 from contextlib import contextmanager
 from typing import Any, Optional
 
+from open_webui.internal.json_codec import decode_json_field, encode_json_field
 from open_webui.internal.wrappers import register_connection
 from open_webui.env import (
     OPEN_WEBUI_DIR,
@@ -31,25 +31,19 @@ class JSONField(types.TypeDecorator):
     cache_ok = True
 
     def process_bind_param(self, value: Optional[_T], dialect: Dialect) -> Any:
-        if value is None:
-            return None
-        return json.dumps(value)
+        return encode_json_field(value)
 
     def process_result_value(self, value: Optional[_T], dialect: Dialect) -> Any:
-        if value is not None:
-            return json.loads(value)
+        return decode_json_field(value)
 
     def copy(self, **kw: Any) -> Self:
         return JSONField(self.impl.length)
 
     def db_value(self, value):
-        if value is None:
-            return None
-        return json.dumps(value)
+        return encode_json_field(value)
 
     def python_value(self, value):
-        if value is not None:
-            return json.loads(value)
+        return decode_json_field(value)
 
 
 # Workaround to handle the peewee migration

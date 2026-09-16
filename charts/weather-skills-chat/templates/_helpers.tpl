@@ -74,11 +74,19 @@ Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 {{- required "secretName is required: create a Kubernetes Secret externally and set secretName to its name." .Values.secretName }}
 {{- end }}
 
+{{- define "weather-skills-chat.sharedDataMountPath" -}}
+{{- if .Values.sandbox.juicefs.enabled }}
+{{- .Values.sandbox.juicefs.mountPath }}
+{{- else if .Values.sandbox.gcs.enabled }}
+{{- .Values.sandbox.gcs.mountPath }}
+{{- end }}
+{{- end }}
+
 {{- define "weather-skills-chat.artifactsDir" -}}
 {{- if .Values.sandbox.artifactsDir }}
 {{- .Values.sandbox.artifactsDir }}
-{{- else if .Values.sandbox.gcs.enabled }}
-{{- printf "%s/artifacts" .Values.sandbox.gcs.mountPath }}
+{{- else if or .Values.sandbox.juicefs.enabled .Values.sandbox.gcs.enabled }}
+{{- printf "%s/artifacts" (include "weather-skills-chat.sharedDataMountPath" .) }}
 {{- else }}
 {{- .Values.sandbox.artifactsDir }}
 {{- end }}
@@ -87,24 +95,24 @@ Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 {{- define "weather-skills-chat.skillsDir" -}}
 {{- if .Values.sandbox.skillsDir }}
 {{- .Values.sandbox.skillsDir }}
-{{- else if .Values.sandbox.gcs.enabled }}
-{{- printf "%s/skills" .Values.sandbox.gcs.mountPath }}
+{{- else if or .Values.sandbox.juicefs.enabled .Values.sandbox.gcs.enabled }}
+{{- printf "%s/skills" (include "weather-skills-chat.sharedDataMountPath" .) }}
 {{- end }}
 {{- end }}
 
 {{- define "weather-skills-chat.userCachesDir" -}}
 {{- if .Values.sandbox.userCachesDir }}
 {{- .Values.sandbox.userCachesDir }}
-{{- else if .Values.sandbox.gcs.enabled }}
-{{- printf "%s/user_caches" .Values.sandbox.gcs.mountPath }}
+{{- else if or .Values.sandbox.juicefs.enabled .Values.sandbox.gcs.enabled }}
+{{- printf "%s/user_caches" (include "weather-skills-chat.sharedDataMountPath" .) }}
 {{- end }}
 {{- end }}
 
 {{- define "weather-skills-chat.uploadDir" -}}
 {{- if .Values.sandbox.uploadDir }}
 {{- .Values.sandbox.uploadDir }}
-{{- else if .Values.sandbox.gcs.enabled }}
-{{- printf "%s/uploads" .Values.sandbox.gcs.mountPath }}
+{{- else if or .Values.sandbox.juicefs.enabled .Values.sandbox.gcs.enabled }}
+{{- printf "%s/uploads" (include "weather-skills-chat.sharedDataMountPath" .) }}
 {{- end }}
 {{- end }}
 

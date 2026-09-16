@@ -45,11 +45,12 @@ class UserCachePathTest(unittest.TestCase):
 
 
 class RunSkillUserCacheWiringTest(unittest.TestCase):
-    def test_sandboxed_run_points_uv_at_per_user_cache(self):
+    def test_sandboxed_run_without_skill_venvs_uses_per_user_uv(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             artifacts = tmp_path / "artifacts"
             caches = tmp_path / "user_caches"
+            missing_venvs = tmp_path / "skill-venvs-missing"
             artifacts.mkdir()
             caches.mkdir()
 
@@ -86,6 +87,8 @@ class RunSkillUserCacheWiringTest(unittest.TestCase):
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
                 patch("open_webui.utils.skill_runtime.USER_CACHES_DIR", caches),
+                # No skill-venvs mount → fall back to per-user UV dirs.
+                patch("open_webui.utils.skill_runtime.SKILL_VENV_ROOT", missing_venvs),
                 patch(
                     "open_webui.utils.skill_runtime.chat_sandbox",
                     side_effect=_sandbox,

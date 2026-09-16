@@ -261,7 +261,7 @@
 				});
 				capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
 
-				accessControl = 'access_control' in model ? (model.access_control ?? {}) : {};
+				accessControl = 'access_control' in model ? model.access_control : {};
 
 				info = {
 					...info,

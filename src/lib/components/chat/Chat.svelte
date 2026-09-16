@@ -60,6 +60,7 @@
 		finalizeOrphanAssistantMessages,
 		formatGenerationRequestError
 	} from '$lib/utils/generationLiveness';
+	import { accumulateUsage } from '$lib/utils/usage';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
 	import {
@@ -1470,7 +1471,8 @@
 		}
 
 		if (usage) {
-			message.usage = usage;
+			// Sum token/cost fields across tool-loop turns until stop (done).
+			message.usage = accumulateUsage(message.usage, usage);
 		}
 
 		history.messages[message.id] = message;

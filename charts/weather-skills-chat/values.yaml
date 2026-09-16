@@ -95,6 +95,22 @@ persistence:
   annotations: {}
   keep: false
 
+# Per-pod generic ephemeral pd-ssd for chat-scoped uv environments.
+# Kubernetes creates `{pod}-skill-venvs` on schedule and deletes it with the pod,
+# so replicas can scale without a shared RWO claim. Safe to lose on pod delete.
+# Package wheels stay on JuiceFS via USER_CACHES_DIR. LRU uses SKILL_VENV_MAX_BYTES
+# (0 → ~85% of this volume).
+skillVenvs:
+  enabled: false
+  mountPath: /var/skill-venvs
+  size: 100Gi
+  # GKE: premium-rwo = pd-ssd, standard-rwo = pd-balanced.
+  storageClass: premium-rwo
+  accessModes:
+    - ReadWriteOnce
+  # 0 → app uses ~85% of the mounted filesystem capacity.
+  maxBytes: 0
+
 # Empty url → SQLite at {DATA_DIR}/webui.db on the PVC.
 # Postgres: put the full URL (including password) in the Secret as DATABASE_URL.
 database:
@@ -132,6 +148,12 @@ sandbox:
       cpuLimit: ""
       memoryLimit: ""
       ephemeralStorageLimit: ""
+  # JuiceFS CSI PVC (preferred over sandbox.gcs for shared skill data).
+  # Mutually exclusive with sandbox.gcs in practice.
+  juicefs:
+    enabled: false
+    pvcName: ""
+    mountPath: /mnt/gcs-data
 
 # Vector DB. Use "pgvector" when DATABASE_URL points at Postgres with the vector extension.
 vectorDb: ""
