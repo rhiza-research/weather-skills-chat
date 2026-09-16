@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - staging
+      - dev
 
 concurrency:
   group: docker-publish-${{ github.ref }}
@@ -57,6 +57,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # main → prod (Argo prod chat). dev → staging (Argo staging chat).
+      # Those deploy branches are CI-owned; this job force-pushes the built
+      # commit plus Chart.appVersion pin and does not commit back to main/dev.
+      - name: Deploy branch
+        id: deploy
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main) echo "branch=prod" >> "$GITHUB_OUTPUT" ;;
+            dev)  echo "branch=staging" >> "$GITHUB_OUTPUT" ;;
+            *)    echo "unexpected branch ${GITHUB_REF_NAME}" >&2; exit 1 ;;
+          esac
+
       - name: Pin Chart.appVersion to image sha
         run: echo "IMAGE_TAG=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
 
@@ -64,7 +76,17 @@ jobs:
         with:
           cmd: yq -i '.appVersion = strenv(IMAGE_TAG)' charts/weather-skills-chat/Chart.yaml
 
-      - uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: chore: pin image to ${{ env.IMAGE_TAG }} [skip ci]
-          file_pattern: charts/weather-skills-chat/Chart.yaml
+      - name: Push pin to Argo branch
+        env:
+          DEPLOY_BRANCH: ${{ steps.deploy.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/weather-skills-chat/Chart.yaml
+          if git diff --cached --quiet; then
+            echo "Chart.appVersion already ${IMAGE_TAG}"
+            exit 0
+          fi
+          git commit -m "chore: pin image to ${IMAGE_TAG} [skip ci]"
+          git push --force origin "HEAD:${DEPLOY_BRANCH}"
