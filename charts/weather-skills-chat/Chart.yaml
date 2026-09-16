@@ -4,7 +4,7 @@ description: Weather Skills chat (Open WebUI fork) — SQLite-on-PVC by default,
 type: application
 version: 0.1.1
 # Docker Publish sets this to sha-<short> on the branch that was built.
-appVersion: "main"
+appVersion: "sha-41287b7"
 keywords:
   - weather-skills
   - open-webui
