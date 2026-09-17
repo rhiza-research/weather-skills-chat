@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { organizationHeaders } from '$lib/apis/organizations';
 
 const request = async (token: string, path: string, options: RequestInit = {}) => {
 	let error = null;
@@ -9,6 +10,7 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`,
+			...organizationHeaders(),
 			...(options.headers || {})
 		}
 	})

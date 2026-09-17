@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { toast } from 'svelte-sonner';
-	import { teams, user, WEBUI_NAME, showSidebar, models } from '$lib/stores';
+	import { organizations, activeOrganizationId, user, WEBUI_NAME, showSidebar, models } from '$lib/stores';
 	import {
 		createAutomation,
 		deleteAutomationById,
@@ -31,7 +31,7 @@
 			model: '',
 			cron: 'every day at noon',
 			enabled: true,
-			team_id: '',
+			visibility: 'private',
 			source_chat_id: null,
 			tool_ids: null,
 			features: null
@@ -57,19 +57,27 @@
 		}
 	}
 
-	$: sections = [
-		{ title: $i18n.t('Personal'), items: automations.filter((a) => !a.team_id) },
-		...($teams ?? []).map((team) => ({
-			title: team.name,
-			items: automations.filter((a) => a.team_id === team.id)
-		}))
-	].filter((section) => section.items.length);
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: isPersonal = !currentOrg || currentOrg.kind === 'personal' || $activeOrganizationId === $user?.id;
+	$: sections = isPersonal
+		? [{ title: $i18n.t('Private'), items: automations }]
+		: [
+				{
+					title: $i18n.t('Private'),
+					items: automations.filter((a) => a.visibility !== 'organization')
+				},
+				{
+					title: $i18n.t('Organization'),
+					items: automations.filter((a) => a.visibility === 'organization')
+				}
+			];
 
 	const canManage = (automation) => {
-		if ($user?.role === 'admin') return true;
 		if (automation.user_id === $user?.id) return true;
-		const team = ($teams ?? []).find((t) => t.id === automation.team_id);
-		return team?.role === 'admin';
+		return (
+			automation.visibility === 'organization' &&
+			(currentOrg?.role === 'owner' || currentOrg?.role === 'admin')
+		);
 	};
 
 	const refresh = async () => {
@@ -94,7 +102,7 @@
 			model: chat?.chat?.models?.[0] || '',
 			cron: 'every day at noon',
 			enabled: true,
-			team_id: chat?.team_id || '',
+			visibility: 'private',
 			source_chat_id: chatId,
 			tool_ids: tools.tool_ids,
 			features: tools.features
@@ -116,7 +124,7 @@
 			model: automation.model || '',
 			cron: automation.cron || '',
 			enabled: automation.enabled,
-			team_id: automation.team_id || '',
+			visibility: automation.visibility || 'private',
 			source_chat_id: automation.source_chat_id,
 			tool_ids: automation.tool_ids ?? null,
 			features: automation.features ?? null
@@ -137,7 +145,7 @@
 				prompt: form.prompt,
 				model: form.model || null,
 				cron: form.cron || '',
-				team_id: form.team_id || null,
+				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: form.tool_ids,
 				features: form.features
 			};
@@ -271,12 +279,12 @@
 						<option value={model.id}>{model.name ?? model.id}</option>
 					{/each}
 				</select>
-				<select class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm" bind:value={form.team_id}>
-					<option value="">{$i18n.t('Personal')}</option>
-					{#each $teams as team}
-						<option value={team.id}>{team.name}</option>
-					{/each}
+				{#if !isPersonal}
+				<select class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm" bind:value={form.visibility}>
+					<option value="private">{$i18n.t('Private')}</option>
+					<option value="organization">{$i18n.t('Organization')}</option>
 				</select>
+				{/if}
 				<div class="flex items-center gap-2">
 					<button
 						class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"

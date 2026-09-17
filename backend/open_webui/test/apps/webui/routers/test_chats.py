@@ -49,11 +49,7 @@ class TestChats(AbstractPostgresTest):
         with mock_webui_user(id="3"):
             response = self.fast_api_client.get(self.create_url("/list/user/2"))
         assert response.status_code == 200
-        first_chat = response.json()[0]
-        assert first_chat["id"] is not None
-        assert first_chat["title"] == "New Chat"
-        assert first_chat["created_at"] is not None
-        assert first_chat["updated_at"] is not None
+        assert response.json() == []
 
     def test_create_new_chat(self):
         with mock_webui_user(id="2"):

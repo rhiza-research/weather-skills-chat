@@ -20,11 +20,13 @@ from open_webui.utils.automation_scheduler import (
     sync_automation_job,
 )
 from open_webui.utils.schedule import parse_schedule
-from open_webui.utils.teams import (
+from open_webui.utils.organizations import (
     can_manage_automation,
     can_view_automation,
-    is_team_member,
-    user_team_ids,
+    get_active_organization_id,
+    is_member,
+    is_personal_org,
+    resolve_visibility,
 )
 
 log = logging.getLogger(__name__)
@@ -46,17 +48,35 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
 
 
 @router.get("/", response_model=list[AutomationModel])
-async def list_automations(user=Depends(get_verified_user)):
-    return Automations.get_automations_for_user(user.id, user_team_ids(user.id))
+async def list_automations(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    return Automations.get_automations_for_user(user.id, organization_id)
 
 
 @router.post("/", response_model=AutomationModel)
-async def create_automation(form_data: AutomationForm, user=Depends(get_verified_user)):
+async def create_automation(
+    form_data: AutomationForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     form_data.cron = _normalize_form_cron(form_data.cron)
-    if form_data.team_id and not is_team_member(form_data.team_id, user.id):
+    form_data.organization_id = form_data.organization_id or organization_id
+    if not is_member(form_data.organization_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    form_data.visibility = resolve_visibility(
+        form_data.organization_id, form_data.visibility
+    )
+    if form_data.visibility == "organization" and is_personal_org(
+        form_data.organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot share automations in the personal organization",
         )
     automation = Automations.insert_new_automation(user.id, form_data)
     if not automation:
@@ -90,7 +110,7 @@ async def update_automation(
         )
     if form_data.cron is not None:
         form_data.cron = _normalize_form_cron(form_data.cron)
-    if form_data.team_id and not is_team_member(form_data.team_id, user.id):
+    if form_data.organization_id and not is_member(form_data.organization_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

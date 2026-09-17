@@ -1,10 +1,12 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { organizationHeaders } from '$lib/apis/organizations';
 
 const authHeaders = (token: string) => ({
 	Accept: 'application/json',
 	'Content-Type': 'application/json',
-	authorization: `Bearer ${token}`
+	authorization: `Bearer ${token}`,
+	...organizationHeaders()
 });
 
 export const getSkillPacks = async (token: string = '') => {

@@ -1,8 +1,13 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { copyToClipboard, getTimeRange } from '$lib/utils';
 import { parseApiError } from '$lib/apis/response';
+import { organizationHeaders } from '$lib/apis/organizations';
 
-export const createNewChat = async (token: string, chat: object, teamId: string | null = null) => {
+export const createNewChat = async (
+	token: string,
+	chat: object,
+	organizationId: string | null = null
+) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/new`, {
@@ -10,11 +15,13 @@ export const createNewChat = async (token: string, chat: object, teamId: string 
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		},
 		body: JSON.stringify({
 			chat: chat,
-			team_id: teamId
+			organization_id: organizationId,
+			visibility: 'private'
 		})
 	})
 		.then(async (res) => {
@@ -48,7 +55,8 @@ export const importChat = async (
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		},
 		body: JSON.stringify({
 			chat: chat,
@@ -87,7 +95,9 @@ export const getChatList = async (token: string = '', page: number | null = null
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` }),
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -113,16 +123,22 @@ export const getChatList = async (token: string = '', page: number | null = null
 	}));
 };
 
-export const getTeamChatList = async (token: string, teamId: string) => {
+export const updateChatVisibilityById = async (
+	token: string,
+	id: string,
+	visibility: string
+) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/team/${teamId}`, {
-		method: 'GET',
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/visibility`, {
+		method: 'POST',
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			...(token && { authorization: `Bearer ${token}` })
-		}
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
+		},
+		body: JSON.stringify({ visibility })
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await parseApiError(res);
@@ -138,37 +154,6 @@ export const getTeamChatList = async (token: string, teamId: string) => {
 		throw error;
 	}
 
-	return (res ?? []).map((chat) => ({
-		...chat,
-		time_range: getTimeRange(chat.updated_at)
-	}));
-};
-
-export const updateChatTeamById = async (token: string, id: string, teamId: string | null) => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/team`, {
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({ team_id: teamId })
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await parseApiError(res);
-			return res.json();
-		})
-		.catch((err) => {
-			error = err.detail ?? err;
-			console.log(err);
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
 	return res;
 };
 
@@ -180,6 +165,7 @@ export const getChatListByUserId = async (token: string = '', userId: string) =>
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -214,6 +200,7 @@ export const getArchivedChatList = async (token: string = '') => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -245,6 +232,7 @@ export const getAllChats = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -280,6 +268,7 @@ export const getChatListBySearchText = async (token: string, text: string, page:
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -314,6 +303,7 @@ export const getChatsByFolderId = async (token: string, folderId: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -345,6 +335,7 @@ export const getAllArchivedChats = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -376,6 +367,7 @@ export const getAllUserChats = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -407,6 +399,7 @@ export const getAllTags = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -438,6 +431,7 @@ export const getPinnedChatList = async (token: string = '') => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -472,6 +466,7 @@ export const getChatListByTagName = async (token: string = '', tagName: string) 
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -509,6 +504,7 @@ export const getChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -541,6 +537,7 @@ export const getChatByShareId = async (token: string, share_id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -573,6 +570,7 @@ export const getChatPinnedStatusById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -611,6 +609,7 @@ export const toggleChatPinnedStatusById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -649,6 +648,7 @@ export const cloneChatById = async (token: string, id: string, title?: string) =
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -690,6 +690,7 @@ export const cloneSharedChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -728,6 +729,7 @@ export const shareChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -783,6 +785,7 @@ export const updateChatFolderIdById = async (token: string, id: string, folderId
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -818,6 +821,7 @@ export const archiveChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -850,6 +854,7 @@ export const deleteSharedChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -882,6 +887,7 @@ export const updateChatById = async (token: string, id: string, chat: object) =>
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -917,6 +923,7 @@ export const deleteChatById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -949,6 +956,7 @@ export const getTagsById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -981,6 +989,7 @@ export const addTagById = async (token: string, id: string, tagName: string) => 
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -1015,6 +1024,7 @@ export const deleteTagById = async (token: string, id: string, tagName: string) 
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
@@ -1049,6 +1059,7 @@ export const deleteTagsById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -1081,6 +1092,7 @@ export const deleteAllChats = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})
@@ -1113,6 +1125,7 @@ export const archiveAllChats = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
+			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
 		}
 	})

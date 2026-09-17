@@ -72,7 +72,7 @@ from open_webui.routers import (
     folders,
     configs,
     groups,
-    teams,
+    organizations,
     automations,
     artifacts,
     secrets,
@@ -1054,7 +1054,9 @@ app.include_router(tools.router, prefix="/api/v1/tools", tags=["tools"])
 app.include_router(memories.router, prefix="/api/v1/memories", tags=["memories"])
 app.include_router(folders.router, prefix="/api/v1/folders", tags=["folders"])
 app.include_router(groups.router, prefix="/api/v1/groups", tags=["groups"])
-app.include_router(teams.router, prefix="/api/v1/teams", tags=["teams"])
+app.include_router(
+    organizations.router, prefix="/api/v1/organizations", tags=["organizations"]
+)
 app.include_router(
     automations.router, prefix="/api/v1/automations", tags=["automations"]
 )

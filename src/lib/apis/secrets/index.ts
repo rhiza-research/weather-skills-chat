@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { organizationHeaders } from '$lib/apis/organizations';
 
 const request = async (token: string, path: string, options: RequestInit = {}) => {
 	let error = null;
@@ -9,6 +10,7 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`,
+			...organizationHeaders(),
 			...(options.headers || {})
 		}
 	})
@@ -30,12 +32,14 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 
 export const getSecrets = async (token: string) => request(token, '/secrets/');
 
-export const getTeamSecrets = async (token: string, teamId: string) =>
-	request(token, `/secrets/team/${teamId}`);
-
 export const createSecret = async (
 	token: string,
-	secret: { name: string; value: string; team_id?: string | null }
+	secret: {
+		name: string;
+		value: string;
+		organization_id?: string | null;
+		visibility?: string | null;
+	}
 ) => request(token, '/secrets/', { method: 'POST', body: JSON.stringify(secret) });
 
 export const updateSecretById = async (

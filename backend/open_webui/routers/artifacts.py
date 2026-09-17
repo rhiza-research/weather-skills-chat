@@ -19,7 +19,7 @@ from open_webui.utils.artifacts import (
     write_json,
 )
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.teams import can_read_chat, can_write_chat
+from open_webui.utils.organizations import can_read_chat, can_write_chat
 from open_webui.models.chats import Chats
 from pydantic import BaseModel
 

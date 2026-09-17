@@ -8,7 +8,7 @@ from open_webui.models.chats import Chats
 
 from open_webui.env import SRC_LOG_LEVELS
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, Text, JSON, Boolean
+from sqlalchemy import BigInteger, Column, Text, JSON, Boolean, or_
 from open_webui.utils.access_control import get_permissions
 
 
@@ -26,6 +26,8 @@ class Folder(Base):
     id = Column(Text, primary_key=True)
     parent_id = Column(Text, nullable=True)
     user_id = Column(Text)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
     name = Column(Text)
     items = Column(JSON, nullable=True)
     meta = Column(JSON, nullable=True)
@@ -38,6 +40,8 @@ class FolderModel(BaseModel):
     id: str
     parent_id: Optional[str] = None
     user_id: str
+    organization_id: Optional[str] = None
+    visibility: str = "private"
     name: str
     items: Optional[dict] = None
     meta: Optional[dict] = None
@@ -60,7 +64,11 @@ class FolderForm(BaseModel):
 
 class FolderTable:
     def insert_new_folder(
-        self, user_id: str, name: str, parent_id: Optional[str] = None
+        self,
+        user_id: str,
+        name: str,
+        parent_id: Optional[str] = None,
+        organization_id: Optional[str] = None,
     ) -> Optional[FolderModel]:
         with get_db() as db:
             id = str(uuid.uuid4())
@@ -68,6 +76,8 @@ class FolderTable:
                 **{
                     "id": id,
                     "user_id": user_id,
+                    "organization_id": organization_id or user_id,
+                    "visibility": "private",
                     "name": name,
                     "parent_id": parent_id,
                     "created_at": int(time.time()),
@@ -125,11 +135,22 @@ class FolderTable:
         except Exception:
             return None
 
-    def get_folders_by_user_id(self, user_id: str) -> list[FolderModel]:
+    def get_folders_by_user_id(
+        self, user_id: str, organization_id: Optional[str] = None
+    ) -> list[FolderModel]:
+        organization_id = organization_id or user_id
         with get_db() as db:
             return [
                 FolderModel.model_validate(folder)
-                for folder in db.query(Folder).filter_by(user_id=user_id).all()
+                for folder in db.query(Folder)
+                .filter(
+                    Folder.organization_id == organization_id,
+                    or_(
+                        Folder.visibility == "organization",
+                        Folder.user_id == user_id,
+                    ),
+                )
+                .all()
             ]
 
     def get_folder_by_parent_id_and_user_id_and_name(

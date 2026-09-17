@@ -51,7 +51,8 @@ export const chats = writable(null);
 export const pinnedChats = writable([]);
 export const tags = writable([]);
 export const teams = writable([]);
-export const pendingTeamId = writable(null);
+export const organizations = writable([]);
+export const activeOrganizationId = writable(null);
 
 export const models: Writable<Model[]> = writable([]);
 

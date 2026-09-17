@@ -74,7 +74,7 @@
 
 			<a
 				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-				href="/teams"
+				href="/organizations"
 				on:click={() => {
 					show = false;
 
@@ -99,7 +99,7 @@
 						/>
 					</svg>
 				</div>
-				<div class=" self-center truncate">{$i18n.t('Teams')}</div>
+				<div class=" self-center truncate">{$i18n.t('Organizations')}</div>
 			</a>
 
 			<a

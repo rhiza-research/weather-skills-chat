@@ -64,10 +64,12 @@
 					>
 						<div class="font-mono">{secret.name}</div>
 						<div class="text-[11px] text-gray-400">
-							{#if !secret.team_id && secrets.some((s) => s.team_id && s.name === secret.name)}
-								{$i18n.t('Personal · overrides team')}
+							{#if secret.visibility !== 'organization' && secrets.some((s) => s.visibility === 'organization' && s.name === secret.name)}
+								{$i18n.t('Private · overrides organization')}
 							{:else}
-								{secret.team_name || $i18n.t('Personal')}
+								{secret.visibility === 'organization'
+									? $i18n.t('Organization')
+									: $i18n.t('Private')}
 							{/if}
 						</div>
 					</button>

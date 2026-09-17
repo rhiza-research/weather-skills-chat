@@ -47,10 +47,10 @@
 		const write = acl.write || {};
 		const empty =
 			!(read.group_ids || []).length &&
-			!(read.team_ids || []).length &&
+			!(read.organization_ids || []).length &&
 			!(read.user_ids || []).length &&
 			!(write.group_ids || []).length &&
-			!(write.team_ids || []).length &&
+			!(write.organization_ids || []).length &&
 			!(write.user_ids || []).length;
 		if (empty) {
 			return 'private';
@@ -63,11 +63,11 @@
 		if (!acl || (Object.keys(acl).length === 0 && acl.constructor === Object)) return 'Private';
 		const users = acl?.read?.user_ids?.length || 0;
 		const groups = acl?.read?.group_ids?.length || 0;
-		const teams = acl?.read?.team_ids?.length || 0;
+		const orgs = acl?.read?.organization_ids?.length || 0;
 		const bits = [];
 		if (users) bits.push(`${users} user${users === 1 ? '' : 's'}`);
 		if (groups) bits.push(`${groups} group${groups === 1 ? '' : 's'}`);
-		if (teams) bits.push(`${teams} team${teams === 1 ? '' : 's'}`);
+		if (orgs) bits.push(`${orgs} org${orgs === 1 ? '' : 's'}`);
 		return bits.length ? bits.join(', ') : 'Restricted';
 	};
 
@@ -139,12 +139,12 @@
 				: {
 						read: {
 							group_ids: pack.access_control?.read?.group_ids ?? [],
-							team_ids: pack.access_control?.read?.team_ids ?? [],
+							organization_ids: pack.access_control?.read?.organization_ids ?? [],
 							user_ids: pack.access_control?.read?.user_ids ?? []
 						},
 						write: {
 							group_ids: pack.access_control?.write?.group_ids ?? [],
-							team_ids: pack.access_control?.write?.team_ids ?? [],
+							organization_ids: pack.access_control?.write?.organization_ids ?? [],
 							user_ids: pack.access_control?.write?.user_ids ?? []
 						}
 					};

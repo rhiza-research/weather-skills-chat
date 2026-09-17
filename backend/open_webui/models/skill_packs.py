@@ -16,12 +16,14 @@ class SkillPack(Base):
     __tablename__ = "skill_pack"
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "git_url", "git_ref", name="uq_skill_pack_user_git_url_ref"
+            "organization_id", "git_url", "git_ref", name="uq_skill_pack_org_git_url_ref"
         ),
     )
 
     id = Column(Text, unique=True, primary_key=True)
     user_id = Column(Text, nullable=False)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
     name = Column(Text, nullable=False)
     git_url = Column(Text, nullable=False)
     git_ref = Column(Text, nullable=False)
@@ -49,6 +51,8 @@ class SkillPackModel(BaseModel):
 
     id: str
     user_id: str
+    organization_id: Optional[str] = None
+    visibility: str = "private"
     name: str
     git_url: str
     git_ref: str
@@ -90,12 +94,20 @@ class SkillPackTable:
         local_path: str,
         meta: Optional[dict] = None,
         access_control: Optional[dict] = None,
+        organization_id: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> Optional[SkillPackModel]:
         now = int(time.time())
+        organization_id = organization_id or user_id
+        visibility = visibility or "private"
+        if organization_id == user_id:
+            visibility = "private"
         with get_db() as db:
             row = SkillPack(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
+                organization_id=organization_id,
+                visibility=visibility,
                 name=name,
                 git_url=git_url,
                 git_ref=git_ref,
@@ -125,16 +137,23 @@ class SkillPackTable:
             )
             return self._to_model(row) if row else None
 
-    def get_by_user_url_ref(
-        self, user_id: str, git_url: str, git_ref: str
+    def get_by_org_url_ref(
+        self, organization_id: str, git_url: str, git_ref: str
     ) -> Optional[SkillPackModel]:
         with get_db() as db:
             row = (
                 db.query(SkillPack)
-                .filter_by(user_id=user_id, git_url=git_url, git_ref=git_ref)
+                .filter_by(
+                    organization_id=organization_id, git_url=git_url, git_ref=git_ref
+                )
                 .first()
             )
             return self._to_model(row) if row else None
+
+    def get_by_user_url_ref(
+        self, user_id: str, git_url: str, git_ref: str
+    ) -> Optional[SkillPackModel]:
+        return self.get_by_org_url_ref(user_id, git_url, git_ref)
 
     def get_all(self) -> list[SkillPackModel]:
         with get_db() as db:
@@ -169,6 +188,8 @@ class SkillPackTable:
         return SkillPackModel(
             id=row.id,
             user_id=row.user_id,
+            organization_id=row.organization_id,
+            visibility=row.visibility or "private",
             name=row.name,
             git_url=row.git_url,
             git_ref=row.git_ref,

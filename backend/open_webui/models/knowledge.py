@@ -29,6 +29,8 @@ class Knowledge(Base):
 
     id = Column(Text, unique=True, primary_key=True)
     user_id = Column(Text)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
 
     name = Column(Text)
     description = Column(Text)
@@ -62,6 +64,8 @@ class KnowledgeModel(BaseModel):
 
     id: str
     user_id: str
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
 
     name: str
     description: str
@@ -97,6 +101,8 @@ class KnowledgeForm(BaseModel):
     description: str
     data: Optional[dict] = None
     access_control: Optional[dict] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
 
 
 class KnowledgeTable:
@@ -109,6 +115,8 @@ class KnowledgeTable:
                     **form_data.model_dump(),
                     "id": str(uuid.uuid4()),
                     "user_id": user_id,
+                    "organization_id": form_data.organization_id or user_id,
+                    "visibility": form_data.visibility or "private",
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }

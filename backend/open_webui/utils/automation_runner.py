@@ -215,22 +215,27 @@ async def execute_automation(
     try:
         chat = Chats.insert_new_chat(
             owner_id,
-            ChatForm(chat=chat_blob, team_id=automation.team_id),
+            ChatForm(
+                chat=chat_blob,
+                organization_id=automation.organization_id,
+                visibility=automation.visibility,
+            ),
         )
         if not chat:
             raise ValueError("Failed to create chat")
         run = AutomationRuns.update_run(run.id, chat_id=chat.id)
 
         notify_ids = [owner_id]
-        if automation.team_id:
+        if automation.visibility == "organization" and automation.organization_id:
             try:
-                from open_webui.models.teams import Teams
+                from open_webui.models.organizations import Organizations
 
                 notify_ids.extend(
-                    m.user_id for m in (Teams.get_members(automation.team_id) or [])
+                    m.user_id
+                    for m in (Organizations.get_members(automation.organization_id) or [])
                 )
             except Exception:
-                log.exception("Failed to resolve team members for chat notify")
+                log.exception("Failed to resolve organization members for chat notify")
         await _notify_chat_created(notify_ids, chat.id, title)
 
         tool_ids = _resolve_tool_ids(automation, model, user)

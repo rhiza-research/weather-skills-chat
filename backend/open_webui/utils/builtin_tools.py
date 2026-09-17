@@ -13,15 +13,15 @@ from email.message import EmailMessage
 from open_webui.models.automations import AutomationForm, Automations
 from open_webui.models.chats import Chats
 from open_webui.models.secrets import SecretForm, Secrets
-from open_webui.models.teams import Teams
+from open_webui.models.organizations import Organizations
 from open_webui.models.users import Users
 from open_webui.utils.automation_scheduler import sync_automation_job
 from open_webui.utils.schedule import parse_schedule, prompt_from_messages
-from open_webui.utils.teams import (
+from open_webui.utils.organizations import (
     can_read_chat,
     can_write_chat,
-    is_team_admin,
-    is_team_member,
+    is_member,
+    is_org_admin,
 )
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -34,7 +34,7 @@ async def create_automation(
     name: str,
     schedule: str,
     prompt: Optional[str] = None,
-    team_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     __user__: dict = {},
     __messages__: list = None,
     __metadata__: dict = None,
@@ -48,7 +48,7 @@ async def create_automation(
     :param name: Short title for the automation
     :param schedule: Cron (0 12 * * *) or a phrase like "every day at noon"
     :param prompt: Optional restatement of the task. If omitted, prior user turns are used.
-    :param team_id: Optional team scope. Defaults to the current chat's team.
+    :param organization_id: Optional organization id. Defaults to the current chat's organization.
     """
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
@@ -74,9 +74,11 @@ async def create_automation(
     if not recipe:
         return "I need a task description to schedule. Please restate what should run."
 
-    scope_team_id = team_id if team_id is not None else getattr(chat, "team_id", None)
-    if scope_team_id and not is_team_member(scope_team_id, user.id):
-        return "You are not a member of that team."
+    organization_id = organization_id if organization_id is not None else getattr(
+        chat, "organization_id", user.id
+    )
+    if organization_id and not is_member(organization_id, user.id):
+        return "You are not a member of that organization."
 
     model_id = None
     if isinstance(__model__, dict):
@@ -104,7 +106,8 @@ async def create_automation(
             model=model_id,
             cron=cron,
             enabled=True,
-            team_id=scope_team_id,
+            organization_id=organization_id,
+            visibility=getattr(chat, "visibility", "private"),
             source_chat_id=chat_id,
             tool_ids=tool_ids,
             features=features,
@@ -113,7 +116,11 @@ async def create_automation(
     if not automation:
         return "Failed to create the automation."
     sync_automation_job(automation)
-    scope = f"team `{scope_team_id}`" if scope_team_id else "your private automations"
+    scope = (
+        f"organization `{organization_id}`"
+        if organization_id != user.id
+        else "your personal automations"
+    )
     tool_note = (
         f" Tools/skills captured: {len(tool_ids)}."
         if tool_ids
@@ -151,9 +158,9 @@ CREATE_AUTOMATION_SPEC = {
                 "type": "string",
                 "description": "Optional restatement of the task to replay",
             },
-            "team_id": {
+            "organization_id": {
                 "type": "string",
-                "description": "Optional team id; defaults to the current chat's team",
+                "description": "Optional organization id; defaults to the current chat's organization",
             },
         },
         "required": ["name", "schedule"],
@@ -199,24 +206,22 @@ async def create_zarr_view(
     return f"Wrote zarr view `{relpath}` for `{zarr}`."
 
 
-def _resolve_team_for_secret(user, team: Optional[str]):
-    if not team or not str(team).strip():
+def _resolve_org_for_secret(user, organization: Optional[str]):
+    if not organization or not str(organization).strip():
         return None, None
-    raw = str(team).strip()
-    found = Teams.get_team_by_id(raw)
+    raw = str(organization).strip()
+    found = Organizations.get_organization_by_id(raw)
     if not found:
-        candidates = Teams.get_teams_by_user_id(user.id)
-        if user.role == "admin":
-            candidates = Teams.get_all_teams()
+        candidates = Organizations.get_organizations_by_user_id(user.id)
         matches = [t for t in candidates if (t.name or "").lower() == raw.lower()]
         if len(matches) == 1:
             found = matches[0]
         elif len(matches) > 1:
-            return None, "That team name is ambiguous; pass the team id."
+            return None, "That organization name is ambiguous; pass the organization id."
     if not found:
-        return None, "Team not found."
-    if not is_team_admin(found.id, user.id, user.role):
-        return None, "Only team admins can create team secrets."
+        return None, "Organization not found."
+    if not is_org_admin(found.id, user.id):
+        return None, "Only organization admins can create organization-shared secrets."
     return found, None
 
 
@@ -234,25 +239,35 @@ async def create_secret(
     if isinstance(replace, str):
         replace = replace.lower() in ("1", "true", "yes")
 
-    team_row, error = _resolve_team_for_secret(user, team)
+    org_row, error = _resolve_org_for_secret(user, team)
     if error:
         return error
-    team_id = team_row.id if team_row else None
+    organization_id = org_row.id if org_row else user.id
+    visibility = "organization" if org_row else "private"
 
     try:
-        form = SecretForm(name=name, value=value, team_id=team_id)
+        form = SecretForm(
+            name=name,
+            value=value,
+            organization_id=organization_id,
+            visibility=visibility,
+        )
     except Exception as e:
         return str(e)
 
     existing = (
-        Secrets.get_team(team_id, form.name)
-        if team_id
-        else Secrets.get_personal(user.id, form.name)
+        Secrets.get_shared(organization_id, form.name)
+        if visibility == "organization"
+        else Secrets.get_private(organization_id, user.id, form.name)
     )
 
     if existing:
         if not replace:
-            scope = f"team `{team_row.name}`" if team_row else "your personal secrets"
+            scope = (
+                f"organization `{org_row.name}`"
+                if org_row
+                else "your personal secrets"
+            )
             return (
                 f"A secret named `{form.name}` already exists in {scope}. "
                 "Pass replace=true to overwrite it, or choose a different name."
@@ -266,7 +281,9 @@ async def create_secret(
         if not updated:
             return "Failed to replace the secret."
         placeholder = f"{{{{secret:{updated.name}}}}}"
-        scope = f"team `{team_row.name}`" if team_row else "your personal secrets"
+        scope = (
+            f"organization `{org_row.name}`" if org_row else "your personal secrets"
+        )
         return (
             f"Replaced secret `{updated.name}` in {scope}. "
             f"Use `{placeholder}` in later tool calls. The value will not be shown again."
@@ -276,7 +293,7 @@ async def create_secret(
     if not created:
         return "Failed to save the secret."
     placeholder = f"{{{{secret:{created.name}}}}}"
-    scope = f"team `{team_row.name}`" if team_row else "your personal secrets"
+    scope = f"organization `{org_row.name}`" if org_row else "your personal secrets"
     return (
         f"Saved secret `{created.name}` in {scope}. "
         f"Use `{placeholder}` in later tool calls. The value will not be shown again."
@@ -693,18 +710,18 @@ def _email_recipient_directory(user_id: str, chat) -> dict:
             "name": (user.name or "").strip() or None,
         }
 
-    team_ids = set(Teams.user_team_ids(user_id))
-    chat_team_id = getattr(chat, "team_id", None) if chat else None
-    if chat_team_id:
-        team_ids.add(chat_team_id)
+    org_ids = set(Organizations.user_organization_ids(user_id))
+    chat_org_id = getattr(chat, "organization_id", None) if chat else None
+    if chat_org_id:
+        org_ids.add(chat_org_id)
 
-    teams = []
-    for team_id in sorted(team_ids):
-        team = Teams.get_team_by_id(team_id)
-        if not team:
+    organizations = []
+    for org_id in sorted(org_ids):
+        org = Organizations.get_organization_by_id(org_id)
+        if not org:
             continue
         members = []
-        for member in Teams.get_members(team_id):
+        for member in Organizations.get_members(org_id):
             email = (member.email or "").strip().lower()
             if not email or not EMAIL_RE.match(email):
                 continue
@@ -717,15 +734,15 @@ def _email_recipient_directory(user_id: str, chat) -> dict:
                 }
             )
         if members:
-            teams.append(
+            organizations.append(
                 {
-                    "team_id": team_id,
-                    "team_name": team.name,
+                    "organization_id": org_id,
+                    "organization_name": org.name,
                     "members": members,
                 }
             )
 
-    return {"self": self_info, "teams": teams}
+    return {"self": self_info, "organizations": organizations}
 
 
 def _allowed_email_recipients_for_user(user_id: str, chat) -> set[str]:

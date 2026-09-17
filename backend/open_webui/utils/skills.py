@@ -491,24 +491,37 @@ def install_skill_pack(
     git_url: str,
     git_ref: str,
     request_app_tools: dict,
+    organization_id: Optional[str] = None,
+    visibility: str = "private",
 ) -> SkillPackModel:
     url = validate_public_git_url(git_url)
     ref = (git_ref or "main").strip() or "main"
+    organization_id = organization_id or user_id
 
-    existing = SkillPacks.get_by_user_url_ref(user_id, url, ref)
+    existing = SkillPacks.get_by_org_url_ref(organization_id, url, ref)
     if existing:
         raise SkillInstallError(
             f"You already have this pack installed for {url} @ {ref} "
             f"(id={existing.id}). Use update instead."
         )
 
-    dirname = pack_dirname(url, ref, owner_key=user_id)
+    dirname = pack_dirname(url, ref, owner_key=organization_id)
     local_path = SKILLS_DIR / dirname
     if local_path.exists():
         shutil.rmtree(local_path)
 
     sha = checkout_ref(local_path, url, ref)
     name = f"{repo_slug_from_url(url)}@{ref}"
+    access_control = {}
+    if visibility == "organization":
+        access_control = {
+            "read": {
+                "organization_ids": [organization_id],
+                "group_ids": [],
+                "user_ids": [],
+            },
+            "write": {"organization_ids": [], "group_ids": [], "user_ids": []},
+        }
     pack = SkillPacks.insert(
         user_id,
         name=name,
@@ -517,6 +530,9 @@ def install_skill_pack(
         commit_sha=sha,
         local_path=str(local_path),
         meta={"skills": []},
+        organization_id=organization_id,
+        visibility=visibility,
+        access_control=access_control,
     )
     if not pack:
         raise SkillInstallError("Failed to create skill pack record")
@@ -551,7 +567,9 @@ def update_skill_pack(
 
     # If retargeting to a ref this user already tracks, refuse
     if ref != pack.git_ref:
-        conflict = SkillPacks.get_by_user_url_ref(pack.user_id, pack.git_url, ref)
+        conflict = SkillPacks.get_by_org_url_ref(
+            pack.organization_id, pack.git_url, ref
+        )
         if conflict and conflict.id != pack.id:
             raise SkillInstallError(
                 f"You already have another pack tracking {pack.git_url} @ {ref}"
@@ -560,7 +578,7 @@ def update_skill_pack(
     local_path = Path(pack.local_path)
     # If changing ref, optionally move directory to new slug path
     target_path = SKILLS_DIR / pack_dirname(
-        pack.git_url, ref, owner_key=pack.user_id
+        pack.git_url, ref, owner_key=pack.organization_id or pack.user_id
     )
     if ref != pack.git_ref and target_path.resolve() != local_path.resolve():
         if target_path.exists():

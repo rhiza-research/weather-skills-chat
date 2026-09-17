@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
+from open_webui.utils.organizations import get_active_organization_id
 
 
 log = logging.getLogger(__name__)
@@ -41,8 +42,11 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[FolderModel])
-async def get_folders(user=Depends(get_verified_user)):
-    folders = Folders.get_folders_by_user_id(user.id)
+async def get_folders(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    folders = Folders.get_folders_by_user_id(user.id, organization_id=organization_id)
 
     return [
         {
@@ -66,7 +70,11 @@ async def get_folders(user=Depends(get_verified_user)):
 
 
 @router.post("/")
-def create_folder(form_data: FolderForm, user=Depends(get_verified_user)):
+def create_folder(
+    form_data: FolderForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     folder = Folders.get_folder_by_parent_id_and_user_id_and_name(
         None, user.id, form_data.name
     )
@@ -78,7 +86,9 @@ def create_folder(form_data: FolderForm, user=Depends(get_verified_user)):
         )
 
     try:
-        folder = Folders.insert_new_folder(user.id, form_data.name)
+        folder = Folders.insert_new_folder(
+            user.id, form_data.name, organization_id=organization_id
+        )
         return folder
     except Exception as e:
         log.exception(e)

@@ -38,7 +38,8 @@ class Chat(Base):
 
     meta = Column(JSON, server_default="{}")
     folder_id = Column(Text, nullable=True)
-    team_id = Column(Text, nullable=True)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
 
 
 class ChatModel(BaseModel):
@@ -58,7 +59,8 @@ class ChatModel(BaseModel):
 
     meta: dict = {}
     folder_id: Optional[str] = None
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: str = "private"
 
 
 ####################
@@ -68,7 +70,8 @@ class ChatModel(BaseModel):
 
 class ChatForm(BaseModel):
     chat: dict
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
 
 
 class ChatImportForm(ChatForm):
@@ -98,7 +101,8 @@ class ChatResponse(BaseModel):
     pinned: Optional[bool] = False
     meta: dict = {}
     folder_id: Optional[str] = None
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: str = "private"
 
 
 class ChatTitleIdResponse(BaseModel):
@@ -106,13 +110,28 @@ class ChatTitleIdResponse(BaseModel):
     title: str
     updated_at: int
     created_at: int
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
     user_id: Optional[str] = None
     owner_name: Optional[str] = None
 
 
+def _chat_visible_filter(user_id: str, organization_id: str):
+    return and_(
+        Chat.organization_id == organization_id,
+        or_(
+            Chat.visibility == "organization",
+            Chat.user_id == user_id,
+        ),
+    )
+
+
 class ChatTable:
     def insert_new_chat(self, user_id: str, form_data: ChatForm) -> Optional[ChatModel]:
+        organization_id = form_data.organization_id or user_id
+        visibility = form_data.visibility or "private"
+        if organization_id == user_id:
+            visibility = "private"
         with get_db() as db:
             id = str(uuid.uuid4())
             chat = ChatModel(
@@ -125,7 +144,8 @@ class ChatTable:
                         else "New Chat"
                     ),
                     "chat": form_data.chat,
-                    "team_id": form_data.team_id,
+                    "organization_id": organization_id,
+                    "visibility": visibility,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
@@ -162,7 +182,12 @@ class ChatTable:
                     "meta": form_data.meta,
                     "pinned": form_data.pinned,
                     "folder_id": form_data.folder_id,
-                    "team_id": form_data.team_id,
+                    "organization_id": form_data.organization_id or user_id,
+                    "visibility": (
+                        "private"
+                        if (form_data.organization_id or user_id) == user_id
+                        else (form_data.visibility or "private")
+                    ),
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
@@ -393,9 +418,9 @@ class ChatTable:
     def archive_all_chats_by_user_id(self, user_id: str) -> bool:
         try:
             with get_db() as db:
-                db.query(Chat).filter_by(user_id=user_id).filter(
-                    Chat.team_id.is_(None)
-                ).update({"archived": True})
+                db.query(Chat).filter(_chat_visible_filter(user_id, user_id)).update(
+                    {"archived": True}
+                )
                 db.commit()
                 return True
         except Exception:
@@ -407,10 +432,9 @@ class ChatTable:
         with get_db() as db:
             all_chats = (
                 db.query(Chat)
-                .filter_by(user_id=user_id, archived=True)
-                .filter(Chat.team_id.is_(None))
+                .filter(_chat_visible_filter(user_id, user_id))
+                .filter_by(archived=True)
                 .order_by(Chat.updated_at.desc())
-                # .limit(limit).offset(skip)
                 .all()
             )
             return [ChatModel.model_validate(chat) for chat in all_chats]
@@ -421,9 +445,11 @@ class ChatTable:
         include_archived: bool = False,
         skip: int = 0,
         limit: int = 50,
+        organization_id: Optional[str] = None,
     ) -> list[ChatModel]:
+        organization_id = organization_id or user_id
         with get_db() as db:
-            query = db.query(Chat).filter_by(user_id=user_id).filter(Chat.team_id.is_(None))
+            query = db.query(Chat).filter(_chat_visible_filter(user_id, organization_id))
             if not include_archived:
                 query = query.filter_by(archived=False)
 
@@ -443,13 +469,14 @@ class ChatTable:
         include_archived: bool = False,
         skip: Optional[int] = None,
         limit: Optional[int] = None,
+        organization_id: Optional[str] = None,
     ) -> list[ChatTitleIdResponse]:
+        organization_id = organization_id or user_id
         with get_db() as db:
             query = (
                 db.query(Chat)
-                .filter_by(user_id=user_id)
+                .filter(_chat_visible_filter(user_id, organization_id))
                 .filter_by(folder_id=None)
-                .filter(Chat.team_id.is_(None))
             )
             query = query.filter(or_(Chat.pinned == False, Chat.pinned == None))
 
@@ -461,7 +488,8 @@ class ChatTable:
                 Chat.title,
                 Chat.updated_at,
                 Chat.created_at,
-                Chat.team_id,
+                Chat.organization_id,
+                Chat.visibility,
                 Chat.user_id,
             )
 
@@ -472,7 +500,6 @@ class ChatTable:
 
             all_chats = query.all()
 
-            # result has to be destrctured from sqlalchemy `row` and mapped to a dict since the `ChatModel`is not the returned dataclass.
             return [
                 ChatTitleIdResponse.model_validate(
                     {
@@ -480,64 +507,47 @@ class ChatTable:
                         "title": chat[1],
                         "updated_at": chat[2],
                         "created_at": chat[3],
-                        "team_id": chat[4],
-                        "user_id": chat[5],
+                        "organization_id": chat[4],
+                        "visibility": chat[5],
+                        "user_id": chat[6],
                     }
                 )
                 for chat in all_chats
             ]
 
-    def get_chat_title_id_list_by_team_id(
+    def get_chat_title_id_list_by_organization_id(
         self,
-        team_id: str,
+        user_id: str,
+        organization_id: str,
         include_archived: bool = False,
         skip: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> list[ChatTitleIdResponse]:
-        with get_db() as db:
-            query = db.query(Chat).filter_by(team_id=team_id)
-            if not include_archived:
-                query = query.filter_by(archived=False)
-            query = query.order_by(Chat.updated_at.desc()).with_entities(
-                Chat.id,
-                Chat.title,
-                Chat.updated_at,
-                Chat.created_at,
-                Chat.team_id,
-                Chat.user_id,
-            )
-            if skip:
-                query = query.offset(skip)
-            if limit:
-                query = query.limit(limit)
-            return [
-                ChatTitleIdResponse.model_validate(
-                    {
-                        "id": chat[0],
-                        "title": chat[1],
-                        "updated_at": chat[2],
-                        "created_at": chat[3],
-                        "team_id": chat[4],
-                        "user_id": chat[5],
-                    }
-                )
-                for chat in query.all()
-            ]
+        return self.get_chat_title_id_list_by_user_id(
+            user_id,
+            include_archived=include_archived,
+            skip=skip,
+            limit=limit,
+            organization_id=organization_id,
+        )
 
-    def count_chats_by_team_id(self, team_id: str, include_archived: bool = True) -> int:
-        """Count chats belonging to a team (archived included by default)."""
+    def count_chats_by_organization_id(
+        self, organization_id: str, include_archived: bool = True
+    ) -> int:
         with get_db() as db:
-            query = db.query(Chat).filter_by(team_id=team_id)
+            query = db.query(Chat).filter_by(organization_id=organization_id)
             if not include_archived:
                 query = query.filter_by(archived=False)
             return query.count()
 
-    def update_chat_team_id(self, id: str, team_id: Optional[str]) -> Optional[ChatModel]:
+    def update_chat_visibility(
+        self, id: str, visibility: str
+    ) -> Optional[ChatModel]:
         try:
             with get_db() as db:
                 chat = db.get(Chat, id)
-                chat.team_id = team_id
-                if team_id:
+                chat.visibility = visibility
+                if visibility == "organization":
                     chat.folder_id = None
                 chat.updated_at = int(time.time())
                 db.commit()
@@ -607,12 +617,15 @@ class ChatTable:
             )
             return [ChatModel.model_validate(chat) for chat in all_chats]
 
-    def get_pinned_chats_by_user_id(self, user_id: str) -> list[ChatModel]:
+    def get_pinned_chats_by_user_id(
+        self, user_id: str, organization_id: Optional[str] = None
+    ) -> list[ChatModel]:
+        organization_id = organization_id or user_id
         with get_db() as db:
             all_chats = (
                 db.query(Chat)
-                .filter_by(user_id=user_id, pinned=True, archived=False)
-                .filter(Chat.team_id.is_(None))
+                .filter(_chat_visible_filter(user_id, organization_id))
+                .filter_by(pinned=True, archived=False)
                 .order_by(Chat.updated_at.desc())
             )
             return [ChatModel.model_validate(chat) for chat in all_chats]
@@ -633,15 +646,18 @@ class ChatTable:
         include_archived: bool = False,
         skip: int = 0,
         limit: int = 60,
-        team_ids: Optional[list[str]] = None,
+        organization_id: Optional[str] = None,
     ) -> list[ChatModel]:
         """
         Filters chats based on a search query using Python, allowing pagination using skip and limit.
         """
         search_text = search_text.lower().strip()
+        organization_id = organization_id or user_id
 
         if not search_text:
-            return self.get_chat_list_by_user_id(user_id, include_archived, skip, limit)
+            return self.get_chat_list_by_user_id(
+                user_id, include_archived, skip, limit, organization_id=organization_id
+            )
 
         search_text_words = search_text.split(" ")
 
@@ -659,11 +675,7 @@ class ChatTable:
         search_text = " ".join(search_text_words)
 
         with get_db() as db:
-            team_ids = team_ids or []
-            visibility = (Chat.user_id == user_id) & (Chat.team_id.is_(None))
-            if team_ids:
-                visibility = or_(visibility, Chat.team_id.in_(team_ids))
-            query = db.query(Chat).filter(visibility)
+            query = db.query(Chat).filter(_chat_visible_filter(user_id, organization_id))
 
             if not include_archived:
                 query = query.filter(Chat.archived == False)
@@ -978,13 +990,11 @@ class ChatTable:
         try:
             with get_db() as db:
                 self.delete_shared_chats_by_user_id(user_id)
-
-                # Leave team-scoped chats in place so teammates keep history.
-                db.query(Chat).filter_by(user_id=user_id).filter(
-                    Chat.team_id.is_(None)
+                db.query(Chat).filter_by(
+                    user_id=user_id, organization_id=user_id
                 ).delete()
+                db.query(Chat).filter_by(user_id=user_id, visibility="private").delete()
                 db.commit()
-
                 return True
         except Exception:
             return False

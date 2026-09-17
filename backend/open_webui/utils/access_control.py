@@ -125,6 +125,7 @@ def has_explicit_acl_grants(access_control: Optional[dict]) -> bool:
         if (
             section.get("user_ids")
             or section.get("group_ids")
+            or section.get("organization_ids")
             or section.get("team_ids")
         ):
             return True
@@ -144,20 +145,22 @@ def has_access(
     if access_control is None:
         return type == "read"
 
-    from open_webui.models.teams import Teams
+    from open_webui.models.organizations import Organizations
 
     user_groups = Groups.get_groups_by_member_id(user_id)
     user_group_ids = [group.id for group in user_groups]
-    user_team_ids = Teams.user_team_ids(user_id)
+    user_org_ids = Organizations.user_organization_ids(user_id)
     permission_access = access_control.get(type, {})
     permitted_group_ids = permission_access.get("group_ids", [])
-    permitted_team_ids = permission_access.get("team_ids", [])
+    permitted_org_ids = permission_access.get("organization_ids", []) or permission_access.get(
+        "team_ids", []
+    )
     permitted_user_ids = permission_access.get("user_ids", [])
 
     return (
         user_id in permitted_user_ids
         or any(group_id in permitted_group_ids for group_id in user_group_ids)
-        or any(team_id in permitted_team_ids for team_id in user_team_ids)
+        or any(org_id in permitted_org_ids for org_id in user_org_ids)
     )
 
 
@@ -241,11 +244,13 @@ def get_users_with_access(
     if access_control is None:
         return Users.get_users()
 
-    from open_webui.models.teams import Teams
+    from open_webui.models.organizations import Organizations
 
     permission_access = access_control.get(type, {})
     permitted_group_ids = permission_access.get("group_ids", [])
-    permitted_team_ids = permission_access.get("team_ids", [])
+    permitted_org_ids = permission_access.get("organization_ids", []) or permission_access.get(
+        "team_ids", []
+    )
     permitted_user_ids = permission_access.get("user_ids", [])
 
     user_ids_with_access = set(permitted_user_ids)
@@ -255,8 +260,8 @@ def get_users_with_access(
         if group_user_ids:
             user_ids_with_access.update(group_user_ids)
 
-    for team_id in permitted_team_ids:
-        for member in Teams.get_members(team_id):
+    for org_id in permitted_org_ids:
+        for member in Organizations.get_members(org_id):
             user_ids_with_access.add(member.user_id)
 
     return Users.get_users_by_user_ids(list(user_ids_with_access))

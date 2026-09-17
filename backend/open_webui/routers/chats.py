@@ -24,11 +24,13 @@ from pydantic import BaseModel
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
-from open_webui.utils.teams import (
+from open_webui.utils.organizations import (
     can_read_chat,
     can_write_chat,
-    is_team_member,
-    user_team_ids,
+    get_active_organization_id,
+    is_member,
+    is_personal_org,
+    resolve_visibility,
 )
 
 log = logging.getLogger(__name__)
@@ -46,7 +48,7 @@ def _attach_owner_names(items: list[ChatTitleIdResponse]) -> list[ChatTitleIdRes
     names = _owner_names([item.user_id for item in items if item.user_id])
     for item in items:
         if item.user_id:
-            item.owner_name = names.get(item.user_id)
+            item.owner_name = names.get(item.user_id) or "Unknown user"
     return items
 
 
@@ -76,15 +78,22 @@ def _require_writable_chat(chat_id: str, user):
 @router.get("/", response_model=list[ChatTitleIdResponse])
 @router.get("/list", response_model=list[ChatTitleIdResponse])
 async def get_session_user_chat_list(
-    user=Depends(get_verified_user), page: Optional[int] = None
+    user=Depends(get_verified_user),
+    page: Optional[int] = None,
+    organization_id: str = Depends(get_active_organization_id),
 ):
     if page is not None:
         limit = 60
         skip = (page - 1) * limit
 
-        return Chats.get_chat_title_id_list_by_user_id(user.id, skip=skip, limit=limit)
+        chats = Chats.get_chat_title_id_list_by_user_id(
+            user.id, skip=skip, limit=limit, organization_id=organization_id
+        )
     else:
-        return Chats.get_chat_title_id_list_by_user_id(user.id)
+        chats = Chats.get_chat_title_id_list_by_user_id(
+            user.id, organization_id=organization_id
+        )
+    return _attach_owner_names(chats)
 
 
 ############################
@@ -124,9 +133,14 @@ async def get_user_chat_list_by_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    return Chats.get_chat_list_by_user_id(
+    chats = Chats.get_chat_list_by_user_id(
         user_id, include_archived=True, skip=skip, limit=limit
     )
+    return [
+        chat
+        for chat in chats
+        if getattr(chat, "visibility", None) == "organization"
+    ]
 
 
 ############################
@@ -135,13 +149,24 @@ async def get_user_chat_list_by_user_id(
 
 
 @router.post("/new", response_model=Optional[ChatResponse])
-async def create_new_chat(form_data: ChatForm, user=Depends(get_verified_user)):
+async def create_new_chat(
+    form_data: ChatForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     try:
-        if form_data.team_id and not is_team_member(form_data.team_id, user.id):
+        if not form_data.organization_id:
+            form_data.organization_id = organization_id
+        if form_data.organization_id and not is_member(
+            form_data.organization_id, user.id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
+        form_data.visibility = resolve_visibility(
+            form_data.organization_id, form_data.visibility
+        )
         chat = Chats.insert_new_chat(user.id, form_data)
         return ChatResponse(**chat.model_dump())
     except HTTPException:
@@ -159,8 +184,14 @@ async def create_new_chat(form_data: ChatForm, user=Depends(get_verified_user)):
 
 
 @router.post("/import", response_model=Optional[ChatResponse])
-async def import_chat(form_data: ChatImportForm, user=Depends(get_verified_user)):
+async def import_chat(
+    form_data: ChatImportForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     try:
+        if not form_data.organization_id:
+            form_data.organization_id = organization_id
         chat = Chats.import_chat(user.id, form_data)
         if chat:
             tags = chat.meta.get("tags", [])
@@ -188,7 +219,10 @@ async def import_chat(form_data: ChatImportForm, user=Depends(get_verified_user)
 
 @router.get("/search", response_model=list[ChatTitleIdResponse])
 async def search_user_chats(
-    text: str, page: Optional[int] = None, user=Depends(get_verified_user)
+    text: str,
+    page: Optional[int] = None,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     if page is None:
         page = 1
@@ -203,7 +237,7 @@ async def search_user_chats(
             text,
             skip=skip,
             limit=limit,
-            team_ids=user_team_ids(user.id),
+            organization_id=organization_id,
         )
     ]
     _attach_owner_names(chat_list)
@@ -241,30 +275,18 @@ async def get_chats_by_folder_id(folder_id: str, user=Depends(get_verified_user)
 
 
 ############################
-# GetTeamChats
-############################
-
-
-@router.get("/team/{team_id}", response_model=list[ChatTitleIdResponse])
-async def get_team_chat_list(team_id: str, user=Depends(get_verified_user)):
-    if user.role != "admin" and not is_team_member(team_id, user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-    return _attach_owner_names(Chats.get_chat_title_id_list_by_team_id(team_id))
-
-
-############################
 # GetPinnedChats
 ############################
 
 
 @router.get("/pinned", response_model=list[ChatResponse])
-async def get_user_pinned_chats(user=Depends(get_verified_user)):
+async def get_user_pinned_chats(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     return [
         ChatResponse(**chat.model_dump())
-        for chat in Chats.get_pinned_chats_by_user_id(user.id)
+        for chat in Chats.get_pinned_chats_by_user_id(user.id, organization_id)
     ]
 
 
@@ -612,7 +634,14 @@ async def clone_chat_by_id(
 
     source_id = chat.id
     chat = Chats.insert_new_chat(
-        user.id, ChatForm(**{"chat": updated_chat, "team_id": chat.team_id})
+        user.id,
+        ChatForm(
+            **{
+                "chat": updated_chat,
+                "organization_id": chat.organization_id,
+                "visibility": "private",
+            }
+        ),
     )
     try:
         from open_webui.utils.artifacts import copy_sandbox
@@ -692,6 +721,11 @@ async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def share_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
+        if is_personal_org(chat.organization_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot share chats in the personal organization",
+            )
         if chat.share_id:
             shared_chat = Chats.update_shared_chat_by_chat_id(chat.id)
             return ChatResponse(**shared_chat.model_dump())
@@ -743,21 +777,22 @@ class ChatFolderIdForm(BaseModel):
     folder_id: Optional[str] = None
 
 
-class ChatTeamForm(BaseModel):
-    team_id: Optional[str] = None
+class ChatVisibilityForm(BaseModel):
+    visibility: str
 
 
-@router.post("/{id}/team", response_model=Optional[ChatResponse])
-async def update_chat_team_by_id(
-    id: str, form_data: ChatTeamForm, user=Depends(get_verified_user)
+@router.post("/{id}/visibility", response_model=Optional[ChatResponse])
+async def update_chat_visibility_by_id(
+    id: str, form_data: ChatVisibilityForm, user=Depends(get_verified_user)
 ):
-    _require_writable_chat(id, user)
-    if form_data.team_id and not is_team_member(form_data.team_id, user.id):
+    chat = _require_writable_chat(id, user)
+    if is_personal_org(chat.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            detail="Cannot share chats in the personal organization",
         )
-    chat = Chats.update_chat_team_id(id, form_data.team_id)
+    visibility = resolve_visibility(chat.organization_id, form_data.visibility)
+    chat = Chats.update_chat_visibility(id, visibility)
     if not chat:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()

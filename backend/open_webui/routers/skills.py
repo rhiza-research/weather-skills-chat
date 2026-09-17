@@ -17,6 +17,13 @@ from open_webui.utils.access_control import (
     user_owns_or_has_access,
 )
 from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.organizations import (
+    can_read_org_resource,
+    can_write_org_resource,
+    get_active_organization_id,
+    is_org_admin,
+    is_personal_org,
+)
 from open_webui.utils.skills import (
     SkillInstallError,
     delete_skill_pack,
@@ -37,12 +44,16 @@ SHARING_PERMISSION_KEY = "sharing.public_skills"
 
 
 def _can_read(user, pack) -> bool:
+    if can_read_org_resource(user, pack):
+        return True
     return user_owns_or_has_access(
         user.id, pack.user_id, pack.access_control, "read", user.role
     )
 
 
 def _can_write(user, pack) -> bool:
+    if can_write_org_resource(user, pack):
+        return True
     return user_owns_or_has_access(
         user.id, pack.user_id, pack.access_control, "write", user.role
     )
@@ -73,12 +84,15 @@ def _require_skills_workspace(request: Request, user) -> None:
 
 
 @router.get("/")
-async def list_skill_packs(user=Depends(get_verified_user)):
+async def list_skill_packs(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     packs = SkillPacks.get_all()
     return [
         pack_to_response(p)
         for p in packs
-        if _can_read(user, p)
+        if p.organization_id == organization_id and _can_read(user, p)
     ]
 
 
@@ -118,14 +132,20 @@ async def install_skills(
     request: Request,
     form_data: SkillPackInstallForm,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     _require_skills_workspace(request, user)
+    visibility = "private"
+    if not is_personal_org(organization_id) and is_org_admin(organization_id, user.id):
+        visibility = "organization"
     try:
         pack = install_skill_pack(
             user.id,
             form_data.git_url,
             form_data.ref or "main",
             request.app.state.TOOLS,
+            organization_id=organization_id,
+            visibility=visibility,
         )
         return pack_to_response(pack)
     except SkillInstallError as e:

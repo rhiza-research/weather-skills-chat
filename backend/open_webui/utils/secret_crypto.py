@@ -79,22 +79,48 @@ def get_master_key() -> bytes:
     return _KEY
 
 
-def _aad(*, user_id: str, team_id: Optional[str], name: str) -> bytes:
+def _aad(
+    *,
+    user_id: str,
+    name: str,
+    team_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    visibility: Optional[str] = None,
+) -> bytes:
     # Bind ciphertext to its row identity so DB-level swaps fail to decrypt.
+    # Legacy team AAD is only used when decrypting pre-migration rows.
     if team_id:
         return f"v1|team|{team_id}|{name}".encode("utf-8")
+    if visibility == "organization" and organization_id:
+        return f"v1|org|{organization_id}|{name}".encode("utf-8")
+    if organization_id and organization_id != user_id:
+        return f"v1|personal|{user_id}|{name}".encode("utf-8")
     return f"v1|personal|{user_id}|{name}".encode("utf-8")
 
 
 def encrypt_secret(
-    plaintext: str, *, name: str, user_id: str, team_id: Optional[str]
+    plaintext: str,
+    *,
+    name: str,
+    user_id: str,
+    team_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    visibility: Optional[str] = None,
 ) -> Tuple[str, str]:
     if plaintext is None:
         raise ValueError("Secret value is required")
     data = plaintext.encode("utf-8")
     nonce = os.urandom(NONCE_SIZE)
     token = AESGCM(get_master_key()).encrypt(
-        nonce, data, _aad(user_id=user_id, team_id=team_id, name=name)
+        nonce,
+        data,
+        _aad(
+            user_id=user_id,
+            team_id=team_id,
+            organization_id=organization_id,
+            visibility=visibility,
+            name=name,
+        ),
     )
     return (
         base64.b64encode(token).decode("ascii"),
@@ -108,11 +134,21 @@ def decrypt_secret(
     *,
     name: str,
     user_id: str,
-    team_id: Optional[str],
+    team_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    visibility: Optional[str] = None,
 ) -> str:
     token = base64.b64decode(ciphertext)
     raw_nonce = base64.b64decode(nonce)
     data = AESGCM(get_master_key()).decrypt(
-        raw_nonce, token, _aad(user_id=user_id, team_id=team_id, name=name)
+        raw_nonce,
+        token,
+        _aad(
+            user_id=user_id,
+            team_id=team_id,
+            organization_id=organization_id,
+            visibility=visibility,
+            name=name,
+        ),
     )
     return data.decode("utf-8")

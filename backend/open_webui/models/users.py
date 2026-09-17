@@ -4,9 +4,8 @@ from typing import Optional
 from open_webui.internal.db import Base, JSONField, get_db
 
 
-from open_webui.models.chats import Chats
 from open_webui.models.groups import Groups
-from open_webui.models.teams import Teams
+from open_webui.models.organizations import Organizations
 
 
 from pydantic import BaseModel, ConfigDict
@@ -124,6 +123,7 @@ class UsersTable:
             db.commit()
             db.refresh(result)
             if result:
+                Organizations.ensure_personal(id)
                 return user
             else:
                 return None
@@ -292,21 +292,14 @@ class UsersTable:
 
     def delete_user_by_id(self, id: str) -> bool:
         try:
-            # Remove User from Groups
             Groups.remove_user_from_all_groups(id)
-            Teams.remove_user_from_all_teams(id)
-
-            # Delete User Chats
-            result = Chats.delete_chats_by_user_id(id)
-            if result:
-                with get_db() as db:
-                    # Delete User
-                    db.query(User).filter_by(id=id).delete()
-                    db.commit()
-
-                return True
-            else:
-                return False
+            Organizations.delete_personal_org(id)
+            Organizations.delete_private_workspace_resources(id)
+            Organizations.remove_user_from_all_organizations(id)
+            with get_db() as db:
+                db.query(User).filter_by(id=id).delete()
+                db.commit()
+            return True
         except Exception:
             return False
 

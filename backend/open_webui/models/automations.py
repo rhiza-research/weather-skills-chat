@@ -22,7 +22,8 @@ class Automation(Base):
     cron = Column(Text, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     user_id = Column(Text, nullable=False)
-    team_id = Column(Text, nullable=True)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
     source_chat_id = Column(Text, nullable=True)
     tool_ids = Column(JSONField, nullable=True)
     features = Column(JSONField, nullable=True)
@@ -53,7 +54,8 @@ class AutomationModel(BaseModel):
     cron: Optional[str] = None
     enabled: bool = True
     user_id: str
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: str = "private"
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
@@ -81,7 +83,8 @@ class AutomationForm(BaseModel):
     model: Optional[str] = None
     cron: Optional[str] = None
     enabled: bool = True
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
@@ -93,7 +96,8 @@ class AutomationUpdateForm(BaseModel):
     model: Optional[str] = None
     cron: Optional[str] = None
     enabled: Optional[bool] = None
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
 
@@ -112,7 +116,12 @@ class AutomationTable:
                 cron=form_data.cron,
                 enabled=form_data.enabled,
                 user_id=user_id,
-                team_id=form_data.team_id,
+                organization_id=form_data.organization_id or user_id,
+                visibility=(
+                    "private"
+                    if (form_data.organization_id or user_id) == user_id
+                    else (form_data.visibility or "private")
+                ),
                 source_chat_id=form_data.source_chat_id,
                 tool_ids=form_data.tool_ids,
                 features=form_data.features,
@@ -130,19 +139,20 @@ class AutomationTable:
             return AutomationModel.model_validate(row) if row else None
 
     def get_automations_for_user(
-        self, user_id: str, team_ids: Optional[list[str]] = None
+        self, user_id: str, organization_id: Optional[str] = None
     ) -> list[AutomationModel]:
-        team_ids = team_ids or []
+        organization_id = organization_id or user_id
         with get_db() as db:
-            conditions = [
-                (Automation.user_id == user_id) & (Automation.team_id.is_(None))
-            ]
-            if team_ids:
-                conditions.append(Automation.team_id.in_(team_ids))
             return [
                 AutomationModel.model_validate(row)
                 for row in db.query(Automation)
-                .filter(or_(*conditions))
+                .filter(
+                    Automation.organization_id == organization_id,
+                    or_(
+                        Automation.visibility == "organization",
+                        Automation.user_id == user_id,
+                    ),
+                )
                 .order_by(Automation.updated_at.desc())
                 .all()
             ]

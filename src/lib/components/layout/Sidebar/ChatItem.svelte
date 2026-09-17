@@ -43,7 +43,8 @@
 	export let title;
 	export let ownerName = '';
 	export let isMine = true;
-	export let teamId = null;
+	export let visibility = 'private';
+	export let isPersonal = false;
 
 	export let selected = false;
 
@@ -362,7 +363,8 @@
 				<ChatMenu
 					chatId={id}
 					{isMine}
-					{teamId}
+					{visibility}
+					{isPersonal}
 					cloneChatHandler={() => {
 						cloneChatHandler(id);
 					}}

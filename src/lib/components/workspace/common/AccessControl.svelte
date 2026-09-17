@@ -4,7 +4,7 @@
 	const i18n = getContext('i18n');
 
 	import { getGroups } from '$lib/apis/groups';
-	import { getTeams } from '$lib/apis/teams';
+	import { getOrganizations } from '$lib/apis/organizations';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import UserCircleSolid from '$lib/components/icons/UserCircleSolid.svelte';
@@ -19,20 +19,20 @@
 	export let allowPublic = true;
 
 	let selectedGroupId = '';
-	let selectedTeamId = '';
+	let selectedOrgId = '';
 	let groups = [];
-	let userTeams = [];
+	let userOrgs = [];
 
 	/** Expand private `{}` / partial ACLs so the template can safely read .read/.write. */
 	const emptyAclForm = () => ({
 		read: {
 			group_ids: [],
-			team_ids: [],
+			organization_ids: [],
 			user_ids: []
 		},
 		write: {
 			group_ids: [],
-			team_ids: [],
+			organization_ids: [],
 			user_ids: []
 		}
 	});
@@ -42,12 +42,12 @@
 		return {
 			read: {
 				group_ids: acl?.read?.group_ids ?? [],
-				team_ids: acl?.read?.team_ids ?? [],
+				organization_ids: acl?.read?.organization_ids ?? acl?.read?.team_ids ?? [],
 				user_ids: acl?.read?.user_ids ?? []
 			},
 			write: {
 				group_ids: acl?.write?.group_ids ?? [],
-				team_ids: acl?.write?.team_ids ?? [],
+				organization_ids: acl?.write?.organization_ids ?? acl?.write?.team_ids ?? [],
 				user_ids: acl?.write?.user_ids ?? []
 			}
 		};
@@ -68,7 +68,7 @@
 
 	onMount(async () => {
 		groups = await getGroups(localStorage.token);
-		userTeams = await getTeams(localStorage.token).catch(() => []);
+		userOrgs = await getOrganizations(localStorage.token).catch(() => []);
 
 		// Re-normalize after mount in case parent rebound a raw `{}` / null.
 		// Do not emit onChange here — auto-save callers must not get a spurious write.
@@ -86,12 +86,12 @@
 		onSelectGroup();
 	}
 
-	$: if (selectedTeamId) {
-		onSelectTeam();
+	$: if (selectedOrgId) {
+		onSelectOrg();
 	}
 
-	$: accessTeams = userTeams.filter((team) =>
-		(accessControl?.read?.team_ids ?? []).includes(team.id)
+	$: accessOrgs = userOrgs.filter((org) =>
+		(accessControl?.read?.organization_ids ?? []).includes(org.id)
 	);
 
 	const onSelectGroup = () => {
@@ -103,11 +103,14 @@
 		}
 	};
 
-	const onSelectTeam = () => {
-		if (selectedTeamId !== '' && accessControl) {
+	const onSelectOrg = () => {
+		if (selectedOrgId !== '' && accessControl) {
 			accessControl = normalizeAclForm(accessControl);
-			accessControl.read.team_ids = [...(accessControl.read.team_ids ?? []), selectedTeamId];
-			selectedTeamId = '';
+			accessControl.read.organization_ids = [
+				...(accessControl.read.organization_ids ?? []),
+				selectedOrgId
+			];
+			selectedOrgId = '';
 			onChange(accessControl);
 		}
 	};
@@ -166,12 +169,12 @@
 							accessControl = {
 								read: {
 									group_ids: [],
-									team_ids: [],
+									organization_ids: [],
 									user_ids: []
 								},
 								write: {
 									group_ids: [],
-									team_ids: [],
+									organization_ids: [],
 									user_ids: []
 								}
 							};
@@ -304,42 +307,41 @@
 			</div>
 
 			<div class="mt-3">
-				<div class="text-sm font-semibold mb-1.5">{$i18n.t('Teams')}</div>
+				<div class="text-sm font-semibold mb-1.5">{$i18n.t('Organizations')}</div>
 				<select
 					class="outline-hidden bg-transparent text-sm rounded-lg block w-full pr-10 max-w-full dark:placeholder-gray-500"
-					bind:value={selectedTeamId}
+					bind:value={selectedOrgId}
 				>
 					<option class=" text-gray-700" value="" disabled selected
-						>{$i18n.t('Select a team')}</option
+						>{$i18n.t('Select an organization')}</option
 					>
-					{#each userTeams.filter((team) => !(accessControl.read.team_ids ?? []).includes(team.id)) as team}
-						<option class=" text-gray-700" value={team.id}>{team.name}</option>
+					{#each userOrgs.filter((org) => org.kind !== 'personal' && !(accessControl.read.organization_ids ?? []).includes(org.id)) as org}
+						<option class=" text-gray-700" value={org.id}>{org.name}</option>
 					{/each}
 				</select>
 				<div class="flex flex-col gap-2 mt-2">
-					{#each accessTeams as team}
+					{#each accessOrgs as org}
 						<div class="flex items-center gap-3 justify-between text-xs w-full">
-							<div class="font-medium">{team.name}</div>
+							<div class="font-medium">{org.name}</div>
 							<div class="flex items-center gap-0.5">
 								<button
 									type="button"
 									on:click={() => {
 										if (accessRoles.includes('write')) {
-											if ((accessControl.write.team_ids ?? []).includes(team.id)) {
-												accessControl.write.team_ids = accessControl.write.team_ids.filter(
-													(id) => id !== team.id
-												);
+											if ((accessControl.write.organization_ids ?? []).includes(org.id)) {
+												accessControl.write.organization_ids =
+													accessControl.write.organization_ids.filter((id) => id !== org.id);
 											} else {
-												accessControl.write.team_ids = [
-													...(accessControl.write.team_ids ?? []),
-													team.id
+												accessControl.write.organization_ids = [
+													...(accessControl.write.organization_ids ?? []),
+													org.id
 												];
 											}
 											onChange(accessControl);
 										}
 									}}
 								>
-									{#if (accessControl.write.team_ids ?? []).includes(team.id)}
+									{#if (accessControl.write.organization_ids ?? []).includes(org.id)}
 										<Badge type={'success'} content={$i18n.t('Write')} />
 									{:else}
 										<Badge type={'info'} content={$i18n.t('Read')} />
@@ -349,9 +351,9 @@
 									class=" rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition"
 									type="button"
 									on:click={() => {
-										accessControl.read.team_ids = (accessControl.read.team_ids ?? []).filter(
-											(id) => id !== team.id
-										);
+										accessControl.read.organization_ids = (
+											accessControl.read.organization_ids ?? []
+										).filter((id) => id !== org.id);
 										onChange(accessControl);
 									}}
 								>

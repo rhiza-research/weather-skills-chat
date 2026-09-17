@@ -8,7 +8,7 @@ from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, get_db
 from open_webui.utils.secret_crypto import decrypt_secret, encrypt_secret
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import BigInteger, Column, Integer, Text
+from sqlalchemy import BigInteger, Column, Integer, Text, and_, or_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -26,7 +26,8 @@ class Secret(Base):
     nonce = Column(Text, nullable=False)
     key_version = Column(Integer, nullable=False, default=1)
     user_id = Column(Text, nullable=False)
-    team_id = Column(Text, nullable=True)
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="private")
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
 
@@ -39,11 +40,12 @@ class SecretModel(BaseModel):
     id: str
     name: str
     user_id: str
-    team_id: Optional[str] = None
+    organization_id: str
+    visibility: str = "private"
     created_at: int
     updated_at: int
     scope: Optional[str] = None
-    team_name: Optional[str] = None
+    organization_name: Optional[str] = None
     can_manage: Optional[bool] = None
     overridden: Optional[bool] = None
 
@@ -51,7 +53,8 @@ class SecretModel(BaseModel):
 class SecretForm(BaseModel):
     name: str
     value: str
-    team_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -76,6 +79,7 @@ class SecretForm(BaseModel):
 class SecretUpdateForm(BaseModel):
     name: Optional[str] = None
     value: Optional[str] = None
+    visibility: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -106,12 +110,18 @@ def _to_model(row: Secret) -> SecretModel:
 
 
 class SecretTable:
-    def insert(
-        self, user_id: str, form: SecretForm
-    ) -> Optional[SecretModel]:
+    def insert(self, user_id: str, form: SecretForm) -> Optional[SecretModel]:
         now = int(time.time())
+        organization_id = form.organization_id or user_id
+        visibility = form.visibility or "private"
+        if organization_id == user_id:
+            visibility = "private"
         ciphertext, nonce = encrypt_secret(
-            form.value, name=form.name, user_id=user_id, team_id=form.team_id
+            form.value,
+            name=form.name,
+            user_id=user_id,
+            organization_id=organization_id,
+            visibility=visibility,
         )
         with get_db() as db:
             row = Secret(
@@ -121,7 +131,8 @@ class SecretTable:
                 nonce=nonce,
                 key_version=1,
                 user_id=user_id,
-                team_id=form.team_id,
+                organization_id=organization_id,
+                visibility=visibility,
                 created_at=now,
                 updated_at=now,
             )
@@ -134,47 +145,45 @@ class SecretTable:
         with get_db() as db:
             return db.query(Secret).filter_by(id=id).first()
 
-    def get_personal(self, user_id: str, name: str) -> Optional[Secret]:
+    def get_private(self, organization_id: str, user_id: str, name: str) -> Optional[Secret]:
         with get_db() as db:
             return (
                 db.query(Secret)
-                .filter_by(user_id=user_id, name=name)
-                .filter(Secret.team_id.is_(None))
+                .filter_by(
+                    organization_id=organization_id,
+                    user_id=user_id,
+                    name=name,
+                    visibility="private",
+                )
                 .first()
             )
 
-    def get_team(self, team_id: str, name: str) -> Optional[Secret]:
+    def get_shared(self, organization_id: str, name: str) -> Optional[Secret]:
         with get_db() as db:
-            return db.query(Secret).filter_by(team_id=team_id, name=name).first()
-
-    def list_personal(self, user_id: str) -> list[SecretModel]:
-        with get_db() as db:
-            rows = (
+            return (
                 db.query(Secret)
-                .filter_by(user_id=user_id)
-                .filter(Secret.team_id.is_(None))
-                .order_by(Secret.name.asc())
-                .all()
+                .filter_by(
+                    organization_id=organization_id,
+                    name=name,
+                    visibility="organization",
+                )
+                .first()
             )
-            return [_to_model(r) for r in rows]
 
-    def list_team(self, team_id: str) -> list[SecretModel]:
+    def list_for_org(self, organization_id: str, user_id: str) -> list[SecretModel]:
         with get_db() as db:
             rows = (
                 db.query(Secret)
-                .filter_by(team_id=team_id)
-                .order_by(Secret.name.asc())
-                .all()
-            )
-            return [_to_model(r) for r in rows]
-
-    def list_teams(self, team_ids: list[str]) -> list[SecretModel]:
-        if not team_ids:
-            return []
-        with get_db() as db:
-            rows = (
-                db.query(Secret)
-                .filter(Secret.team_id.in_(team_ids))
+                .filter(
+                    Secret.organization_id == organization_id,
+                    or_(
+                        Secret.visibility == "organization",
+                        and_(
+                            Secret.visibility == "private",
+                            Secret.user_id == user_id,
+                        ),
+                    ),
+                )
                 .order_by(Secret.name.asc())
                 .all()
             )
@@ -186,33 +195,37 @@ class SecretTable:
             if not row:
                 return None
             name = form.name if form.name is not None else row.name
+            visibility = form.visibility if form.visibility is not None else row.visibility
             if form.value is not None:
                 ciphertext, nonce = encrypt_secret(
                     form.value,
                     name=name,
                     user_id=row.user_id,
-                    team_id=row.team_id,
+                    organization_id=row.organization_id,
+                    visibility=visibility,
                 )
                 row.ciphertext = ciphertext
                 row.nonce = nonce
-            elif name != row.name:
-                # Re-bind AAD to the new name without exposing plaintext longer than needed.
+            elif name != row.name or visibility != row.visibility:
                 plaintext = decrypt_secret(
                     row.ciphertext,
                     row.nonce,
                     name=row.name,
                     user_id=row.user_id,
-                    team_id=row.team_id,
+                    organization_id=row.organization_id,
+                    visibility=row.visibility,
                 )
                 ciphertext, nonce = encrypt_secret(
                     plaintext,
                     name=name,
                     user_id=row.user_id,
-                    team_id=row.team_id,
+                    organization_id=row.organization_id,
+                    visibility=visibility,
                 )
                 row.ciphertext = ciphertext
                 row.nonce = nonce
             row.name = name
+            row.visibility = visibility
             row.updated_at = int(time.time())
             db.commit()
             db.refresh(row)
@@ -224,13 +237,19 @@ class SecretTable:
             db.commit()
             return deleted > 0
 
+    def delete_private_by_user_id(self, user_id: str) -> None:
+        with get_db() as db:
+            db.query(Secret).filter_by(user_id=user_id, visibility="private").delete()
+            db.commit()
+
     def decrypt(self, row: Secret) -> str:
         return decrypt_secret(
             row.ciphertext,
             row.nonce,
             name=row.name,
             user_id=row.user_id,
-            team_id=row.team_id,
+            organization_id=row.organization_id,
+            visibility=row.visibility,
         )
 
 

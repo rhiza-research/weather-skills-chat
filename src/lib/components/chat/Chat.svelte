@@ -38,8 +38,8 @@
 		artifactsRefresh,
 		tools,
 		toolServers,
-		pendingTeamId,
-		teams
+		activeOrganizationId,
+		organizations
 	} from '$lib/stores';
 	import {
 		convertMessagesToHistory,
@@ -933,16 +933,16 @@
 				selectedModels = urlModels;
 			}
 		} else {
-			const teamId = get(pendingTeamId);
-			const teamDefaultModels = teamId
-				? ($teams.find((t) => t.id === teamId)?.default_models || '')
+			const orgId = get(activeOrganizationId) || $user?.id;
+			const orgDefaultModels = orgId
+				? ($organizations.find((t) => t.id === orgId)?.default_models || '')
 						.split(',')
 						.map((s) => s.trim())
 						.filter(Boolean)
 				: [];
 
-			if (teamDefaultModels.length) {
-				selectedModels = teamDefaultModels;
+			if (orgDefaultModels.length) {
+				selectedModels = orgDefaultModels;
 				sessionStorage.removeItem('selectedModels');
 			} else if (sessionStorage.selectedModels) {
 				selectedModels = JSON.parse(sessionStorage.selectedModels);
@@ -2304,9 +2304,8 @@
 					tags: [],
 					timestamp: Date.now()
 				},
-				get(pendingTeamId)
+				get(activeOrganizationId)
 			);
-			pendingTeamId.set(null);
 
 			_chatId = chat.id;
 			await chatId.set(_chatId);

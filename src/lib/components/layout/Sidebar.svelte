@@ -22,7 +22,8 @@
 		config,
 		isApp,
 		teams,
-		pendingTeamId
+		organizations,
+		activeOrganizationId
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -39,10 +40,9 @@
 		getChatPinnedStatusById,
 		getChatById,
 		updateChatFolderIdById,
-		importChat,
-		getTeamChatList
+		importChat
 	} from '$lib/apis/chats';
-	import { getTeams } from '$lib/apis/teams';
+	import { getOrganizations } from '$lib/apis/organizations';
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -80,7 +80,7 @@
 
 	let folders = {};
 	let newFolderId = null;
-	let teamChats = {};
+	let showOrgMenu = false;
 
 	/** Which chat time-range sections are expanded in the sidebar. Missing keys default to open. */
 	let openTimeRanges: Record<string, boolean> = {};
@@ -199,20 +199,43 @@
 		await channels.set(await getChannels(localStorage.token));
 	};
 
-	const loadTeamChats = async () => {
-		const memberships = await getTeams(localStorage.token).catch(() => []);
+	const loadOrganizations = async () => {
+		const memberships = await getOrganizations(localStorage.token).catch(() => []);
+		organizations.set(memberships ?? []);
 		teams.set(memberships ?? []);
-		const next = {};
-		for (const team of memberships ?? []) {
-			next[team.id] = await getTeamChatList(localStorage.token, team.id).catch(() => []);
+		if (!$activeOrganizationId && $user?.id) {
+			const stored = localStorage.getItem('activeOrganizationId');
+			const valid = (memberships ?? []).some((org) => org.id === stored);
+			activeOrganizationId.set(valid ? stored : $user.id);
 		}
-		teamChats = next;
+	};
+
+	$: if ($activeOrganizationId) {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem('activeOrganizationId', $activeOrganizationId);
+		}
+	}
+
+	const currentOrganization = () =>
+		($organizations ?? []).find((org) => org.id === $activeOrganizationId) ?? {
+			id: $user?.id,
+			name: 'Personal',
+			kind: 'personal'
+		};
+
+	const switchOrganization = async (orgId) => {
+		activeOrganizationId.set(orgId);
+		showOrgMenu = false;
+		selectedChatId = null;
+		chatId.set('');
+		await initChatList();
+		await goto('/');
 	};
 
 	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
 	const softRefreshChatList = async () => {
 		try {
-			await loadTeamChats();
+			await loadOrganizations();
 			if (search) {
 				return;
 			}
@@ -259,23 +282,12 @@
 		}
 	};
 
-	const startTeamChat = async (teamId) => {
-		pendingTeamId.set(teamId);
-		sessionStorage.removeItem('selectedModels');
-		selectedChatId = null;
-		chatId.set('');
-		await goto('/');
-		if ($mobile) {
-			showSidebar.set(false);
-		}
-	};
-
 	const initChatList = async () => {
 		// Reset pagination variables
 		tags.set(await getAllTags(localStorage.token));
 		pinnedChats.set(await getPinnedChatList(localStorage.token));
 		initFolders();
-		loadTeamChats();
+		loadOrganizations();
 
 		currentChatPage.set(1);
 		allChatsLoaded = false;
@@ -625,7 +637,6 @@
 				on:click={async (event) => {
 					event.preventDefault();
 					selectedChatId = null;
-					pendingTeamId.set(null);
 					await goto('/');
 					const newChatButton = document.getElementById('new-chat-button');
 					setTimeout(() => {
@@ -919,6 +930,10 @@
 										className=""
 										id={chat.id}
 										title={chat.title}
+										ownerName={chat.owner_name}
+										isMine={chat.user_id === $user?.id}
+										visibility={chat.visibility}
+										isPersonal={currentOrganization().kind === 'personal'}
 										selected={selectedChatId === chat.id}
 										on:select={() => {
 											selectedChatId = chat.id;
@@ -992,6 +1007,10 @@
 											className=""
 											id={chat.id}
 											title={chat.title}
+											ownerName={chat.owner_name}
+											isMine={chat.user_id === $user?.id}
+											visibility={chat.visibility}
+											isPersonal={currentOrganization().kind === 'personal'}
 											selected={selectedChatId === chat.id}
 											on:select={() => {
 												selectedChatId = chat.id;
@@ -1038,107 +1057,64 @@
 				</div>
 			</Folder>
 
-			{#if !search}
-				{#each $teams as team}
-					{@const items = teamChats[team.id] ?? []}
-					{@const mine = items.filter((chat) => chat.user_id === $user?.id)}
-					{@const others = items.filter((chat) => chat.user_id !== $user?.id)}
-					<Folder
-						className="px-2 mt-0.5"
-						name={team.name}
-						emphasis="strong"
-						onAdd={() => startTeamChat(team.id)}
-						onAddLabel={$i18n.t('New team chat')}
-						dragAndDrop={false}
-					>
-						<div class="ml-3 pl-1 mt-[1px] flex flex-col border-s border-gray-100 dark:border-gray-900">
-							<div class="w-full pl-2.5 text-xs text-gray-500 font-medium pb-1.5 pt-1">
-								{$i18n.t('My chats')}
-							</div>
-							{#each groupChatsByTimeRange(mine) as group (group.time_range)}
-								<Folder
-									name={$i18n.t(group.time_range)}
-									open={isTimeRangeOpen(`team:${team.id}:mine`, group.time_range)}
-									dragAndDrop={false}
-									on:change={(e) => {
-										setTimeRangeOpen(`team:${team.id}:mine`, group.time_range, e.detail);
-									}}
-								>
-									{#each group.chats as chat (chat.id)}
-										<ChatItem
-											id={chat.id}
-											title={chat.title}
-											ownerName={chat.owner_name}
-											isMine={true}
-											teamId={team.id}
-											selected={selectedChatId === chat.id}
-											on:select={() => {
-												selectedChatId = chat.id;
-											}}
-											on:unselect={() => {
-												selectedChatId = null;
-											}}
-											on:change={async () => {
-												initChatList();
-											}}
-											on:tag={(e) => {
-												const { type, name } = e.detail;
-												tagEventHandler(type, name, chat.id);
-											}}
-										/>
-									{/each}
-								</Folder>
-							{:else}
-								<div class="pl-2.5 pb-2 text-[11px] text-gray-400">{$i18n.t('No chats yet')}</div>
-							{/each}
-							<div class="w-full pl-2.5 text-xs text-gray-500 font-medium pb-1.5 pt-3">
-								{$i18n.t("Others' chats")}
-							</div>
-							{#each groupChatsByTimeRange(others) as group (group.time_range)}
-								<Folder
-									name={$i18n.t(group.time_range)}
-									open={isTimeRangeOpen(`team:${team.id}:others`, group.time_range)}
-									dragAndDrop={false}
-									on:change={(e) => {
-										setTimeRangeOpen(`team:${team.id}:others`, group.time_range, e.detail);
-									}}
-								>
-									{#each group.chats as chat (chat.id)}
-										<ChatItem
-											id={chat.id}
-											title={chat.title}
-											ownerName={chat.owner_name}
-											isMine={false}
-											teamId={team.id}
-											selected={selectedChatId === chat.id}
-											on:select={() => {
-												selectedChatId = chat.id;
-											}}
-											on:unselect={() => {
-												selectedChatId = null;
-											}}
-											on:change={async () => {
-												initChatList();
-											}}
-											on:tag={(e) => {
-												const { type, name } = e.detail;
-												tagEventHandler(type, name, chat.id);
-											}}
-										/>
-									{/each}
-								</Folder>
-							{:else}
-								<div class="pl-2.5 pb-2 text-[11px] text-gray-400">{$i18n.t('No chats yet')}</div>
-							{/each}
-						</div>
-					</Folder>
-				{/each}
-			{/if}
 		</div>
 
 		<div class="px-2">
-			<div class="flex flex-col font-primary">
+			<div class="flex flex-col font-primary relative">
 				{#if $user !== undefined && $user !== null}
+					<button
+						class="flex items-center rounded-xl py-2 px-2.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition mb-1"
+						on:click={() => {
+							showOrgMenu = !showOrgMenu;
+						}}
+					>
+						<div class="self-center mr-3 text-gray-500">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="size-5"
+							>
+								<path
+									fill-rule="evenodd"
+									d="M4 16.5V4.75A.75.75 0 0 1 4.75 4h10.5a.75.75 0 0 1 .75.75v11.75a.75.75 0 0 1-1.28.53L10 13.06l-4.72 4.22A.75.75 0 0 1 4 16.5Z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						</div>
+						<div class="self-center font-medium truncate flex-1 text-left">
+							{currentOrganization().name}
+						</div>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							class="size-4 text-gray-400"
+						>
+							<path
+								fill-rule="evenodd"
+								d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+					</button>
+					{#if showOrgMenu}
+						<div
+							class="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg py-1 max-h-64 overflow-y-auto"
+						>
+							{#each $organizations as org}
+								<button
+									class="flex items-center w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 {org.id ===
+									$activeOrganizationId
+										? 'font-medium'
+										: ''}"
+									on:click={() => switchOrganization(org.id)}
+								>
+									{org.name}
+								</button>
+							{/each}
+						</div>
+					{/if}
 					<UserMenu
 						role={$user?.role}
 						on:show={(e) => {

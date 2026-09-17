@@ -25,10 +25,10 @@
 		getChatById,
 		getChatPinnedStatusById,
 		toggleChatPinnedStatusById,
-		updateChatTeamById
+		updateChatVisibilityById
 	} from '$lib/apis/chats';
 	import { goto } from '$app/navigation';
-	import { chats, teams, theme } from '$lib/stores';
+	import { chats, theme } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	import { createMessagesList } from '$lib/utils';
 	import { downloadChatAsPDF } from '$lib/apis/utils';
@@ -45,7 +45,8 @@
 
 	export let chatId = '';
 	export let isMine = true;
-	export let teamId = null;
+	export let visibility = 'private';
+	export let isPersonal = false;
 
 	let show = false;
 	let pinned = false;
@@ -240,7 +241,9 @@
 				<ArchiveBox strokeWidth="2" />
 				<div class="flex items-center">{$i18n.t('Archive')}</div>
 			</DropdownMenu.Item>
+			{/if}
 
+			{#if isMine && !isPersonal}
 			<DropdownMenu.Item
 				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-md"
 				on:click={() => {
@@ -251,30 +254,12 @@
 				<div class="flex items-center">{$i18n.t('Share via link')}</div>
 			</DropdownMenu.Item>
 
-			{#each $teams as team}
+			{#if visibility === 'organization'}
 				<DropdownMenu.Item
 					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 					on:click={async () => {
 						try {
-							await updateChatTeamById(localStorage.token, chatId, team.id);
-							toast.success($i18n.t('Shared with team'));
-							dispatch('change');
-						} catch (error) {
-							toast.error(`${error}`);
-						}
-					}}
-				>
-					<Share />
-					<div class="flex items-center">{$i18n.t('Share with')} {team.name}</div>
-				</DropdownMenu.Item>
-			{/each}
-
-			{#if teamId}
-				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-					on:click={async () => {
-						try {
-							await updateChatTeamById(localStorage.token, chatId, null);
+							await updateChatVisibilityById(localStorage.token, chatId, 'private');
 							toast.success($i18n.t('Moved to private'));
 							dispatch('change');
 						} catch (error) {
@@ -284,6 +269,22 @@
 				>
 					<Share />
 					<div class="flex items-center">{$i18n.t('Make private')}</div>
+				</DropdownMenu.Item>
+			{:else}
+				<DropdownMenu.Item
+					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					on:click={async () => {
+						try {
+							await updateChatVisibilityById(localStorage.token, chatId, 'organization');
+							toast.success($i18n.t('Shared with organization'));
+							dispatch('change');
+						} catch (error) {
+							toast.error(`${error}`);
+						}
+					}}
+				>
+					<Share />
+					<div class="flex items-center">{$i18n.t('Share with organization')}</div>
 				</DropdownMenu.Item>
 			{/if}
 

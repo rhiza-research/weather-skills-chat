@@ -38,6 +38,10 @@ def bootstrap_admin_user() -> None:
         role="admin",
     )
     if user:
+        from open_webui.models.organizations import Organizations
+
+        Organizations.ensure_personal(user.id)
+        Organizations.ensure_platform(user.id)
         log.info("Bootstrapped admin user %s", email)
     else:
         log.error("Failed to bootstrap admin user %s", email)

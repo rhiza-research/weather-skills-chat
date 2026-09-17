@@ -2,8 +2,8 @@
 	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { teams, WEBUI_NAME, showSidebar } from '$lib/stores';
-	import { createTeam, getTeams } from '$lib/apis/teams';
+	import { organizations, user, WEBUI_NAME, showSidebar } from '$lib/stores';
+	import { createOrganization, getAllOrganizations, getOrganizations } from '$lib/apis/organizations';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
 
@@ -12,26 +12,33 @@
 	let name = '';
 	let description = '';
 	let creating = false;
+	let allOrgs = [];
+
+	$: memberships = ($organizations ?? []).filter((org) => org.kind !== 'personal');
+	$: isPlatformAdmin = $user?.role === 'admin';
 
 	const refresh = async () => {
-		teams.set(await getTeams(localStorage.token));
+		organizations.set(await getOrganizations(localStorage.token));
+		if (isPlatformAdmin) {
+			allOrgs = await getAllOrganizations(localStorage.token).catch(() => []);
+		}
 	};
 
 	const submit = async () => {
 		if (!name.trim()) {
-			toast.error($i18n.t('Team name cannot be empty.'));
+			toast.error($i18n.t('Organization name cannot be empty.'));
 			return;
 		}
 		creating = true;
 		try {
-			const team = await createTeam(localStorage.token, {
+			const org = await createOrganization(localStorage.token, {
 				name: name.trim(),
 				description: description.trim()
 			});
 			name = '';
 			description = '';
 			await refresh();
-			goto(`/teams/${team.id}`);
+			goto(`/organizations/${org.id}`);
 		} catch (error) {
 			toast.error(`${error}`);
 		}
@@ -42,7 +49,7 @@
 </script>
 
 <svelte:head>
-	<title>{$i18n.t('Teams')} | {$WEBUI_NAME}</title>
+	<title>{$i18n.t('Organizations')} | {$WEBUI_NAME}</title>
 </svelte:head>
 
 <div class="flex flex-col w-full h-screen max-h-[100dvh]">
@@ -56,7 +63,7 @@
 					<MenuLines />
 				</button>
 			</div>
-			<div class="text-lg font-medium px-1.5">{$i18n.t('Teams')}</div>
+			<div class="text-lg font-medium px-1.5">{$i18n.t('Organizations')}</div>
 		</div>
 	</nav>
 
@@ -65,10 +72,10 @@
 			class="mb-6 rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex flex-col gap-2"
 			on:submit|preventDefault={submit}
 		>
-			<div class="text-sm font-medium">{$i18n.t('Create a team')}</div>
+			<div class="text-sm font-medium">{$i18n.t('Create an organization')}</div>
 			<input
 				class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
-				placeholder={$i18n.t('Team name')}
+				placeholder={$i18n.t('Organization name')}
 				bind:value={name}
 			/>
 			<textarea
@@ -88,24 +95,43 @@
 		</form>
 
 		<div class="flex flex-col gap-2">
-			{#each $teams as team}
+			{#each memberships as org}
 				<a
 					class="rounded-xl border border-gray-100 dark:border-gray-850 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
-					href="/teams/{team.id}"
+					href="/organizations/{org.id}"
 				>
-					<div class="font-medium">{team.name}</div>
+					<div class="font-medium">{org.name}</div>
 					<div class="text-xs text-gray-500">
-						{team.role === 'admin' ? $i18n.t('Admin') : $i18n.t('Member')}
-						{#if team.description}
-							· {team.description}
+						{org.role === 'owner'
+							? $i18n.t('Owner')
+							: org.role === 'admin'
+								? $i18n.t('Admin')
+								: $i18n.t('User')}
+						{#if org.description}
+							· {org.description}
 						{/if}
 					</div>
 				</a>
 			{:else}
 				<div class="text-sm text-gray-500 py-6 text-center">
-					{$i18n.t('You are not on any teams yet.')}
+					{$i18n.t('You are not in any workspace organizations yet.')}
 				</div>
 			{/each}
 		</div>
+
+		{#if isPlatformAdmin && allOrgs.length}
+			<div class="mt-8 text-sm font-medium mb-2">{$i18n.t('All organizations')}</div>
+			<div class="flex flex-col gap-2">
+				{#each allOrgs.filter((org) => org.kind !== 'personal') as org}
+					<a
+						class="rounded-xl border border-gray-100 dark:border-gray-850 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+						href="/organizations/{org.id}"
+					>
+						<div class="font-medium">{org.name}</div>
+						<div class="text-xs text-gray-500 capitalize">{org.kind}</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
 	</div>
 </div>

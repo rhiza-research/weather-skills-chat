@@ -49,7 +49,7 @@ class UserOwnsOrHasAccessTest(unittest.TestCase):
             "open_webui.models.groups.Groups.get_groups_by_member_id",
             return_value=[],
         ), patch(
-            "open_webui.models.teams.Teams.user_team_ids",
+            "open_webui.models.organizations.Organizations.user_organization_ids",
             return_value=[],
         ):
             self.assertTrue(user_owns_or_has_access("bob", "alice", acl, "read"))
@@ -61,7 +61,7 @@ class UserOwnsOrHasAccessTest(unittest.TestCase):
             "open_webui.models.groups.Groups.get_groups_by_member_id",
             return_value=[],
         ), patch(
-            "open_webui.models.teams.Teams.user_team_ids",
+            "open_webui.models.organizations.Organizations.user_organization_ids",
             return_value=[],
         ):
             self.assertTrue(
@@ -77,7 +77,7 @@ class UserOwnsOrHasAccessTest(unittest.TestCase):
             "open_webui.models.groups.Groups.get_groups_by_member_id",
             return_value=[],
         ), patch(
-            "open_webui.models.teams.Teams.user_team_ids",
+            "open_webui.models.organizations.Organizations.user_organization_ids",
             return_value=[],
         ):
             self.assertTrue(
@@ -89,7 +89,7 @@ class UserOwnsOrHasAccessTest(unittest.TestCase):
             "open_webui.models.groups.Groups.get_groups_by_member_id",
             return_value=[],
         ), patch(
-            "open_webui.models.teams.Teams.user_team_ids",
+            "open_webui.models.organizations.Organizations.user_organization_ids",
             return_value=[],
         ):
             self.assertFalse(has_access("anyone", "read", {}))

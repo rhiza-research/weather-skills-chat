@@ -26,6 +26,13 @@ from open_webui.utils.access_control import (
     has_permission,
     user_owns_or_has_access,
 )
+from open_webui.utils.organizations import (
+    can_read_org_resource,
+    can_write_org_resource,
+    get_active_organization_id,
+    is_org_admin,
+    is_personal_org,
+)
 
 
 from open_webui.env import SRC_LOG_LEVELS
@@ -41,12 +48,16 @@ SHARING_PERMISSION_KEY = "sharing.public_knowledge"
 
 
 def _can_read(user, knowledge) -> bool:
+    if can_read_org_resource(user, knowledge):
+        return True
     return user_owns_or_has_access(
         user.id, knowledge.user_id, knowledge.access_control, "read", user.role
     )
 
 
 def _can_write(user, knowledge) -> bool:
+    if can_write_org_resource(user, knowledge):
+        return True
     return user_owns_or_has_access(
         user.id, knowledge.user_id, knowledge.access_control, "write", user.role
     )
@@ -58,9 +69,14 @@ def _can_write(user, knowledge) -> bool:
 
 
 @router.get("/", response_model=list[KnowledgeUserResponse])
-async def get_knowledge(user=Depends(get_verified_user)):
+async def get_knowledge(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     knowledge_bases = [
-        kb for kb in Knowledges.get_knowledge_bases() if _can_read(user, kb)
+        kb
+        for kb in Knowledges.get_knowledge_bases()
+        if kb.organization_id == organization_id and _can_read(user, kb)
     ]
 
     # Get files for each knowledge base
@@ -103,9 +119,14 @@ async def get_knowledge(user=Depends(get_verified_user)):
 
 
 @router.get("/list", response_model=list[KnowledgeUserResponse])
-async def get_knowledge_list(user=Depends(get_verified_user)):
+async def get_knowledge_list(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     knowledge_bases = [
-        kb for kb in Knowledges.get_knowledge_bases() if _can_write(user, kb)
+        kb
+        for kb in Knowledges.get_knowledge_bases()
+        if kb.organization_id == organization_id and _can_write(user, kb)
     ]
 
     # Get files for each knowledge base
@@ -153,7 +174,10 @@ async def get_knowledge_list(user=Depends(get_verified_user)):
 
 @router.post("/create", response_model=Optional[KnowledgeResponse])
 async def create_new_knowledge(
-    request: Request, form_data: KnowledgeForm, user=Depends(get_verified_user)
+    request: Request,
+    form_data: KnowledgeForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     if user.role != "admin" and not has_permission(
         user.id, "workspace.knowledge", request.app.state.config.USER_PERMISSIONS
@@ -162,6 +186,14 @@ async def create_new_knowledge(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
+
+    form_data.organization_id = form_data.organization_id or organization_id
+    if is_personal_org(form_data.organization_id) or not is_org_admin(
+        form_data.organization_id, user.id
+    ):
+        form_data.visibility = "private"
+    elif not form_data.visibility:
+        form_data.visibility = "organization"
 
     knowledge = Knowledges.insert_new_knowledge(user.id, form_data)
 

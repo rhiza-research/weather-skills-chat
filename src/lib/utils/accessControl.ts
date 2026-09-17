@@ -1,6 +1,6 @@
 type AccessControl = {
-	read?: { user_ids?: string[]; group_ids?: string[]; team_ids?: string[] };
-	write?: { user_ids?: string[]; group_ids?: string[]; team_ids?: string[] };
+	read?: { user_ids?: string[]; group_ids?: string[]; organization_ids?: string[]; team_ids?: string[] };
+	write?: { user_ids?: string[]; group_ids?: string[]; organization_ids?: string[]; team_ids?: string[] };
 } | null;
 
 type UserLike = {
@@ -25,6 +25,7 @@ function hasExplicitGrants(accessControl: AccessControl): boolean {
 		if (
 			(section?.user_ids?.length ?? 0) > 0 ||
 			(section?.group_ids?.length ?? 0) > 0 ||
+			(section?.organization_ids?.length ?? 0) > 0 ||
 			(section?.team_ids?.length ?? 0) > 0
 		) {
 			return true;

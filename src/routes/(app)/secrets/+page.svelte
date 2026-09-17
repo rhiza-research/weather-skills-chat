@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { teams, WEBUI_NAME, showSidebar } from '$lib/stores';
+	import { organizations, activeOrganizationId, WEBUI_NAME, showSidebar, user } from '$lib/stores';
 	import {
 		createSecret,
 		deleteSecretById,
@@ -15,16 +15,16 @@
 	let secrets = [];
 	let name = '';
 	let value = '';
-	let teamId = '';
+	let visibility = 'private';
 	let replacing = null;
 	let replaceValue = '';
 
-	$: personal = secrets.filter((s) => !s.team_id);
-	$: teamNames = new Set(secrets.filter((s) => s.team_id).map((s) => s.name));
-	$: byTeam = ($teams ?? []).map((team) => ({
-		team,
-		items: secrets.filter((s) => s.team_id === team.id)
-	}));
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: isPersonal = !currentOrg || currentOrg.kind === 'personal' || $activeOrganizationId === $user?.id;
+	$: isOrgAdmin = currentOrg?.role === 'owner' || currentOrg?.role === 'admin';
+	$: privateItems = secrets.filter((s) => s.visibility !== 'organization');
+	$: sharedItems = secrets.filter((s) => s.visibility === 'organization');
+	$: sharedNames = new Set(sharedItems.map((s) => s.name));
 
 	const refresh = async () => {
 		secrets = await getSecrets(localStorage.token).catch((error) => {
@@ -38,7 +38,7 @@
 			await createSecret(localStorage.token, {
 				name: name.trim(),
 				value,
-				team_id: teamId || null
+				visibility: isPersonal ? 'private' : visibility
 			});
 			name = '';
 			value = '';
@@ -100,7 +100,7 @@
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-3xl w-full mx-auto flex flex-col gap-4">
 		<p class="text-xs text-gray-500">
 			{$i18n.t(
-				'Values are encrypted at rest and never shown again. In a tool call, use a secret placeholder — the server fills the value in before the tool runs. A personal secret overrides a team secret with the same name.'
+				'Values are encrypted at rest and never shown again. In a tool call, use a secret placeholder — the server fills the value in before the tool runs. A private secret overrides an organization secret with the same name.'
 			)}
 			<span class="font-mono">&#123;&#123;secret:NAME&#125;&#125;</span>
 		</p>
@@ -125,12 +125,12 @@
 				autocomplete="new-password"
 				required
 			/>
-			<select class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm" bind:value={teamId}>
-				<option value="">{$i18n.t('Personal')}</option>
-				{#each ($teams ?? []).filter((t) => t.role === 'admin') as team}
-					<option value={team.id}>{team.name}</option>
-				{/each}
-			</select>
+			{#if !isPersonal && isOrgAdmin}
+				<select class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm" bind:value={visibility}>
+					<option value="private">{$i18n.t('Private')}</option>
+					<option value="organization">{$i18n.t('Organization')}</option>
+				</select>
+			{/if}
 			<button
 				class="self-start rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
 				type="submit">{$i18n.t('Save secret')}</button
@@ -139,17 +139,17 @@
 
 		<section class="flex flex-col gap-2">
 			<div class="text-xs font-medium text-gray-500 uppercase tracking-wide">
-				{$i18n.t('Personal')}
+				{$i18n.t('Private')}
 			</div>
-			{#each personal as secret}
+			{#each privateItems as secret}
 				<div class="rounded-xl border border-gray-100 dark:border-gray-850 p-3">
 					<div class="flex items-start justify-between gap-3">
 						<div>
 							<div class="font-medium text-sm">{secret.name}</div>
 							<div class="text-xs text-gray-400 font-mono">{'{{secret:' + secret.name + '}}'}</div>
-							{#if teamNames.has(secret.name)}
+							{#if sharedNames.has(secret.name)}
 								<div class="text-[11px] text-gray-500 mt-1">
-									{$i18n.t('Overrides the team secret with this name')}
+									{$i18n.t('Overrides the organization secret with this name')}
 								</div>
 							{/if}
 						</div>
@@ -177,16 +177,16 @@
 					{/if}
 				</div>
 			{:else}
-				<div class="text-xs text-gray-400">{$i18n.t('No personal secrets yet.')}</div>
+				<div class="text-xs text-gray-400">{$i18n.t('No private secrets yet.')}</div>
 			{/each}
 		</section>
 
-		{#each byTeam as group}
+		{#if !isPersonal}
 			<section class="flex flex-col gap-2">
 				<div class="text-xs font-medium text-gray-500 uppercase tracking-wide">
-					{group.team.name}
+					{$i18n.t('Organization')}
 				</div>
-				{#each group.items as secret}
+				{#each sharedItems as secret}
 					<div class="rounded-xl border border-gray-100 dark:border-gray-850 p-3">
 						<div class="flex items-start justify-between gap-3">
 							<div>
@@ -228,9 +228,9 @@
 						{/if}
 					</div>
 				{:else}
-					<div class="text-xs text-gray-400">{$i18n.t('No team secrets yet.')}</div>
+					<div class="text-xs text-gray-400">{$i18n.t('No organization secrets yet.')}</div>
 				{/each}
 			</section>
-		{/each}
+		{/if}
 	</div>
 </div>

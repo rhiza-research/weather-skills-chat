@@ -16,7 +16,7 @@
 	import { getTools } from '$lib/apis/tools';
 	import { getBanners } from '$lib/apis/configs';
 	import { getUserSettings } from '$lib/apis/users';
-	import { getTeams } from '$lib/apis/teams';
+	import { getOrganizations } from '$lib/apis/organizations';
 
 	import {
 		config,
@@ -33,7 +33,8 @@
 		showChangelog,
 		temporaryChatEnabled,
 		toolServers,
-		teams
+		organizations,
+		activeOrganizationId
 	} from '$lib/stores';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
@@ -100,7 +101,13 @@
 			banners.set(await getBanners(localStorage.token));
 			tools.set(await getTools(localStorage.token));
 			toolServers.set(await getToolServersData($i18n, $settings?.toolServers ?? []));
-			teams.set(await getTeams(localStorage.token).catch(() => []));
+			const memberships = await getOrganizations(localStorage.token).catch(() => []);
+			organizations.set(memberships);
+			const stored =
+				(typeof localStorage !== 'undefined' && localStorage.getItem('activeOrganizationId')) ||
+				$user?.id;
+			const valid = (memberships ?? []).some((org) => org.id === stored);
+			activeOrganizationId.set(valid ? stored : $user?.id);
 
 			document.addEventListener('keydown', async function (event) {
 				const isCtrlPressed = event.ctrlKey || event.metaKey; // metaKey is for Cmd key on Mac
