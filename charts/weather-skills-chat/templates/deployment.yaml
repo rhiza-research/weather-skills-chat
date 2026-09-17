@@ -84,6 +84,8 @@ spec:
               value: {{ printf "%s/tiktoken" .Values.modelCache.dir | quote }}
             - name: WEBUI_NAME
               value: {{ .Values.webui.name | quote }}
+            - name: WEBUI_IMAGE_TAG
+              value: {{ include "weather-skills-chat.imageTag" . | quote }}
             {{- include "weather-skills-chat.optionalEnv" (dict "name" "ENABLE_SIGNUP" "value" .Values.webui.enableSignup) | nindent 12 }}
             - name: DEFAULT_USER_ROLE
               value: {{ .Values.webui.defaultUserRole | quote }}

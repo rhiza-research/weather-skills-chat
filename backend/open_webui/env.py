@@ -210,6 +210,12 @@ ENABLE_FORWARD_USER_INFO_HEADERS = (
 WEBUI_BUILD_HASH = os.environ.get("WEBUI_BUILD_HASH", "dev-build")
 
 ####################################
+# WEBUI_IMAGE_TAG (deployed image: semver or sha-xxx)
+####################################
+
+WEBUI_IMAGE_TAG = os.environ.get("WEBUI_IMAGE_TAG", "").strip()
+
+####################################
 # DATA/FRONTEND BUILD DIR
 ####################################
 
