@@ -19,7 +19,14 @@ spec:
     matchLabels:
       {{- include "weather-skills-chat.selectorLabels" . | nindent 6 }}
   strategy:
+    {{- if .Values.persistence.enabled }}
     type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
   template:
     metadata:
       labels:
