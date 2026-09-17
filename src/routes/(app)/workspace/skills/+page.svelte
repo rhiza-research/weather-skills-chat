@@ -87,6 +87,7 @@
 	};
 
 	const installHandler = async () => {
+		if (busy) return;
 		if (!gitUrl.trim()) {
 			toast.error('Git URL is required');
 			return;
@@ -111,6 +112,7 @@
 	};
 
 	const updateHandler = async (pack) => {
+		if (busy) return;
 		busy = true;
 		const updated = await updateSkillPack(localStorage.token, pack.id).catch((error) => {
 			toast.error(`${error}`);
@@ -206,7 +208,7 @@
 	};
 
 	const deleteHandler = async () => {
-		if (!deletePackId) return;
+		if (!deletePackId || busy) return;
 		busy = true;
 		const ok = await deleteSkillPack(localStorage.token, deletePackId).catch((error) => {
 			toast.error(`${error}`);

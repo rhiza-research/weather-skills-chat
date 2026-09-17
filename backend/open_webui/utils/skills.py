@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 import textwrap
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -31,6 +37,43 @@ DESC_MAX_CHARS = 800
 
 class SkillInstallError(Exception):
     pass
+
+
+class SkillInstallBusyError(SkillInstallError):
+    """Raised when another install/update/delete is already using git/disk."""
+
+
+# One checkout at a time: concurrent rmtree/copytree of the same pack (or two
+# large packs on JuiceFS) can stall the process long enough for k8s to kill it.
+_GIT_OPS_LOCK = threading.Lock()
+
+IGNORE_DIR_NAMES = frozenset(
+    {
+        ".git",
+        ".github",
+        "__pycache__",
+        ".pytest_cache",
+        ".venv",
+        "node_modules",
+        ".mypy_cache",
+        ".ruff_cache",
+    }
+)
+MANIFEST_NAME = ".skillpack-manifest.json"
+# Override with SKILL_PACK_COPY_WORKERS. Default is CPU count, capped at 32.
+_MAX_COPY_WORKERS = 32
+
+
+@contextmanager
+def exclusive_git_op():
+    if not _GIT_OPS_LOCK.acquire(blocking=False):
+        raise SkillInstallBusyError(
+            "A skill pack install or update is already running. Wait for it to finish."
+        )
+    try:
+        yield
+    finally:
+        _GIT_OPS_LOCK.release()
 
 
 @dataclass
@@ -134,12 +177,235 @@ def _run_git(args: list[str], cwd: Optional[Path] = None) -> str:
     return (result.stdout or "").strip()
 
 
+def parse_ls_remote(output: str) -> Optional[str]:
+    """Pick a commit sha from ``git ls-remote`` output.
+
+    Prefer a peeled ``^{}`` line so annotated tags resolve to the commit.
+    """
+    peeled = None
+    first = None
+    for line in (output or "").splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        sha = parts[0].lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            continue
+        ref = parts[1] if len(parts) > 1 else ""
+        if ref.endswith("^{}"):
+            peeled = sha
+        elif first is None:
+            first = sha
+    return peeled or first
+
+
+def resolve_remote_sha(git_url: str, git_ref: str) -> str:
+    """Resolve a branch/tag/sha to a commit without downloading the tree."""
+    git_ref = (git_ref or "").strip()
+    if not git_ref:
+        raise SkillInstallError("git ref (branch/tag/commit) is required")
+    if re.fullmatch(r"[0-9a-f]{40}", git_ref, re.I):
+        return git_ref.lower()
+    for spec in (git_ref, f"refs/heads/{git_ref}", f"refs/tags/{git_ref}"):
+        sha = parse_ls_remote(_run_git(["ls-remote", git_url, spec]))
+        if sha:
+            return sha
+    raise SkillInstallError(f"Could not resolve git ref {git_ref!r} on {git_url}")
+
+
+def _pack_tree_present(local_path: Path) -> bool:
+    path = Path(local_path)
+    try:
+        return path.is_dir() and any(path.iterdir())
+    except OSError:
+        return False
+
+
+def _skipped_rel(rel: Path) -> bool:
+    return rel.as_posix() == MANIFEST_NAME or any(
+        part in IGNORE_DIR_NAMES for part in rel.parts
+    )
+
+
+def _file_digest(path: Path) -> str:
+    if path.is_symlink():
+        return f"symlink:{path.readlink().as_posix()}"
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _staging_manifest(staging: Path) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for path in staging.rglob("*"):
+        if not (path.is_symlink() or path.is_file()):
+            continue
+        rel = path.relative_to(staging)
+        if _skipped_rel(rel):
+            continue
+        files[rel.as_posix()] = _file_digest(path)
+    return files
+
+
+def _load_manifest(dest: Path) -> dict[str, str]:
+    manifest_path = dest / MANIFEST_NAME
+    if not manifest_path.is_file():
+        return {}
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    files = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(files, dict):
+        return {}
+    return {str(key): str(value) for key, value in files.items()}
+
+
+def _write_manifest(dest: Path, files: dict[str, str]) -> None:
+    payload = json.dumps({"files": files}, sort_keys=True)
+    (dest / MANIFEST_NAME).write_text(payload, encoding="utf-8")
+
+
+def _default_copy_workers() -> int:
+    cpus = os.cpu_count() or 1
+    return max(1, min(cpus, _MAX_COPY_WORKERS))
+
+
+def _copy_workers(job_count: int) -> int:
+    raw = (os.getenv("SKILL_PACK_COPY_WORKERS") or "").strip()
+    if raw:
+        try:
+            configured = int(raw)
+        except ValueError:
+            configured = _default_copy_workers()
+    else:
+        configured = _default_copy_workers()
+    configured = max(1, min(configured, _MAX_COPY_WORKERS))
+    return max(1, min(configured, job_count))
+
+
+def _run_parallel(label: str, items: list, fn) -> None:
+    if not items:
+        return
+    workers = _copy_workers(len(items))
+    if workers == 1:
+        for item in items:
+            fn(item)
+        return
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=label) as pool:
+        futures = [pool.submit(fn, item) for item in items]
+        for future in as_completed(futures):
+            future.result()
+
+
+def _copy_file(src: Path, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_symlink() or dest.is_file():
+        dest.unlink()
+    elif dest.exists():
+        shutil.rmtree(dest)
+    if src.is_symlink():
+        dest.symlink_to(src.readlink())
+        return
+    shutil.copy2(src, dest)
+
+
+def _remove_empty_dirs(root: Path) -> None:
+    dirs = sorted(
+        (path for path in root.rglob("*") if path.is_dir()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for path in dirs:
+        try:
+            path.rmdir()
+        except OSError:
+            continue
+
+
+def _unlink_stale(dest: Path, wanted: set[str], previous: dict[str, str]) -> int:
+    removed = 0
+    for name in IGNORE_DIR_NAMES:
+        junk = dest / name
+        if junk.is_dir() and not junk.is_symlink():
+            shutil.rmtree(junk, ignore_errors=True)
+            removed += 1
+        elif junk.is_symlink() or junk.is_file():
+            junk.unlink()
+            removed += 1
+
+    if previous:
+        stale = [rel for rel in previous if rel not in wanted]
+    else:
+        stale = []
+        for path in dest.rglob("*"):
+            if not (path.is_symlink() or path.is_file()):
+                continue
+            rel = path.relative_to(dest).as_posix()
+            if rel == MANIFEST_NAME or rel in wanted:
+                continue
+            stale.append(rel)
+    stale_paths = [
+        dest / rel
+        for rel in stale
+        if (dest / rel).is_symlink() or (dest / rel).is_file()
+    ]
+    _run_parallel("skill-pack-unlink", stale_paths, Path.unlink)
+    removed += len(stale_paths)
+    _remove_empty_dirs(dest)
+    return removed
+
+
+def _publish_working_tree(staging: Path, local_path: Path) -> None:
+    """Copy a local checkout onto SKILLS_DIR, writing only files that changed.
+
+    Hashes are computed on the staging tree (local disk). Unchanged files are
+    left in place so JuiceFS does not rewrite every blob on each update.
+    """
+    staging = Path(staging)
+    dest = Path(local_path)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    wanted = _staging_manifest(staging)
+    previous = _load_manifest(dest)
+    t0 = time.monotonic()
+    copies: list[tuple[Path, Path]] = []
+    parents: set[Path] = set()
+    for rel, digest in wanted.items():
+        dest_file = dest / rel
+        if previous.get(rel) == digest and (dest_file.is_file() or dest_file.is_symlink()):
+            continue
+        copies.append((staging / rel, dest_file))
+        parents.add(dest_file.parent)
+    # Create parent dirs first so parallel JuiceFS writes do not race mkdir.
+    for parent in sorted(parents, key=lambda path: len(path.parts)):
+        parent.mkdir(parents=True, exist_ok=True)
+
+    def _copy_pair(pair: tuple[Path, Path]) -> None:
+        _copy_file(pair[0], pair[1])
+
+    _run_parallel("skill-pack-copy", copies, _copy_pair)
+    removed = _unlink_stale(dest, set(wanted), previous)
+    _write_manifest(dest, wanted)
+    log.info(
+        "Published skill pack tree to %s: copied=%d removed=%d workers=%d in %.1fs",
+        dest,
+        len(copies),
+        removed,
+        _copy_workers(len(copies)) if copies else 0,
+        time.monotonic() - t0,
+    )
+
+
 def checkout_ref(local_path: Path, git_url: str, git_ref: str) -> str:
     """Shallow-fetch a ref into a local temp dir, then publish the working tree.
 
     Git runs on local disk (fast; supports hardlinks). Only the checked-out
     files are copied to ``local_path`` — ``.git`` is omitted so durable mounts
-    like GCS FUSE are not flooded with tiny object writes. Returns HEAD sha.
+    like GCS FUSE / JuiceFS are not flooded with tiny object writes. Returns
+    HEAD sha.
     """
     local_path = Path(local_path)
     local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,6 +413,7 @@ def checkout_ref(local_path: Path, git_url: str, git_ref: str) -> str:
     if not git_ref:
         raise SkillInstallError("git ref (branch/tag/commit) is required")
 
+    t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="skill-pack-") as tmp:
         staging = Path(tmp) / "repo"
         staging.mkdir()
@@ -155,15 +422,14 @@ def checkout_ref(local_path: Path, git_url: str, git_ref: str) -> str:
         _run_git(["fetch", "--depth", "1", "origin", git_ref], cwd=staging)
         _run_git(["checkout", "--force", "FETCH_HEAD"], cwd=staging)
         sha = _run_git(["rev-parse", "HEAD"], cwd=staging)
-
-        if local_path.exists():
-            shutil.rmtree(local_path)
-        shutil.copytree(
-            staging,
-            local_path,
-            ignore=shutil.ignore_patterns(".git"),
-            symlinks=True,
+        log.info(
+            "Fetched %s@%s (%s) in %.1fs",
+            git_url,
+            git_ref,
+            sha[:7],
+            time.monotonic() - t0,
         )
+        _publish_working_tree(staging, local_path)
     return sha
 
 
@@ -504,36 +770,38 @@ def install_skill_pack(
 
     dirname = pack_dirname(url, ref, owner_key=user_id)
     local_path = SKILLS_DIR / dirname
-    if local_path.exists():
-        shutil.rmtree(local_path)
 
-    sha = checkout_ref(local_path, url, ref)
-    name = f"{repo_slug_from_url(url)}@{ref}"
-    pack = SkillPacks.insert(
-        user_id,
-        name=name,
-        git_url=url,
-        git_ref=ref,
-        commit_sha=sha,
-        local_path=str(local_path),
-        meta={"skills": []},
-    )
-    if not pack:
-        raise SkillInstallError("Failed to create skill pack record")
-
-    try:
-        return sync_pack_tools(pack, request_app_tools, user_id=user_id)
-    except Exception:
-        # Roll back pack + tools on failed discover
-        for s in (pack.meta or {}).get("skills") or []:
-            tid = s.get("tool_id") if isinstance(s, dict) else None
-            if tid:
-                Tools.delete_tool_by_id(tid)
-                request_app_tools.pop(tid, None)
-        SkillPacks.delete(pack.id)
+    with exclusive_git_op():
         if local_path.exists():
-            shutil.rmtree(local_path, ignore_errors=True)
-        raise
+            shutil.rmtree(local_path)
+
+        sha = checkout_ref(local_path, url, ref)
+        name = f"{repo_slug_from_url(url)}@{ref}"
+        pack = SkillPacks.insert(
+            user_id,
+            name=name,
+            git_url=url,
+            git_ref=ref,
+            commit_sha=sha,
+            local_path=str(local_path),
+            meta={"skills": []},
+        )
+        if not pack:
+            raise SkillInstallError("Failed to create skill pack record")
+
+        try:
+            return sync_pack_tools(pack, request_app_tools, user_id=user_id)
+        except Exception:
+            # Roll back pack + tools on failed discover
+            for s in (pack.meta or {}).get("skills") or []:
+                tid = s.get("tool_id") if isinstance(s, dict) else None
+                if tid:
+                    Tools.delete_tool_by_id(tid)
+                    request_app_tools.pop(tid, None)
+            SkillPacks.delete(pack.id)
+            if local_path.exists():
+                shutil.rmtree(local_path, ignore_errors=True)
+            raise
 
 
 def update_skill_pack(
@@ -557,47 +825,73 @@ def update_skill_pack(
                 f"You already have another pack tracking {pack.git_url} @ {ref}"
             )
 
-    local_path = Path(pack.local_path)
-    # If changing ref, optionally move directory to new slug path
-    target_path = SKILLS_DIR / pack_dirname(
-        pack.git_url, ref, owner_key=pack.user_id
-    )
-    if ref != pack.git_ref and target_path.resolve() != local_path.resolve():
-        if target_path.exists():
-            shutil.rmtree(target_path)
-        if local_path.exists():
-            local_path.rename(target_path)
-        local_path = target_path
+    with exclusive_git_op():
+        local_path = Path(pack.local_path)
+        # If changing ref, optionally move directory to new slug path
+        target_path = SKILLS_DIR / pack_dirname(
+            pack.git_url, ref, owner_key=pack.user_id
+        )
+        if ref != pack.git_ref and target_path.resolve() != local_path.resolve():
+            if target_path.exists():
+                shutil.rmtree(target_path)
+            if local_path.exists():
+                local_path.rename(target_path)
+            local_path = target_path
 
-    sha = checkout_ref(local_path, pack.git_url, ref)
-    SkillPacks.update(
-        pack.id,
-        {
-            "git_ref": ref,
-            "commit_sha": sha,
-            "local_path": str(local_path),
-            "name": f"{repo_slug_from_url(pack.git_url)}@{ref}",
-        },
-    )
-    pack = SkillPacks.get_by_id(pack.id)
-    return sync_pack_tools(pack, request_app_tools)
+        remote_sha = None
+        try:
+            remote_sha = resolve_remote_sha(pack.git_url, ref)
+        except SkillInstallError:
+            log.warning(
+                "Could not resolve %s@%s via ls-remote; fetching",
+                pack.git_url,
+                ref,
+            )
+
+        current_sha = (pack.commit_sha or "").strip().lower()
+        if (
+            remote_sha
+            and remote_sha == current_sha
+            and ref == pack.git_ref
+            and _pack_tree_present(local_path)
+        ):
+            log.info(
+                "Skill pack %s already at %s; skipping checkout",
+                pack.id,
+                remote_sha[:7],
+            )
+            return pack
+
+        sha = checkout_ref(local_path, pack.git_url, ref)
+        SkillPacks.update(
+            pack.id,
+            {
+                "git_ref": ref,
+                "commit_sha": sha,
+                "local_path": str(local_path),
+                "name": f"{repo_slug_from_url(pack.git_url)}@{ref}",
+            },
+        )
+        pack = SkillPacks.get_by_id(pack.id)
+        return sync_pack_tools(pack, request_app_tools)
 
 
 def delete_skill_pack(pack_id: str, request_app_tools: dict) -> None:
     pack = SkillPacks.get_by_id(pack_id)
     if not pack:
         raise SkillInstallError("Skill pack not found")
-    for s in (pack.meta or {}).get("skills") or []:
-        if not isinstance(s, dict):
-            continue
-        tool_id = s.get("tool_id")
-        if tool_id:
-            Tools.delete_tool_by_id(tool_id)
-            request_app_tools.pop(tool_id, None)
-    local_path = Path(pack.local_path)
-    if local_path.exists():
-        shutil.rmtree(local_path, ignore_errors=True)
-    SkillPacks.delete(pack_id)
+    with exclusive_git_op():
+        for s in (pack.meta or {}).get("skills") or []:
+            if not isinstance(s, dict):
+                continue
+            tool_id = s.get("tool_id")
+            if tool_id:
+                Tools.delete_tool_by_id(tool_id)
+                request_app_tools.pop(tool_id, None)
+        local_path = Path(pack.local_path)
+        if local_path.exists():
+            shutil.rmtree(local_path, ignore_errors=True)
+        SkillPacks.delete(pack_id)
 
 
 def set_pack_access_control(
