@@ -301,16 +301,45 @@ def _run_parallel(label: str, items: list, fn) -> None:
             future.result()
 
 
-def _copy_file(src: Path, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.is_symlink() or dest.is_file():
+def _remove_path(dest: Path) -> None:
+    try:
         dest.unlink()
-    elif dest.exists():
+    except FileNotFoundError:
+        return
+    except IsADirectoryError:
         shutil.rmtree(dest)
+
+
+def _copy_regular_file(src: Path, dest: Path) -> None:
+    """Truncate-or-create dest without following a dest-side symlink.
+
+    POSIX ``open(O_TRUNC)`` overwrites a regular file in place, which is the
+    fast JuiceFS path (no getattr/unlink, no copystat). It cannot replace a
+    directory, and without ``O_NOFOLLOW`` it would write *through* a symlink.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(os.fspath(dest), flags, 0o644)
+    except OSError:
+        if not dest.is_symlink():
+            raise
+        dest.unlink()
+        fd = os.open(os.fspath(dest), flags, 0o644)
+    with open(src, "rb") as fsrc, os.fdopen(fd, "wb") as fdst:
+        shutil.copyfileobj(fsrc, fdst)
+
+
+def _copy_file(src: Path, dest: Path) -> None:
+    """Overwrite dest with src. ``dest.parent`` must already exist."""
     if src.is_symlink():
+        _remove_path(dest)
         dest.symlink_to(src.readlink())
         return
-    shutil.copy2(src, dest)
+    try:
+        _copy_regular_file(src, dest)
+    except IsADirectoryError:
+        shutil.rmtree(dest)
+        _copy_regular_file(src, dest)
 
 
 def _remove_empty_dirs(root: Path) -> None:

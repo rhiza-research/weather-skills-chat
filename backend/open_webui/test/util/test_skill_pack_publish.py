@@ -11,6 +11,7 @@ from open_webui.models.skill_packs import SkillPackModel
 from open_webui.utils.skills import (
     MANIFEST_NAME,
     SkillInstallBusyError,
+    _copy_file,
     _copy_workers,
     _publish_working_tree,
     exclusive_git_op,
@@ -51,6 +52,60 @@ class CopyWorkersTest(unittest.TestCase):
                 self.assertEqual(_copy_workers(100), 32)
             with patch("open_webui.utils.skills.os.cpu_count", return_value=None):
                 self.assertEqual(_copy_workers(100), 1)
+
+
+class CopyFileTest(unittest.TestCase):
+    def test_overwrites_regular_file_in_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / "src.txt"
+            dest = root / "dest.txt"
+            src.write_text("new\n", encoding="utf-8")
+            dest.write_text("old\n", encoding="utf-8")
+            with patch.object(Path, "mkdir") as mkdir:
+                _copy_file(src, dest)
+            mkdir.assert_not_called()
+            self.assertEqual(dest.read_text(encoding="utf-8"), "new\n")
+            self.assertFalse(dest.is_symlink())
+
+    def test_replaces_dest_symlink_with_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target.txt"
+            src = root / "src.txt"
+            dest = root / "dest.txt"
+            target.write_text("via-link\n", encoding="utf-8")
+            src.write_text("file\n", encoding="utf-8")
+            dest.symlink_to(target)
+            _copy_file(src, dest)
+            self.assertFalse(dest.is_symlink())
+            self.assertEqual(dest.read_text(encoding="utf-8"), "file\n")
+            self.assertEqual(target.read_text(encoding="utf-8"), "via-link\n")
+
+    def test_replaces_dest_directory_with_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / "src.txt"
+            dest = root / "dest"
+            src.write_text("file\n", encoding="utf-8")
+            dest.mkdir()
+            (dest / "nested.txt").write_text("gone\n", encoding="utf-8")
+            _copy_file(src, dest)
+            self.assertTrue(dest.is_file())
+            self.assertEqual(dest.read_text(encoding="utf-8"), "file\n")
+
+    def test_copies_src_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "target.txt"
+            src = root / "src.txt"
+            dest = root / "dest.txt"
+            target.write_text("linked\n", encoding="utf-8")
+            src.symlink_to(target)
+            dest.write_text("old\n", encoding="utf-8")
+            _copy_file(src, dest)
+            self.assertTrue(dest.is_symlink())
+            self.assertEqual(dest.readlink(), target)
 
 
 class PublishWorkingTreeTest(unittest.TestCase):
