@@ -2,7 +2,16 @@
 # Never put real secret values here. Create a Kubernetes Secret externally
 # (e.g. gcloud Secret Manager + kubectl) and set secretName to its name.
 
-replicaCount: 1 # required while using SQLite + a ReadWriteOnce PVC
+replicaCount: 1
+
+# Recreate is used automatically when persistence.enabled (SQLite on a
+# ReadWriteOnce PVC cannot attach to two pods). Staging/prod use Postgres +
+# JuiceFS RWX + per-pod ephemeral venv disks, so RollingUpdate can start the
+# new pod and wait until it is Ready before stopping the old one.
+strategy:
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 
 # REQUIRED. Name of a Kubernetes Secret you create out-of-band.
 # Must contain WEBUI_SECRET_KEY. Optional keys on the same Secret:
@@ -30,7 +39,8 @@ secretKeys:
 
 image:
   repository: ghcr.io/rhiza-research/weather-skills-chat
-  # Empty uses Chart.appVersion (CI pins sha-<gitsha> on prod from main, staging from dev).
+  # Empty uses Chart.appVersion (CI pins sha-<gitsha> on staging from dev,
+  # and the semver tag on prod).
   tag: ""
   pullPolicy: IfNotPresent
 

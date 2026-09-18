@@ -3,7 +3,8 @@ name: weather-skills-chat
 description: Weather Skills chat (Open WebUI fork) — SQLite-on-PVC by default, optional GCS FUSE for skill artifacts
 type: application
 version: 0.1.1
-# CI writes sha-<short> on the Argo branch (prod from main, staging from dev).
+# CI writes the deployed image tag on the Argo branch:
+# staging from dev (sha-<short>), prod from a semver tag on main (vX.Y.Z).
 appVersion: "main"
 keywords:
   - weather-skills

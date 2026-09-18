@@ -5,7 +5,7 @@
 	import { flyAndScale } from '$lib/utils/transitions';
 	import { goto } from '$app/navigation';
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
-	import { showSettings, activeUserIds, USAGE_POOL, mobile, showSidebar, user } from '$lib/stores';
+	import { showSettings, activeUserIds, USAGE_POOL, mobile, showSidebar, user, config } from '$lib/stores';
 	import { fade, slide } from 'svelte/transition';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { userSignOut } from '$lib/apis/auths';
@@ -279,6 +279,12 @@
 						</div>
 					</div>
 				</Tooltip>
+			{/if}
+
+			{#if $config?.image_tag}
+				<div class="px-3 py-1.5 text-[10px] leading-none text-gray-400 dark:text-gray-500 select-all">
+					version {$config.image_tag}
+				</div>
 			{/if}
 
 			<!-- <DropdownMenu.Item class="flex items-center px-3 py-2 text-sm ">

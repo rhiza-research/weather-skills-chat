@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - dev
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
 
 concurrency:
   group: docker-publish-${{ github.ref }}
@@ -38,6 +41,8 @@ jobs:
           images: ghcr.io/rhiza-research/weather-skills-chat
           tags: |
             type=ref,event=branch
+            type=semver,pattern={{raw}}
+            type=semver,pattern={{version}}
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -57,26 +62,48 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # main → prod (Argo prod chat). dev → staging (Argo staging chat).
-      # Those deploy branches are CI-owned; this job force-pushes the built
-      # commit plus Chart.appVersion pin and does not commit back to main/dev.
+      # staging: every push to dev, image tag sha-<short>.
+      # prod: only semver tags that point at a commit on main; image tag is that tag.
+      # Pushes to main still build GHCR images (main / sha- / latest) but do not
+      # update the Argo prod branch.
       - name: Deploy branch
         id: deploy
         run: |
-          case "${GITHUB_REF_NAME}" in
-            main) echo "branch=prod" >> "$GITHUB_OUTPUT" ;;
-            dev)  echo "branch=staging" >> "$GITHUB_OUTPUT" ;;
-            *)    echo "unexpected branch ${GITHUB_REF_NAME}" >&2; exit 1 ;;
-          esac
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+              echo "tag ${GITHUB_REF_NAME} is not semver" >&2
+              exit 1
+            fi
+            git fetch --no-tags origin main:refs/remotes/origin/main
+            if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+              echo "tag ${GITHUB_REF_NAME} is not on main; refusing prod deploy" >&2
+              exit 1
+            fi
+            echo "branch=prod" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
+            echo "branch=staging" >> "$GITHUB_OUTPUT"
+            echo "image_tag=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "main builds images only; prod deploys from semver tags"
+          else
+            echo "unexpected ref ${GITHUB_REF}" >&2
+            exit 1
+          fi
 
-      - name: Pin Chart.appVersion to image sha
-        run: echo "IMAGE_TAG=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+      - name: Pin Chart.appVersion to image tag
+        if: steps.deploy.outputs.skip != 'true'
+        run: echo "IMAGE_TAG=${{ steps.deploy.outputs.image_tag }}" >> "$GITHUB_ENV"
 
       - uses: mikefarah/yq@v4
+        if: steps.deploy.outputs.skip != 'true'
         with:
           cmd: yq -i '.appVersion = strenv(IMAGE_TAG)' charts/weather-skills-chat/Chart.yaml
 
       - name: Push pin to Argo branch
+        if: steps.deploy.outputs.skip != 'true'
         env:
           DEPLOY_BRANCH: ${{ steps.deploy.outputs.branch }}
         run: |

@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.skill_packs import (
@@ -25,6 +26,7 @@ from open_webui.utils.organizations import (
     is_personal_org,
 )
 from open_webui.utils.skills import (
+    SkillInstallBusyError,
     SkillInstallError,
     delete_skill_pack,
     install_skill_pack,
@@ -83,6 +85,15 @@ def _require_skills_workspace(request: Request, user) -> None:
         )
 
 
+def _raise_install_error(exc: Exception):
+    if isinstance(exc, SkillInstallBusyError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, SkillInstallError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    log.exception("Skill pack operation failed")
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
 @router.get("/")
 async def list_skill_packs(
     user=Depends(get_verified_user),
@@ -100,12 +111,11 @@ async def list_skill_packs(
 async def resync_skill_tools(request: Request, user=Depends(get_admin_user)):
     """Regenerate skill tool wrappers from on-disk packs (no git pull)."""
     try:
-        return resync_all_skill_pack_tools(request.app.state.TOOLS)
-    except Exception as e:
-        log.exception("Skill pack resync failed")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        return await run_in_threadpool(
+            resync_all_skill_pack_tools, request.app.state.TOOLS
         )
+    except Exception as e:
+        _raise_install_error(e)
 
 
 @router.get("/{pack_id}")
@@ -139,7 +149,8 @@ async def install_skills(
     if not is_personal_org(organization_id) and is_org_admin(organization_id, user.id):
         visibility = "organization"
     try:
-        pack = install_skill_pack(
+        pack = await run_in_threadpool(
+            install_skill_pack,
             user.id,
             form_data.git_url,
             form_data.ref or "main",
@@ -148,13 +159,8 @@ async def install_skills(
             visibility=visibility,
         )
         return pack_to_response(pack)
-    except SkillInstallError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        log.exception("Skill pack install failed")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        _raise_install_error(e)
 
 
 @router.post("/{pack_id}/update")
@@ -168,19 +174,15 @@ async def update_skills(
     pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
     form_data = form_data or SkillPackUpdateForm()
     try:
-        pack = update_skill_pack(
+        pack = await run_in_threadpool(
+            update_skill_pack,
             pack.id,
             request.app.state.TOOLS,
-            new_ref=form_data.ref,
+            form_data.ref,
         )
         return pack_to_response(pack)
-    except SkillInstallError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        log.exception("Skill pack update failed")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        _raise_install_error(e)
 
 
 @router.post("/{pack_id}/access")
@@ -238,7 +240,7 @@ async def remove_skill_pack(
     _require_skills_workspace(request, user)
     pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
     try:
-        delete_skill_pack(pack.id, request.app.state.TOOLS)
+        await run_in_threadpool(delete_skill_pack, pack.id, request.app.state.TOOLS)
         return {"success": True}
-    except SkillInstallError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        _raise_install_error(e)

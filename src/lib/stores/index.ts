@@ -201,6 +201,7 @@ type Config = {
 	status: boolean;
 	name: string;
 	version: string;
+	image_tag?: string | null;
 	default_locale: string;
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];

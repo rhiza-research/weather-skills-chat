@@ -50,9 +50,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
+{{- define "weather-skills-chat.imageTag" -}}
+{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- end }}
+
 {{- define "weather-skills-chat.image" -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
-{{- printf "%s:%s" .Values.image.repository $tag }}
+{{- printf "%s:%s" .Values.image.repository (include "weather-skills-chat.imageTag" .) }}
 {{- end }}
 
 {{- define "weather-skills-chat.pvcName" -}}

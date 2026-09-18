@@ -357,6 +357,7 @@ from open_webui.env import (
     SRC_LOG_LEVELS,
     VERSION,
     WEBUI_BUILD_HASH,
+    WEBUI_IMAGE_TAG,
     WEBUI_SECRET_KEY,
     WEBUI_SESSION_COOKIE_SAME_SITE,
     WEBUI_SESSION_COOKIE_SECURE,
@@ -1471,6 +1472,7 @@ async def get_app_config(request: Request):
         "status": True,
         "name": app.state.WEBUI_NAME,
         "version": VERSION,
+        "image_tag": WEBUI_IMAGE_TAG or None,
         "default_locale": str(DEFAULT_LOCALE),
         "oauth": {
             "providers": {
