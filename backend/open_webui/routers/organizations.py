@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.organizations import (
@@ -19,7 +19,7 @@ from open_webui.utils.organizations import (
     is_at_least,
     is_member,
     is_owner,
-    is_platform_admin,
+    require_platform_admin,
 )
 
 log = logging.getLogger(__name__)
@@ -42,13 +42,9 @@ async def get_organizations(user=Depends(get_verified_user)):
 
 
 @router.get("/all", response_model=list[OrganizationModel])
-async def get_all_organizations(user=Depends(get_verified_user)):
-    if not is_platform_admin(user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-    return Organizations.get_all_organizations()
+async def get_all_organizations(request: Request, user=Depends(get_verified_user)):
+    require_platform_admin(user, request)
+    return [_with_members(org, user.id) for org in Organizations.get_all_organizations()]
 
 
 @router.post("/", response_model=OrganizationModel)
@@ -67,24 +63,39 @@ async def create_organization(
     return _with_members(org, user.id)
 
 
-@router.get("/{id}", response_model=OrganizationModel)
-async def get_organization(id: str, user=Depends(get_verified_user)):
+@router.post("/{id}/activate", response_model=OrganizationModel)
+async def activate_organization(id: str, request: Request, user=Depends(get_verified_user)):
+    require_platform_admin(user, request)
     org = Organizations.get_organization_by_id(id)
     if not org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    if not is_member(id, user.id) and not is_platform_admin(user.id):
+    try:
+        org = Organizations.set_active(id, True)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return _with_members(org, user.id)
+
+
+@router.get("/{id}", response_model=OrganizationModel)
+async def get_organization(id: str, request: Request, user=Depends(get_verified_user)):
+    org = Organizations.get_organization_by_id(id)
+    if not org:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
+    if not is_member(id, user.id):
+        require_platform_admin(user, request)
     return _with_members(org, user.id)
 
 
 @router.post("/{id}/update", response_model=OrganizationModel)
 async def update_organization(
-    id: str, form_data: OrganizationUpdateForm, user=Depends(get_verified_user)
+    id: str,
+    form_data: OrganizationUpdateForm,
+    request: Request,
+    user=Depends(get_verified_user),
 ):
     org = Organizations.get_organization_by_id(id)
     if not org:
@@ -97,10 +108,7 @@ async def update_organization(
             detail="Cannot update a personal organization",
         )
     if not is_at_least(id, user.id, "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+        require_platform_admin(user, request)
     try:
         org = Organizations.update_organization(id, form_data)
     except ValueError as e:
@@ -208,7 +216,9 @@ async def remove_organization_member(
 
 
 @router.delete("/{id}", response_model=bool)
-async def delete_organization(id: str, user=Depends(get_verified_user)):
+async def delete_organization(
+    id: str, request: Request, user=Depends(get_verified_user)
+):
     org = Organizations.get_organization_by_id(id)
     if not org:
         raise HTTPException(
@@ -220,10 +230,7 @@ async def delete_organization(id: str, user=Depends(get_verified_user)):
             detail="Cannot delete this organization",
         )
     if not is_owner(id, user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+        require_platform_admin(user, request)
     try:
         return Organizations.delete_organization(id)
     except ValueError as e:

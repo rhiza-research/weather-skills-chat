@@ -37,6 +37,9 @@
 	import { executeToolServer, getBackendConfig } from '$lib/apis';
 	import { getArtifactArchive, uploadArtifactArchive } from '$lib/apis/artifacts';
 	import { getSessionUser } from '$lib/apis/auths';
+	import { installOrganizationFetch } from '$lib/apis/organizations';
+
+	installOrganizationFetch();
 
 	import '../tailwind.css';
 	import '../app.css';

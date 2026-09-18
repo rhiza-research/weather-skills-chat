@@ -43,6 +43,7 @@
 		importChat
 	} from '$lib/apis/chats';
 	import { getOrganizations } from '$lib/apis/organizations';
+	import { reloadOrganizationCatalog } from '$lib/utils/organizationContext';
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -80,7 +81,6 @@
 
 	let folders = {};
 	let newFolderId = null;
-	let showOrgMenu = false;
 
 	/** Which chat time-range sections are expanded in the sidebar. Missing keys default to open. */
 	let openTimeRanges: Record<string, boolean> = {};
@@ -216,7 +216,7 @@
 		}
 	}
 
-	const currentOrganization = () =>
+	$: currentOrg =
 		($organizations ?? []).find((org) => org.id === $activeOrganizationId) ?? {
 			id: $user?.id,
 			name: 'Personal',
@@ -224,12 +224,17 @@
 		};
 
 	const switchOrganization = async (orgId) => {
+		if (orgId === $activeOrganizationId) {
+			return;
+		}
 		activeOrganizationId.set(orgId);
-		showOrgMenu = false;
+		await reloadOrganizationCatalog(localStorage.token);
 		selectedChatId = null;
 		chatId.set('');
 		await initChatList();
 		await goto('/');
+		await tick();
+		document.getElementById('new-chat-button')?.click();
 	};
 
 	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
@@ -693,44 +698,42 @@
 			</div>
 		{/if} -->
 
-		{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools || $user?.permissions?.workspace?.skills}
-			<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
-				<a
-					class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-					href="/workspace"
-					on:click={() => {
-						selectedChatId = null;
-						chatId.set('');
+		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+			<a
+				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				href="/workspace"
+				on:click={() => {
+					selectedChatId = null;
+					chatId.set('');
 
-						if ($mobile) {
-							showSidebar.set(false);
-						}
-					}}
-					draggable="false"
-				>
-					<div class="self-center">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="2"
-							stroke="currentColor"
-							class="size-[1.1rem]"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
-							/>
-						</svg>
-					</div>
+					if ($mobile) {
+						showSidebar.set(false);
+					}
+				}}
+				draggable="false"
+			>
+				<div class="self-center">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="2"
+						stroke="currentColor"
+						class="size-[1.1rem]"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
+						/>
+					</svg>
+				</div>
 
-					<div class="flex self-center translate-y-[0.5px]">
-						<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Workspace')}</div>
-					</div>
-				</a>
-			</div>
-		{/if}
+				<div class="flex self-center translate-y-[0.5px]">
+					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Workspace')}</div>
+				</div>
+			</a>
+		</div>
 
 		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 			<a
@@ -933,7 +936,7 @@
 										ownerName={chat.owner_name}
 										isMine={chat.user_id === $user?.id}
 										visibility={chat.visibility}
-										isPersonal={currentOrganization().kind === 'personal'}
+										isPersonal={currentOrg?.kind === 'personal'}
 										selected={selectedChatId === chat.id}
 										on:select={() => {
 											selectedChatId = chat.id;
@@ -1010,7 +1013,7 @@
 											ownerName={chat.owner_name}
 											isMine={chat.user_id === $user?.id}
 											visibility={chat.visibility}
-											isPersonal={currentOrganization().kind === 'personal'}
+											isPersonal={currentOrg?.kind === 'personal'}
 											selected={selectedChatId === chat.id}
 											on:select={() => {
 												selectedChatId = chat.id;
@@ -1062,72 +1065,18 @@
 		<div class="px-2">
 			<div class="flex flex-col font-primary relative">
 				{#if $user !== undefined && $user !== null}
-					<button
-						class="flex items-center rounded-xl py-2 px-2.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition mb-1"
-						on:click={() => {
-							showOrgMenu = !showOrgMenu;
-						}}
-					>
-						<div class="self-center mr-3 text-gray-500">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="size-5"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M4 16.5V4.75A.75.75 0 0 1 4.75 4h10.5a.75.75 0 0 1 .75.75v11.75a.75.75 0 0 1-1.28.53L10 13.06l-4.72 4.22A.75.75 0 0 1 4 16.5Z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-						</div>
-						<div class="self-center font-medium truncate flex-1 text-left">
-							{currentOrganization().name}
-						</div>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 20 20"
-							fill="currentColor"
-							class="size-4 text-gray-400"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-					</button>
-					{#if showOrgMenu}
-						<div
-							class="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg py-1 max-h-64 overflow-y-auto"
-						>
-							{#each $organizations as org}
-								<button
-									class="flex items-center w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 {org.id ===
-									$activeOrganizationId
-										? 'font-medium'
-										: ''}"
-									on:click={() => switchOrganization(org.id)}
-								>
-									{org.name}
-								</button>
-							{/each}
-						</div>
-					{/if}
 					<UserMenu
 						role={$user?.role}
+						bind:show={showDropdown}
 						on:show={(e) => {
 							if (e.detail === 'archived-chat') {
 								showArchivedChats.set(true);
 							}
 						}}
+						on:switch-org={(e) => switchOrganization(e.detail)}
 					>
 						<button
 							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-							on:click={() => {
-								showDropdown = !showDropdown;
-							}}
 						>
 							<div class=" self-center mr-3">
 								<img
@@ -1136,7 +1085,24 @@
 									alt="User profile"
 								/>
 							</div>
-							<div class=" self-center font-medium">{$user?.name}</div>
+							<div class="self-center font-medium min-w-0 flex-1 text-left">
+								<div class="truncate">{$user?.name}</div>
+								<div class="truncate text-xs font-normal text-gray-500 dark:text-gray-400">
+									{currentOrg?.name ?? 'Personal'}
+								</div>
+							</div>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="size-4 text-gray-400 shrink-0 ml-1 {showDropdown ? 'rotate-180' : ''}"
+							>
+								<path
+									fill-rule="evenodd"
+									d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+									clip-rule="evenodd"
+								/>
+							</svg>
 						</button>
 					</UserMenu>
 				{/if}

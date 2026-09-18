@@ -6,7 +6,7 @@ from typing import Optional
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, get_db
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import BigInteger, Column, Text, and_
+from sqlalchemy import BigInteger, Boolean, Column, Text, and_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -32,6 +32,7 @@ class Organization(Base):
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
     default_models = Column(Text, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
 
 
 class OrganizationMember(Base):
@@ -68,6 +69,7 @@ class OrganizationModel(BaseModel):
     role: Optional[str] = None
     members: Optional[list[OrganizationMemberModel]] = None
     default_models: Optional[str] = None
+    active: bool = True
 
 
 class OrganizationForm(BaseModel):
@@ -130,6 +132,7 @@ class OrganizationTable:
                 created_by=user_id,
                 created_at=now,
                 updated_at=now,
+                active=True,
             )
             member = OrganizationMember(
                 organization_id=user_id,
@@ -148,7 +151,7 @@ class OrganizationTable:
         if existing:
             if owner_user_id and not self.get_member(PLATFORM_ORG_ID, owner_user_id):
                 self.add_member(PLATFORM_ORG_ID, owner_user_id, "owner")
-                self.sync_platform_user_role(owner_user_id)
+            self.adopt_legacy_admins()
             return existing
         now = int(time.time())
         created_by = owner_user_id or PLATFORM_ORG_ID
@@ -161,6 +164,7 @@ class OrganizationTable:
                 created_by=created_by,
                 created_at=now,
                 updated_at=now,
+                active=True,
             )
             db.add(org)
             if owner_user_id:
@@ -174,8 +178,7 @@ class OrganizationTable:
                 )
             db.commit()
             db.refresh(org)
-        if owner_user_id:
-            self.sync_platform_user_role(owner_user_id)
+        self.adopt_legacy_admins()
         return OrganizationModel.model_validate(org)
 
     def insert_new_organization(
@@ -193,6 +196,7 @@ class OrganizationTable:
                 created_at=now,
                 updated_at=now,
                 default_models=form_data.default_models,
+                active=False,
             )
             member = OrganizationMember(
                 organization_id=org_id,
@@ -220,7 +224,10 @@ class OrganizationTable:
                     OrganizationMember,
                     Organization.id == OrganizationMember.organization_id,
                 )
-                .filter(OrganizationMember.user_id == user_id)
+                .filter(
+                    OrganizationMember.user_id == user_id,
+                    Organization.active.is_(True),
+                )
                 .order_by(Organization.kind.asc(), Organization.name.asc())
                 .all()
             )
@@ -283,6 +290,21 @@ class OrganizationTable:
                 .count()
             )
 
+    def set_active(
+        self, organization_id: str, active: bool
+    ) -> Optional[OrganizationModel]:
+        org = self.get_organization_by_id(organization_id)
+        if not org:
+            return None
+        if org.kind in (ORG_KIND_PERSONAL, ORG_KIND_PLATFORM) and not active:
+            raise ValueError("Cannot deactivate this organization")
+        with get_db() as db:
+            db.query(Organization).filter_by(id=organization_id).update(
+                {"active": active, "updated_at": int(time.time())}
+            )
+            db.commit()
+        return self.get_organization_by_id(organization_id)
+
     def update_organization(
         self, organization_id: str, form_data: OrganizationUpdateForm
     ) -> Optional[OrganizationModel]:
@@ -330,8 +352,7 @@ class OrganizationTable:
             )
             db.commit()
             db.refresh(member)
-        if organization_id == PLATFORM_ORG_ID:
-            self.sync_platform_user_role(user_id)
+        self.activate_if_pending(user_id)
         return OrganizationMemberModel.model_validate(member)
 
     def update_member_role(
@@ -361,8 +382,6 @@ class OrganizationTable:
                 {"updated_at": int(time.time())}
             )
             db.commit()
-        if organization_id == PLATFORM_ORG_ID:
-            self.sync_platform_user_role(user_id)
         return self.get_member(organization_id, user_id)
 
     def remove_member(self, organization_id: str, user_id: str) -> bool:
@@ -382,8 +401,6 @@ class OrganizationTable:
                 {"updated_at": int(time.time())}
             )
             db.commit()
-        if organization_id == PLATFORM_ORG_ID:
-            self.sync_platform_user_role(user_id)
         return True
 
     def delete_organization(self, organization_id: str) -> bool:
@@ -524,7 +541,6 @@ class OrganizationTable:
                 )
             ).delete(synchronize_session=False)
             db.commit()
-        self.sync_platform_user_role(user_id)
         return True
 
     def user_organization_ids(self, user_id: str) -> list[str]:
@@ -532,22 +548,39 @@ class OrganizationTable:
             return [
                 row[0]
                 for row in db.query(OrganizationMember.organization_id)
-                .filter_by(user_id=user_id)
+                .join(
+                    Organization,
+                    Organization.id == OrganizationMember.organization_id,
+                )
+                .filter(
+                    OrganizationMember.user_id == user_id,
+                    Organization.active.is_(True),
+                )
                 .all()
             ]
 
-    def sync_platform_user_role(self, user_id: str) -> None:
+    def activate_if_pending(self, user_id: str) -> None:
         from open_webui.models.users import Users
 
         user = Users.get_user_by_id(user_id)
-        if not user or user.role == "pending":
-            return
-        member = self.get_member(PLATFORM_ORG_ID, user_id)
-        if member and member.role in ("owner", "admin"):
-            if user.role != "admin":
-                Users.update_user_role_by_id(user_id, "admin")
-        elif user.role == "admin":
+        if user and user.role == "pending":
             Users.update_user_role_by_id(user_id, "user")
+
+    def adopt_legacy_admins(self) -> None:
+        """Existing global admins become platform-org admins; role is no longer stored."""
+        from open_webui.internal.db import get_db
+        from open_webui.models.users import User
+
+        with get_db() as db:
+            admin_ids = [
+                row[0] for row in db.query(User.id).filter(User.role == "admin").all()
+            ]
+        for user_id in admin_ids:
+            if not self.get_member(PLATFORM_ORG_ID, user_id):
+                try:
+                    self.add_member(PLATFORM_ORG_ID, user_id, "admin")
+                except ValueError:
+                    continue
 
 
 Organizations = OrganizationTable()

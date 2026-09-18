@@ -9,6 +9,7 @@ from open_webui.utils.access_control import (
     can_update_access_control,
     has_access,
     user_owns_or_has_access,
+    visible_in_organization,
 )
 
 
@@ -83,6 +84,50 @@ class UserOwnsOrHasAccessTest(unittest.TestCase):
             self.assertTrue(
                 user_owns_or_has_access("admin-user", "alice", acl, "write", "admin")
             )
+
+    def test_organization_grant_allows_members(self):
+        acl = {"read": {"organization_ids": ["org-1"]}, "write": {"organization_ids": []}}
+        with patch(
+            "open_webui.models.groups.Groups.get_groups_by_member_id",
+            return_value=[],
+        ), patch(
+            "open_webui.models.organizations.Organizations.user_organization_ids",
+            return_value=["org-1"],
+        ):
+            self.assertTrue(user_owns_or_has_access("bob", "alice", acl, "read"))
+            self.assertFalse(user_owns_or_has_access("bob", "alice", acl, "write"))
+        with patch(
+            "open_webui.models.groups.Groups.get_groups_by_member_id",
+            return_value=[],
+        ), patch(
+            "open_webui.models.organizations.Organizations.user_organization_ids",
+            return_value=["org-2"],
+        ):
+            self.assertFalse(user_owns_or_has_access("carol", "alice", acl, "read"))
+
+    def test_org_shared_model_only_visible_in_that_org(self):
+        acl = {"read": {"organization_ids": ["org-1"]}, "write": {"organization_ids": []}}
+        with patch(
+            "open_webui.models.groups.Groups.get_groups_by_member_id",
+            return_value=[],
+        ), patch(
+            "open_webui.models.organizations.Organizations.user_organization_ids",
+            return_value=["org-1", "org-2"],
+        ):
+            self.assertTrue(
+                visible_in_organization("bob", "alice", acl, "org-1", "read")
+            )
+            self.assertFalse(
+                visible_in_organization("bob", "alice", acl, "org-2", "read")
+            )
+            self.assertTrue(
+                visible_in_organization("alice", "alice", acl, "org-2", "read")
+            )
+
+    def test_public_model_visible_in_every_org(self):
+        self.assertTrue(
+            visible_in_organization("bob", "alice", None, "org-2", "read")
+        )
 
     def test_has_access_private_is_false(self):
         with patch(

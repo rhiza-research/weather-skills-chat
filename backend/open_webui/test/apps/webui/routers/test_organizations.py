@@ -54,7 +54,30 @@ class TestOrganizations(AbstractPostgresTest):
         workspace = response.json()
         assert workspace["kind"] == "workspace"
         assert workspace["role"] == "owner"
+        assert workspace["active"] is False
         workspace_id = workspace["id"]
+
+        with mock_webui_user(id="owner"):
+            listed = self.fast_api_client.get(self.create_url("/"))
+        assert workspace_id not in {org["id"] for org in listed.json()}
+
+        with mock_webui_user(id="member"):
+            forbidden = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/activate")
+            )
+        assert forbidden.status_code == 403
+
+        self.orgs.ensure_platform("owner")
+        with mock_webui_user(id="owner"):
+            response = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/activate")
+            )
+        assert response.status_code == 200
+        assert response.json()["active"] is True
+
+        with mock_webui_user(id="owner"):
+            listed = self.fast_api_client.get(self.create_url("/"))
+        assert workspace_id in {org["id"] for org in listed.json()}
 
         with mock_webui_user(id="owner"):
             response = self.fast_api_client.post(
@@ -83,6 +106,50 @@ class TestOrganizations(AbstractPostgresTest):
             )
         assert response.status_code == 400
 
+    def test_update_and_delete_workspace(self):
+        with mock_webui_user(id="owner"):
+            created = self.fast_api_client.post(
+                self.create_url("/"),
+                json={"name": "Temp Org"},
+            ).json()
+        workspace_id = created["id"]
+        self.orgs.ensure_platform("owner")
+        with mock_webui_user(id="owner"):
+            self.fast_api_client.post(self.create_url(f"/{workspace_id}/activate"))
+
+        with mock_webui_user(id="outsider"):
+            denied = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/update"),
+                json={"name": "Hijacked"},
+            )
+        assert denied.status_code == 403
+
+        with mock_webui_user(id="owner"):
+            updated = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/update"),
+                json={"name": "Renamed Org", "description": "updated"},
+            )
+        assert updated.status_code == 200
+        assert updated.json()["name"] == "Renamed Org"
+
+        with mock_webui_user(id="owner"):
+            personal = self.fast_api_client.delete(self.create_url("/owner"))
+        assert personal.status_code == 400
+
+        with mock_webui_user(id="outsider"):
+            denied_delete = self.fast_api_client.delete(
+                self.create_url(f"/{workspace_id}")
+            )
+        assert denied_delete.status_code == 403
+
+        with mock_webui_user(id="owner"):
+            deleted = self.fast_api_client.delete(self.create_url(f"/{workspace_id}"))
+        assert deleted.status_code == 200
+
+        with mock_webui_user(id="owner"):
+            missing = self.fast_api_client.get(self.create_url(f"/{workspace_id}"))
+        assert missing.status_code == 404
+
     def test_context_isolation_and_private_chats(self):
 
         with mock_webui_user(id="owner"):
@@ -91,6 +158,9 @@ class TestOrganizations(AbstractPostgresTest):
                 json={"name": "Workspace B"},
             ).json()
         workspace_id = created["id"]
+        self.orgs.ensure_platform("owner")
+        with mock_webui_user(id="owner"):
+            self.fast_api_client.post(self.create_url(f"/{workspace_id}/activate"))
         with mock_webui_user(id="owner"):
             self.fast_api_client.post(
                 self.create_url(f"/{workspace_id}/members"),
@@ -169,7 +239,8 @@ class TestOrganizations(AbstractPostgresTest):
 
         Organizations.ensure_platform("owner")
         owner = self.users.get_user_by_id("owner")
-        assert owner.role == "admin"
+        assert owner.role == "user"
+        assert Organizations.get_member(PLATFORM_ORG_ID, "owner").role == "owner"
 
         with mock_webui_user(id="owner"):
             workspace = self.fast_api_client.post(
@@ -177,6 +248,8 @@ class TestOrganizations(AbstractPostgresTest):
                 json={"name": "Keep me"},
             ).json()
         workspace_id = workspace["id"]
+        with mock_webui_user(id="owner"):
+            self.fast_api_client.post(self.create_url(f"/{workspace_id}/activate"))
         with mock_webui_user(id="owner"):
             self.fast_api_client.post(
                 self.create_url(f"/{workspace_id}/members"),

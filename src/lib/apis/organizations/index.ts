@@ -1,4 +1,4 @@
-import { WEBUI_API_BASE_URL } from '$lib/constants';
+import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
 import { get } from 'svelte/store';
 import { activeOrganizationId } from '$lib/stores';
@@ -6,6 +6,50 @@ import { activeOrganizationId } from '$lib/stores';
 export const organizationHeaders = (): Record<string, string> => {
 	const id = get(activeOrganizationId);
 	return id ? { 'X-Organization-Id': id } : {};
+};
+
+let fetchPatched = false;
+
+export const installOrganizationFetch = () => {
+	if (typeof window === 'undefined' || fetchPatched) {
+		return;
+	}
+	fetchPatched = true;
+	if (typeof localStorage !== 'undefined') {
+		const stored = localStorage.getItem('activeOrganizationId');
+		if (stored && !get(activeOrganizationId)) {
+			activeOrganizationId.set(stored);
+		}
+	}
+	const originalFetch = window.fetch.bind(window);
+	window.fetch = (input, init) => {
+		const orgId = get(activeOrganizationId);
+		if (!orgId) {
+			return originalFetch(input, init);
+		}
+		const url =
+			typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+		const local =
+			url.startsWith('/') ||
+			url.startsWith(WEBUI_API_BASE_URL) ||
+			(WEBUI_BASE_URL && url.startsWith(WEBUI_BASE_URL));
+		if (!local) {
+			return originalFetch(input, init);
+		}
+		if (typeof Request !== 'undefined' && input instanceof Request) {
+			if (!input.headers.has('X-Organization-Id')) {
+				const headers = new Headers(input.headers);
+				headers.set('X-Organization-Id', orgId);
+				input = new Request(input, { headers });
+			}
+			return originalFetch(input, init);
+		}
+		const headers = new Headers(init?.headers);
+		if (!headers.has('X-Organization-Id')) {
+			headers.set('X-Organization-Id', orgId);
+		}
+		return originalFetch(input, { ...(init || {}), headers });
+	};
 };
 
 const request = async (token: string, path: string, options: RequestInit = {}) => {
@@ -47,6 +91,9 @@ export const createOrganization = async (
 	token: string,
 	org: { name: string; description?: string; default_models?: string | null }
 ) => request(token, '/organizations/', { method: 'POST', body: JSON.stringify(org) });
+
+export const activateOrganization = async (token: string, id: string) =>
+	request(token, `/organizations/${id}/activate`, { method: 'POST' });
 
 export const updateOrganizationById = async (
 	token: string,

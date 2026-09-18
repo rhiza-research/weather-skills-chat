@@ -18,6 +18,7 @@ from open_webui.utils.organizations import (
     can_read_org_resource,
     can_write_chat,
     can_write_org_resource,
+    effective_user_role,
     resolve_visibility,
 )
 
@@ -132,3 +133,28 @@ class OrgResourceAclTest(unittest.TestCase):
 
     def test_platform_org_id_constant(self):
         self.assertEqual(PLATFORM_ORG_ID, "platform")
+
+
+class EffectiveUserRoleTest(unittest.TestCase):
+    def test_pending_stays_pending(self):
+        user = SimpleNamespace(id="alice", role="pending")
+        self.assertEqual(effective_user_role(user, PLATFORM_ORG_ID), "pending")
+
+    def test_platform_admin_only_in_platform_context(self):
+        user = SimpleNamespace(id="alice", role="user")
+        member = SimpleNamespace(role="owner")
+        with patch(
+            "open_webui.utils.organizations.Organizations.get_member",
+            return_value=member,
+        ):
+            self.assertEqual(effective_user_role(user, PLATFORM_ORG_ID), "admin")
+            self.assertEqual(effective_user_role(user, "alice"), "user")
+            self.assertEqual(effective_user_role(user, "workspace-1"), "user")
+
+    def test_non_member_is_never_admin(self):
+        user = SimpleNamespace(id="bob", role="user")
+        with patch(
+            "open_webui.utils.organizations.Organizations.get_member",
+            return_value=None,
+        ):
+            self.assertEqual(effective_user_role(user, PLATFORM_ORG_ID), "user")

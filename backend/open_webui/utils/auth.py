@@ -194,7 +194,8 @@ def get_current_user(
                     status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.API_KEY_NOT_ALLOWED
                 )
 
-        return get_current_user_by_api_key(token)
+        user = get_current_user_by_api_key(token)
+        return _with_effective_role(user, request)
 
     # auth by jwt token
     try:
@@ -217,12 +218,18 @@ def get_current_user(
             # to prevent blocking the request
             if background_tasks:
                 background_tasks.add_task(Users.update_user_last_active_by_id, user.id)
-        return user
+        return _with_effective_role(user, request)
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
+
+
+def _with_effective_role(user, request: Request):
+    from open_webui.utils.organizations import apply_effective_user_role
+
+    return apply_effective_user_role(user, request)
 
 
 def get_current_user_by_api_key(api_key: str):

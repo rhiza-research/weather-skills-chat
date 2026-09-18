@@ -148,23 +148,6 @@ type Settings = {
 	splitLargeDeltas?: boolean;
 	chatDirection: 'LTR' | 'RTL' | 'auto';
 	ctrlEnterToSend?: boolean;
-
-	system?: string;
-	requestFormat?: string;
-	keepAlive?: string;
-	seed?: number;
-	temperature?: string;
-	repeat_penalty?: string;
-	top_k?: string;
-	top_p?: string;
-	num_ctx?: string;
-	num_batch?: string;
-	num_keep?: string;
-	options?: ModelOptions;
-};
-
-type ModelOptions = {
-	stop?: boolean;
 };
 
 type AudioSettings = {

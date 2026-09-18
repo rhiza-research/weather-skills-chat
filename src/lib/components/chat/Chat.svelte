@@ -47,7 +47,6 @@
 		getMessageContentParts,
 		createMessagesList,
 		extractSentencesForAudio,
-		promptTemplate,
 		splitStream,
 		sleep,
 		removeDetails,
@@ -78,7 +77,6 @@
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
-	import { queryMemory } from '$lib/apis/memories';
 	import { getAndUpdateUserLocation, getUserById, getUserSettings } from '$lib/apis/users';
 	import {
 		chatCompleted,
@@ -1090,7 +1088,7 @@
 					await settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
 				}
 
-				params = chatContent?.params ?? {};
+				params = {};
 				chatFiles = chatContent?.files ?? [];
 
 				autoScroll = true;
@@ -1692,7 +1690,6 @@
 					model: model.id,
 					modelName: model.name ?? model.id,
 					modelIdx: modelIdx ? modelIdx : _modelIdx,
-					userContext: null,
 					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
 				};
 
@@ -1786,30 +1783,6 @@
 						responseMessageIds[`${modelId}-${modelIdx ? modelIdx : _modelIdx}`];
 					let responseMessage = _history.messages[responseMessageId];
 
-					let userContext = null;
-					if ($settings?.memory ?? false) {
-						if (userContext === null) {
-							const res = await queryMemory(localStorage.token, prompt).catch((error) => {
-								toast.error(`${error}`);
-								return null;
-							});
-							if (res) {
-								if (res.documents[0].length > 0) {
-									userContext = res.documents[0].reduce((acc, doc, index) => {
-										const createdAtTimestamp = res.metadatas[0][index].created_at;
-										const createdAtDate = new Date(createdAtTimestamp * 1000)
-											.toISOString()
-											.split('T')[0];
-										return `${acc}${index + 1}. [${createdAtDate}]. ${doc}\n`;
-									}, '');
-								}
-
-								console.log(userContext);
-							}
-						}
-					}
-					responseMessage.userContext = userContext;
-
 					const chatEventEmitter = await getChatEventEmitter(model.id, _chatId);
 
 					scrollToBottom();
@@ -1853,32 +1826,9 @@
 		);
 		await tick();
 
-		const stream =
-			model?.info?.params?.stream_response ??
-			$settings?.params?.stream_response ??
-			params?.stream_response ??
-			true;
+		const stream = model?.info?.params?.stream_response ?? true;
 
 		let messages = [
-			params?.system || $settings.system || (responseMessage?.userContext ?? null)
-				? {
-						role: 'system',
-						content: `${promptTemplate(
-							params?.system ?? $settings?.system ?? '',
-							$user?.name,
-							$settings?.userLocation
-								? await getAndUpdateUserLocation(localStorage.token).catch((err) => {
-										console.error(err);
-										return undefined;
-									})
-								: undefined
-						)}${
-							(responseMessage?.userContext ?? null)
-								? `\n\nUser Context:\n${responseMessage?.userContext ?? ''}`
-								: ''
-						}`
-					}
-				: undefined,
 			// Keep UI <details type="tool_calls"> intact. The backend expands them
 			// into native assistant tool_calls + role:tool messages. Do not run
 			// processDetails() here — that rewrote tools as <tool_calls> XML and
@@ -1890,7 +1840,7 @@
 						? removeDetails(message.content, ['reasoning', 'code_interpreter'])
 						: message.content
 			}))
-		].filter((message) => message);
+		];
 
 		messages = messages
 			.map((message, idx, arr) => ({
@@ -1934,19 +1884,6 @@
 				stream: stream,
 				model: model.id,
 				messages: messages,
-				params: {
-					...$settings?.params,
-					...params,
-
-					format: $settings.requestFormat ?? undefined,
-					keep_alive: $settings.keepAlive ?? undefined,
-					stop:
-						(params?.stop ?? $settings?.params?.stop ?? undefined)
-							? (params?.stop.split(',').map((token) => token.trim()) ?? $settings.params.stop).map(
-									(str) => decodeURIComponent(JSON.parse('"' + str.replace(/\"/g, '\\"') + '"'))
-								)
-							: undefined
-				},
 
 				files: (files?.length ?? 0) > 0 ? files : undefined,
 				tool_ids: selectedToolIds.length > 0 ? selectedToolIds : undefined,
@@ -2297,7 +2234,6 @@
 					id: _chatId,
 					title: $i18n.t('New Chat'),
 					models: selectedModels,
-					system: $settings.system ?? undefined,
 					params: params,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
@@ -2413,7 +2349,6 @@
 						chat: {
 							title: $chatTitle,
 							models: selectedModels,
-							system: $settings.system ?? undefined,
 							params: params,
 							history: history,
 							timestamp: Date.now()
@@ -2585,19 +2520,10 @@
 			<ChatControls
 				bind:this={controlPaneComponent}
 				bind:history
-				bind:chatFiles
-				bind:params
 				bind:files
 				bind:pane={controlPane}
 				chatId={$chatId}
 				modelId={selectedModelIds?.at(0) ?? null}
-				models={selectedModelIds.reduce((a, e, i, arr) => {
-					const model = $models.find((m) => m.id === e);
-					if (model) {
-						return [...a, model];
-					}
-					return a;
-				}, [])}
 				{submitPrompt}
 				{stopResponse}
 				{showMessage}

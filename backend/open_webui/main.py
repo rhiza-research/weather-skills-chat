@@ -393,7 +393,8 @@ from open_webui.utils.langfuse_tracing import (
     start_chat_trace,
 )
 from open_webui.env import LANGFUSE_ENABLED
-from open_webui.utils.access_control import has_access, user_owns_or_has_access
+from open_webui.utils.access_control import visible_in_organization
+from open_webui.utils.organizations import get_active_organization_id
 
 from open_webui.utils.auth import (
     get_license_data,
@@ -1093,17 +1094,20 @@ if audit_level != AuditLevel.NONE:
 
 
 @app.get("/api/models")
-async def get_models(request: Request, user=Depends(get_verified_user)):
+async def get_models(
+    request: Request,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     def get_filtered_models(models, user):
         filtered_models = []
         for model in models:
             if model.get("arena"):
-                if user_owns_or_has_access(
+                if visible_in_organization(
                     user.id,
                     None,
-                    model.get("info", {})
-                    .get("meta", {})
-                    .get("access_control", {}),
+                    model.get("info", {}).get("meta", {}).get("access_control", {}),
+                    organization_id,
                     "read",
                     user.role,
                 ):
@@ -1112,10 +1116,11 @@ async def get_models(request: Request, user=Depends(get_verified_user)):
 
             model_info = Models.get_model_by_id(model["id"])
             if model_info:
-                if user_owns_or_has_access(
+                if visible_in_organization(
                     user.id,
                     model_info.user_id,
                     model_info.access_control,
+                    organization_id,
                     "read",
                     user.role,
                 ):

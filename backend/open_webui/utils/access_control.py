@@ -198,6 +198,40 @@ def user_owns_or_has_access(
     return has_access(user_id, permission, access_control)
 
 
+def access_control_organization_ids(access_control: Optional[dict]) -> list[str]:
+    if not access_control:
+        return []
+    section = access_control.get("read") or {}
+    return list(section.get("organization_ids") or section.get("team_ids") or [])
+
+
+def visible_in_organization(
+    user_id: str,
+    owner_user_id: Optional[str],
+    access_control: Optional[dict],
+    organization_id: Optional[str],
+    permission: str = "read",
+    user_role: Optional[str] = None,
+) -> bool:
+    """ACL check scoped to the active organization context.
+
+    Owners and public resources remain visible in every org. Models (and other
+    resources) shared with specific organizations only appear in those orgs.
+    """
+    if not user_owns_or_has_access(
+        user_id, owner_user_id, access_control, permission, user_role
+    ):
+        return False
+    if owner_user_id and owner_user_id == user_id:
+        return True
+    if is_public_access(access_control):
+        return True
+    org_ids = access_control_organization_ids(access_control)
+    if not org_ids:
+        return True
+    return bool(organization_id) and organization_id in org_ids
+
+
 def can_update_access_control(
     user_id: str,
     user_role: str,

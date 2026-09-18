@@ -5,7 +5,6 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
-	import Controls from './Controls/Controls.svelte';
 	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
 	import Overview from './Overview.svelte';
@@ -13,12 +12,8 @@
 	import Artifacts from './Artifacts.svelte';
 
 	export let history;
-	export let models = [];
 
 	export let chatId = null;
-
-	export let chatFiles = [];
-	export let params = {};
 
 	export let eventTarget: EventTarget;
 	export let submitPrompt: Function;
@@ -36,6 +31,8 @@
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
 	const MAX_SIZE = 45;
+
+	$: panelOpen = $showCallOverlay || $showOverview || $showArtifacts;
 
 	const readStoredSize = () => {
 		const stored = parseInt(localStorage?.chatControlsSize);
@@ -142,7 +139,7 @@
 
 <SvelteFlowProvider>
 	{#if !largeScreen}
-		{#if $showControls}
+		{#if $showControls && panelOpen}
 			<Drawer
 				show={$showControls}
 				on:close={() => {
@@ -185,21 +182,12 @@
 								showControls.set(false);
 							}}
 						/>
-					{:else}
-						<Controls
-							on:close={() => {
-								showControls.set(false);
-							}}
-							{models}
-							bind:chatFiles
-							bind:params
-						/>
 					{/if}
 				</div>
 			</Drawer>
 		{/if}
 	{:else}
-		{#if $showControls}
+		{#if $showControls && panelOpen}
 			<PaneResizer class="relative flex w-2 items-center justify-center bg-background group">
 				<div class="z-10 flex h-7 w-5 items-center justify-center rounded-xs">
 					<EllipsisVertical className="size-4 invisible group-hover:visible" />
@@ -209,7 +197,7 @@
 
 		<Pane
 			bind:pane
-			defaultSize={$showControls ? DEFAULT_SIZE : 0}
+			defaultSize={$showControls && panelOpen ? DEFAULT_SIZE : 0}
 			minSize={minSize}
 			maxSize={MAX_SIZE}
 			onResize={(size) => {
@@ -228,7 +216,7 @@
 			collapsible={true}
 			class="z-10 h-full min-h-0 bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800"
 		>
-			{#if $showControls}
+			{#if $showControls && panelOpen}
 				<div class="flex h-full max-h-full min-h-0 w-full overflow-hidden">
 					<div
 						class="w-full h-full min-h-0 {($showOverview || $showArtifacts) && !$showCallOverlay
@@ -268,15 +256,6 @@
 								on:close={() => {
 									showControls.set(false);
 								}}
-							/>
-						{:else}
-							<Controls
-								on:close={() => {
-									showControls.set(false);
-								}}
-								{models}
-								bind:chatFiles
-								bind:params
 							/>
 						{/if}
 					</div>

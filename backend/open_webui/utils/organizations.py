@@ -1,6 +1,7 @@
 from typing import Optional
+import logging
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.automations import AutomationModel
@@ -16,6 +17,8 @@ from open_webui.models.organizations import (
 )
 from open_webui.models.users import UserModel
 from open_webui.utils.auth import get_verified_user
+
+log = logging.getLogger(__name__)
 
 
 def user_organization_ids(user_id: str) -> list[str]:
@@ -50,6 +53,50 @@ def is_platform_admin(user_id: str) -> bool:
     return is_at_least(PLATFORM_ORG_ID, user_id, "admin")
 
 
+def effective_user_role(user: UserModel, organization_id: Optional[str] = None) -> str:
+    """Admin is platform-org membership, and only in the platform context."""
+    stored = getattr(user, "role", None) or "pending"
+    if stored == "pending":
+        return "pending"
+    if stored == "admin" and not is_platform_admin(user.id):
+        try:
+            Organizations.ensure_platform()
+            if not Organizations.get_member(PLATFORM_ORG_ID, user.id):
+                Organizations.add_member(PLATFORM_ORG_ID, user.id, "admin")
+        except Exception:
+            log.exception("Failed to adopt legacy admin into platform org")
+    org_id = (organization_id or "").strip() or user.id
+    if org_id == PLATFORM_ORG_ID and is_platform_admin(user.id):
+        return "admin"
+    return "user"
+
+
+def apply_effective_user_role(
+    user: UserModel, request: Optional[Request] = None
+) -> UserModel:
+    org_id = None
+    if request is not None:
+        org_id = request.headers.get("X-Organization-Id")
+    user.role = effective_user_role(user, org_id)
+    return user
+
+
+def require_platform_admin(user: UserModel, request: Optional[Request] = None) -> None:
+    if not is_platform_admin(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if request is None:
+        return
+    org_id = (request.headers.get("X-Organization-Id") or "").strip()
+    if org_id and org_id != PLATFORM_ORG_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+
 def is_personal_org(organization_id: str) -> bool:
     org = Organizations.get_organization_by_id(organization_id)
     return bool(org and org.kind == ORG_KIND_PERSONAL)
@@ -70,7 +117,7 @@ def can_read_chat(user: UserModel, chat: Optional[ChatModel]) -> bool:
         return True
     if not is_member(chat.organization_id, user.id) and not (
         ENABLE_ADMIN_CHAT_ACCESS
-        and is_platform_admin(user.id)
+        and getattr(user, "role", None) == "admin"
         and chat.visibility == VISIBILITY_ORGANIZATION
     ):
         return False
@@ -153,5 +200,10 @@ def get_active_organization_id(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if not org.active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization is not active",
         )
     return org_id

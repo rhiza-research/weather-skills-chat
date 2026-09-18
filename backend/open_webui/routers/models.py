@@ -16,7 +16,9 @@ from open_webui.utils.access_control import (
     can_update_access_control,
     has_permission,
     user_owns_or_has_access,
+    visible_in_organization,
 )
+from open_webui.utils.organizations import get_active_organization_id
 
 
 router = APIRouter()
@@ -42,11 +44,22 @@ def _can_write(user, model) -> bool:
 
 
 @router.get("/", response_model=list[ModelUserResponse])
-async def get_models(id: Optional[str] = None, user=Depends(get_verified_user)):
+async def get_models(
+    id: Optional[str] = None,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     return [
         model
         for model in Models.get_models()
-        if _can_read(user, model)
+        if visible_in_organization(
+            user.id,
+            model.user_id,
+            model.access_control,
+            organization_id,
+            "read",
+            user.role,
+        )
     ]
 
 

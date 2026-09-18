@@ -15,7 +15,6 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
 	import { config } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -141,9 +140,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						</div>
 						<div class="flex w-full justify-between items-center">
 							<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-								<Tooltip content={WEBUI_BUILD_HASH}>
-									v{WEBUI_VERSION}
-								</Tooltip>
+								{$config?.image_tag || 'unknown'}
 							</div>
 						</div>
 					</div>
@@ -166,31 +163,6 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							>
 								{$i18n.t('Documentation')}
 							</a>
-						</div>
-
-						<div class="mt-1">
-							<div class="flex space-x-1">
-								<a href="https://discord.gg/5rJgQTnV4s" target="_blank">
-									<img
-										alt="Discord"
-										src="https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white"
-									/>
-								</a>
-
-								<a href="https://twitter.com/OpenWebUI" target="_blank">
-									<img
-										alt="X (formerly Twitter) Follow"
-										src="https://img.shields.io/twitter/follow/OpenWebUI"
-									/>
-								</a>
-
-								<a href="https://github.com/open-webui/open-webui" target="_blank">
-									<img
-										alt="Github Repo"
-										src="https://img.shields.io/github/stars/open-webui/open-webui?style=social&label=Star us on Github"
-									/>
-								</a>
-							</div>
 						</div>
 					</div>
 
@@ -264,7 +236,6 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							>
 								<option value="pending">{$i18n.t('pending')}</option>
 								<option value="user">{$i18n.t('user')}</option>
-								<option value="admin">{$i18n.t('admin')}</option>
 							</select>
 						</div>
 					</div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getAdminDetails } from '$lib/apis/auths';
-	import { onMount, tick, getContext } from 'svelte';
+	import { onMount, getContext } from 'svelte';
+	import { WEBUI_NAME } from '$lib/stores';
 
 	const i18n = getContext('i18n');
 
@@ -22,13 +23,14 @@
 			<div class="max-w-md">
 				<div class="text-center dark:text-white text-2xl font-medium z-50">
 					{$i18n.t('Account Activation Pending')}<br />
-					{$i18n.t('Contact Admin for WebUI Access')}
+					{$i18n.t('Contact Admin for {{WEBUI_NAME}} Access', { WEBUI_NAME: $WEBUI_NAME })}
 				</div>
 
 				<div class=" mt-4 text-center text-sm dark:text-gray-200 w-full">
 					{$i18n.t('Your account status is currently pending activation.')}<br />
 					{$i18n.t(
-						'To access the WebUI, please reach out to the administrator. Admins can manage user statuses from the Admin Panel.'
+						'To access {{WEBUI_NAME}}, please reach out to the administrator. Admins can manage user statuses from the Admin Panel.',
+						{ WEBUI_NAME: $WEBUI_NAME }
 					)}
 				</div>
 

@@ -99,11 +99,7 @@
 					</div>
 
 					<div class=" text-xs text-gray-600 dark:text-gray-300 mb-2">
-						<a
-							class="underline"
-							href="https://github.com/open-webui/openapi-servers"
-							target="_blank">{$i18n.t('Learn more about OpenAPI tool servers.')}</a
-						>
+						{$i18n.t('Open WebUI can use tools provided by any OpenAPI server.')}
 					</div>
 				</div>
 			</div>

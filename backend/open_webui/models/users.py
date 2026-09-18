@@ -124,6 +124,8 @@ class UsersTable:
             db.refresh(result)
             if result:
                 Organizations.ensure_personal(id)
+                if db.query(User).count() == 1:
+                    Organizations.ensure_platform(id)
                 return user
             else:
                 return None

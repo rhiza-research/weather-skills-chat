@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy, getContext, tick } from 'svelte';
 	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
-	import { models, functions, knowledge as knowledgeCollections, user } from '$lib/stores';
+	import { models, knowledge as knowledgeCollections, user } from '$lib/stores';
 
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
 	import Tags from '$lib/components/common/Tags.svelte';
 	import Knowledge from '$lib/components/workspace/Models/Knowledge.svelte';
-	import FiltersSelector from '$lib/components/workspace/Models/FiltersSelector.svelte';
-	import ActionsSelector from '$lib/components/workspace/Models/ActionsSelector.svelte';
 	import Capabilities from '$lib/components/workspace/Models/Capabilities.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { getFunctions } from '$lib/apis/functions';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
 	import AccessControl from '../common/AccessControl.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -180,19 +177,10 @@
 
 		(async () => {
 			try {
-				const [fnList, kbList] = await Promise.all([
-					getFunctions(localStorage.token).catch((error) => {
-						console.error(error);
-						return [];
-					}),
-					getKnowledgeBases(localStorage.token).catch((error) => {
-						console.error(error);
-						return [];
-					})
-				]);
-				if (!active) return;
-
-				await functions.set(fnList);
+				const kbList = await getKnowledgeBases(localStorage.token).catch((error) => {
+					console.error(error);
+					return [];
+				});
 				if (!active) return;
 				await knowledgeCollections.set(kbList);
 				if (!active) return;
@@ -729,20 +717,6 @@
 						{$i18n.t(
 							'Skills and tools available to you are enabled by default in chat (highest skill version). Use the chat tools menu to change that per conversation.'
 						)}
-					</div>
-
-					<div class="my-2">
-						<FiltersSelector
-							bind:selectedFilterIds={filterIds}
-							filters={($functions ?? []).filter((func) => func.type === 'filter')}
-						/>
-					</div>
-
-					<div class="my-2">
-						<ActionsSelector
-							bind:selectedActionIds={actionIds}
-							actions={($functions ?? []).filter((func) => func.type === 'action')}
-						/>
 					</div>
 
 					<div class="my-2">

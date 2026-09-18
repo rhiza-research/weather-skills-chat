@@ -38,7 +38,8 @@ function hasAclGrant(
 	userId: string,
 	permission: 'read' | 'write',
 	accessControl: AccessControl,
-	groupIds: string[] = []
+	groupIds: string[] = [],
+	organizationIds: string[] = []
 ): boolean {
 	if (isPublicAccess(accessControl)) {
 		return permission === 'read';
@@ -48,10 +49,12 @@ function hasAclGrant(
 	const section = accessControl[permission] ?? {};
 	const userIds = section.user_ids ?? [];
 	const groupIdsInAcl = section.group_ids ?? [];
+	const orgIdsInAcl = [...(section.organization_ids ?? []), ...(section.team_ids ?? [])];
 
 	return (
 		userIds.includes(userId) ||
-		groupIdsInAcl.some((gid) => groupIds.includes(gid))
+		groupIdsInAcl.some((gid) => groupIds.includes(gid)) ||
+		orgIdsInAcl.some((oid) => organizationIds.includes(oid))
 	);
 }
 
@@ -61,7 +64,8 @@ export function userCanAccessResource(
 	ownerUserId: string | null | undefined,
 	accessControl: AccessControl,
 	permission: 'read' | 'write' = 'read',
-	groupIds: string[] = []
+	groupIds: string[] = [],
+	organizationIds: string[] = []
 ): boolean {
 	if (!user?.id) return false;
 	if (ownerUserId && ownerUserId === user.id) return true;
@@ -69,16 +73,22 @@ export function userCanAccessResource(
 	if (user.role === 'admin') {
 		if (isPrivateAccess(accessControl)) return false;
 		if (permission === 'read') {
-			return isPublicAccess(accessControl) || hasAclGrant(user.id, 'read', accessControl, groupIds);
+			return (
+				isPublicAccess(accessControl) ||
+				hasAclGrant(user.id, 'read', accessControl, groupIds, organizationIds)
+			);
 		}
-		return isPublicAccess(accessControl) || hasAclGrant(user.id, 'write', accessControl, groupIds);
+		return (
+			isPublicAccess(accessControl) ||
+			hasAclGrant(user.id, 'write', accessControl, groupIds, organizationIds)
+		);
 	}
 
 	if (isPublicAccess(accessControl)) {
 		return permission === 'read';
 	}
 
-	return hasAclGrant(user.id, permission, accessControl, groupIds);
+	return hasAclGrant(user.id, permission, accessControl, groupIds, organizationIds);
 }
 
 export function userCanSetSharingAccess(
@@ -86,7 +96,8 @@ export function userCanSetSharingAccess(
 	ownerUserId: string | null | undefined,
 	accessControl: AccessControl,
 	sharingPermissionKey: string,
-	groupIds: string[] = []
+	groupIds: string[] = [],
+	organizationIds: string[] = []
 ): boolean {
 	if (!user?.id) return false;
 	// Owners use the sharing permission; do not gate on current ACL shape
@@ -96,7 +107,14 @@ export function userCanSetSharingAccess(
 		return Boolean(user.permissions?.sharing?.[sharingPermissionKey]);
 	}
 	if (user.role === 'admin') {
-		return userCanAccessResource(user, ownerUserId, accessControl, 'write', groupIds);
+		return userCanAccessResource(
+			user,
+			ownerUserId,
+			accessControl,
+			'write',
+			groupIds,
+			organizationIds
+		);
 	}
 	return false;
 }

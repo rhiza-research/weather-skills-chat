@@ -37,8 +37,15 @@ def _index_names(table: str) -> set[str]:
 
 
 def _drop_index_if_exists(name: str, table: str) -> None:
-    if name in _index_names(table):
-        op.drop_index(name, table_name=table)
+    # SQLite leftover indexes from a failed batch_alter survive inspect+drop_index.
+    op.execute(text(f'DROP INDEX IF EXISTS "{name}"'))
+
+
+def _create_index_if_missing(
+    name: str, table: str, columns: list[str], unique: bool = False
+) -> None:
+    if name not in _index_names(table):
+        op.create_index(name, table, columns, unique=unique)
 
 
 def _table_exists(name: str) -> bool:
@@ -47,6 +54,10 @@ def _table_exists(name: str) -> bool:
 
 def _column_names(table: str) -> set[str]:
     return {col["name"] for col in inspect(op.get_bind()).get_columns(table)}
+
+
+def _row_exists(conn, sql: str, params: dict) -> bool:
+    return conn.execute(text(sql), params).fetchone() is not None
 
 
 def _rewrite_access_control(value):
@@ -129,28 +140,30 @@ def upgrade():
     conn = op.get_bind()
     now = int(time.time())
 
-    op.create_table(
-        "organization",
-        sa.Column("id", sa.Text(), primary_key=True, nullable=False, unique=True),
-        sa.Column("name", sa.Text(), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("kind", sa.Text(), nullable=False),
-        sa.Column("created_by", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.BigInteger(), nullable=True),
-        sa.Column("updated_at", sa.BigInteger(), nullable=True),
-        sa.Column("default_models", sa.Text(), nullable=True),
-    )
-    op.create_index("ix_organization_kind", "organization", ["kind"])
+    if not _table_exists("organization"):
+        op.create_table(
+            "organization",
+            sa.Column("id", sa.Text(), primary_key=True, nullable=False, unique=True),
+            sa.Column("name", sa.Text(), nullable=False),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("kind", sa.Text(), nullable=False),
+            sa.Column("created_by", sa.Text(), nullable=False),
+            sa.Column("created_at", sa.BigInteger(), nullable=True),
+            sa.Column("updated_at", sa.BigInteger(), nullable=True),
+            sa.Column("default_models", sa.Text(), nullable=True),
+        )
+    _create_index_if_missing("ix_organization_kind", "organization", ["kind"])
 
-    op.create_table(
-        "organization_member",
-        sa.Column("organization_id", sa.Text(), nullable=False),
-        sa.Column("user_id", sa.Text(), nullable=False),
-        sa.Column("role", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.BigInteger(), nullable=True),
-        sa.PrimaryKeyConstraint("organization_id", "user_id"),
-    )
-    op.create_index(
+    if not _table_exists("organization_member"):
+        op.create_table(
+            "organization_member",
+            sa.Column("organization_id", sa.Text(), nullable=False),
+            sa.Column("user_id", sa.Text(), nullable=False),
+            sa.Column("role", sa.Text(), nullable=False),
+            sa.Column("created_at", sa.BigInteger(), nullable=True),
+            sa.PrimaryKeyConstraint("organization_id", "user_id"),
+        )
+    _create_index_if_missing(
         "ix_organization_member_user_id", "organization_member", ["user_id"]
     )
 
@@ -159,6 +172,48 @@ def upgrade():
     ).fetchall()
     for user_id, _role, created_at in users:
         created = created_at or now
+        if not _row_exists(
+            conn, "SELECT 1 FROM organization WHERE id = :id", {"id": user_id}
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO organization (id, name, description, kind, created_by, "
+                    "created_at, updated_at) VALUES (:id, :name, :description, :kind, "
+                    ":created_by, :created_at, :updated_at)"
+                ),
+                {
+                    "id": user_id,
+                    "name": "Personal",
+                    "description": "",
+                    "kind": "personal",
+                    "created_by": user_id,
+                    "created_at": created,
+                    "updated_at": now,
+                },
+            )
+        if not _row_exists(
+            conn,
+            "SELECT 1 FROM organization_member WHERE organization_id = :organization_id "
+            "AND user_id = :user_id",
+            {"organization_id": user_id, "user_id": user_id},
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO organization_member (organization_id, user_id, role, created_at) "
+                    "VALUES (:organization_id, :user_id, :role, :created_at)"
+                ),
+                {
+                    "organization_id": user_id,
+                    "user_id": user_id,
+                    "role": "owner",
+                    "created_at": created,
+                },
+            )
+
+    platform_owner = next((row[0] for row in users if row[1] == "admin"), None)
+    if not _row_exists(
+        conn, "SELECT 1 FROM organization WHERE id = :id", {"id": PLATFORM_ORG_ID}
+    ):
         conn.execute(
             text(
                 "INSERT INTO organization (id, name, description, kind, created_by, "
@@ -166,61 +221,37 @@ def upgrade():
                 ":created_by, :created_at, :updated_at)"
             ),
             {
-                "id": user_id,
-                "name": "Personal",
-                "description": "",
-                "kind": "personal",
-                "created_by": user_id,
-                "created_at": created,
+                "id": PLATFORM_ORG_ID,
+                "name": "Platform",
+                "description": "Super-admin organization",
+                "kind": "platform",
+                "created_by": platform_owner or PLATFORM_ORG_ID,
+                "created_at": now,
                 "updated_at": now,
             },
         )
-        conn.execute(
-            text(
-                "INSERT INTO organization_member (organization_id, user_id, role, created_at) "
-                "VALUES (:organization_id, :user_id, :role, :created_at)"
-            ),
-            {
-                "organization_id": user_id,
-                "user_id": user_id,
-                "role": "owner",
-                "created_at": created,
-            },
-        )
-
-    platform_owner = next((row[0] for row in users if row[1] == "admin"), None)
-    conn.execute(
-        text(
-            "INSERT INTO organization (id, name, description, kind, created_by, "
-            "created_at, updated_at) VALUES (:id, :name, :description, :kind, "
-            ":created_by, :created_at, :updated_at)"
-        ),
-        {
-            "id": PLATFORM_ORG_ID,
-            "name": "Platform",
-            "description": "Super-admin organization",
-            "kind": "platform",
-            "created_by": platform_owner or PLATFORM_ORG_ID,
-            "created_at": now,
-            "updated_at": now,
-        },
-    )
     first_admin = True
     for user_id, role, created_at in users:
         if role != "admin":
             continue
-        conn.execute(
-            text(
-                "INSERT INTO organization_member (organization_id, user_id, role, created_at) "
-                "VALUES (:organization_id, :user_id, :role, :created_at)"
-            ),
-            {
-                "organization_id": PLATFORM_ORG_ID,
-                "user_id": user_id,
-                "role": "owner" if first_admin else "admin",
-                "created_at": created_at or now,
-            },
-        )
+        if not _row_exists(
+            conn,
+            "SELECT 1 FROM organization_member WHERE organization_id = :organization_id "
+            "AND user_id = :user_id",
+            {"organization_id": PLATFORM_ORG_ID, "user_id": user_id},
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO organization_member (organization_id, user_id, role, created_at) "
+                    "VALUES (:organization_id, :user_id, :role, :created_at)"
+                ),
+                {
+                    "organization_id": PLATFORM_ORG_ID,
+                    "user_id": user_id,
+                    "role": "owner" if first_admin else "admin",
+                    "created_at": created_at or now,
+                },
+            )
         first_admin = False
 
     _reencrypt_team_secrets(conn)
@@ -247,16 +278,33 @@ def upgrade():
         )
 
         _drop_index_if_exists(f"ix_{table}_team_id", table)
+        if table == "secret":
+            _drop_index_if_exists("uq_secret_personal_name", table)
+            _drop_index_if_exists("uq_secret_team_name", table)
         with op.batch_alter_table(table) as batch:
             batch.alter_column("organization_id", existing_type=sa.Text(), nullable=False)
             batch.alter_column("visibility", existing_type=sa.Text(), nullable=False)
             if table in RESOURCE_TABLES_WITH_TEAM and "team_id" in _column_names(table):
                 batch.drop_column("team_id")
-        op.create_index(f"ix_{table}_organization_id", table, ["organization_id"])
+        _create_index_if_missing(f"ix_{table}_organization_id", table, ["organization_id"])
+
+    if _table_exists("secret"):
+        op.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_secret_private_name "
+                "ON secret (organization_id, user_id, name) WHERE visibility = 'private'"
+            )
+        )
+        op.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_secret_org_name "
+                "ON secret (organization_id, name) WHERE visibility = 'organization'"
+            )
+        )
 
     if _table_exists("skill_pack"):
         _drop_index_if_exists("uq_skill_pack_user_git_url_ref", "skill_pack")
-        op.create_index(
+        _create_index_if_missing(
             "uq_skill_pack_org_git_url_ref",
             "skill_pack",
             ["organization_id", "git_url", "git_ref"],

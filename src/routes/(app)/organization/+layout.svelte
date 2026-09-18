@@ -2,7 +2,8 @@
 	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	import { WEBUI_NAME, showSidebar, user } from '$lib/stores';
+	import { WEBUI_NAME, showSidebar, organizations, activeOrganizationId } from '$lib/stores';
+	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { page } from '$app/stores';
 
@@ -10,25 +11,28 @@
 
 	let loaded = false;
 
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: canManage = isWorkspaceManagerContext(currentOrg);
+
 	onMount(async () => {
-		if ($user?.role !== 'admin') {
+		if (!canManage) {
 			await goto('/');
 		}
 		loaded = true;
 	});
 
-	$: if (loaded && $user && $user.role !== 'admin') {
+	$: if (loaded && !canManage) {
 		goto('/');
 	}
 </script>
 
 <svelte:head>
 	<title>
-		{$i18n.t('Admin Panel')} | {$WEBUI_NAME}
+		{$i18n.t('Organization settings')} | {$WEBUI_NAME}
 	</title>
 </svelte:head>
 
-{#if loaded}
+{#if loaded && canManage}
 	<div
 		class=" flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 			? 'md:max-w-[calc(100%-260px)]'
@@ -56,28 +60,12 @@
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 					>
 						<a
-							class="min-w-fit rounded-full p-1.5 {['/admin', '/admin/users'].includes(
+							class="min-w-fit rounded-full p-1.5 {['/organization', '/organization/membership'].includes(
 								$page.url.pathname
 							)
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							href="/admin">{$i18n.t('Users and Organizations')}</a
-						>
-
-						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
-								'/admin/membership'
-							)
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							href="/admin/membership">{$i18n.t('Organization membership')}</a
-						>
-
-						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/settings')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							href="/admin/settings">{$i18n.t('Admin settings')}</a
+							href="/organization">{$i18n.t('Organization membership')}</a
 						>
 					</div>
 				</div>

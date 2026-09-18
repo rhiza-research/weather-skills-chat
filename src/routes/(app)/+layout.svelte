@@ -8,15 +8,12 @@
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { getKnowledgeBases } from '$lib/apis/knowledge';
-	import { getFunctions } from '$lib/apis/functions';
-	import { getModels, getToolServersData } from '$lib/apis';
+	import { getToolServersData } from '$lib/apis';
 	import { getAllTags } from '$lib/apis/chats';
-	import { getPrompts } from '$lib/apis/prompts';
-	import { getTools } from '$lib/apis/tools';
 	import { getBanners } from '$lib/apis/configs';
 	import { getUserSettings } from '$lib/apis/users';
 	import { getOrganizations } from '$lib/apis/organizations';
+	import { reloadOrganizationCatalog } from '$lib/utils/organizationContext';
 
 	import {
 		config,
@@ -26,7 +23,6 @@
 		prompts,
 		knowledge,
 		tools,
-		functions,
 		tags,
 		banners,
 		showSettings,
@@ -91,15 +87,7 @@
 				settings.set(localStorageSettings);
 			}
 
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
-
 			banners.set(await getBanners(localStorage.token));
-			tools.set(await getTools(localStorage.token));
 			toolServers.set(await getToolServersData($i18n, $settings?.toolServers ?? []));
 			const memberships = await getOrganizations(localStorage.token).catch(() => []);
 			organizations.set(memberships);
@@ -108,6 +96,7 @@
 				$user?.id;
 			const valid = (memberships ?? []).some((org) => org.id === stored);
 			activeOrganizationId.set(valid ? stored : $user?.id);
+			await reloadOrganizationCatalog(localStorage.token);
 
 			document.addEventListener('keydown', async function (event) {
 				const isCtrlPressed = event.ctrlKey || event.metaKey; // metaKey is for Cmd key on Mac

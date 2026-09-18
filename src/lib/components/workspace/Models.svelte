@@ -11,7 +11,15 @@
 	import { goto } from '$app/navigation';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_NAME, config, mobile, models as _models, settings, user } from '$lib/stores';
+	import {
+		WEBUI_NAME,
+		config,
+		mobile,
+		models as _models,
+		organizations,
+		settings,
+		user
+	} from '$lib/stores';
 	import {
 		createNewModel,
 		deleteModelById,
@@ -22,7 +30,6 @@
 	} from '$lib/apis/models';
 
 	import { getModels } from '$lib/apis';
-	import { getGroups } from '$lib/apis/groups';
 
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import ModelMenu from './Models/ModelMenu.svelte';
@@ -50,7 +57,7 @@
 
 	let showModelDeleteConfirm = false;
 
-	let group_ids = [];
+	$: organizationIds = ($organizations ?? []).map((org) => org.id);
 
 	$: if (models) {
 		filteredModels = models.filter(
@@ -183,9 +190,6 @@
 
 	onMount(async () => {
 		models = await getWorkspaceModels(localStorage.token);
-		let groups = await getGroups(localStorage.token);
-		group_ids = groups.map((group) => group.id);
-
 		loaded = true;
 
 		const onKeyDown = (event) => {
@@ -342,7 +346,7 @@
 								</button>
 							</Tooltip>
 						{:else}
-							{#if userCanAccessResource($user, model.user_id, model.access_control, 'write', group_ids)}
+							{#if userCanAccessResource($user, model.user_id, model.access_control, 'write', [], organizationIds)}
 								<a
 									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 									type="button"

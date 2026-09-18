@@ -1,7 +1,6 @@
 <script>
 	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, showSidebar } from '$lib/stores';
-	import { goto } from '$app/navigation';
+	import { config, user } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 
 	import dayjs from 'dayjs';
@@ -13,47 +12,77 @@
 	import { toast } from 'svelte-sonner';
 
 	import { updateUserRole, getUsers, deleteUserById } from '$lib/apis/users';
+	import {
+		activateOrganization,
+		deleteOrganizationById,
+		getAllOrganizations
+	} from '$lib/apis/organizations';
 
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
+	import UserCircleSolid from '$lib/components/icons/UserCircleSolid.svelte';
 
 	import EditUserModal from '$lib/components/admin/Users/UserList/EditUserModal.svelte';
+	import EditOrganizationModal from '$lib/components/admin/Users/UserList/EditOrganizationModal.svelte';
 	import UserChatsModal from '$lib/components/admin/Users/UserList/UserChatsModal.svelte';
 	import AddUserModal from '$lib/components/admin/Users/UserList/AddUserModal.svelte';
 
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
-	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
-	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
-	import About from '$lib/components/chat/Settings/About.svelte';
 	import Banner from '$lib/components/common/Banner.svelte';
-	import Markdown from '$lib/components/chat/Messages/Markdown.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let users = [];
 
+	let orgs = [];
 	let search = '';
 	let selectedUser = null;
-
 	let page = 1;
+	let expandedId = '';
+	let activating = '';
 
 	let showDeleteConfirmDialog = false;
 	let showAddUserModal = false;
-
 	let showUserChatsModal = false;
 	let showEditUserModal = false;
+	let showEditOrgModal = false;
+	let selectedOrg = null;
+	let pendingDelete = null;
+
+	const avatarSrc = (url) =>
+		url?.startsWith(WEBUI_BASE_URL) ||
+		url?.startsWith('https://www.gravatar.com/avatar/') ||
+		url?.startsWith('data:')
+			? url
+			: '/user.png';
+
+	const kindRank = (org) => {
+		if (org.kind === 'workspace' && org.active === false) return 0;
+		if (org.kind === 'personal') return 1;
+		if (org.kind === 'platform') return 2;
+		return 3;
+	};
+
+	const loadOrgs = async () => {
+		orgs = (await getAllOrganizations(localStorage.token).catch(() => [])) || [];
+	};
+
+	const refreshUsers = async () => {
+		users = await getUsers(localStorage.token);
+		await loadOrgs();
+	};
 
 	const updateRoleHandler = async (id, role) => {
 		const res = await updateUserRole(localStorage.token, id, role).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
-
 		if (res) {
-			users = await getUsers(localStorage.token);
+			await refreshUsers();
 		}
 	};
 
@@ -63,47 +92,108 @@
 			return null;
 		});
 		if (res) {
-			users = await getUsers(localStorage.token);
+			await refreshUsers();
 		}
 	};
 
-	let sortKey = 'created_at'; // default sort key
-	let sortOrder = 'asc'; // default sort order
-
-	function setSortKey(key) {
-		if (sortKey === key) {
-			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-		} else {
-			sortKey = key;
-			sortOrder = 'asc';
-		}
-	}
-
-	let filteredUsers;
-
-	$: filteredUsers = users
-		.filter((user) => {
-			if (search === '') {
-				return true;
-			} else {
-				let name = user.name.toLowerCase();
-				let email = user.email.toLowerCase();
-				const query = search.toLowerCase();
-				return name.includes(query) || email.includes(query);
+	const deleteOrgHandler = async (id) => {
+		try {
+			await deleteOrganizationById(localStorage.token, id);
+			if (expandedId === id) {
+				expandedId = '';
 			}
+			await loadOrgs();
+			toast.success($i18n.t('Organization deleted'));
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
+	const openDelete = (kind, id, name) => {
+		pendingDelete = { kind, id, name };
+		showDeleteConfirmDialog = true;
+	};
+
+	const confirmPendingDelete = async () => {
+		if (!pendingDelete) {
+			return;
+		}
+		if (pendingDelete.kind === 'user') {
+			await deleteUserHandler(pendingDelete.id);
+		} else {
+			await deleteOrgHandler(pendingDelete.id);
+		}
+		pendingDelete = null;
+	};
+
+	const activate = async (id) => {
+		activating = id;
+		try {
+			await activateOrganization(localStorage.token, id);
+			await loadOrgs();
+			toast.success($i18n.t('Organization activated'));
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		activating = '';
+	};
+
+	$: userById = Object.fromEntries((users ?? []).map((item) => [item.id, item]));
+
+	$: rows = (orgs ?? [])
+		.map((org) => {
+			const person = org.kind === 'personal' ? userById[org.id] : null;
+			return {
+				...org,
+				person,
+				displayName: person?.name ?? org.name,
+				email: person?.email ?? '',
+				image: person?.profile_image_url ?? '',
+				memberCount: (org.members ?? []).length
+			};
+		})
+		.filter((row) => {
+			if (!search.trim()) return true;
+			const q = search.toLowerCase();
+			const memberHit = (row.members ?? []).some(
+				(member) =>
+					(member.name || '').toLowerCase().includes(q) ||
+					(member.email || '').toLowerCase().includes(q)
+			);
+			return (
+				row.displayName.toLowerCase().includes(q) ||
+				row.email.toLowerCase().includes(q) ||
+				(row.name || '').toLowerCase().includes(q) ||
+				(row.kind || '').toLowerCase().includes(q) ||
+				memberHit
+			);
 		})
 		.sort((a, b) => {
-			if (a[sortKey] < b[sortKey]) return sortOrder === 'asc' ? -1 : 1;
-			if (a[sortKey] > b[sortKey]) return sortOrder === 'asc' ? 1 : -1;
-			return 0;
-		})
-		.slice((page - 1) * 20, page * 20);
+			const rank = kindRank(a) - kindRank(b);
+			if (rank !== 0) return rank;
+			return a.displayName.localeCompare(b.displayName);
+		});
+
+	$: paged = rows.slice((page - 1) * 20, page * 20);
+
+	onMount(loadOrgs);
 </script>
 
 <ConfirmDialog
 	bind:show={showDeleteConfirmDialog}
-	on:confirm={() => {
-		deleteUserHandler(selectedUser.id);
+	title={pendingDelete?.kind === 'organization'
+		? $i18n.t('Delete Organization')
+		: $i18n.t('Delete User')}
+	message={pendingDelete?.kind === 'organization'
+		? $i18n.t(
+				'This will permanently delete the organization and its shared resources. Type the organization name to confirm.'
+			)
+		: $i18n.t('This will permanently delete the user. Type the user name to confirm.')}
+	inputMatch={pendingDelete?.name ?? ''}
+	confirmLabel={$i18n.t('Delete')}
+	on:confirm={confirmPendingDelete}
+	on:cancel={() => {
+		pendingDelete = null;
 	}}
 />
 
@@ -112,18 +202,15 @@
 		bind:show={showEditUserModal}
 		{selectedUser}
 		sessionUser={$user}
-		on:save={async () => {
-			users = await getUsers(localStorage.token);
-		}}
+		on:save={refreshUsers}
 	/>
 {/key}
 
-<AddUserModal
-	bind:show={showAddUserModal}
-	on:save={async () => {
-		users = await getUsers(localStorage.token);
-	}}
-/>
+{#key selectedOrg}
+	<EditOrganizationModal bind:show={showEditOrgModal} {selectedOrg} on:save={loadOrgs} />
+{/key}
+
+<AddUserModal bind:show={showAddUserModal} on:save={refreshUsers} />
 <UserChatsModal bind:show={showUserChatsModal} user={selectedUser} />
 
 {#if ($config?.license_metadata?.seats ?? null) !== null && users.length > $config?.license_metadata?.seats}
@@ -144,25 +231,10 @@
 <div class="mt-0.5 mb-2 gap-1 flex flex-col md:flex-row justify-between">
 	<div class="flex md:self-center text-lg font-medium px-0.5">
 		<div class="flex-shrink-0">
-			{$i18n.t('Users')}
+			{$i18n.t('Users & Organizations')}
 		</div>
 		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-
-		{#if ($config?.license_metadata?.seats ?? null) !== null}
-			{#if users.length > $config?.license_metadata?.seats}
-				<span class="text-lg font-medium text-red-500"
-					>{users.length} of {$config?.license_metadata?.seats}
-					<span class="text-sm font-normal">available users</span></span
-				>
-			{:else}
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
-					>{users.length} of {$config?.license_metadata?.seats}
-					<span class="text-sm font-normal">available users</span></span
-				>
-			{/if}
-		{:else}
-			<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{users.length}</span>
-		{/if}
+		<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{rows.length}</span>
 	</div>
 
 	<div class="flex gap-1">
@@ -205,230 +277,161 @@
 	</div>
 </div>
 
-<div
-	class="scrollbar-hidden relative whitespace-nowrap overflow-x-auto max-w-full rounded-sm pt-0.5"
->
-	<table
-		class="w-full text-sm text-left text-gray-500 dark:text-gray-400 table-auto max-w-full rounded-sm"
-	>
-		<thead
-			class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-850 dark:text-gray-400 -translate-y-0.5"
-		>
-			<tr class="">
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('role')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('Role')}
+<div>
+	<div class="flex items-center gap-3 justify-between text-xs uppercase px-1 font-bold">
+		<div class="w-full">{$i18n.t('Name')}</div>
+		<div class="w-full">{$i18n.t('Type')}</div>
+		<div class="w-full">{$i18n.t('Members')}</div>
+		<div class="w-full"></div>
+	</div>
+	<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
 
-						{#if sortKey === 'role'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('name')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('Name')}
-
-						{#if sortKey === 'name'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('email')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('Email')}
-
-						{#if sortKey === 'email'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('last_active_at')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('Last Active')}
-
-						{#if sortKey === 'last_active_at'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('created_at')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('Created at')}
-						{#if sortKey === 'created_at'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-
-				<th
-					scope="col"
-					class="px-3 py-1.5 cursor-pointer select-none"
-					on:click={() => setSortKey('oauth_sub')}
-				>
-					<div class="flex gap-1.5 items-center">
-						{$i18n.t('OAuth ID')}
-
-						{#if sortKey === 'oauth_sub'}
-							<span class="font-normal"
-								>{#if sortOrder === 'asc'}
-									<ChevronUp className="size-2" />
-								{:else}
-									<ChevronDown className="size-2" />
-								{/if}
-							</span>
-						{:else}
-							<span class="invisible">
-								<ChevronUp className="size-2" />
-							</span>
-						{/if}
-					</div>
-				</th>
-
-				<th scope="col" class="px-3 py-2 text-right" />
-			</tr>
-		</thead>
-		<tbody class="">
-			{#each filteredUsers as user, userIdx}
-				<tr class="bg-white dark:bg-gray-900 dark:border-gray-850 text-xs">
-					<td class="px-3 py-1 min-w-[7rem] w-28">
-						<button
-							class=" translate-y-0.5"
-							on:click={() => {
-								if (user.role === 'user') {
-									updateRoleHandler(user.id, 'admin');
-								} else if (user.role === 'pending') {
-									updateRoleHandler(user.id, 'user');
-								} else {
-									updateRoleHandler(user.id, 'pending');
-								}
-							}}
-						>
-							<Badge
-								type={user.role === 'admin' ? 'info' : user.role === 'user' ? 'success' : 'muted'}
-								content={$i18n.t(user.role)}
-							/>
-						</button>
-					</td>
-					<td class="px-3 py-1 font-medium text-gray-900 dark:text-white w-max">
-						<div class="flex flex-row w-max">
+	{#each paged as row (row.id)}
+		<div class="py-1.5">
+			<div class="flex items-center gap-3 px-1">
+				{#if row.kind === 'personal'}
+					<div class="flex items-center gap-2 min-w-0 w-full">
+						<span class="shrink-0 w-4"></span>
+						{#if row.person}
 							<img
-								class=" rounded-full w-6 h-6 object-cover mr-2.5"
-								src={user.profile_image_url.startsWith(WEBUI_BASE_URL) ||
-								user.profile_image_url.startsWith('https://www.gravatar.com/avatar/') ||
-								user.profile_image_url.startsWith('data:')
-									? user.profile_image_url
-									: `/user.png`}
-								alt="user"
+								class="rounded-full w-6 h-6 object-cover shrink-0"
+								src={avatarSrc(row.image)}
+								alt=""
 							/>
-
-							<div class=" font-medium self-center">{user.name}</div>
+						{:else}
+							<div
+								class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+							>
+								<UserCircleSolid className="size-4" />
+							</div>
+						{/if}
+						<div class="min-w-0">
+							<div class="text-sm font-medium truncate">{row.displayName}</div>
+							<div class="text-xs text-gray-500 truncate">
+								{#if row.email}
+									{row.email}
+								{:else if row.description}
+									{row.description}
+								{/if}
+							</div>
 						</div>
-					</td>
-					<td class=" px-3 py-1"> {user.email} </td>
+					</div>
+				{:else}
+					<button
+						class="flex items-center gap-2 min-w-0 w-full text-left"
+						on:click={() => {
+							expandedId = expandedId === row.id ? '' : row.id;
+						}}
+					>
+						<span
+							class="shrink-0 text-gray-400 transition {expandedId === row.id ? 'rotate-90' : ''}"
+						>
+							<ChevronRight className="size-4" strokeWidth="2" />
+						</span>
+						<div
+							class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+						>
+							<UserCircleSolid className="size-4" />
+						</div>
+						<div class="min-w-0">
+							<div class="text-sm font-medium truncate">{row.displayName}</div>
+							<div class="text-xs text-gray-500 truncate">
+								{#if row.description}
+									{row.description}
+								{/if}
+							</div>
+						</div>
+					</button>
+				{/if}
 
-					<td class=" px-3 py-1">
-						{dayjs(user.last_active_at * 1000).fromNow()}
-					</td>
+				<div class="w-full flex items-center gap-1.5">
+					{#if row.kind === 'personal'}
+						<Badge type="muted" content={$i18n.t('Personal')} />
+						{#if row.person?.role === 'pending'}
+							<Badge type="warning" content={$i18n.t('Pending')} />
+						{/if}
+					{:else}
+						<Badge type="success" content={$i18n.t('Organization')} />
+						{#if row.kind === 'platform'}
+							<Badge type="info" content={$i18n.t('Platform')} />
+						{/if}
+						{#if row.active === false}
+							<Badge type="warning" content={$i18n.t('Pending')} />
+						{/if}
+					{/if}
+				</div>
 
-					<td class=" px-3 py-1">
-						{dayjs(user.created_at * 1000).format('LL')}
-					</td>
+				<div class="w-full text-sm text-gray-500">
+					{row.memberCount}
+				</div>
 
-					<td class=" px-3 py-1"> {user.oauth_sub ?? ''} </td>
+				<div class="w-full flex justify-end items-center gap-0.5">
+					{#if row.kind === 'workspace' && row.active === false}
+						<button
+							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+							disabled={activating === row.id}
+							on:click={() => activate(row.id)}
+						>
+							{$i18n.t('Activate')}
+						</button>
+					{/if}
 
-					<td class="px-3 py-1 text-right">
-						<div class="flex justify-end w-full">
-							{#if $config.features.enable_admin_chat_access && user.role !== 'admin'}
-								<Tooltip content={$i18n.t('Chats')}>
-									<button
-										class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-										on:click={async () => {
-											showUserChatsModal = !showUserChatsModal;
-											selectedUser = user;
-										}}
-									>
-										<ChatBubbles />
-									</button>
-								</Tooltip>
-							{/if}
+					{#if row.person}
+						{#if row.person.role === 'pending'}
+							<button
+								class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+								on:click={() => updateRoleHandler(row.person.id, 'user')}
+							>
+								{$i18n.t('Activate')}
+							</button>
+						{/if}
 
-							<Tooltip content={$i18n.t('Edit User')}>
+						{#if $config?.features?.enable_admin_chat_access && row.person.id !== $user?.id}
+							<Tooltip content={$i18n.t('Chats')}>
 								<button
 									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									on:click={async () => {
-										showEditUserModal = !showEditUserModal;
-										selectedUser = user;
+									on:click={() => {
+										showUserChatsModal = !showUserChatsModal;
+										selectedUser = row.person;
+									}}
+								>
+									<ChatBubbles />
+								</button>
+							</Tooltip>
+						{/if}
+
+						<Tooltip content={$i18n.t('Edit User')}>
+							<button
+								class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								on:click={() => {
+									showEditUserModal = !showEditUserModal;
+									selectedUser = row.person;
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="w-4 h-4"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+									/>
+								</svg>
+							</button>
+						</Tooltip>
+
+						{#if row.person.id !== $user?.id}
+							<Tooltip content={$i18n.t('Delete User')}>
+								<button
+									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									on:click={() => {
+										selectedUser = row.person;
+										openDelete('user', row.person.id, row.person.name);
 									}}
 								>
 									<svg
@@ -442,72 +445,99 @@
 										<path
 											stroke-linecap="round"
 											stroke-linejoin="round"
-											d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+											d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
 										/>
 									</svg>
 								</button>
 							</Tooltip>
+						{/if}
+					{:else}
+						<Tooltip content={$i18n.t('Edit Organization')}>
+							<button
+								class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								on:click={() => {
+									selectedOrg = row;
+									showEditOrgModal = !showEditOrgModal;
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="w-4 h-4"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+									/>
+								</svg>
+							</button>
+						</Tooltip>
 
-							{#if user.role !== 'admin'}
-								<Tooltip content={$i18n.t('Delete User')}>
-									<button
-										class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-										on:click={async () => {
-											showDeleteConfirmDialog = true;
-											selectedUser = user;
-										}}
+						{#if row.kind === 'workspace'}
+							<Tooltip content={$i18n.t('Delete Organization')}>
+								<button
+									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									on:click={() => openDelete('organization', row.id, row.name)}
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										class="w-4 h-4"
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke-width="1.5"
-											stroke="currentColor"
-											class="w-4 h-4"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-											/>
-										</svg>
-									</button>
-								</Tooltip>
-							{/if}
-						</div>
-					</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+										/>
+									</svg>
+								</button>
+							</Tooltip>
+						{/if}
+					{/if}
+				</div>
+			</div>
+
+			{#if row.kind !== 'personal' && expandedId === row.id}
+				<div class="ml-10 mt-1 mb-2 rounded-lg bg-gray-50 dark:bg-gray-850/60 px-3 py-2">
+					{#if (row.members ?? []).length === 0}
+						<div class="text-xs text-gray-500 py-1">{$i18n.t('No members yet.')}</div>
+					{:else}
+						{#each row.members as member (member.user_id)}
+							<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
+								<div class="flex items-center gap-2 min-w-0">
+									<img
+										class="rounded-full w-5 h-5 object-cover shrink-0"
+										src={avatarSrc(member.profile_image_url)}
+										alt=""
+									/>
+									<div class="min-w-0">
+										<div class="truncate">{member.name ?? member.user_id}</div>
+										<div class="text-xs text-gray-500 truncate">{member.email ?? ''}</div>
+									</div>
+								</div>
+								<div class="text-xs text-gray-500 capitalize shrink-0">{member.role}</div>
+							</div>
+						{/each}
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{:else}
+		<div class="text-sm text-gray-500 py-6 text-center">
+			{$i18n.t('No users or organizations yet.')}
+		</div>
+	{/each}
 </div>
 
 <div class=" text-gray-500 text-xs mt-1.5 text-right">
-	ⓘ {$i18n.t("Click on the user role button to change a user's role.")}
+	ⓘ {$i18n.t('Admin access is granted by membership in the Platform organization.')}
 </div>
 
-<Pagination bind:page count={users.length} />
-
-{#if !$config?.license_metadata}
-	{#if users.length > 50}
-		<div class="text-sm">
-			<Markdown
-				content={`
-> [!NOTE]
-> # **Hey there! 👋**
->
-> It looks like you have over 50 users — that usually falls under organizational usage.
-> 
-> Open WebUI is proudly open source and completely free, with no hidden limits — and we'd love to keep it that way. 🌱  
->
-> By supporting the project through sponsorship or an enterprise license, you’re not only helping us stay independent, you’re also helping us ship new features faster, improve stability, and grow the project for the long haul. With an *enterprise license*, you also get additional perks like dedicated support, customization options, and more — all at a fraction of what it would cost to build and maintain internally.  
-> 
-> Your support helps us stay independent and continue building great tools for everyone. 💛
-> 
-> - 👉 **[Click here to learn more about enterprise licensing](https://docs.openwebui.com/enterprise)**
-> - 👉 *[Click here to sponsor the project on GitHub](https://github.com/sponsors/tjbck)*
-`}
-			/>
-		</div>
-	{/if}
-{/if}
+<Pagination bind:page count={rows.length} />

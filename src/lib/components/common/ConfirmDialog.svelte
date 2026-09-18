@@ -17,25 +17,40 @@
 	export let input = false;
 	export let inputPlaceholder = '';
 	export let inputValue = '';
+	export let inputMatch = '';
 
 	export let show = false;
 
 	let modalElement = null;
 	let mounted = false;
+	let wasShown = false;
+
+	$: showInput = input || !!inputMatch;
+	$: matched = !inputMatch || inputValue.trim() === String(inputMatch).trim();
+
+	$: if (show) {
+		if (!wasShown) {
+			inputValue = '';
+		}
+		wasShown = true;
+	} else {
+		wasShown = false;
+	}
 
 	const handleKeyDown = (event: KeyboardEvent) => {
 		if (event.key === 'Escape') {
-			console.log('Escape');
 			show = false;
 		}
 
 		if (event.key === 'Enter') {
-			console.log('Enter');
 			confirmHandler();
 		}
 	};
 
 	const confirmHandler = async () => {
+		if (!matched) {
+			return;
+		}
 		show = false;
 		await onConfirm();
 		dispatch('confirm', inputValue);
@@ -95,14 +110,26 @@
 							{$i18n.t('This action cannot be undone. Do you wish to continue?')}
 						{/if}
 
-						{#if input}
-							<textarea
-								bind:value={inputValue}
-								placeholder={inputPlaceholder ? inputPlaceholder : $i18n.t('Enter your message')}
-								class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden resize-none"
-								rows="3"
-								required
-							/>
+						{#if showInput}
+							{#if inputMatch}
+								<input
+									bind:value={inputValue}
+									placeholder={inputPlaceholder
+										? inputPlaceholder
+										: $i18n.t('Type {{NAME}} to confirm', { NAME: inputMatch })}
+									class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden"
+									autocomplete="off"
+									required
+								/>
+							{:else}
+								<textarea
+									bind:value={inputValue}
+									placeholder={inputPlaceholder ? inputPlaceholder : $i18n.t('Enter your message')}
+									class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden resize-none"
+									rows="3"
+									required
+								/>
+							{/if}
 						{/if}
 					</div>
 				</slot>
@@ -119,7 +146,8 @@
 						{cancelLabel}
 					</button>
 					<button
-						class="bg-gray-900 hover:bg-gray-850 text-gray-100 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-800 font-medium w-full py-2.5 rounded-lg transition"
+						class="bg-gray-900 hover:bg-gray-850 text-gray-100 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-800 font-medium w-full py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+						disabled={!matched}
 						on:click={() => {
 							confirmHandler();
 						}}

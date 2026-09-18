@@ -1,27 +1,100 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
-	import { createEventDispatcher, getContext, onMount } from 'svelte';
+	import { createEventDispatcher, getContext } from 'svelte';
+	import { toast } from 'svelte-sonner';
 
-	import { flyAndScale } from '$lib/utils/transitions';
-	import { goto } from '$app/navigation';
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
-	import { showSettings, activeUserIds, USAGE_POOL, mobile, showSidebar, user, config } from '$lib/stores';
-	import { fade, slide } from 'svelte/transition';
+	import Check from '$lib/components/icons/Check.svelte';
+	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
+	import Plus from '$lib/components/icons/Plus.svelte';
+	import UsersSolid from '$lib/components/icons/UsersSolid.svelte';
+	import {
+		showSettings,
+		activeUserIds,
+		USAGE_POOL,
+		mobile,
+		showSidebar,
+		user,
+		config,
+		organizations,
+		activeOrganizationId
+	} from '$lib/stores';
+	import { fade } from 'svelte/transition';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { userSignOut } from '$lib/apis/auths';
+	import { createOrganization } from '$lib/apis/organizations';
+	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
 
 	const i18n = getContext('i18n');
 
 	export let show = false;
 	export let role = '';
-	export let className = 'max-w-[240px]';
+	export let className = 'max-w-[280px]';
 
 	const dispatch = createEventDispatcher();
+
+	let showOrgPicker = false;
+	let showRequestForm = false;
+	let requestName = '';
+	let requestDescription = '';
+	let requesting = false;
+
+	$: currentOrg =
+		($organizations ?? []).find((org) => org.id === $activeOrganizationId) ?? {
+			id: $user?.id,
+			name: 'Personal',
+			kind: 'personal'
+		};
+	$: isOrgManager = isWorkspaceManagerContext(currentOrg);
+
+	const resetOrgUi = () => {
+		showOrgPicker = false;
+		showRequestForm = false;
+		requestName = '';
+		requestDescription = '';
+	};
+
+	const closeMenu = () => {
+		show = false;
+		resetOrgUi();
+		if ($mobile) {
+			showSidebar.set(false);
+		}
+	};
+
+	const selectOrg = (orgId: string) => {
+		dispatch('switch-org', orgId);
+		closeMenu();
+	};
+
+	const submitRequest = async () => {
+		if (!requestName.trim()) {
+			toast.error($i18n.t('Organization name cannot be empty.'));
+			return;
+		}
+		requesting = true;
+		try {
+			await createOrganization(localStorage.token, {
+				name: requestName.trim(),
+				description: requestDescription.trim()
+			});
+			toast.success($i18n.t('Organization request submitted. An admin will activate it.'));
+			requestName = '';
+			requestDescription = '';
+			showRequestForm = false;
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		requesting = false;
+	};
 </script>
 
 <DropdownMenu.Root
 	bind:open={show}
 	onOpenChange={(state) => {
+		if (!state) {
+			resetOrgUi();
+		}
 		dispatch('change', state);
 	}}
 >
@@ -38,109 +111,140 @@
 			transition={(e) => fade(e, { duration: 100 })}
 		>
 			<button
+				class="flex items-center rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				on:click={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					showOrgPicker = !showOrgPicker;
+					if (!showOrgPicker) {
+						showRequestForm = false;
+					}
+				}}
+			>
+				<div class="flex-1 text-left min-w-0">
+					{#if showOrgPicker}
+						<div class="truncate font-medium">{$i18n.t('Organizations')}</div>
+					{:else}
+						<div class="text-[11px] uppercase tracking-wide text-gray-400">
+							{$i18n.t('Organization')}
+						</div>
+						<div class="truncate font-medium">{currentOrg.name}</div>
+					{/if}
+				</div>
+				<ChevronDown
+					className="size-4 text-gray-400 shrink-0 transition {showOrgPicker ? 'rotate-180' : ''}"
+					strokeWidth="2"
+				/>
+			</button>
+
+			{#if showOrgPicker}
+				<div class="px-1 pb-1">
+					{#each $organizations ?? [] as org}
+						<button
+							class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
+							$activeOrganizationId
+								? 'bg-gray-50 dark:bg-gray-800 font-medium'
+								: 'text-gray-600 dark:text-gray-300'}"
+							on:click={() => selectOrg(org.id)}
+						>
+							<span class="truncate flex-1">{org.name}</span>
+							{#if org.id === $activeOrganizationId}
+								<Check className="size-4 shrink-0" strokeWidth="2.5" />
+							{/if}
+						</button>
+					{/each}
+					<button
+						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300"
+						on:click={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							showRequestForm = !showRequestForm;
+						}}
+					>
+						<Plus className="size-4" strokeWidth="2" />
+						{$i18n.t('Request a new organization')}
+					</button>
+					{#if showRequestForm}
+						<form
+							class="px-3 pb-2 pt-1 flex flex-col gap-2"
+							on:submit|preventDefault={submitRequest}
+							on:click|stopPropagation
+						>
+							<input
+								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								placeholder={$i18n.t('Organization name')}
+								bind:value={requestName}
+								required
+							/>
+							<textarea
+								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								placeholder={$i18n.t('Description')}
+								rows="2"
+								bind:value={requestDescription}
+							/>
+							<button
+								class="self-start rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2.5 py-1 text-xs"
+								type="submit"
+								disabled={requesting}
+							>
+								{$i18n.t('Submit request')}
+							</button>
+						</form>
+					{/if}
+				</div>
+			{/if}
+
+			<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+
+			<button
 				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 				on:click={async () => {
 					await showSettings.set(true);
-					show = false;
-
-					if ($mobile) {
-						showSidebar.set(false);
-					}
+					closeMenu();
 				}}
 			>
-				<div class=" self-center mr-3">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-5 h-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z"
-						/>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-						/>
-					</svg>
-				</div>
-				<div class=" self-center truncate">{$i18n.t('Settings')}</div>
+					<div class=" self-center mr-3">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-5 h-5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71.505.78-.929l.15-.894z"
+							/>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+							/>
+						</svg>
+					</div>
+					<div class=" self-center truncate">{$i18n.t('Settings')}</div>
 			</button>
 
-			<a
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-				href="/organizations"
-				on:click={() => {
-					show = false;
-
-					if ($mobile) {
-						showSidebar.set(false);
-					}
-				}}
-			>
-				<div class=" self-center mr-3">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="size-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
-						/>
-					</svg>
-				</div>
-				<div class=" self-center truncate">{$i18n.t('Organizations')}</div>
-			</a>
-
-			<a
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-				href="/secrets"
-				on:click={() => {
-					show = false;
-
-					if ($mobile) {
-						showSidebar.set(false);
-					}
-				}}
-			>
-				<div class=" self-center mr-3">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="size-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-						/>
-					</svg>
-				</div>
-				<div class=" self-center truncate">{$i18n.t('Secrets')}</div>
-			</a>
+			{#if isOrgManager}
+				<a
+					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+					href="/organization"
+					on:click={closeMenu}
+				>
+					<div class=" self-center mr-3">
+						<UsersSolid className="w-5 h-5" />
+					</div>
+					<div class=" self-center truncate">{$i18n.t('Organization settings')}</div>
+				</a>
+			{/if}
 
 			<button
 				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 				on:click={() => {
 					dispatch('show', 'archived-chat');
-					show = false;
-
-					if ($mobile) {
-						showSidebar.set(false);
-					}
+					closeMenu();
 				}}
 			>
 				<div class=" self-center mr-3">
@@ -152,44 +256,8 @@
 			{#if role === 'admin'}
 				<a
 					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-					href="/playground"
-					on:click={() => {
-						show = false;
-
-						if ($mobile) {
-							showSidebar.set(false);
-						}
-					}}
-				>
-					<div class=" self-center mr-3">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="1.5"
-							stroke="currentColor"
-							class="size-5"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M14.25 9.75 16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z"
-							/>
-						</svg>
-					</div>
-					<div class=" self-center truncate">{$i18n.t('Playground')}</div>
-				</a>
-
-				<a
-					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 					href="/admin"
-					on:click={() => {
-						show = false;
-
-						if ($mobile) {
-							showSidebar.set(false);
-						}
-					}}
+					on:click={closeMenu}
 				>
 					<div class=" self-center mr-3">
 						<svg
@@ -227,6 +295,7 @@
 					location.href = '/auth';
 
 					show = false;
+					resetOrgUi();
 				}}
 			>
 				<div class=" self-center mr-3">

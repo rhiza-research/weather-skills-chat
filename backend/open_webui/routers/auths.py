@@ -260,10 +260,12 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
                     user_count = Users.get_num_users()
 
                     role = (
-                        "admin"
+                        "user"
                         if user_count == 0
                         else request.app.state.config.DEFAULT_USER_ROLE
                     )
+                    if role == "admin":
+                        role = "user"
 
                     user = Auths.insert_new_auth(
                         email=email,
@@ -451,8 +453,10 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
     try:
         role = (
-            "admin" if user_count == 0 else request.app.state.config.DEFAULT_USER_ROLE
+            "user" if user_count == 0 else request.app.state.config.DEFAULT_USER_ROLE
         )
+        if role == "admin":
+            role = "user"
 
         if user_count == 0:
             # Disable signup after the first user is created
@@ -591,12 +595,13 @@ async def add_user(form_data: AddUserForm, user=Depends(get_admin_user)):
 
     try:
         hashed = get_password_hash(form_data.password)
+        role = "user" if form_data.role == "admin" else form_data.role
         user = Auths.insert_new_auth(
             form_data.email.lower(),
             hashed,
             form_data.name,
             form_data.profile_image_url,
-            form_data.role,
+            role,
         )
 
         if user:
@@ -725,7 +730,7 @@ async def update_admin_config(
 
     request.app.state.config.ENABLE_CHANNELS = form_data.ENABLE_CHANNELS
 
-    if form_data.DEFAULT_USER_ROLE in ["pending", "user", "admin"]:
+    if form_data.DEFAULT_USER_ROLE in ["pending", "user"]:
         request.app.state.config.DEFAULT_USER_ROLE = form_data.DEFAULT_USER_ROLE
 
     pattern = r"^(-1|0|(-?\d+(\.\d+)?)(ms|s|m|h|d|w))$"

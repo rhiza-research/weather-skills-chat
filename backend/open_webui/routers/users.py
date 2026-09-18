@@ -159,13 +159,23 @@ async def update_default_user_permissions(
 
 @router.post("/update/role", response_model=Optional[UserModel])
 async def update_user_role(form_data: UserRoleUpdateForm, user=Depends(get_admin_user)):
-    if user.id != form_data.id and form_data.id != Users.get_first_user().id:
-        return Users.update_user_role_by_id(form_data.id, form_data.role)
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=ERROR_MESSAGES.ACTION_PROHIBITED,
-    )
+    if user.id == form_data.id or form_data.id == Users.get_first_user().id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACTION_PROHIBITED,
+        )
+    if form_data.role != "user":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Activate pending accounts as user; grant admin by adding them to the Platform organization.",
+        )
+    target = Users.get_user_by_id(form_data.id)
+    if not target or target.role != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending accounts can be activated.",
+        )
+    return Users.update_user_role_by_id(form_data.id, "user")
 
 
 ############################

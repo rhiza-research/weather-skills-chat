@@ -3,10 +3,7 @@
 
 	const i18n = getContext('i18n');
 
-	import { getGroups } from '$lib/apis/groups';
 	import { getOrganizations } from '$lib/apis/organizations';
-	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
 	import UserCircleSolid from '$lib/components/icons/UserCircleSolid.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
@@ -18,9 +15,7 @@
 
 	export let allowPublic = true;
 
-	let selectedGroupId = '';
 	let selectedOrgId = '';
-	let groups = [];
 	let userOrgs = [];
 
 	/** Expand private `{}` / partial ACLs so the template can safely read .read/.write. */
@@ -53,8 +48,6 @@
 		};
 	};
 
-	// Private packs open as `{}` — normalize before first render or the Groups
-	// section throws on accessControl.read and freezes the modal.
 	if (accessControl !== null) {
 		accessControl = normalizeAclForm(accessControl);
 	} else if (!allowPublic) {
@@ -67,11 +60,8 @@
 	}
 
 	onMount(async () => {
-		groups = await getGroups(localStorage.token);
 		userOrgs = await getOrganizations(localStorage.token).catch(() => []);
 
-		// Re-normalize after mount in case parent rebound a raw `{}` / null.
-		// Do not emit onChange here — auto-save callers must not get a spurious write.
 		if (accessControl === null) {
 			if (!allowPublic) {
 				accessControl = emptyAclForm();
@@ -82,10 +72,6 @@
 		}
 	});
 
-	$: if (selectedGroupId) {
-		onSelectGroup();
-	}
-
 	$: if (selectedOrgId) {
 		onSelectOrg();
 	}
@@ -93,15 +79,6 @@
 	$: accessOrgs = userOrgs.filter((org) =>
 		(accessControl?.read?.organization_ids ?? []).includes(org.id)
 	);
-
-	const onSelectGroup = () => {
-		if (selectedGroupId !== '' && accessControl) {
-			accessControl = normalizeAclForm(accessControl);
-			accessControl.read.group_ids = [...accessControl.read.group_ids, selectedGroupId];
-			selectedGroupId = '';
-			onChange(accessControl);
-		}
-	};
 
 	const onSelectOrg = () => {
 		if (selectedOrgId !== '' && accessControl) {
@@ -190,7 +167,7 @@
 
 				<div class=" text-xs text-gray-400 font-medium">
 					{#if accessControl !== null}
-						{$i18n.t('Only select users and groups with permission can access')}
+						{$i18n.t('Only selected users and organizations with permission can access')}
 					{:else}
 						{$i18n.t('Accessible to all users')}
 					{/if}
@@ -199,149 +176,45 @@
 		</div>
 	</div>
 	{#if accessControl !== null}
-		{@const readGroupIds = accessControl?.read?.group_ids ?? []}
-		{@const writeGroupIds = accessControl?.write?.group_ids ?? []}
-		{@const accessGroups = groups.filter((group) => readGroupIds.includes(group.id))}
+		{@const writeOrgIds = accessControl?.write?.organization_ids ?? []}
 		<div>
-			<div class="">
-				<div class="flex justify-between mb-1.5">
-					<div class="text-sm font-semibold">
-						{$i18n.t('Groups')}
-					</div>
-				</div>
-
-				<div class="mb-1">
-					<div class="flex w-full">
-						<div class="flex flex-1 items-center">
-							<div class="w-full px-0.5">
-								<select
-									class="outline-hidden bg-transparent text-sm rounded-lg block w-full pr-10 max-w-full
-									{selectedGroupId ? '' : 'text-gray-500'}
-									dark:placeholder-gray-500"
-									bind:value={selectedGroupId}
-								>
-									<option class=" text-gray-700" value="" disabled selected
-										>{$i18n.t('Select a group')}</option
-									>
-									{#each groups.filter((group) => !readGroupIds.includes(group.id)) as group}
-										<option class=" text-gray-700" value={group.id}>{group.name}</option>
-									{/each}
-								</select>
-							</div>
-							<!-- <div>
-								<Tooltip content={$i18n.t('Add Group')}>
-									<button
-										class=" p-1 rounded-xl bg-transparent dark:hover:bg-white/5 hover:bg-black/5 transition font-medium text-sm flex items-center space-x-1"
-										type="button"
-										on:click={() => {}}
-									>
-										<Plus className="size-3.5" />
-									</button>
-								</Tooltip>
-							</div> -->
-						</div>
-					</div>
-				</div>
-
-				<hr class=" border-gray-100 dark:border-gray-700/10 mt-1.5 mb-2.5 w-full" />
-
-				<div class="flex flex-col gap-2 mb-1 px-0.5">
-					{#if accessGroups.length > 0}
-						{#each accessGroups as group}
-							<div class="flex items-center gap-3 justify-between text-xs w-full transition">
-								<div class="flex items-center gap-1.5 w-full font-medium">
-									<div>
-										<UserCircleSolid className="size-4" />
-									</div>
-
-									<div>
-										{group.name}
-									</div>
-								</div>
-
-								<div class="w-full flex justify-end items-center gap-0.5">
-									<button
-										class=""
-										type="button"
-										on:click={() => {
-											if (accessRoles.includes('write')) {
-												if (writeGroupIds.includes(group.id)) {
-													accessControl.write.group_ids = writeGroupIds.filter(
-														(group_id) => group_id !== group.id
-													);
-												} else {
-													accessControl.write.group_ids = [...writeGroupIds, group.id];
-												}
-												onChange(accessControl);
-											}
-										}}
-									>
-										{#if writeGroupIds.includes(group.id)}
-											<Badge type={'success'} content={$i18n.t('Write')} />
-										{:else}
-											<Badge type={'info'} content={$i18n.t('Read')} />
-										{/if}
-									</button>
-
-									<button
-										class=" rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-										type="button"
-										on:click={() => {
-											accessControl.read.group_ids = readGroupIds.filter((id) => id !== group.id);
-											onChange(accessControl);
-										}}
-									>
-										<XMark />
-									</button>
-								</div>
-							</div>
-						{/each}
-					{:else}
-						<div class="flex items-center justify-center">
-							<div class="text-gray-500 text-xs text-center py-2 px-10">
-								{$i18n.t('No groups with access, add a group to grant access')}
-							</div>
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<div class="mt-3">
-				<div class="text-sm font-semibold mb-1.5">{$i18n.t('Organizations')}</div>
-				<select
-					class="outline-hidden bg-transparent text-sm rounded-lg block w-full pr-10 max-w-full dark:placeholder-gray-500"
-					bind:value={selectedOrgId}
+			<div class="text-sm font-semibold mb-1.5">{$i18n.t('Organizations')}</div>
+			<select
+				class="outline-hidden bg-transparent text-sm rounded-lg block w-full pr-10 max-w-full dark:placeholder-gray-500"
+				bind:value={selectedOrgId}
+			>
+				<option class=" text-gray-700" value="" disabled selected
+					>{$i18n.t('Select an organization')}</option
 				>
-					<option class=" text-gray-700" value="" disabled selected
-						>{$i18n.t('Select an organization')}</option
-					>
-					{#each userOrgs.filter((org) => org.kind !== 'personal' && !(accessControl.read.organization_ids ?? []).includes(org.id)) as org}
-						<option class=" text-gray-700" value={org.id}>{org.name}</option>
-					{/each}
-				</select>
-				<div class="flex flex-col gap-2 mt-2">
+				{#each userOrgs.filter((org) => org.kind !== 'personal' && !(accessControl.read.organization_ids ?? []).includes(org.id)) as org}
+					<option class=" text-gray-700" value={org.id}>{org.name}</option>
+				{/each}
+			</select>
+			<div class="flex flex-col gap-2 mt-2">
+				{#if accessOrgs.length > 0}
 					{#each accessOrgs as org}
 						<div class="flex items-center gap-3 justify-between text-xs w-full">
-							<div class="font-medium">{org.name}</div>
+							<div class="flex items-center gap-1.5 font-medium">
+								<UserCircleSolid className="size-4" />
+								{org.name}
+							</div>
 							<div class="flex items-center gap-0.5">
 								<button
 									type="button"
 									on:click={() => {
 										if (accessRoles.includes('write')) {
-											if ((accessControl.write.organization_ids ?? []).includes(org.id)) {
-												accessControl.write.organization_ids =
-													accessControl.write.organization_ids.filter((id) => id !== org.id);
+											if (writeOrgIds.includes(org.id)) {
+												accessControl.write.organization_ids = writeOrgIds.filter(
+													(id) => id !== org.id
+												);
 											} else {
-												accessControl.write.organization_ids = [
-													...(accessControl.write.organization_ids ?? []),
-													org.id
-												];
+												accessControl.write.organization_ids = [...writeOrgIds, org.id];
 											}
 											onChange(accessControl);
 										}
 									}}
 								>
-									{#if (accessControl.write.organization_ids ?? []).includes(org.id)}
+									{#if writeOrgIds.includes(org.id)}
 										<Badge type={'success'} content={$i18n.t('Write')} />
 									{:else}
 										<Badge type={'info'} content={$i18n.t('Read')} />
@@ -354,6 +227,9 @@
 										accessControl.read.organization_ids = (
 											accessControl.read.organization_ids ?? []
 										).filter((id) => id !== org.id);
+										accessControl.write.organization_ids = (
+											accessControl.write.organization_ids ?? []
+										).filter((id) => id !== org.id);
 										onChange(accessControl);
 									}}
 								>
@@ -362,7 +238,13 @@
 							</div>
 						</div>
 					{/each}
-				</div>
+				{:else}
+					<div class="flex items-center justify-center">
+						<div class="text-gray-500 text-xs text-center py-2 px-10">
+							{$i18n.t('No organizations with access, add an organization to grant access')}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}

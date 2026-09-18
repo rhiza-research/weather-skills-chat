@@ -35,7 +35,7 @@ def bootstrap_admin_user() -> None:
         hashed,
         name,
         profile_image_url="/user.png",
-        role="admin",
+        role="user",
     )
     if user:
         from open_webui.models.organizations import Organizations
