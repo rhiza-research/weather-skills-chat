@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from contextlib import nullcontext
 from typing import Any, Optional
 
 from open_webui.env import SRC_LOG_LEVELS
@@ -90,9 +91,11 @@ class SkillPackTable:
         local_path: str,
         meta: Optional[dict] = None,
         access_control: Optional[dict] = None,
+        db=None,
     ) -> Optional[SkillPackModel]:
         now = int(time.time())
-        with get_db() as db:
+        owns = db is None
+        with get_db() if owns else nullcontext(db) as session:
             row = SkillPack(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
@@ -106,9 +109,12 @@ class SkillPackTable:
                 created_at=now,
                 updated_at=now,
             )
-            db.add(row)
-            db.commit()
-            db.refresh(row)
+            session.add(row)
+            if owns:
+                session.commit()
+                session.refresh(row)
+            else:
+                session.flush()
             return self._to_model(row)
 
     def get_by_id(self, pack_id: str) -> Optional[SkillPackModel]:
@@ -141,9 +147,12 @@ class SkillPackTable:
             rows = db.query(SkillPack).order_by(SkillPack.updated_at.desc()).all()
             return [self._to_model(row) for row in rows]
 
-    def update(self, pack_id: str, data: dict[str, Any]) -> Optional[SkillPackModel]:
-        with get_db() as db:
-            row = db.get(SkillPack, pack_id)
+    def update(
+        self, pack_id: str, data: dict[str, Any], db=None
+    ) -> Optional[SkillPackModel]:
+        owns = db is None
+        with get_db() if owns else nullcontext(db) as session:
+            row = session.get(SkillPack, pack_id)
             if not row:
                 return None
             # Use ORM setattr so JSONField bind processors run (needed for
@@ -151,9 +160,12 @@ class SkillPackTable:
             for key, value in data.items():
                 setattr(row, key, value)
             row.updated_at = int(time.time())
-            db.add(row)
-            db.commit()
-            db.refresh(row)
+            session.add(row)
+            if owns:
+                session.commit()
+                session.refresh(row)
+            else:
+                session.flush()
             return self._to_model(row)
 
     def delete(self, pack_id: str) -> bool:

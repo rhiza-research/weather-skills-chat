@@ -23,8 +23,9 @@ from urllib.parse import urlparse
 import yaml
 
 from open_webui.env import SKILLS_DIR, SRC_LOG_LEVELS
-from open_webui.models.skill_packs import SkillPackModel, SkillPacks, SkillSummary
-from open_webui.models.tools import ToolForm, ToolMeta, Tools
+from open_webui.internal.db import get_db
+from open_webui.models.skill_packs import SkillPack, SkillPackModel, SkillPacks, SkillSummary
+from open_webui.models.tools import Tool, ToolForm, ToolMeta, Tools
 from open_webui.utils.plugin import load_tool_module_by_id, replace_imports
 from open_webui.utils.tools import get_tool_specs
 
@@ -144,15 +145,15 @@ def skill_method_name(skill_name: str) -> str:
 
 def tool_id_for_skill(skill_name: str, pack_slug: str, existing_ids: set[str]) -> str:
     base = f"skill_{skill_method_name(skill_name)}"
-    if base not in existing_ids and Tools.get_tool_by_id(base) is None:
+    if base not in existing_ids:
         return base
     candidate = f"skill_{sanitize_slug(pack_slug)}_{skill_method_name(skill_name)}"
-    if candidate not in existing_ids and Tools.get_tool_by_id(candidate) is None:
+    if candidate not in existing_ids:
         return candidate
     n = 2
     while True:
         alt = f"{candidate}_{n}"
-        if alt not in existing_ids and Tools.get_tool_by_id(alt) is None:
+        if alt not in existing_ids:
             return alt
         n += 1
 
@@ -659,16 +660,80 @@ def _upsert_skill_tool(
     return tool_id
 
 
-def sync_pack_tools(
+def _ids_present(db, ids: list[str]) -> set[str]:
+    if not ids:
+        return set()
+    return {tid for (tid,) in db.query(Tool.id).filter(Tool.id.in_(ids)).all()}
+
+
+def _prepare_skill_tool(
+    *,
     pack: SkillPackModel,
-    request_app_tools: dict,
+    skill: DiscoveredSkill,
+    tool_id: str,
+    enabled: bool,
+    user_id: str,
+) -> dict:
+    method = skill_method_name(skill.name)
+    content = replace_imports(
+        generate_tool_content(
+            method_name=method,
+            skill_name=skill.name,
+            description=skill.description,
+            usage=skill.usage,
+            skill_dir=skill.skill_dir,
+            version=skill.version,
+        )
+    )
+    module, _frontmatter = load_tool_module_by_id(tool_id, content=content)
+    specs = get_tool_specs(module)
+    display_name = skill.name
+    if skill.version:
+        display_name = f"{skill.name}@{skill.version}"
+    meta = ToolMeta(
+        description=skill.description,
+        manifest={
+            "kind": "skill",
+            "pack_id": pack.id,
+            "skill_name": skill.name,
+            "version": skill.version,
+            "git_url": pack.git_url,
+            "git_ref": pack.git_ref,
+            "commit_sha": pack.commit_sha,
+            "skill_dir": str(skill.skill_dir),
+            "relative_path": skill.relative_path,
+            "scripts": skill.scripts,
+            "enabled": bool(enabled),
+        },
+    )
+    return {
+        "tool_id": tool_id,
+        "user_id": user_id,
+        "display_name": display_name,
+        "content": content,
+        "specs": specs,
+        "meta": meta.model_dump(),
+        "access_control": pack.access_control,
+        "enabled": enabled,
+        "skill": skill,
+        "module": module,
+    }
+
+
+def _sync_pack_tools(
+    db,
+    pack: SkillPackModel,
     user_id: Optional[str] = None,
-) -> SkillPackModel:
-    """Discover skills on disk and create/update/remove linked tool rows."""
+) -> tuple[SkillPackModel, dict, set[str]]:
+    """Discover skills and stage pack+tool ORM writes on ``db`` (no commit)."""
     root = Path(pack.local_path)
     discovered = discover_skills(root)
     if not discovered:
         raise SkillInstallError(f"No SKILL.md with scripts/ found under {root}")
+
+    pack_row = db.get(SkillPack, pack.id)
+    if pack_row is None:
+        raise SkillInstallError("Skill pack not found")
 
     previous = {
         (s.get("skill_name") or s.get("name")): s
@@ -676,31 +741,44 @@ def sync_pack_tools(
         if isinstance(s, dict)
     }
     pack_slug = pack_dirname(pack.git_url, pack.git_ref, owner_key=pack.user_id)
-    used_ids: set[str] = set()
-    summaries: list[dict] = []
+    prev_ids = [
+        s.get("tool_id")
+        for s in previous.values()
+        if isinstance(s, dict) and s.get("tool_id")
+    ]
+    candidate_ids = []
+    for skill in discovered:
+        method = skill_method_name(skill.name)
+        candidate_ids.append(f"skill_{method}")
+        candidate_ids.append(f"skill_{sanitize_slug(pack_slug)}_{method}")
+    occupied = _ids_present(db, prev_ids + candidate_ids)
 
+    used_ids: set[str] = set()
+    assignments: list[tuple[DiscoveredSkill, str, dict]] = []
     for skill in discovered:
         prev = previous.get(skill.name) or {}
         tool_id = prev.get("tool_id")
-        if tool_id and Tools.get_tool_by_id(tool_id):
+        if tool_id and tool_id in occupied:
             used_ids.add(tool_id)
         else:
-            tool_id = tool_id_for_skill(skill.name, pack_slug, used_ids)
+            tool_id = tool_id_for_skill(skill.name, pack_slug, occupied | used_ids)
             used_ids.add(tool_id)
+            occupied.add(tool_id)
+        assignments.append((skill, tool_id, prev))
 
-        # New skills default on; preserve user toggle across sync/update.
+    owner_id = user_id or pack.user_id
+    prepared = []
+    summaries: list[dict] = []
+    for skill, tool_id, prev in assignments:
         enabled = True if prev.get("enabled") is None else bool(prev.get("enabled"))
-
-        # Keep pack ACL as-is: None means Public. Do not coerce to {} (Private).
-        _upsert_skill_tool(
-            request_app_tools=request_app_tools,
-            user_id=user_id or pack.user_id,
+        row = _prepare_skill_tool(
             pack=pack,
             skill=skill,
             tool_id=tool_id,
-            preserve_access_control=pack.access_control,
             enabled=enabled,
+            user_id=owner_id,
         )
+        prepared.append(row)
         summaries.append(
             {
                 "name": skill.name,
@@ -713,24 +791,90 @@ def sync_pack_tools(
             }
         )
 
-    # Remove tools for skills that disappeared from the pack
     keep_ids = {s["tool_id"] for s in summaries}
-    for prev in previous.values():
-        old_id = prev.get("tool_id")
-        if old_id and old_id not in keep_ids:
-            Tools.delete_tool_by_id(old_id)
-            request_app_tools.pop(old_id, None)
+    stale_ids = {
+        prev.get("tool_id")
+        for prev in previous.values()
+        if prev.get("tool_id") and prev.get("tool_id") not in keep_ids
+    }
 
-    updated = SkillPacks.update(
+    now = int(time.time())
+    existing = {}
+    if keep_ids:
+        existing = {
+            tool.id: tool
+            for tool in db.query(Tool).filter(Tool.id.in_(keep_ids)).all()
+        }
+    new_rows = []
+    for row in prepared:
+        tool = existing.get(row["tool_id"])
+        if tool is None:
+            new_rows.append(
+                Tool(
+                    id=row["tool_id"],
+                    user_id=row["user_id"],
+                    name=row["display_name"],
+                    content=row["content"],
+                    specs=row["specs"],
+                    meta=row["meta"],
+                    access_control=row["access_control"],
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            continue
+        tool.name = row["display_name"]
+        tool.content = row["content"]
+        tool.specs = row["specs"]
+        tool.meta = row["meta"]
+        tool.access_control = row["access_control"]
+        tool.updated_at = now
+    if new_rows:
+        db.add_all(new_rows)
+    if stale_ids:
+        db.query(Tool).filter(Tool.id.in_(stale_ids)).delete(synchronize_session=False)
+
+    pack_row.meta = {**(pack_row.meta or {}), "skills": summaries}
+    pack_row.updated_at = now
+    db.add(pack_row)
+    db.flush()
+    modules = {row["tool_id"]: row["module"] for row in prepared}
+    return SkillPacks._to_model(pack_row), modules, stale_ids
+
+
+def _commit_pack_tools(
+    db,
+    pack: SkillPackModel,
+    request_app_tools: dict,
+    user_id: Optional[str] = None,
+) -> SkillPackModel:
+    t0 = time.monotonic()
+    pack, modules, stale_ids = _sync_pack_tools(db, pack, user_id=user_id)
+    db.commit()
+    for tool_id in stale_ids:
+        request_app_tools.pop(tool_id, None)
+    request_app_tools.update(modules)
+    log.info(
+        "Synced %d skill tools for pack %s in one transaction in %.1fs",
+        len(modules),
         pack.id,
-        {
-            "meta": {
-                **(pack.meta or {}),
-                "skills": summaries,
-            }
-        },
+        time.monotonic() - t0,
     )
-    return updated or SkillPacks.get_by_id(pack.id)
+    return pack
+
+
+def sync_pack_tools(
+    pack: SkillPackModel,
+    request_app_tools: dict,
+    user_id: Optional[str] = None,
+) -> SkillPackModel:
+    """Discover skills on disk and create/update/remove linked tool rows."""
+    with get_db() as db:
+        try:
+            return _commit_pack_tools(db, pack, request_app_tools, user_id=user_id)
+        except Exception:
+            db.rollback()
+            raise
 
 
 def resync_all_skill_pack_tools(request_app_tools: dict) -> dict:
@@ -777,28 +921,28 @@ def install_skill_pack(
 
         sha = checkout_ref(local_path, url, ref)
         name = f"{repo_slug_from_url(url)}@{ref}"
-        pack = SkillPacks.insert(
-            user_id,
-            name=name,
-            git_url=url,
-            git_ref=ref,
-            commit_sha=sha,
-            local_path=str(local_path),
-            meta={"skills": []},
-        )
-        if not pack:
-            raise SkillInstallError("Failed to create skill pack record")
-
         try:
-            return sync_pack_tools(pack, request_app_tools, user_id=user_id)
+            with get_db() as db:
+                try:
+                    pack = SkillPacks.insert(
+                        user_id,
+                        name=name,
+                        git_url=url,
+                        git_ref=ref,
+                        commit_sha=sha,
+                        local_path=str(local_path),
+                        meta={"skills": []},
+                        db=db,
+                    )
+                    if not pack:
+                        raise SkillInstallError("Failed to create skill pack record")
+                    return _commit_pack_tools(
+                        db, pack, request_app_tools, user_id=user_id
+                    )
+                except Exception:
+                    db.rollback()
+                    raise
         except Exception:
-            # Roll back pack + tools on failed discover
-            for s in (pack.meta or {}).get("skills") or []:
-                tid = s.get("tool_id") if isinstance(s, dict) else None
-                if tid:
-                    Tools.delete_tool_by_id(tid)
-                    request_app_tools.pop(tid, None)
-            SkillPacks.delete(pack.id)
             if local_path.exists():
                 shutil.rmtree(local_path, ignore_errors=True)
             raise
@@ -863,17 +1007,24 @@ def update_skill_pack(
             return pack
 
         sha = checkout_ref(local_path, pack.git_url, ref)
-        SkillPacks.update(
-            pack.id,
-            {
-                "git_ref": ref,
-                "commit_sha": sha,
-                "local_path": str(local_path),
-                "name": f"{repo_slug_from_url(pack.git_url)}@{ref}",
-            },
-        )
-        pack = SkillPacks.get_by_id(pack.id)
-        return sync_pack_tools(pack, request_app_tools)
+        with get_db() as db:
+            try:
+                pack = SkillPacks.update(
+                    pack.id,
+                    {
+                        "git_ref": ref,
+                        "commit_sha": sha,
+                        "local_path": str(local_path),
+                        "name": f"{repo_slug_from_url(pack.git_url)}@{ref}",
+                    },
+                    db=db,
+                )
+                if not pack:
+                    raise SkillInstallError("Skill pack not found after update")
+                return _commit_pack_tools(db, pack, request_app_tools)
+            except Exception:
+                db.rollback()
+                raise
 
 
 def delete_skill_pack(pack_id: str, request_app_tools: dict) -> None:
