@@ -70,6 +70,7 @@ from open_webui.utils.misc import (
 )
 from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
 from open_webui.utils.tools import get_tools
+from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.tool_parallel import (
     execution_waves,
     inject_depends_on_spec,
@@ -1011,9 +1012,15 @@ def apply_params_to_form_data(form_data, model):
 
 
 async def process_chat_payload(request, form_data, user, metadata, model):
+    clock = StageClock(
+        "process_chat_payload",
+        chat_id=metadata.get("chat_id"),
+        message_id=metadata.get("message_id"),
+    )
 
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f"form_data: {form_data}")
+    clock.mark("apply_params")
 
     event_emitter = get_event_emitter(metadata)
     event_call = get_event_call(metadata)
@@ -1062,6 +1069,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception:
         log.exception("expand_ui_tool_history_messages failed")
+    clock.mark("expand_history")
 
     user_message = get_last_user_message(form_data["messages"])
     model_knowledge = model.get("info", {}).get("meta", {}).get("knowledge", False)
@@ -1113,6 +1121,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise e
+    clock.mark("pipeline_inlet")
 
     try:
         filter_functions = [
@@ -1129,6 +1138,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise Exception(f"Error: {e}")
+    clock.mark("db.inlet_filters", n_filters=len(filter_functions))
 
     features = form_data.pop("features", None)
     if features:
@@ -1147,6 +1157,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # <code_interpreter> prompt — that bypasses tool_calls and breaks
         # Anthropic, which rejects a trailing assistant prefill.
 
+    clock.mark("features")
     tool_ids = form_data.pop("tool_ids", None)
     files = form_data.pop("files", None)
 
@@ -1181,16 +1192,20 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
 
+        skill_records = accessible_skill_records(user)
+        clock.mark("db.accessible_skill_records", n=len(skill_records))
         tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), accessible_skill_records(user)
+            list(tool_ids), skill_records
         )
         metadata["tool_ids"] = tool_ids
+        clock.mark("resolve_tool_ids", n=len(tool_ids))
         tools_dict = get_tools(
             request,
             tool_ids,
             user,
             tool_extra,
         )
+        clock.mark("get_tools", n_out=len(tools_dict))
 
     try:
         from open_webui.utils.builtin_tools import get_builtin_tools
@@ -1198,6 +1213,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         tools_dict = {**get_builtin_tools(tool_extra), **tools_dict}
     except Exception:
         log.exception("Failed to load built-in tools")
+    clock.mark("builtins", n_tools=len(tools_dict))
 
     if tool_servers:
         for tool_server in tool_servers:
@@ -1281,11 +1297,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             except Exception as e:
                 log.exception(e)
 
+    clock.mark("tool_specs")
     try:
         form_data, flags = await chat_completion_files_handler(request, form_data, user)
         sources.extend(flags.get("sources", []))
     except Exception as e:
         log.exception(e)
+    clock.mark("files_handler")
 
     # If context is not empty, insert it into the messages
     if len(sources) > 0:
@@ -1378,6 +1396,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     except Exception:
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
+    clock.done(n_tools=len(tools_dict) if tools_dict else 0)
     return form_data, metadata, events
 
 
@@ -2235,6 +2254,12 @@ async def process_chat_response(
                     stream_parse_errors = 0
                     stream_events_seen = 0
                     heartbeat = WaitingResponseHeartbeat(event_emitter)
+                    log_timing(
+                        "waiting_response_heartbeat_start",
+                        0.0,
+                        chat_id=metadata.get("chat_id"),
+                        message_id=metadata.get("message_id"),
+                    )
                     await heartbeat.start()
 
                     try:

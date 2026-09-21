@@ -387,6 +387,7 @@ from open_webui.utils.middleware import (
     process_chat_response,
     emit_chat_title_if_needed,
 )
+from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
     shutdown_langfuse,
@@ -1250,17 +1251,31 @@ async def chat_completion(
     async def run_chat_job():
         job_form_data = form_data
         job_metadata = metadata
+        clock = StageClock(
+            "run_chat_job",
+            chat_id=job_metadata.get("chat_id"),
+            message_id=job_metadata.get("message_id"),
+        )
         try:
             job_form_data, job_metadata, events = await process_chat_payload(
                 request, job_form_data, user, job_metadata, model
             )
+            clock.mark("process_chat_payload")
 
             if LANGFUSE_ENABLED:
                 start_chat_trace(
                     user=user, metadata=job_metadata, form_data=job_form_data
                 )
+            clock.mark("langfuse_start")
 
             response = await chat_completion_handler(request, job_form_data, user)
+            clock.mark("chat_completion_handler")
+            log_timing(
+                "run_chat_job.until_stream_open",
+                clock.elapsed(),
+                chat_id=job_metadata.get("chat_id"),
+                message_id=job_metadata.get("message_id"),
+            )
             await process_chat_response(
                 request,
                 response,

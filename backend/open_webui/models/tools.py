@@ -143,9 +143,17 @@ class ToolsTable:
             return None
 
     def get_tools(self) -> list[ToolUserModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
         with get_db() as db:
+            t_query = time.perf_counter()
+            rows = db.query(Tool).order_by(Tool.updated_at.desc()).all()
+            query_s = time.perf_counter() - t_query
+            content_bytes = sum(len(row.content or "") for row in rows)
+            t_users = time.perf_counter()
             tools = []
-            for tool in db.query(Tool).order_by(Tool.updated_at.desc()).all():
+            for tool in rows:
                 user = Users.get_user_by_id(tool.user_id)
                 tools.append(
                     ToolUserModel.model_validate(
@@ -155,7 +163,16 @@ class ToolsTable:
                         }
                     )
                 )
-            return tools
+            users_s = time.perf_counter() - t_users
+        log_timing(
+            "db.Tools.get_tools",
+            time.perf_counter() - t0,
+            n=len(tools),
+            query_s=f"{query_s:.3f}",
+            users_nplus1_s=f"{users_s:.3f}",
+            content_bytes=content_bytes,
+        )
+        return tools
 
     def get_tools_by_user_id(
         self, user_id: str, permission: str = "write"
@@ -235,6 +252,9 @@ class ToolsTable:
             return None
 
     def update_tool_by_id(self, id: str, updated: dict) -> Optional[ToolModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
         try:
             with get_db() as db:
                 tool = db.query(Tool).filter_by(id=id).first()
@@ -246,7 +266,15 @@ class ToolsTable:
                 db.add(tool)
                 db.commit()
                 db.refresh(tool)
-                return ToolModel.model_validate(tool)
+                result = ToolModel.model_validate(tool)
+            content = updated.get("content")
+            log_timing(
+                "db.Tools.update_tool_by_id",
+                time.perf_counter() - t0,
+                tool_id=id,
+                content_bytes=len(content) if isinstance(content, str) else None,
+            )
+            return result
         except Exception:
             return None
 

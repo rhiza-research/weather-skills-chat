@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional, overload
@@ -40,6 +41,7 @@ from open_webui.utils.payload import (
 from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
 )
+from open_webui.utils.chat_timing import log_timing
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access
@@ -699,9 +701,17 @@ async def generate_chat_completion(
 
     payload = {**form_data}
     metadata = payload.pop("metadata", None)
+    chat_id = (metadata or {}).get("chat_id") if isinstance(metadata, dict) else None
 
     model_id = form_data.get("model")
+    t_db = time.perf_counter()
     model_info = Models.get_model_by_id(model_id)
+    log_timing(
+        "db.Models.get_model_by_id",
+        time.perf_counter() - t_db,
+        model_id=model_id,
+        chat_id=chat_id,
+    )
 
     # Check model info and override the payload
     if model_info:
@@ -732,7 +742,14 @@ async def generate_chat_completion(
                 detail="Model not found",
             )
 
+    t_models = time.perf_counter()
     await get_all_models(request, user=user)
+    log_timing(
+        "openai.get_all_models",
+        time.perf_counter() - t_models,
+        chat_id=chat_id,
+        n=len(getattr(request.app.state, "OPENAI_MODELS", {}) or {}),
+    )
     model = request.app.state.OPENAI_MODELS.get(model_id)
     if model:
         idx = model["urlIdx"]
@@ -787,7 +804,14 @@ async def generate_chat_completion(
 
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
 
+    t_dump = time.perf_counter()
     payload = json.dumps(payload)
+    log_timing(
+        "openai.json_dumps_payload",
+        time.perf_counter() - t_dump,
+        chat_id=chat_id,
+        payload_bytes=len(payload),
+    )
 
     r = None
     session = None
@@ -799,6 +823,7 @@ async def generate_chat_completion(
             trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
         )
 
+        t_post = time.perf_counter()
         r = await session.request(
             method="POST",
             url=f"{url}/chat/completions",
@@ -825,6 +850,13 @@ async def generate_chat_completion(
                     else {}
                 ),
             },
+        )
+        log_timing(
+            "openai.provider_post_until_headers",
+            time.perf_counter() - t_post,
+            chat_id=chat_id,
+            status=r.status,
+            sse="text/event-stream" in (r.headers.get("Content-Type") or ""),
         )
 
         # Check if response is SSE

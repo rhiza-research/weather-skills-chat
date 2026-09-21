@@ -38,6 +38,10 @@ def can_use_secret(user: UserModel, row: Optional[Secret]) -> bool:
 
 
 def list_secret_metadata(user: UserModel) -> list[dict]:
+    from open_webui.utils.chat_timing import log_timing
+    import time as _time
+
+    t0 = _time.perf_counter()
     personal = Secrets.list_personal(user.id)
     team_ids = user_team_ids(user.id)
     if user.role == "admin":
@@ -66,6 +70,12 @@ def list_secret_metadata(user: UserModel) -> list[dict]:
                 "overridden": row.name in personal_names,
             }
         )
+    log_timing(
+        "db.list_secret_metadata",
+        _time.perf_counter() - t0,
+        n=len(items),
+        user_id=user.id,
+    )
     return items
 
 

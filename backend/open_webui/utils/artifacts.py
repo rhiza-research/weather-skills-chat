@@ -1,19 +1,32 @@
 import io
 import json
+import logging
 import shutil
 import tarfile
+import time
 import zipfile
 from pathlib import Path
 from open_webui.env import ARTIFACTS_DIR
+from open_webui.utils.chat_timing import log_timing
+
+log = logging.getLogger(__name__)
 
 ZARR_MARKERS = (".zgroup", ".zarray", "zarr.json")
 INTERMEDIATE_RESULTS_DIRNAME = "intermediate_results"
 
 
 def chat_sandbox(chat_id: str) -> Path:
+    t0 = time.perf_counter()
     root = (ARTIFACTS_DIR / chat_id).resolve()
+    existed = root.exists()
     root.mkdir(parents=True, exist_ok=True)
     (root / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
+    log_timing(
+        "juicefs.chat_sandbox",
+        time.perf_counter() - t0,
+        chat_id=chat_id,
+        existed=existed,
+    )
     return root
 
 
@@ -505,6 +518,7 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
 
 
 def list_artifacts(chat_id: str) -> list[dict]:
+    t0 = time.perf_counter()
     root = chat_sandbox(chat_id)
     entries = []
 
@@ -551,16 +565,29 @@ def list_artifacts(chat_id: str) -> list[dict]:
                 walk(path)
 
     walk(root)
+    log_timing(
+        "juicefs.list_artifacts",
+        time.perf_counter() - t0,
+        chat_id=chat_id,
+        n=len(entries),
+    )
     return entries
 
 
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
+    t0 = time.perf_counter()
     src = (ARTIFACTS_DIR / src_chat_id).resolve()
     dest = chat_sandbox(dest_chat_id)
     if src.exists() and src.is_dir():
         shutil.copytree(src, dest, dirs_exist_ok=True)
         # Ensure the scratch folder exists even if the source predated it.
         (dest / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
+    log_timing(
+        "juicefs.copy_sandbox",
+        time.perf_counter() - t0,
+        src_chat_id=src_chat_id,
+        dest_chat_id=dest_chat_id,
+    )
 
 
 def delete_sandbox(chat_id: str) -> None:
@@ -570,9 +597,17 @@ def delete_sandbox(chat_id: str) -> None:
 
 
 def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
+    t0 = time.perf_counter()
     target = resolve_in_sandbox(chat_id, relpath)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
+    log_timing(
+        "juicefs.write_bytes",
+        time.perf_counter() - t0,
+        chat_id=chat_id,
+        bytes=len(data),
+        relpath=relpath,
+    )
     return target
 
 

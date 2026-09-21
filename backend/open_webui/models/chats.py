@@ -113,6 +113,9 @@ class ChatTitleIdResponse(BaseModel):
 
 class ChatTable:
     def insert_new_chat(self, user_id: str, form_data: ChatForm) -> Optional[ChatModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
         with get_db() as db:
             id = str(uuid.uuid4())
             chat = ChatModel(
@@ -135,13 +138,25 @@ class ChatTable:
             db.add(result)
             db.commit()
             db.refresh(result)
+            db_s = time.perf_counter() - t0
+            juice_s = None
             if result:
                 try:
                     from open_webui.utils.artifacts import chat_sandbox
 
+                    t_fs = time.perf_counter()
                     chat_sandbox(result.id)
+                    juice_s = time.perf_counter() - t_fs
                 except Exception:
                     pass
+            log_timing(
+                "db.Chats.insert_new_chat",
+                time.perf_counter() - t0,
+                chat_id=getattr(result, "id", None),
+                db_s=f"{db_s:.3f}",
+                juicefs_sandbox_s=f"{juice_s:.3f}" if juice_s is not None else None,
+                chat_json_bytes=len(json.dumps(form_data.chat or {}, default=str)),
+            )
             return ChatModel.model_validate(result) if result else None
 
     def import_chat(
@@ -182,6 +197,9 @@ class ChatTable:
             return ChatModel.model_validate(result) if result else None
 
     def update_chat_by_id(self, id: str, chat: dict) -> Optional[ChatModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
         try:
             with get_db() as db:
                 chat_item = db.get(Chat, id)
@@ -191,7 +209,14 @@ class ChatTable:
                 db.commit()
                 db.refresh(chat_item)
 
-                return ChatModel.model_validate(chat_item)
+                result = ChatModel.model_validate(chat_item)
+            log_timing(
+                "db.Chats.update_chat_by_id",
+                time.perf_counter() - t0,
+                chat_id=id,
+                chat_json_bytes=len(json.dumps(chat or {}, default=str)),
+            )
+            return result
         except Exception:
             return None
 
@@ -444,6 +469,7 @@ class ChatTable:
         skip: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> list[ChatTitleIdResponse]:
+        t0 = time.perf_counter()
         with get_db() as db:
             query = (
                 db.query(Chat)
@@ -471,6 +497,16 @@ class ChatTable:
                 query = query.limit(limit)
 
             all_chats = query.all()
+
+            from open_webui.utils.chat_timing import log_timing
+
+            log_timing(
+                "db.Chats.get_chat_title_id_list",
+                time.perf_counter() - t0,
+                n=len(all_chats),
+                skip=skip,
+                limit=limit,
+            )
 
             # result has to be destrctured from sqlalchemy `row` and mapped to a dict since the `ChatModel`is not the returned dataclass.
             return [
@@ -560,10 +596,21 @@ class ChatTable:
             return [ChatModel.model_validate(chat) for chat in all_chats]
 
     def get_chat_by_id(self, id: str) -> Optional[ChatModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
         try:
             with get_db() as db:
                 chat = db.get(Chat, id)
-                return ChatModel.model_validate(chat)
+                result = ChatModel.model_validate(chat)
+            payload = result.chat if result else None
+            log_timing(
+                "db.Chats.get_chat_by_id",
+                time.perf_counter() - t0,
+                chat_id=id,
+                chat_json_bytes=len(json.dumps(payload or {}, default=str)),
+            )
+            return result
         except Exception:
             return None
 

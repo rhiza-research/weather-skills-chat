@@ -43,8 +43,10 @@ from open_webui.utils.skill_version import (
     tool_version_from_record,
 )
 from open_webui.env import AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA
+from open_webui.utils.chat_timing import log_timing
 
 import copy
+import time
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +72,7 @@ def get_async_tool_function_and_apply_extra_params(
 
 def accessible_skill_records(user: UserModel) -> list[dict]:
     """Skill tools the user can read, for version-preference substitution."""
+    t0 = time.perf_counter()
     records = []
     for tool in Tools.get_tools():
         if not user_owns_or_has_access(
@@ -90,6 +93,12 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
                 "enabled": manifest.get("enabled", True) is not False,
             }
         )
+    log_timing(
+        "db.accessible_skill_records",
+        time.perf_counter() - t0,
+        n=len(records),
+        user_id=user.id,
+    )
     return records
 
 
@@ -97,12 +106,23 @@ def get_tools(
     request: Request, tool_ids: list[str], user: UserModel, extra_params: dict
 ) -> dict[str, dict]:
     tools_dict = {}
+    t0 = time.perf_counter()
+    t_resolve = time.perf_counter()
     tool_ids = resolve_tool_ids_by_skill_version(
         list(tool_ids), accessible_skill_records(user)
     )
+    resolve_s = time.perf_counter() - t_resolve
+
+    db_get_s = 0.0
+    load_s = 0.0
+    valves_s = 0.0
+    cache_hits = 0
+    cache_misses = 0
 
     for tool_id in tool_ids:
+        t_get = time.perf_counter()
         tool = Tools.get_tool_by_id(tool_id)
+        db_get_s += time.perf_counter() - t_get
         if tool is None:
             if tool_id.startswith("server:"):
                 server_idx = int(tool_id.split(":")[1])
@@ -173,19 +193,28 @@ def get_tools(
                 continue
             module = request.app.state.TOOLS.get(tool_id, None)
             if module is None:
+                cache_misses += 1
+                t_load = time.perf_counter()
                 module, _ = load_tool_module_by_id(tool_id)
+                load_s += time.perf_counter() - t_load
                 request.app.state.TOOLS[tool_id] = module
+            else:
+                cache_hits += 1
 
             extra_params["__id__"] = tool_id
 
             # Set valves for the tool
             if hasattr(module, "valves") and hasattr(module, "Valves"):
+                t_valves = time.perf_counter()
                 valves = Tools.get_tool_valves_by_id(tool_id) or {}
+                valves_s += time.perf_counter() - t_valves
                 module.valves = module.Valves(**valves)
             if hasattr(module, "UserValves"):
+                t_valves = time.perf_counter()
                 extra_params["__user__"]["valves"] = module.UserValves(  # type: ignore
                     **Tools.get_user_valves_by_id_and_user_id(tool_id, user.id)
                 )
+                valves_s += time.perf_counter() - t_valves
 
             for spec in tool.specs:
                 # TODO: Fix hack for OpenAI API
@@ -229,6 +258,18 @@ def get_tools(
                 }
                 register_tool_by_function_name(tools_dict, function_name, tool_dict)
 
+    log_timing(
+        "get_tools",
+        time.perf_counter() - t0,
+        n_in=len(tool_ids),
+        n_out=len(tools_dict),
+        resolve_incl_accessible_s=f"{resolve_s:.3f}",
+        db_get_tool_by_id_s=f"{db_get_s:.3f}",
+        load_module_s=f"{load_s:.3f}",
+        db_valves_s=f"{valves_s:.3f}",
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+    )
     return tools_dict
 
 
