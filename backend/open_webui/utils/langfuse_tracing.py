@@ -8,8 +8,10 @@ explicitly false). Failures never raise into the chat path.
 from __future__ import annotations
 
 import contextvars
+import copy
 import json
 import logging
+import threading
 from typing import Any, Callable, Optional
 
 from starlette.responses import StreamingResponse
@@ -29,6 +31,7 @@ MAX_GENERATION_INPUT_CHARS = 1_000_000
 
 _client: Any = None
 _client_failed = False
+_client_lock = threading.Lock()
 _trace_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
     "langfuse_trace", default=None
 )
@@ -38,6 +41,18 @@ _generation_stack_var: contextvars.ContextVar[list] = contextvars.ContextVar(
 _propagate_cm_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
     "langfuse_propagate_cm", default=None
 )
+_pending_trace_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "langfuse_pending_trace", default=None
+)
+
+
+class _PendingTrace:
+    __slots__ = ("trace", "cm", "done")
+
+    def __init__(self):
+        self.trace = None
+        self.cm = None
+        self.done = threading.Event()
 
 
 def tracing_enabled() -> bool:
@@ -48,7 +63,11 @@ def get_client():
     global _client, _client_failed
     if not tracing_enabled() or _client_failed:
         return None
-    if _client is None:
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is not None or _client_failed:
+            return _client
         try:
             from langfuse import Langfuse
 
@@ -117,7 +136,29 @@ def _exit_propagate_attributes() -> None:
         _propagate_cm_var.set(None)
 
 
+def _adopt_pending_trace(*, wait: bool = False, timeout: float = 5.0) -> None:
+    pending = _pending_trace_var.get()
+    if pending is None or _trace_var.get() is not None:
+        return
+    if wait and not pending.done.is_set():
+        pending.done.wait(timeout=timeout)
+    if not pending.done.is_set():
+        return
+    if pending.trace is None:
+        return
+    cm = pending.cm
+    if cm is not None:
+        _safe_call(cm.__enter__)
+        _propagate_cm_var.set(cm)
+        pending.cm = None
+    _trace_var.set(pending.trace)
+
+
 def current_trace():
+    existing = _trace_var.get()
+    if existing is not None:
+        return existing
+    _adopt_pending_trace()
     return _trace_var.get()
 
 
@@ -129,16 +170,16 @@ def _trace_user_id(user: Any) -> Optional[str]:
     return str(user_id) if user_id is not None else None
 
 
-def start_chat_trace(
+def _create_chat_trace(
     *,
     user: Any,
     metadata: Optional[dict],
     form_data: Optional[dict],
     source: str = "chat",
-) -> Any:
+) -> tuple[Any, Any]:
     client = get_client()
     if not client:
-        return None
+        return None, None
     metadata = metadata or {}
     form_data = form_data or {}
     if metadata.get("headless"):
@@ -174,9 +215,6 @@ def start_chat_trace(
         tags=tags,
         metadata=trace_metadata,
     )
-    _safe_call(cm.__enter__)
-    _propagate_cm_var.set(cm)
-
     trace = _safe_call(
         client.start_observation,
         name="weather-skills-chat",
@@ -184,14 +222,67 @@ def start_chat_trace(
         input=trace_input,
         metadata=trace_metadata,
     )
+    if trace is None:
+        return None, None
+    return trace, cm
+
+
+def start_chat_trace(
+    *,
+    user: Any,
+    metadata: Optional[dict],
+    form_data: Optional[dict],
+    source: str = "chat",
+) -> Any:
+    trace, cm = _create_chat_trace(
+        user=user, metadata=metadata, form_data=form_data, source=source
+    )
+    if cm is not None:
+        _safe_call(cm.__enter__)
+        _propagate_cm_var.set(cm)
     if trace is not None:
         _trace_var.set(trace)
-    else:
-        _exit_propagate_attributes()
     return trace
 
 
+def schedule_start_chat_trace(
+    *,
+    user: Any,
+    metadata: Optional[dict],
+    form_data: Optional[dict],
+    source: str = "chat",
+) -> None:
+    """Create the chat trace off the send path. Later spans adopt it if ready."""
+    if not tracing_enabled():
+        return
+    pending = _PendingTrace()
+    _pending_trace_var.set(pending)
+    snapshot_metadata = copy.copy(metadata or {})
+    snapshot_form = {
+        "model": (form_data or {}).get("model"),
+        "messages": copy.deepcopy((form_data or {}).get("messages") or []),
+    }
+
+    def _run():
+        try:
+            pending.trace, pending.cm = _create_chat_trace(
+                user=user,
+                metadata=snapshot_metadata,
+                form_data=snapshot_form,
+                source=source,
+            )
+        except Exception:
+            log.debug("Background Langfuse start_chat_trace failed", exc_info=True)
+        finally:
+            pending.done.set()
+
+    threading.Thread(
+        target=_run, name="langfuse-start-chat-trace", daemon=True
+    ).start()
+
+
 def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
+    _adopt_pending_trace(wait=True)
     while _generation_stack():
         end_generation(error=error or "trace closed")
     trace = _trace_var.get()
@@ -212,6 +303,7 @@ def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
     finally:
         _trace_var.set(None)
         _generation_stack_var.set(None)
+        _pending_trace_var.set(None)
         _exit_propagate_attributes()
         client = get_client()
         if client:

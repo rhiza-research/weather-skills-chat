@@ -164,6 +164,10 @@ class WaitingResponseHeartbeat:
         await self._emit(done=False)
         self._task = asyncio.create_task(self._loop())
 
+    @property
+    def is_active(self) -> bool:
+        return self._active
+
     async def _loop(self):
         try:
             while self._active:
@@ -1191,9 +1195,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if tool_ids:
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
+        from open_webui.models.tools import Tools
 
-        skill_records = accessible_skill_records(user)
-        clock.mark("db.accessible_skill_records", n=len(skill_records))
+        catalog = Tools.get_tool_catalog()
+        clock.mark("db.tool_catalog", n=len(catalog))
+        skill_records = accessible_skill_records(user, catalog)
+        clock.mark("accessible_skill_records", n=len(skill_records))
         tool_ids = resolve_tool_ids_by_skill_version(
             list(tool_ids), skill_records
         )
@@ -1204,6 +1211,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             tool_ids,
             user,
             tool_extra,
+            catalog=catalog,
         )
         clock.mark("get_tools", n_out=len(tools_dict))
 
@@ -1515,7 +1523,16 @@ async def emit_chat_title_if_needed(
 
 
 async def process_chat_response(
-    request, response, form_data, user, metadata, model, events, tasks, detach=True
+    request,
+    response,
+    form_data,
+    user,
+    metadata,
+    model,
+    events,
+    tasks,
+    detach=True,
+    waiting_heartbeat=None,
 ):
     async def background_tasks_handler():
         message_map = Chats.get_messages_by_chat_id(metadata["chat_id"])
@@ -1696,6 +1713,8 @@ async def process_chat_response(
     if event_emitter and event_caller:
         task_id = str(uuid4())  # Create a unique task ID.
         model_id = form_data.get("model", "")
+        if waiting_heartbeat is None:
+            waiting_heartbeat = WaitingResponseHeartbeat(event_emitter)
 
         Chats.upsert_message_to_chat_by_id_and_message_id(
             metadata["chat_id"],
@@ -2253,14 +2272,17 @@ async def process_chat_response(
                     response_tool_calls = []
                     stream_parse_errors = 0
                     stream_events_seen = 0
-                    heartbeat = WaitingResponseHeartbeat(event_emitter)
-                    log_timing(
-                        "waiting_response_heartbeat_start",
-                        0.0,
-                        chat_id=metadata.get("chat_id"),
-                        message_id=metadata.get("message_id"),
-                    )
-                    await heartbeat.start()
+                    heartbeat = waiting_heartbeat
+                    if heartbeat is None:
+                        heartbeat = WaitingResponseHeartbeat(event_emitter)
+                    if not heartbeat.is_active:
+                        log_timing(
+                            "waiting_response_heartbeat_start",
+                            0.0,
+                            chat_id=metadata.get("chat_id"),
+                            message_id=metadata.get("message_id"),
+                        )
+                        await heartbeat.start()
 
                     try:
                         async for line in response.body_iterator:
@@ -2787,6 +2809,14 @@ async def process_chat_response(
                     try:
                         from open_webui.utils.model_messages import deepcopy_messages
 
+                        await waiting_heartbeat.start()
+                        log_timing(
+                            "waiting_response_heartbeat_start",
+                            0.0,
+                            chat_id=metadata.get("chat_id"),
+                            message_id=metadata.get("message_id"),
+                            followup="tools",
+                        )
                         res = await generate_chat_completion(
                             request,
                             {
@@ -2996,6 +3026,14 @@ async def process_chat_response(
                         try:
                             from open_webui.utils.model_messages import deepcopy_messages
 
+                            await waiting_heartbeat.start()
+                            log_timing(
+                                "waiting_response_heartbeat_start",
+                                0.0,
+                                chat_id=metadata.get("chat_id"),
+                                message_id=metadata.get("message_id"),
+                                followup="code",
+                            )
                             res = await generate_chat_completion(
                                 request,
                                 {

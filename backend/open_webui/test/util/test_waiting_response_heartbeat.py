@@ -19,6 +19,7 @@ class WaitingResponseHeartbeatTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["type"], "status")
         self.assertEqual(first["data"]["action"], WAITING_RESPONSE_ACTION)
         self.assertFalse(first["data"]["done"])
+        self.assertTrue(heartbeat.is_active)
 
         await heartbeat.mark_activity()
         self.assertGreaterEqual(emitter.await_count, 2)

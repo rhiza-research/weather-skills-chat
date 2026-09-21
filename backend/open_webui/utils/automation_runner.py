@@ -63,7 +63,7 @@ def _accessible_tool_ids(user) -> list[str]:
     from open_webui.utils.access_control import user_owns_or_has_access
 
     ids: list[str] = []
-    for tool in Tools.get_tools():
+    for tool in Tools.get_tool_catalog():
         if not user_owns_or_has_access(
             user.id, tool.user_id, tool.access_control, "read", user.role
         ):

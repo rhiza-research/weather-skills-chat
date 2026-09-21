@@ -1218,11 +1218,12 @@ async def list_available_tools(
         )
 
     selected_ids = list(metadata.get("tool_ids") or [])
+    catalog = Tools.get_tool_catalog()
     if selected_ids:
         selected_ids = resolve_tool_ids_by_skill_version(
-            selected_ids, accessible_skill_records(user)
+            selected_ids, accessible_skill_records(user, catalog)
         )
-    all_tools = Tools.get_tools()
+    all_tools = catalog
 
     def _visible(tool) -> bool:
         return user_owns_or_has_access(

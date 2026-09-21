@@ -80,6 +80,20 @@ class ToolUserModel(ToolModel):
     user: Optional[UserResponse] = None
 
 
+class ToolCatalogModel(BaseModel):
+    """Tool row without `content` — one SELECT for access checks and specs."""
+
+    id: str
+    user_id: str
+    name: str
+    specs: list[dict]
+    meta: ToolMeta
+    access_control: Optional[dict] = None
+    valves: Optional[dict] = None
+    updated_at: int
+    created_at: int
+
+
 class ToolResponse(BaseModel):
     id: str
     user_id: str
@@ -142,35 +156,92 @@ class ToolsTable:
         except Exception:
             return None
 
-    def get_tools(self) -> list[ToolUserModel]:
+    def get_tool_catalog(self) -> list[ToolCatalogModel]:
+        """All tools in one query, omitting wrapper `content`."""
         from open_webui.utils.chat_timing import log_timing
 
         t0 = time.perf_counter()
         with get_db() as db:
-            t_query = time.perf_counter()
-            rows = db.query(Tool).order_by(Tool.updated_at.desc()).all()
-            query_s = time.perf_counter() - t_query
-            content_bytes = sum(len(row.content or "") for row in rows)
-            t_users = time.perf_counter()
+            rows = (
+                db.query(
+                    Tool.id,
+                    Tool.user_id,
+                    Tool.name,
+                    Tool.specs,
+                    Tool.meta,
+                    Tool.access_control,
+                    Tool.valves,
+                    Tool.updated_at,
+                    Tool.created_at,
+                )
+                .order_by(Tool.updated_at.desc())
+                .all()
+            )
             tools = []
-            for tool in rows:
-                user = Users.get_user_by_id(tool.user_id)
+            for row in rows:
+                meta = row.meta or {}
+                if not isinstance(meta, ToolMeta):
+                    try:
+                        meta = ToolMeta.model_validate(meta) if meta else ToolMeta()
+                    except Exception:
+                        meta = ToolMeta()
                 tools.append(
-                    ToolUserModel.model_validate(
-                        {
-                            **ToolModel.model_validate(tool).model_dump(),
-                            "user": user.model_dump() if user else None,
-                        }
+                    ToolCatalogModel(
+                        id=row.id,
+                        user_id=row.user_id,
+                        name=row.name or "",
+                        specs=row.specs or [],
+                        meta=meta,
+                        access_control=row.access_control,
+                        valves=row.valves,
+                        updated_at=row.updated_at or 0,
+                        created_at=row.created_at or 0,
                     )
                 )
-            users_s = time.perf_counter() - t_users
+        log_timing(
+            "db.Tools.get_tool_catalog",
+            time.perf_counter() - t0,
+            n=len(tools),
+        )
+        return tools
+
+    def get_tools(self) -> list[ToolUserModel]:
+        from open_webui.utils.chat_timing import log_timing
+
+        t0 = time.perf_counter()
+        catalog = self.get_tool_catalog()
+        t_users = time.perf_counter()
+        user_ids = list({tool.user_id for tool in catalog if tool.user_id})
+        users_by_id = (
+            {user.id: user for user in Users.get_users_by_user_ids(user_ids)}
+            if user_ids
+            else {}
+        )
+        tools = []
+        for tool in catalog:
+            user = users_by_id.get(tool.user_id)
+            tools.append(
+                ToolUserModel.model_validate(
+                    {
+                        "id": tool.id,
+                        "user_id": tool.user_id,
+                        "name": tool.name,
+                        "content": "",
+                        "specs": tool.specs,
+                        "meta": tool.meta,
+                        "access_control": tool.access_control,
+                        "updated_at": tool.updated_at,
+                        "created_at": tool.created_at,
+                        "user": user.model_dump() if user else None,
+                    }
+                )
+            )
         log_timing(
             "db.Tools.get_tools",
             time.perf_counter() - t0,
             n=len(tools),
-            query_s=f"{query_s:.3f}",
-            users_nplus1_s=f"{users_s:.3f}",
-            content_bytes=content_bytes,
+            users_batch_s=f"{time.perf_counter() - t_users:.3f}",
+            users_n=len(users_by_id),
         )
         return tools
 

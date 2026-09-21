@@ -383,6 +383,7 @@ from open_webui.utils.chat import (
     chat_action as chat_action_handler,
 )
 from open_webui.utils.middleware import (
+    WaitingResponseHeartbeat,
     process_chat_payload,
     process_chat_response,
     emit_chat_title_if_needed,
@@ -390,8 +391,8 @@ from open_webui.utils.middleware import (
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
+    schedule_start_chat_trace,
     shutdown_langfuse,
-    start_chat_trace,
 )
 from open_webui.env import LANGFUSE_ENABLED
 from open_webui.utils.access_control import has_access, user_owns_or_has_access
@@ -1256,17 +1257,28 @@ async def chat_completion(
             chat_id=job_metadata.get("chat_id"),
             message_id=job_metadata.get("message_id"),
         )
+        waiting_heartbeat = WaitingResponseHeartbeat(get_event_emitter(job_metadata))
         try:
+            if LANGFUSE_ENABLED:
+                schedule_start_chat_trace(
+                    user=user, metadata=job_metadata, form_data=job_form_data
+                )
+            clock.mark("langfuse_start")
+
             job_form_data, job_metadata, events = await process_chat_payload(
                 request, job_form_data, user, job_metadata, model
             )
             clock.mark("process_chat_payload")
 
-            if LANGFUSE_ENABLED:
-                start_chat_trace(
-                    user=user, metadata=job_metadata, form_data=job_form_data
-                )
-            clock.mark("langfuse_start")
+            await waiting_heartbeat.start()
+            log_timing(
+                "waiting_response_heartbeat_start",
+                0.0,
+                chat_id=job_metadata.get("chat_id"),
+                message_id=job_metadata.get("message_id"),
+                when="pre_provider_post",
+            )
+            clock.mark("waiting_response_start")
 
             response = await chat_completion_handler(request, job_form_data, user)
             clock.mark("chat_completion_handler")
@@ -1286,6 +1298,7 @@ async def chat_completion(
                 events,
                 tasks,
                 detach=False,
+                waiting_heartbeat=waiting_heartbeat,
             )
         except asyncio.CancelledError:
             log.warning(
@@ -1293,6 +1306,7 @@ async def chat_completion(
                 job_metadata.get("chat_id"),
                 job_metadata.get("message_id"),
             )
+            await waiting_heartbeat.stop(clear=True)
             event_emitter = get_event_emitter(job_metadata)
             if event_emitter:
                 try:
@@ -1343,6 +1357,7 @@ async def chat_completion(
                 job_metadata.get("chat_id"),
                 job_metadata.get("message_id"),
             )
+            await waiting_heartbeat.stop(clear=True)
             event_emitter = get_event_emitter(job_metadata)
             if event_emitter:
                 try:

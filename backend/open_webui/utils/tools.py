@@ -33,7 +33,7 @@ from langchain_core.utils.function_calling import (
 )
 
 
-from open_webui.models.tools import Tools
+from open_webui.models.tools import ToolCatalogModel, Tools
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import user_owns_or_has_access
 from open_webui.utils.plugin import load_tool_module_by_id
@@ -70,16 +70,38 @@ def get_async_tool_function_and_apply_extra_params(
         return new_function
 
 
-def accessible_skill_records(user: UserModel) -> list[dict]:
+def _tool_manifest(tool) -> dict:
+    meta = getattr(tool, "meta", None)
+    if meta is None:
+        return {}
+    manifest = getattr(meta, "manifest", None)
+    if manifest is None and isinstance(meta, dict):
+        manifest = meta.get("manifest")
+    return manifest if isinstance(manifest, dict) else {}
+
+
+def _user_tool_valves(user: UserModel, tool_id: str) -> dict:
+    settings = getattr(user, "settings", None)
+    if not settings:
+        return {}
+    dumped = settings.model_dump() if hasattr(settings, "model_dump") else dict(settings)
+    valves = ((dumped.get("tools") or {}).get("valves") or {}).get(tool_id)
+    return valves if isinstance(valves, dict) else {}
+
+
+def accessible_skill_records(
+    user: UserModel, catalog: Optional[list[ToolCatalogModel]] = None
+) -> list[dict]:
     """Skill tools the user can read, for version-preference substitution."""
     t0 = time.perf_counter()
+    tools = catalog if catalog is not None else Tools.get_tool_catalog()
     records = []
-    for tool in Tools.get_tools():
+    for tool in tools:
         if not user_owns_or_has_access(
             user.id, tool.user_id, tool.access_control, "read", user.role
         ):
             continue
-        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        manifest = _tool_manifest(tool)
         if manifest.get("kind") != "skill":
             continue
         name = manifest.get("skill_name")
@@ -98,31 +120,36 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
         time.perf_counter() - t0,
         n=len(records),
         user_id=user.id,
+        catalog=len(tools),
     )
     return records
 
 
 def get_tools(
-    request: Request, tool_ids: list[str], user: UserModel, extra_params: dict
+    request: Request,
+    tool_ids: list[str],
+    user: UserModel,
+    extra_params: dict,
+    catalog: Optional[list[ToolCatalogModel]] = None,
 ) -> dict[str, dict]:
     tools_dict = {}
     t0 = time.perf_counter()
+    if catalog is None:
+        catalog = Tools.get_tool_catalog()
     t_resolve = time.perf_counter()
     tool_ids = resolve_tool_ids_by_skill_version(
-        list(tool_ids), accessible_skill_records(user)
+        list(tool_ids), accessible_skill_records(user, catalog)
     )
     resolve_s = time.perf_counter() - t_resolve
+    by_id = {tool.id: tool for tool in catalog}
 
-    db_get_s = 0.0
     load_s = 0.0
     valves_s = 0.0
     cache_hits = 0
     cache_misses = 0
 
     for tool_id in tool_ids:
-        t_get = time.perf_counter()
-        tool = Tools.get_tool_by_id(tool_id)
-        db_get_s += time.perf_counter() - t_get
+        tool = by_id.get(tool_id)
         if tool is None:
             if tool_id.startswith("server:"):
                 server_idx = int(tool_id.split(":")[1])
@@ -206,13 +233,15 @@ def get_tools(
             # Set valves for the tool
             if hasattr(module, "valves") and hasattr(module, "Valves"):
                 t_valves = time.perf_counter()
-                valves = Tools.get_tool_valves_by_id(tool_id) or {}
+                valves = tool.valves if getattr(tool, "valves", None) else {}
                 valves_s += time.perf_counter() - t_valves
-                module.valves = module.Valves(**valves)
-            if hasattr(module, "UserValves"):
+                module.valves = module.Valves(**(valves or {}))
+            if hasattr(module, "UserValves") and isinstance(
+                extra_params.get("__user__"), dict
+            ):
                 t_valves = time.perf_counter()
                 extra_params["__user__"]["valves"] = module.UserValves(  # type: ignore
-                    **Tools.get_user_valves_by_id_and_user_id(tool_id, user.id)
+                    **_user_tool_valves(user, tool_id)
                 )
                 valves_s += time.perf_counter() - t_valves
 
@@ -264,9 +293,9 @@ def get_tools(
         n_in=len(tool_ids),
         n_out=len(tools_dict),
         resolve_incl_accessible_s=f"{resolve_s:.3f}",
-        db_get_tool_by_id_s=f"{db_get_s:.3f}",
+        catalog_n=len(catalog),
         load_module_s=f"{load_s:.3f}",
-        db_valves_s=f"{valves_s:.3f}",
+        valves_s=f"{valves_s:.3f}",
         cache_hits=cache_hits,
         cache_misses=cache_misses,
     )
