@@ -31,13 +31,18 @@ export const getSkillPacks = async (token: string = '') => {
 export const installSkillPack = async (
 	token: string,
 	gitUrl: string,
-	ref: string = 'main'
+	ref: string = 'main',
+	enabledByDefault: boolean = true
 ) => {
 	let error = null;
 	const res = await fetch(`${WEBUI_API_BASE_URL}/skills/install`, {
 		method: 'POST',
 		headers: authHeaders(token),
-		body: JSON.stringify({ git_url: gitUrl, ref: ref || 'main' })
+		body: JSON.stringify({
+			git_url: gitUrl,
+			ref: ref || 'main',
+			enabled_by_default: enabledByDefault
+		})
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await parseApiError(res);
@@ -121,6 +126,69 @@ export const updateSkillPackAccess = async (
 	return res;
 };
 
+export const setSkillPackEnabled = async (token: string, packId: string, enabled: boolean) => {
+	let error = null;
+	const res = await fetch(`${WEBUI_API_BASE_URL}/skills/${packId}/enabled`, {
+		method: 'POST',
+		headers: authHeaders(token),
+		body: JSON.stringify({ enabled })
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
+export const setSkillPackEnabledByDefault = async (
+	token: string,
+	packId: string,
+	enabled: boolean
+) => {
+	let error = null;
+	const res = await fetch(`${WEBUI_API_BASE_URL}/skills/${packId}/enabled-by-default`, {
+		method: 'POST',
+		headers: authHeaders(token),
+		body: JSON.stringify({ enabled })
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
+export const toggleSkillPackActive = async (token: string, packId: string) => {
+	let error = null;
+	const res = await fetch(`${WEBUI_API_BASE_URL}/skills/${packId}/toggle`, {
+		method: 'POST',
+		headers: authHeaders(token)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
 export const updateSkillEnabled = async (
 	token: string,
 	packId: string,
@@ -134,6 +202,56 @@ export const updateSkillEnabled = async (
 			method: 'POST',
 			headers: authHeaders(token),
 			body: JSON.stringify({ enabled })
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
+export const setSkillEnabledByDefault = async (
+	token: string,
+	packId: string,
+	toolId: string,
+	enabled: boolean
+) => {
+	let error = null;
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/skills/${packId}/skills/${encodeURIComponent(toolId)}/enabled-by-default`,
+		{
+			method: 'POST',
+			headers: authHeaders(token),
+			body: JSON.stringify({ enabled })
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? err;
+			console.log(err);
+			return null;
+		});
+	if (error) throw error;
+	return res;
+};
+
+export const toggleSkillActive = async (token: string, packId: string, toolId: string) => {
+	let error = null;
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/skills/${packId}/skills/${encodeURIComponent(toolId)}/toggle`,
+		{
+			method: 'POST',
+			headers: authHeaders(token)
 		}
 	)
 		.then(async (res) => {

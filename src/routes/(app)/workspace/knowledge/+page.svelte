@@ -15,5 +15,5 @@
 </script>
 
 {#if $knowledge !== null}
-	<Knowledge />
+	<Knowledge catalog="org" />
 {/if}

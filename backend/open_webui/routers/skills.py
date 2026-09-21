@@ -12,27 +12,30 @@ from open_webui.models.skill_packs import (
     SkillPackUpdateForm,
     SkillPacks,
 )
-from open_webui.utils.access_control import (
-    can_update_access_control,
-    has_permission,
-    user_owns_or_has_access,
+from open_webui.models.org_catalog import (
+    RESOURCE_SKILL,
+    RESOURCE_SKILL_ITEM,
+    CatalogEnabledForm,
+    OrgCatalogOverrides,
+)
+from open_webui.utils.catalog import (
+    can_toggle,
+    can_write_item,
+    is_public_item,
+    is_visible,
+    stamp_create,
 )
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.organizations import (
-    can_read_org_resource,
-    can_write_org_resource,
-    get_active_organization_id,
-    is_org_admin,
-    is_personal_org,
-)
+from open_webui.utils.organizations import get_active_organization_id
 from open_webui.utils.skills import (
     SkillInstallBusyError,
     SkillInstallError,
     delete_skill_pack,
     install_skill_pack,
-    pack_to_response,
+    respond_pack,
     resync_all_skill_pack_tools,
     set_pack_access_control,
+    set_skill_active,
     set_skill_enabled,
     update_skill_pack,
 )
@@ -45,30 +48,40 @@ router = APIRouter()
 SHARING_PERMISSION_KEY = "sharing.public_skills"
 
 
-def _can_read(user, pack) -> bool:
-    if can_read_org_resource(user, pack):
-        return True
-    return user_owns_or_has_access(
-        user.id, pack.user_id, pack.access_control, "read", user.role
-    )
+def _can_read(user, pack, organization_id: str) -> bool:
+    return is_visible(organization_id, RESOURCE_SKILL, pack)
 
 
-def _can_write(user, pack) -> bool:
-    if can_write_org_resource(user, pack):
-        return True
-    return user_owns_or_has_access(
-        user.id, pack.user_id, pack.access_control, "write", user.role
-    )
+def _can_write(user, pack, organization_id: Optional[str] = None) -> bool:
+    if getattr(pack, "visibility", None) == "public":
+        from open_webui.utils.organizations import is_platform_admin
+
+        return is_platform_admin(user.id)
+    org_id = organization_id or getattr(pack, "organization_id", None)
+    return can_write_item(user, org_id, pack)
 
 
-def _require_pack_access(user, pack, permission: str = "read"):
+def _require_pack_access(user, pack, permission: str = "read", organization_id: Optional[str] = None):
     if not pack:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if permission == "read" and not _can_read(user, pack):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
-        )
-    if permission == "write" and not _can_write(user, pack):
+    if permission == "read":
+        org_id = organization_id or getattr(pack, "organization_id", None)
+        if organization_id:
+            visible = _can_read(user, pack, organization_id)
+        elif getattr(pack, "visibility", None) == "public":
+            from open_webui.models.organizations import Organizations
+
+            visible = any(
+                _can_read(user, pack, oid)
+                for oid in Organizations.user_organization_ids(user.id)
+            )
+        else:
+            visible = _can_read(user, pack, org_id)
+        if not visible:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+            )
+    if permission == "write" and not _can_write(user, pack, organization_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
         )
@@ -76,13 +89,7 @@ def _require_pack_access(user, pack, permission: str = "read"):
 
 
 def _require_skills_workspace(request: Request, user) -> None:
-    if user.role != "admin" and not has_permission(
-        user.id, "workspace.skills", request.app.state.config.USER_PERMISSIONS
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
+    return
 
 
 def _raise_install_error(exc: Exception):
@@ -101,9 +108,9 @@ async def list_skill_packs(
 ):
     packs = SkillPacks.get_all()
     return [
-        pack_to_response(p)
+        respond_pack(p, organization_id)
         for p in packs
-        if p.organization_id == organization_id and _can_read(user, p)
+        if is_visible(organization_id, RESOURCE_SKILL, p)
     ]
 
 
@@ -119,15 +126,27 @@ async def resync_skill_tools(request: Request, user=Depends(get_admin_user)):
 
 
 @router.get("/{pack_id}")
-async def get_skill_pack(pack_id: str, user=Depends(get_verified_user)):
-    pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "read")
-    return pack_to_response(pack)
+async def get_skill_pack(
+    pack_id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack or not is_visible(organization_id, RESOURCE_SKILL, pack):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return respond_pack(pack, organization_id)
 
 
 @router.get("/{pack_id}/skills")
-async def get_skill_pack_skills(pack_id: str, user=Depends(get_verified_user)):
-    pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "read")
-    data = pack_to_response(pack)
+async def get_skill_pack_skills(
+    pack_id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = _require_pack_access(
+        user, SkillPacks.get_by_id(pack_id), "read", organization_id
+    )
+    data = respond_pack(pack, organization_id)
     return {
         "id": pack.id,
         "git_url": pack.git_url,
@@ -144,10 +163,13 @@ async def install_skills(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    _require_skills_workspace(request, user)
-    visibility = "private"
-    if not is_personal_org(organization_id) and is_org_admin(organization_id, user.id):
-        visibility = "organization"
+    try:
+        org_id, visibility = stamp_create(user, organization_id, RESOURCE_SKILL)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
     try:
         pack = await run_in_threadpool(
             install_skill_pack,
@@ -155,10 +177,13 @@ async def install_skills(
             form_data.git_url,
             form_data.ref or "main",
             request.app.state.TOOLS,
-            organization_id=organization_id,
+            organization_id=org_id,
             visibility=visibility,
+            enabled_by_default=form_data.enabled_by_default
+            if visibility == "public"
+            else True,
         )
-        return pack_to_response(pack)
+        return respond_pack(pack, organization_id)
     except Exception as e:
         _raise_install_error(e)
 
@@ -169,6 +194,7 @@ async def update_skills(
     pack_id: str,
     form_data: Optional[SkillPackUpdateForm] = None,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     _require_skills_workspace(request, user)
     pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
@@ -180,38 +206,76 @@ async def update_skills(
             request.app.state.TOOLS,
             form_data.ref,
         )
-        return pack_to_response(pack)
+        return respond_pack(pack, organization_id)
     except Exception as e:
         _raise_install_error(e)
 
 
-@router.post("/{pack_id}/access")
-async def update_skill_pack_access(
-    request: Request,
+@router.post("/{pack_id}/enabled")
+async def set_skill_pack_enabled(
     pack_id: str,
-    form_data: SkillPackAccessForm,
+    form_data: CatalogEnabledForm,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
-    _require_skills_workspace(request, user)
-    pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
-    if not can_update_access_control(
-        user.id,
-        user.role,
-        pack.user_id,
-        pack.access_control,
-        form_data.access_control,
-        SHARING_PERMISSION_KEY,
-        request.app.state.config.USER_PERMISSIONS,
-    ):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if getattr(pack, "visibility", None) != "public":
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    try:
-        pack = set_pack_access_control(pack.id, form_data.access_control)
-        return pack_to_response(pack)
-    except SkillInstallError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not can_toggle(user, organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    OrgCatalogOverrides.set(organization_id, RESOURCE_SKILL, pack_id, form_data.enabled)
+    return respond_pack(pack, organization_id)
+
+
+@router.post("/{pack_id}/enabled-by-default")
+async def set_skill_pack_enabled_by_default(
+    pack_id: str,
+    form_data: CatalogEnabledForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack or not can_write_item(user, organization_id, pack):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    pack = SkillPacks.set_enabled_by_default(pack_id, form_data.enabled)
+    if not pack:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Error updating skill pack"),
+        )
+    return respond_pack(pack, organization_id)
+
+
+@router.post("/{pack_id}/toggle")
+async def toggle_skill_pack_active(
+    pack_id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack or not can_write_item(user, organization_id, pack):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    pack = SkillPacks.toggle_active(pack_id)
+    if not pack:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Error updating skill pack"),
+        )
+    return respond_pack(pack, organization_id)
 
 
 @router.post("/{pack_id}/skills/{tool_id}/enabled")
@@ -221,12 +285,94 @@ async def update_skill_enabled(
     tool_id: str,
     form_data: SkillPackSkillEnabledForm,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
-    _require_skills_workspace(request, user)
-    pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    skill = next(
+        (
+            s
+            for s in ((pack.meta or {}).get("skills") or [])
+            if isinstance(s, dict) and s.get("tool_id") == tool_id
+        ),
+        None,
+    )
+    if not skill:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Skill tool {tool_id} not found in pack",
+        )
+    if is_public_item(pack):
+        if not can_toggle(user, organization_id):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ERROR_MESSAGES.UNAUTHORIZED,
+            )
+        OrgCatalogOverrides.set(
+            organization_id, RESOURCE_SKILL_ITEM, tool_id, form_data.enabled
+        )
+        return respond_pack(pack, organization_id)
+    _require_pack_access(user, pack, "write", organization_id)
     try:
         pack = set_skill_enabled(pack.id, tool_id, form_data.enabled)
-        return pack_to_response(pack)
+        return respond_pack(pack, organization_id)
+    except SkillInstallError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{pack_id}/skills/{tool_id}/enabled-by-default")
+async def set_skill_enabled_by_default(
+    pack_id: str,
+    tool_id: str,
+    form_data: SkillPackSkillEnabledForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack or not can_write_item(user, organization_id, pack):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    try:
+        pack = set_skill_enabled(pack.id, tool_id, form_data.enabled)
+        return respond_pack(pack, organization_id)
+    except SkillInstallError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{pack_id}/skills/{tool_id}/toggle")
+async def toggle_skill_active(
+    pack_id: str,
+    tool_id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    pack = SkillPacks.get_by_id(pack_id)
+    if not pack or not can_write_item(user, organization_id, pack):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    skill = next(
+        (
+            s
+            for s in ((pack.meta or {}).get("skills") or [])
+            if isinstance(s, dict) and s.get("tool_id") == tool_id
+        ),
+        None,
+    )
+    if not skill:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Skill tool {tool_id} not found in pack",
+        )
+    try:
+        pack = set_skill_active(
+            pack.id, tool_id, not bool(skill.get("is_active", True))
+        )
+        return respond_pack(pack, organization_id)
     except SkillInstallError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -240,6 +386,12 @@ async def remove_skill_pack(
     _require_skills_workspace(request, user)
     pack = _require_pack_access(user, SkillPacks.get_by_id(pack_id), "write")
     try:
+        for skill in (pack.meta or {}).get("skills") or []:
+            if isinstance(skill, dict) and skill.get("tool_id"):
+                OrgCatalogOverrides.delete_for_resource(
+                    RESOURCE_SKILL_ITEM, skill["tool_id"]
+                )
+        OrgCatalogOverrides.delete_for_resource(RESOURCE_SKILL, pack.id)
         await run_in_threadpool(delete_skill_pack, pack.id, request.app.state.TOOLS)
         return {"success": True}
     except Exception as e:

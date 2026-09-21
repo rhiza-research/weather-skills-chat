@@ -68,13 +68,33 @@ def get_async_tool_function_and_apply_extra_params(
         return new_function
 
 
-def accessible_skill_records(user: UserModel) -> list[dict]:
-    """Skill tools the user can read, for version-preference substitution."""
+def accessible_skill_records(
+    user: UserModel, organization_id: Optional[str] = None
+) -> list[dict]:
+    """Skill tools the user can use, for version-preference substitution."""
+    from open_webui.models.organizations import Organizations
+    from open_webui.models.skill_packs import SkillPacks
+    from open_webui.utils.catalog import skill_is_usable
+
+    org_ids = (
+        [organization_id]
+        if organization_id
+        else Organizations.user_organization_ids(user.id)
+    )
+    visible_tool_ids = set()
+    for pack in SkillPacks.get_all():
+        for oid in org_ids:
+            if not oid:
+                continue
+            for skill in (pack.meta or {}).get("skills") or []:
+                if not isinstance(skill, dict) or not skill.get("tool_id"):
+                    continue
+                if skill_is_usable(oid, pack, skill):
+                    visible_tool_ids.add(skill["tool_id"])
+
     records = []
     for tool in Tools.get_tools():
-        if not user_owns_or_has_access(
-            user.id, tool.user_id, tool.access_control, "read", user.role
-        ):
+        if tool.id not in visible_tool_ids:
             continue
         manifest = (tool.meta.manifest if tool.meta else None) or {}
         if manifest.get("kind") != "skill":
@@ -87,7 +107,7 @@ def accessible_skill_records(user: UserModel) -> list[dict]:
                 "id": tool.id,
                 "skill_name": name,
                 "version": manifest.get("version"),
-                "enabled": manifest.get("enabled", True) is not False,
+                "enabled": True,
             }
         )
     return records
@@ -97,12 +117,22 @@ def get_tools(
     request: Request, tool_ids: list[str], user: UserModel, extra_params: dict
 ) -> dict[str, dict]:
     tools_dict = {}
-    tool_ids = resolve_tool_ids_by_skill_version(
-        list(tool_ids), accessible_skill_records(user)
-    )
+    org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
+    skill_records = accessible_skill_records(user, org_id)
+    usable_skill_ids = {record["id"] for record in skill_records}
+    tool_ids = resolve_tool_ids_by_skill_version(list(tool_ids), skill_records)
 
     for tool_id in tool_ids:
         tool = Tools.get_tool_by_id(tool_id)
+        if tool is not None:
+            meta = getattr(tool, "meta", None)
+            manifest = (getattr(meta, "manifest", None) if meta else None) or {}
+            if (
+                isinstance(manifest, dict)
+                and manifest.get("kind") == "skill"
+                and tool_id not in usable_skill_ids
+            ):
+                continue
         if tool is None:
             if tool_id.startswith("server:"):
                 server_idx = int(tool_id.split(":")[1])

@@ -389,15 +389,18 @@ async def get_all_models(request: Request, user: UserModel = None):
 
 
 async def get_filtered_models(models, user):
-    # Filter models based on user access control
+    from open_webui.models.org_catalog import RESOURCE_MODEL
+    from open_webui.models.organizations import Organizations
+    from open_webui.utils.catalog import is_catalog_chat_model, is_usable
+
+    org_ids = Organizations.user_organization_ids(user.id)
     filtered_models = []
     for model in models.get("models", []):
         model_info = Models.get_model_by_id(model["model"])
-        if model_info:
-            if user.id == model_info.user_id or has_access(
-                user.id, type="read", access_control=model_info.access_control
-            ):
-                filtered_models.append(model)
+        if not is_catalog_chat_model(model_info):
+            continue
+        if any(is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids):
+            filtered_models.append(model)
     return filtered_models
 
 

@@ -19,5 +19,5 @@
 </script>
 
 {#if $models !== null}
-	<Models />
+	<Models catalog="org" />
 {/if}

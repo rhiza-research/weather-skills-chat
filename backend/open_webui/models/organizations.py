@@ -19,6 +19,7 @@ ORG_ROLES = ("owner", "admin", "user")
 ROLE_RANK = {"user": 1, "admin": 2, "owner": 3}
 VISIBILITY_PRIVATE = "private"
 VISIBILITY_ORGANIZATION = "organization"
+VISIBILITY_PUBLIC = "public"
 
 
 class Organization(Base):
@@ -33,6 +34,9 @@ class Organization(Base):
     updated_at = Column(BigInteger)
     default_models = Column(Text, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
+    can_add_models = Column(Boolean, nullable=False, default=False)
+    can_add_skills = Column(Boolean, nullable=False, default=False)
+    can_add_knowledge = Column(Boolean, nullable=False, default=False)
 
 
 class OrganizationMember(Base):
@@ -70,6 +74,9 @@ class OrganizationModel(BaseModel):
     members: Optional[list[OrganizationMemberModel]] = None
     default_models: Optional[str] = None
     active: bool = True
+    can_add_models: bool = False
+    can_add_skills: bool = False
+    can_add_knowledge: bool = False
 
 
 class OrganizationForm(BaseModel):
@@ -90,6 +97,9 @@ class OrganizationUpdateForm(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     default_models: Optional[str] = None
+    can_add_models: Optional[bool] = None
+    can_add_skills: Optional[bool] = None
+    can_add_knowledge: Optional[bool] = None
 
 
 class OrganizationMemberAddForm(BaseModel):
@@ -423,6 +433,8 @@ class OrganizationTable:
         from open_webui.models.chats import Chat
         from open_webui.models.folders import Folder
         from open_webui.models.knowledge import Knowledge
+        from open_webui.models.models import Model
+        from open_webui.models.org_catalog import OrgCatalogOverride
         from open_webui.models.secrets import Secret
         from open_webui.models.skill_packs import SkillPack
 
@@ -452,6 +464,8 @@ class OrganizationTable:
             db.query(SkillPack).filter_by(organization_id=organization_id).delete()
             db.query(Knowledge).filter_by(organization_id=organization_id).delete()
             db.query(Automation).filter_by(organization_id=organization_id).delete()
+            db.query(Model).filter_by(organization_id=organization_id).delete()
+            db.query(OrgCatalogOverride).filter_by(organization_id=organization_id).delete()
             db.commit()
 
     def delete_personal_org(self, user_id: str) -> bool:

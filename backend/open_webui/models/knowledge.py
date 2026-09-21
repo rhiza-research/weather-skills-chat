@@ -12,7 +12,7 @@ from open_webui.models.users import Users, UserResponse
 
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, String, Text, JSON
+from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON
 
 from open_webui.utils.access_control import has_access
 
@@ -38,25 +38,11 @@ class Knowledge(Base):
     data = Column(JSON, nullable=True)
     meta = Column(JSON, nullable=True)
 
-    access_control = Column(JSON, nullable=True)  # Controls data access levels.
-    # Defines access control rules for this entry.
-    # - `None`: Public access, available to all users with the "user" role.
-    # - `{}`: Private access, restricted exclusively to the owner.
-    # - Custom permissions: Specific access control for reading and writing;
-    #   Can specify group or user-level restrictions:
-    #   {
-    #      "read": {
-    #          "group_ids": ["group_id1", "group_id2"],
-    #          "user_ids":  ["user_id1", "user_id2"]
-    #      },
-    #      "write": {
-    #          "group_ids": ["group_id1", "group_id2"],
-    #          "user_ids":  ["user_id1", "user_id2"]
-    #      }
-    #   }
+    access_control = Column(JSON, nullable=True)
 
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
+    enabled_by_default = Column(Boolean, nullable=False, default=True)
 
 
 class KnowledgeModel(BaseModel):
@@ -74,6 +60,8 @@ class KnowledgeModel(BaseModel):
     meta: Optional[dict] = None
 
     access_control: Optional[dict] = None
+    enabled_by_default: bool = True
+    enabled: Optional[bool] = None
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -103,6 +91,7 @@ class KnowledgeForm(BaseModel):
     access_control: Optional[dict] = None
     organization_id: Optional[str] = None
     visibility: Optional[str] = None
+    enabled_by_default: Optional[bool] = None
 
 
 class KnowledgeTable:
@@ -116,14 +105,19 @@ class KnowledgeTable:
                     "id": str(uuid.uuid4()),
                     "user_id": user_id,
                     "organization_id": form_data.organization_id or user_id,
-                    "visibility": form_data.visibility or "private",
+                    "visibility": form_data.visibility or "organization",
+                    "enabled_by_default": form_data.enabled_by_default
+                    if form_data.enabled_by_default is not None
+                    else True,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
             )
 
             try:
-                result = Knowledge(**knowledge.model_dump())
+                result = Knowledge(
+                    **knowledge.model_dump(exclude={"enabled", "user"})
+                )
                 db.add(result)
                 db.commit()
                 db.refresh(result)

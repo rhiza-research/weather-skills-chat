@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, getContext, tick } from 'svelte';
-	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
-	import { models, knowledge as knowledgeCollections, user } from '$lib/stores';
+	import { models, knowledge as knowledgeCollections } from '$lib/stores';
 
 	import AdvancedParams from '$lib/components/chat/Settings/Advanced/AdvancedParams.svelte';
 	import Tags from '$lib/components/common/Tags.svelte';
@@ -9,8 +8,9 @@
 	import Capabilities from '$lib/components/workspace/Models/Capabilities.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import { getKnowledgeBases } from '$lib/apis/knowledge';
-	import AccessControl from '../common/AccessControl.svelte';
+	import { getModels } from '$lib/apis';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
 	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
@@ -20,11 +20,14 @@
 
 	export let model = null;
 	export let edit = false;
+	export let catalog: 'public' | 'org' = 'org';
 
 	export let preset = true;
 
 	let loading = false;
 	let success = false;
+	let baseModels = [];
+	let enabledByDefault = true;
 
 	let filesInputElement;
 	let inputFiles;
@@ -81,8 +84,6 @@
 	let filterIds = [];
 	let actionIds = [];
 
-	let accessControl = {};
-
 	const addUsage = (base_model_id) => {
 		const baseModel = ($models ?? []).find((m) => m.id === base_model_id);
 
@@ -101,6 +102,7 @@
 
 		info.id = id;
 		info.name = name;
+		info.enabled_by_default = catalog === 'public' ? enabledByDefault : true;
 
 		if (id === '') {
 			toast.error('Model ID is required.');
@@ -119,7 +121,6 @@
 			};
 		}
 
-		info.access_control = accessControl;
 		info.meta.capabilities = capabilities;
 
 		if (enableDescription) {
@@ -185,6 +186,14 @@
 				await knowledgeCollections.set(kbList);
 				if (!active) return;
 
+				try {
+					const baseRes = await getModels(localStorage.token, null, true);
+					baseModels = baseRes ?? [];
+				} catch (error) {
+					console.error(error);
+					baseModels = [];
+				}
+
 				// Scroll to top 'workspace-container' element
 				const workspaceContainer = document.getElementById('workspace-container');
 				if (workspaceContainer) {
@@ -209,14 +218,12 @@
 				enableDescription = model?.meta?.description !== null;
 
 				if (model.base_model_id) {
-					const base_model = ($models ?? [])
-						.filter((m) => !m?.preset && !(m?.arena ?? false))
-						.find((m) => [model.base_model_id, `${model.base_model_id}:latest`].includes(m.id));
+					const base_model = (baseModels.length ? baseModels : ($models ?? [])).find((m) =>
+						[model.base_model_id, `${model.base_model_id}:latest`].includes(m.id)
+					);
 
 					if (base_model) {
 						model.base_model_id = base_model.id;
-					} else {
-						model.base_model_id = null;
 					}
 				}
 
@@ -249,7 +256,7 @@
 				});
 				capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
 
-				accessControl = 'access_control' in model ? model.access_control : {};
+				enabledByDefault = model?.enabled_by_default !== false;
 
 				info = {
 					...info,
@@ -480,7 +487,7 @@
 									<option value={null} class=" text-gray-900"
 										>{$i18n.t('Select a base model')}</option
 									>
-									{#each ($models ?? []).filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
+									{#each (baseModels.length ? baseModels : ($models ?? [])).filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
 										<option value={baseModelOption.id} class=" text-gray-900"
 											>{baseModelOption.name}</option
 										>
@@ -538,20 +545,14 @@
 						</div>
 					</div>
 
-					<div class="my-2">
-						<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg">
-							<AccessControl
-								bind:accessControl
-								accessRoles={['read', 'write']}
-								allowPublic={userCanSetSharingAccess(
-									$user,
-									edit ? (info.user_id ?? $user?.id) : $user?.id,
-									accessControl,
-									'public_models'
-								)}
-							/>
+					{#if catalog === 'public'}
+						<div class="my-2">
+							<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg flex items-center justify-between">
+								<div class="text-sm font-medium">{$i18n.t('Enabled by default')}</div>
+								<Switch bind:state={enabledByDefault} />
+							</div>
 						</div>
-					</div>
+					{/if}
 
 					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
 

@@ -2,21 +2,19 @@
 	import { marked } from 'marked';
 
 	import { toast } from 'svelte-sonner';
-	import Sortable from 'sortablejs';
-
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { onMount, getContext, tick } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	const i18n = getContext('i18n');
 
 	import {
 		WEBUI_NAME,
 		config,
-		mobile,
 		models as _models,
 		organizations,
+		activeOrganizationId,
 		settings,
 		user
 	} from '$lib/stores';
@@ -25,6 +23,8 @@
 		deleteModelById,
 		getModelById,
 		getModels as getWorkspaceModels,
+		setModelEnabled,
+		setModelEnabledByDefault,
 		toggleModelById,
 		updateModelById
 	} from '$lib/apis/models';
@@ -42,7 +42,15 @@
 	import Switch from '../common/Switch.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import { capitalizeFirstLetter } from '$lib/utils';
-	import { userCanAccessResource } from '$lib/utils/accessControl';
+	import {
+		canAddKind,
+		canManageCatalogItem,
+		isCatalogEnabled,
+		isOrgAdminRole,
+		isPublicItem
+	} from '$lib/utils/catalog';
+
+	export let catalog: 'public' | 'org' = 'org';
 
 	let shiftKey = false;
 
@@ -57,7 +65,12 @@
 
 	let showModelDeleteConfirm = false;
 
-	$: organizationIds = ($organizations ?? []).map((org) => org.id);
+	$: basePath = catalog === 'public' ? '/admin' : '/workspace';
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: orgAdmin = catalog === 'public' || isOrgAdminRole(currentOrg);
+	$: canCreate = catalog === 'public' || (orgAdmin && canAddKind(currentOrg, 'models'));
+	$: showOrgSection = catalog === 'org' && canAddKind(currentOrg, 'models');
+	$: orgName = currentOrg?.name || $i18n.t('Organization');
 
 	$: if (models) {
 		filteredModels = models.filter(
@@ -65,7 +78,13 @@
 		);
 	}
 
+	$: publicModels = filteredModels.filter((m) => isPublicItem(m));
+	$: orgModels = filteredModels.filter((m) => !isPublicItem(m));
+	$: sectionModels = catalog === 'public' ? filteredModels : orgModels;
+
 	let searchValue = '';
+
+	const canManage = (model) => canManageCatalogItem(catalog, model, currentOrg);
 
 	const deleteModelHandler = async (model) => {
 		const res = await deleteModelById(localStorage.token, model.id).catch((e) => {
@@ -112,7 +131,7 @@
 			id: `${source.id}-clone`,
 			name: `${source.name} (Clone)`
 		});
-		goto('/workspace/models/create');
+		goto(`${basePath}/models/create`);
 	};
 
 	const shareModelHandler = async (model) => {
@@ -152,8 +171,6 @@
 			hidden: !(info?.meta?.hidden ?? false)
 		};
 
-		console.log(info);
-
 		const res = await updateModelById(localStorage.token, info.id, info);
 
 		if (res) {
@@ -186,6 +203,48 @@
 			type: 'application/json'
 		});
 		saveAs(blob, `${model.id}-${Date.now()}.json`);
+	};
+
+	const setEnabledHandler = async (model, enabled) => {
+		const previous = !!model.enabled;
+		model.enabled = enabled;
+		models = models;
+		const res = await setModelEnabled(localStorage.token, model.id, enabled).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		});
+		if (!res) {
+			model.enabled = previous;
+			models = models;
+			return;
+		}
+		await _models.set(
+			await getModels(
+				localStorage.token,
+				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+			)
+		);
+		models = await getWorkspaceModels(localStorage.token);
+	};
+
+	const setEnabledByDefaultHandler = async (model, enabledByDefault) => {
+		const previous = model.enabled_by_default !== false;
+		model.enabled_by_default = enabledByDefault;
+		models = models;
+		const res = await setModelEnabledByDefault(
+			localStorage.token,
+			model.id,
+			enabledByDefault
+		).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		});
+		if (!res) {
+			model.enabled_by_default = previous;
+			models = models;
+			return;
+		}
+		models = await getWorkspaceModels(localStorage.token);
 	};
 
 	onMount(async () => {
@@ -257,19 +316,141 @@
 				/>
 			</div>
 
-			<div>
-				<a
-					class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
-					href="/workspace/models/create"
-				>
-					<Plus className="size-3.5" />
-				</a>
-			</div>
+			{#if canCreate}
+				<div>
+					<a
+						class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+						href={`${basePath}/models/create`}
+					>
+						<Plus className="size-3.5" />
+					</a>
+				</div>
+			{/if}
 		</div>
 	</div>
 
+	{#if catalog === 'org'}
+		<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			{$i18n.t('Models from catalog')}
+		</div>
+		{#if publicModels.length === 0}
+			<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+		{/if}
+		<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3">
+			{#each publicModels as model}
+				{@const manage = canManage(model)}
+				{@const usable = isCatalogEnabled(model)}
+				<div
+					class=" flex flex-col w-full px-3 py-2 rounded-xl transition {usable
+						? 'cursor-pointer dark:hover:bg-white/5 hover:bg-black/5'
+						: 'cursor-default'}"
+					id="model-item-{model.id}"
+				>
+					<div class="flex gap-4 mt-0.5 mb-0.5">
+						<div class=" w-[44px]">
+							<div class=" rounded-full object-cover {usable ? '' : 'opacity-50'} ">
+								<img
+									src={model?.meta?.profile_image_url ?? '/static/favicon.png'}
+									alt="modelfile profile"
+									class=" rounded-full w-full h-auto object-cover"
+								/>
+							</div>
+						</div>
+
+						<svelte:element
+							this={usable ? 'a' : 'div'}
+							class=" flex flex-1 w-full {usable ? 'cursor-pointer' : 'cursor-default'}"
+							href={usable ? `/?models=${encodeURIComponent(model.id)}` : undefined}
+						>
+							<div class=" flex-1 self-center {usable ? '' : 'text-gray-500'}">
+								<Tooltip
+									content={marked.parse(model?.meta?.description ?? model.id)}
+									className=" w-fit"
+									placement="top-start"
+								>
+									<div class=" font-semibold line-clamp-1">{model.name}</div>
+								</Tooltip>
+								<div class="flex gap-1 text-xs overflow-hidden">
+									<div class="line-clamp-1">
+										{#if (model?.meta?.description ?? '').trim()}
+											{model?.meta?.description}
+										{:else}
+											{model.id}
+										{/if}
+									</div>
+								</div>
+							</div>
+						</svelte:element>
+					</div>
+
+					<div class="flex justify-end items-center -mb-0.5 px-0.5">
+						<div class="flex flex-row gap-0.5 items-center">
+							{#if canCreate}
+								<ModelMenu
+									user={$user}
+									{model}
+									shareHandler={() => {
+										shareModelHandler(model);
+									}}
+									cloneHandler={() => {
+										cloneModelHandler(model);
+									}}
+									exportHandler={() => {
+										exportModelHandler(model);
+									}}
+									hideHandler={() => {
+										hideModelHandler(model);
+									}}
+									deleteHandler={() => {}}
+									onClose={() => {}}
+								>
+									<button
+										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										type="button"
+									>
+										<EllipsisHorizontal className="size-5" />
+									</button>
+								</ModelMenu>
+							{/if}
+
+							<div class="ml-1">
+								<Tooltip content={model.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
+									{#if orgAdmin}
+										<Switch
+											state={!!model.enabled}
+											on:change={async (e) => {
+												const next = !!e.detail;
+												if (next === !!model.enabled) return;
+												await setEnabledHandler(model, next);
+											}}
+										/>
+									{:else}
+										<span class="text-xs text-gray-500"
+											>{model.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
+										>
+									{/if}
+								</Tooltip>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+
+		{#if showOrgSection}
+			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+				{$i18n.t('{{name}} Models', { name: orgName })}
+			</div>
+			{#if sectionModels.length === 0}
+				<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+			{/if}
+		{/if}
+	{/if}
+
+	{#if catalog === 'public' || showOrgSection}
 	<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3" id="model-list">
-		{#each filteredModels as model}
+		{#each sectionModels as model}
+			{@const manage = canManage(model)}
 			<div
 				class=" flex flex-col cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-xl transition"
 				id="model-item-{model.id}"
@@ -315,25 +496,31 @@
 					</a>
 				</div>
 
-				<div class="flex justify-between items-center -mb-0.5 px-0.5">
-					<div class=" text-xs mt-0.5">
-						<Tooltip
-							content={model?.user?.email ?? $i18n.t('Deleted User')}
-							className="flex shrink-0"
-							placement="top-start"
-						>
-							<div class="shrink-0 text-gray-500">
-								{$i18n.t('By {{name}}', {
-									name: capitalizeFirstLetter(
-										model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
-									)
-								})}
-							</div>
-						</Tooltip>
-					</div>
+				<div
+					class="flex items-center -mb-0.5 px-0.5 {catalog === 'public'
+						? 'justify-between'
+						: 'justify-end'}"
+				>
+					{#if catalog === 'public'}
+						<div class=" text-xs mt-0.5">
+							<Tooltip
+								content={model?.user?.email ?? $i18n.t('Deleted User')}
+								className="flex shrink-0"
+								placement="top-start"
+							>
+								<div class="shrink-0 text-gray-500">
+									{$i18n.t('By {{name}}', {
+										name: capitalizeFirstLetter(
+											model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
+										)
+									})}
+								</div>
+							</Tooltip>
+						</div>
+					{/if}
 
 					<div class="flex flex-row gap-0.5 items-center">
-						{#if shiftKey}
+						{#if shiftKey && manage}
 							<Tooltip content={$i18n.t('Delete')}>
 								<button
 									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
@@ -346,11 +533,11 @@
 								</button>
 							</Tooltip>
 						{:else}
-							{#if userCanAccessResource($user, model.user_id, model.access_control, 'write', [], organizationIds)}
+							{#if manage}
 								<a
 									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 									type="button"
-									href={`/workspace/models/edit?id=${encodeURIComponent(model.id)}`}
+									href={`${basePath}/models/edit?id=${encodeURIComponent(model.id)}`}
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -369,60 +556,113 @@
 								</a>
 							{/if}
 
-							<ModelMenu
-								user={$user}
-								{model}
-								shareHandler={() => {
-									shareModelHandler(model);
-								}}
-								cloneHandler={() => {
-									cloneModelHandler(model);
-								}}
-								exportHandler={() => {
-									exportModelHandler(model);
-								}}
-								hideHandler={() => {
-									hideModelHandler(model);
-								}}
-								deleteHandler={() => {
-									selectedModel = model;
-									showModelDeleteConfirm = true;
-								}}
-								onClose={() => {}}
-							>
-								<button
-									class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-									type="button"
+							{#if manage || canCreate}
+								<ModelMenu
+									user={$user}
+									{model}
+									shareHandler={() => {
+										shareModelHandler(model);
+									}}
+									cloneHandler={() => {
+										cloneModelHandler(model);
+									}}
+									exportHandler={() => {
+										exportModelHandler(model);
+									}}
+									hideHandler={() => {
+										hideModelHandler(model);
+									}}
+									deleteHandler={() => {
+										selectedModel = model;
+										showModelDeleteConfirm = true;
+									}}
+									onClose={() => {}}
 								>
-									<EllipsisHorizontal className="size-5" />
-								</button>
-							</ModelMenu>
+									<button
+										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										type="button"
+									>
+										<EllipsisHorizontal className="size-5" />
+									</button>
+								</ModelMenu>
+							{/if}
 
-							<div class="ml-1">
-								<Tooltip content={model.is_active ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
-									<Switch
-										bind:state={model.is_active}
-										on:change={async (e) => {
-											toggleModelById(localStorage.token, model.id);
-											_models.set(
-												await getModels(
-													localStorage.token,
-													$config?.features?.enable_direct_connections &&
-														($settings?.directConnections ?? null)
-												)
-											);
-										}}
-									/>
-								</Tooltip>
-							</div>
+							{#if manage}
+								<div class="ml-1 flex items-center gap-2">
+									{#if catalog === 'public'}
+										<Tooltip content={$i18n.t('Enabled by default')}>
+											<div class="flex items-center gap-1">
+												<span
+													class="text-[10px] leading-none text-gray-500 max-w-[4.5rem] text-right {!model.is_active
+														? 'opacity-40'
+														: ''}"
+													>{$i18n.t('Enabled by default')}</span
+												>
+												<Switch
+													state={model.enabled_by_default !== false}
+													disabled={!model.is_active}
+													on:change={async (e) => {
+														if (!model.is_active) return;
+														const next = !!e.detail;
+														if (next === (model.enabled_by_default !== false)) return;
+														await setEnabledByDefaultHandler(model, next);
+													}}
+												/>
+											</div>
+										</Tooltip>
+										<Tooltip
+											content={model.is_active
+												? $i18n.t('In catalog')
+												: $i18n.t('Not in catalog')}
+										>
+											<div class="flex items-center gap-1">
+												<span class="text-[10px] leading-none text-gray-500"
+													>{$i18n.t('In catalog')}</span
+												>
+												<Switch
+													bind:state={model.is_active}
+													on:change={async () => {
+														await toggleModelById(localStorage.token, model.id);
+														models = await getWorkspaceModels(localStorage.token);
+														_models.set(
+															await getModels(
+																localStorage.token,
+																$config?.features?.enable_direct_connections &&
+																	($settings?.directConnections ?? null)
+															)
+														);
+													}}
+												/>
+											</div>
+										</Tooltip>
+									{:else}
+										<Tooltip content={model.is_active ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
+											<Switch
+												bind:state={model.is_active}
+												on:change={async (e) => {
+													toggleModelById(localStorage.token, model.id);
+													_models.set(
+														await getModels(
+															localStorage.token,
+															$config?.features?.enable_direct_connections &&
+																($settings?.directConnections ?? null)
+														)
+													);
+												}}
+											/>
+										</Tooltip>
+									{/if}
+								</div>
+							{/if}
 						{/if}
 					</div>
 				</div>
 			</div>
 		{/each}
 	</div>
+	{/if}
 
-	{#if $user?.role === 'admin'}
+	{#if catalog === 'public'}
 		<div class=" flex justify-end w-full mb-3">
 			<div class="flex space-x-1">
 				<input
@@ -433,29 +673,24 @@
 					accept=".json"
 					hidden
 					on:change={() => {
-						console.log(importFiles);
-
 						let reader = new FileReader();
 						reader.onload = async (event) => {
 							let savedModels = JSON.parse(event.target.result);
-							console.log(savedModels);
 
 							for (const model of savedModels) {
 								if (model?.info ?? false) {
 									if ($_models.find((m) => m.id === model.id)) {
-										await updateModelById(localStorage.token, model.id, model.info).catch(
-											(error) => {
-												return null;
-											}
-										);
+										await updateModelById(localStorage.token, model.id, model.info).catch(() => {
+											return null;
+										});
 									} else {
-										await createNewModel(localStorage.token, model.info).catch((error) => {
+										await createNewModel(localStorage.token, model.info).catch(() => {
 											return null;
 										});
 									}
 								} else {
 									if (model?.id && model?.name) {
-										await createNewModel(localStorage.token, model).catch((error) => {
+										await createNewModel(localStorage.token, model).catch(() => {
 											return null;
 										});
 									}
@@ -483,21 +718,6 @@
 					}}
 				>
 					<div class=" self-center mr-2 font-medium line-clamp-1">{$i18n.t('Import Models')}</div>
-
-					<div class=" self-center">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 16 16"
-							fill="currentColor"
-							class="w-3.5 h-3.5"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 9.5a.75.75 0 0 1-.75-.75V8.06l-.72.72a.75.75 0 0 1-1.06-1.06l2-2a.75.75 0 0 1 1.06 0l2 2a.75.75 0 1 1-1.06 1.06l-.72-.72v2.69a.75.75 0 0 1-.75.75Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-					</div>
 				</button>
 
 				{#if models.length}
@@ -510,28 +730,13 @@
 						<div class=" self-center mr-2 font-medium line-clamp-1">
 							{$i18n.t('Export Models')}
 						</div>
-
-						<div class=" self-center">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 16 16"
-								fill="currentColor"
-								class="w-3.5 h-3.5"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm4 3.5a.75.75 0 0 1 .75.75v2.69l.72-.72a.75.75 0 1 1 1.06 1.06l-2 2a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 0 1 1.06-1.06l.72.72V6.25A.75.75 0 0 1 8 5.5Z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-						</div>
 					</button>
 				{/if}
 			</div>
 		</div>
 	{/if}
 
-	{#if $config?.features.enable_community_sharing}
+	{#if $config?.features.enable_community_sharing && catalog === 'public'}
 		<div class=" my-16">
 			<div class=" text-xl font-medium mb-1 line-clamp-1">
 				{$i18n.t('Made by Open WebUI Community')}
@@ -550,9 +755,7 @@
 				</div>
 
 				<div>
-					<div>
-						<ChevronRight />
-					</div>
+					<ChevronRight />
 				</div>
 			</a>
 		</div>

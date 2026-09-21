@@ -6,7 +6,8 @@ export const createNewKnowledge = async (
 	token: string,
 	name: string,
 	description: string,
-	accessControl: null | object
+	accessControl: null | object,
+	enabledByDefault: boolean = true
 ) => {
 	let error = null;
 
@@ -21,7 +22,8 @@ export const createNewKnowledge = async (
 		body: JSON.stringify({
 			name: name,
 			description: description,
-			access_control: accessControl
+			access_control: accessControl,
+			enabled_by_default: enabledByDefault
 		})
 	})
 		.then(async (res) => {
@@ -143,6 +145,7 @@ type KnowledgeUpdateForm = {
 	description?: string;
 	data?: object;
 	access_control?: null | object;
+	enabled_by_default?: boolean;
 };
 
 export const updateKnowledgeById = async (token: string, id: string, form: KnowledgeUpdateForm) => {
@@ -160,7 +163,8 @@ export const updateKnowledgeById = async (token: string, id: string, form: Knowl
 			name: form?.name ? form.name : undefined,
 			description: form?.description ? form.description : undefined,
 			data: form?.data ? form.data : undefined,
-			access_control: form.access_control
+			access_control: form.access_control,
+			enabled_by_default: form.enabled_by_default
 		})
 	})
 		.then(async (res) => {
@@ -173,6 +177,36 @@ export const updateKnowledgeById = async (token: string, id: string, form: Knowl
 		.catch((err) => {
 			error = err.detail;
 
+			console.log(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const setKnowledgeEnabled = async (token: string, id: string, enabled: boolean) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/knowledge/${id}/enabled`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
+		},
+		body: JSON.stringify({ enabled })
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail;
 			console.log(err);
 			return null;
 		});

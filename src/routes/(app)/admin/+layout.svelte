@@ -1,20 +1,37 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
 	import { WEBUI_NAME, showSidebar, user } from '$lib/stores';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { page } from '$app/stores';
+	import { catalogOrganizationId, PLATFORM_ORG_ID } from '$lib/apis/organizations';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
+
+	$: if (loaded) {
+		if (
+			$page.url.pathname.startsWith('/admin/models') ||
+			$page.url.pathname.startsWith('/admin/skills') ||
+			$page.url.pathname.startsWith('/admin/knowledge')
+		) {
+			catalogOrganizationId.set(PLATFORM_ORG_ID);
+		} else {
+			catalogOrganizationId.set(null);
+		}
+	}
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
 			await goto('/');
 		}
 		loaded = true;
+	});
+
+	onDestroy(() => {
+		catalogOrganizationId.set(null);
 	});
 
 	$: if (loaded && $user && $user.role !== 'admin') {
@@ -70,7 +87,7 @@
 							)
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							href="/admin/membership">{$i18n.t('Organization membership')}</a
+							href="/admin/membership">{$i18n.t('Platform organization membership')}</a
 						>
 
 						<a
@@ -78,6 +95,27 @@
 								? ''
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
 							href="/admin/settings">{$i18n.t('Admin settings')}</a
+						>
+
+						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/models')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/admin/models">{$i18n.t('Model catalog')}</a
+						>
+
+						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/skills')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/admin/skills">{$i18n.t('Skill catalog')}</a
+						>
+
+						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/knowledge')
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/admin/knowledge">{$i18n.t('Knowledge catalog')}</a
 						>
 					</div>
 				</div>

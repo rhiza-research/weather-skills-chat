@@ -97,6 +97,10 @@ class Model(Base):
 
     is_active = Column(Boolean, default=True)
 
+    organization_id = Column(Text, nullable=False)
+    visibility = Column(Text, nullable=False, default="organization")
+    enabled_by_default = Column(Boolean, nullable=False, default=True)
+
     updated_at = Column(BigInteger)
     created_at = Column(BigInteger)
 
@@ -113,6 +117,10 @@ class ModelModel(BaseModel):
     access_control: Optional[dict] = None
 
     is_active: bool
+    organization_id: Optional[str] = None
+    visibility: str = "organization"
+    enabled_by_default: bool = True
+    enabled: Optional[bool] = None
     updated_at: int  # timestamp in epoch
     created_at: int  # timestamp in epoch
 
@@ -140,6 +148,9 @@ class ModelForm(BaseModel):
     params: ModelParams
     access_control: Optional[dict] = None
     is_active: bool = True
+    enabled_by_default: bool = True
+    organization_id: Optional[str] = None
+    visibility: Optional[str] = None
 
 
 class ModelsTable:
@@ -148,7 +159,7 @@ class ModelsTable:
     ) -> Optional[ModelModel]:
         model = ModelModel(
             **{
-                **form_data.model_dump(),
+                **form_data.model_dump(exclude={"enabled"}),
                 "user_id": user_id,
                 "created_at": int(time.time()),
                 "updated_at": int(time.time()),
@@ -156,7 +167,11 @@ class ModelsTable:
         )
         try:
             with get_db() as db:
-                result = Model(**model.model_dump())
+                result = Model(
+                    **{
+                        **model.model_dump(exclude={"enabled", "user"}),
+                    }
+                )
                 db.add(result)
                 db.commit()
                 db.refresh(result)
@@ -231,6 +246,22 @@ class ModelsTable:
             except Exception:
                 return None
 
+    def set_enabled_by_default(
+        self, id: str, enabled_by_default: bool
+    ) -> Optional[ModelModel]:
+        with get_db() as db:
+            try:
+                db.query(Model).filter_by(id=id).update(
+                    {
+                        "enabled_by_default": bool(enabled_by_default),
+                        "updated_at": int(time.time()),
+                    }
+                )
+                db.commit()
+                return self.get_model_by_id(id)
+            except Exception:
+                return None
+
     def update_model_by_id(self, id: str, model: ModelForm) -> Optional[ModelModel]:
         try:
             with get_db() as db:
@@ -238,7 +269,7 @@ class ModelsTable:
                 result = (
                     db.query(Model)
                     .filter_by(id=id)
-                    .update(model.model_dump(exclude={"id"}))
+                    .update(model.model_dump(exclude={"id", "enabled", "user"}))
                 )
                 db.commit()
 

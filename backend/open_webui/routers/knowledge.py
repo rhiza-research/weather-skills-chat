@@ -26,12 +26,26 @@ from open_webui.utils.access_control import (
     has_permission,
     user_owns_or_has_access,
 )
+from open_webui.utils.catalog import (
+    annotate,
+    can_toggle,
+    can_write_item,
+    is_visible,
+    stamp_create,
+)
+from open_webui.models.org_catalog import (
+    RESOURCE_KNOWLEDGE,
+    CatalogEnabledForm,
+    OrgCatalogOverrides,
+)
+from open_webui.models.organizations import Organizations
 from open_webui.utils.organizations import (
     can_read_org_resource,
     can_write_org_resource,
     get_active_organization_id,
     is_org_admin,
     is_personal_org,
+    is_platform_admin,
 )
 
 
@@ -47,20 +61,22 @@ router = APIRouter()
 SHARING_PERMISSION_KEY = "sharing.public_knowledge"
 
 
-def _can_read(user, knowledge) -> bool:
-    if can_read_org_resource(user, knowledge):
-        return True
-    return user_owns_or_has_access(
-        user.id, knowledge.user_id, knowledge.access_control, "read", user.role
-    )
+def _can_read(user, knowledge, organization_id: Optional[str] = None) -> bool:
+    if organization_id:
+        return is_visible(organization_id, RESOURCE_KNOWLEDGE, knowledge)
+    if getattr(knowledge, "visibility", None) == "public":
+        for oid in Organizations.user_organization_ids(user.id):
+            if is_visible(oid, RESOURCE_KNOWLEDGE, knowledge):
+                return True
+        return False
+    return is_visible(knowledge.organization_id, RESOURCE_KNOWLEDGE, knowledge)
 
 
-def _can_write(user, knowledge) -> bool:
-    if can_write_org_resource(user, knowledge):
-        return True
-    return user_owns_or_has_access(
-        user.id, knowledge.user_id, knowledge.access_control, "write", user.role
-    )
+def _can_write(user, knowledge, organization_id: Optional[str] = None) -> bool:
+    if getattr(knowledge, "visibility", None) == "public":
+        return is_platform_admin(user.id)
+    org_id = organization_id or getattr(knowledge, "organization_id", None)
+    return can_write_item(user, org_id, knowledge)
 
 
 ############################
@@ -76,7 +92,7 @@ async def get_knowledge(
     knowledge_bases = [
         kb
         for kb in Knowledges.get_knowledge_bases()
-        if kb.organization_id == organization_id and _can_read(user, kb)
+        if is_visible(organization_id, RESOURCE_KNOWLEDGE, kb)
     ]
 
     # Get files for each knowledge base
@@ -110,7 +126,7 @@ async def get_knowledge(
 
         knowledge_with_files.append(
             KnowledgeUserResponse(
-                **knowledge_base.model_dump(),
+                **annotate(knowledge_base, organization_id, RESOURCE_KNOWLEDGE),
                 files=files,
             )
         )
@@ -126,7 +142,7 @@ async def get_knowledge_list(
     knowledge_bases = [
         kb
         for kb in Knowledges.get_knowledge_bases()
-        if kb.organization_id == organization_id and _can_write(user, kb)
+        if is_visible(organization_id, RESOURCE_KNOWLEDGE, kb)
     ]
 
     # Get files for each knowledge base
@@ -160,7 +176,7 @@ async def get_knowledge_list(
 
         knowledge_with_files.append(
             KnowledgeUserResponse(
-                **knowledge_base.model_dump(),
+                **annotate(knowledge_base, organization_id, RESOURCE_KNOWLEDGE),
                 files=files,
             )
         )
@@ -179,21 +195,18 @@ async def create_new_knowledge(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    if user.role != "admin" and not has_permission(
-        user.id, "workspace.knowledge", request.app.state.config.USER_PERMISSIONS
-    ):
+    try:
+        org_id, visibility = stamp_create(user, organization_id, RESOURCE_KNOWLEDGE)
+    except PermissionError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    form_data.organization_id = form_data.organization_id or organization_id
-    if is_personal_org(form_data.organization_id) or not is_org_admin(
-        form_data.organization_id, user.id
-    ):
-        form_data.visibility = "private"
-    elif not form_data.visibility:
-        form_data.visibility = "organization"
+    form_data.organization_id = org_id
+    form_data.visibility = visibility
+    if visibility != "public":
+        form_data.enabled_by_default = True
 
     knowledge = Knowledges.insert_new_knowledge(user.id, form_data)
 
@@ -204,6 +217,37 @@ async def create_new_knowledge(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.FILE_EXISTS,
         )
+
+
+@router.post("/{id}/enabled", response_model=Optional[KnowledgeResponse])
+async def set_knowledge_enabled(
+    id: str,
+    form_data: CatalogEnabledForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    knowledge = Knowledges.get_knowledge_by_id(id=id)
+    if not knowledge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+    if getattr(knowledge, "visibility", None) != "public":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if not can_toggle(user, organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    OrgCatalogOverrides.set(
+        organization_id, RESOURCE_KNOWLEDGE, id, form_data.enabled
+    )
+    return KnowledgeResponse.model_validate(
+        annotate(knowledge, organization_id, RESOURCE_KNOWLEDGE)
+    )
 
 
 ############################
@@ -330,19 +374,13 @@ async def update_knowledge_by_id(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    if not can_update_access_control(
-        user.id,
-        user.role,
-        knowledge.user_id,
-        knowledge.access_control,
-        form_data.access_control,
-        SHARING_PERMISSION_KEY,
-        request.app.state.config.USER_PERMISSIONS,
+    form_data.organization_id = knowledge.organization_id
+    form_data.visibility = knowledge.visibility
+    if (
+        knowledge.visibility != "public"
+        or form_data.enabled_by_default is None
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+        form_data.enabled_by_default = knowledge.enabled_by_default
 
     knowledge = Knowledges.update_knowledge_by_id(id=id, form_data=form_data)
     if knowledge:
@@ -620,6 +658,8 @@ async def delete_knowledge_by_id(id: str, user=Depends(get_verified_user)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+
+    OrgCatalogOverrides.delete_for_resource(RESOURCE_KNOWLEDGE, id)
 
     log.info(f"Deleting knowledge base: {id} (name: {knowledge.name})")
 

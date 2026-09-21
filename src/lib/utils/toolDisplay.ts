@@ -21,7 +21,7 @@ export type ToolWithId = ToolLike & { id: string };
 export const isSkillTool = (tool: ToolLike | null | undefined): boolean =>
 	tool?.meta?.manifest?.kind === 'skill';
 
-/** Global default from Workspace; missing/undefined means enabled. */
+/** Global default from the tools payload (org-effective after GET /tools). */
 export const isSkillDefaultEnabled = (tool: ToolLike | null | undefined): boolean => {
 	if (!isSkillTool(tool)) {
 		return true;
@@ -209,9 +209,6 @@ export const remapSelectedToolIdsToHighestSkills = (
 	return out;
 };
 
-/** IDs to enable by default in chat (deduped skills; respects pack toggles). */
-export const defaultEnabledToolIds = (allTools: ToolWithId[]): string[] => {
-	const eligible = allTools.filter(isSkillDefaultEnabled);
-	// Dedupe only among enabled skills so a disabled higher version cannot win.
-	return dedupeToolsForSelection(eligible).map((t) => t.id);
-};
+/** IDs to enable in chat. `$tools` is already the org-usable set. */
+export const defaultEnabledToolIds = (allTools: ToolWithId[]): string[] =>
+	dedupeToolsForSelection(allTools).map((t) => t.id);

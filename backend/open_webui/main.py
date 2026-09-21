@@ -394,6 +394,13 @@ from open_webui.utils.langfuse_tracing import (
 )
 from open_webui.env import LANGFUSE_ENABLED
 from open_webui.utils.access_control import visible_in_organization
+from open_webui.utils.catalog import (
+    can_create_private,
+    can_manage_public,
+    is_catalog_chat_model,
+    is_usable,
+)
+from open_webui.models.org_catalog import RESOURCE_MODEL
 from open_webui.utils.organizations import get_active_organization_id
 
 from open_webui.utils.auth import (
@@ -1103,29 +1110,12 @@ async def get_models(
         filtered_models = []
         for model in models:
             if model.get("arena"):
-                if visible_in_organization(
-                    user.id,
-                    None,
-                    model.get("info", {}).get("meta", {}).get("access_control", {}),
-                    organization_id,
-                    "read",
-                    user.role,
-                ):
-                    filtered_models.append(model)
                 continue
-
             model_info = Models.get_model_by_id(model["id"])
-            if model_info:
-                if visible_in_organization(
-                    user.id,
-                    model_info.user_id,
-                    model_info.access_control,
-                    organization_id,
-                    "read",
-                    user.role,
-                ):
-                    filtered_models.append(model)
-
+            if not is_catalog_chat_model(model_info):
+                continue
+            if is_usable(organization_id, RESOURCE_MODEL, model_info):
+                filtered_models.append(model)
         return filtered_models
 
     all_models = await get_all_models(request, user=user)
@@ -1160,9 +1150,8 @@ async def get_models(
             key=lambda x: (model_order_dict.get(x["id"], float("inf")), x["name"])
         )
 
-    # Filter out models that the user does not have access to
-    if user.role == "user" and not BYPASS_MODEL_ACCESS_CONTROL:
-        models = get_filtered_models(models, user)
+    # Always restrict the chat picker to curated catalog models.
+    models = get_filtered_models(models, user)
 
     log.debug(
         f"/api/models returned filtered models accessible to the user: {json.dumps([model['id'] for model in models])}"
@@ -1171,7 +1160,19 @@ async def get_models(
 
 
 @app.get("/api/models/base")
-async def get_base_models(request: Request, user=Depends(get_admin_user)):
+async def get_base_models(
+    request: Request,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    if not (
+        can_manage_public(user, organization_id)
+        or can_create_private(user, organization_id, RESOURCE_MODEL)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access prohibited",
+        )
     models = await get_all_base_models(request, user=user)
     return {"data": models}
 
@@ -1181,6 +1182,7 @@ async def chat_completion(
     request: Request,
     form_data: dict,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     if not request.app.state.MODELS:
         await get_all_models(request, user=user)
@@ -1198,10 +1200,10 @@ async def chat_completion(
             model = request.app.state.MODELS[model_id]
             model_info = Models.get_model_by_id(model_id)
 
-            # Check if user has access to the model
-            if not BYPASS_MODEL_ACCESS_CONTROL and user.role == "user":
+            # Check if user has access to the curated catalog model
+            if not BYPASS_MODEL_ACCESS_CONTROL:
                 try:
-                    check_model_access(user, model)
+                    check_model_access(user, model, organization_id)
                 except Exception as e:
                     raise e
         else:

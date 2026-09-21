@@ -18,6 +18,9 @@
 
 	const i18n = getContext('i18n');
 
+	export let title = '';
+	export let organizationId = '';
+
 	let org = null;
 	let loading = false;
 	let query = '';
@@ -26,16 +29,18 @@
 	let searchInput;
 
 	$: current = ($organizations ?? []).find((item) => item.id === $activeOrganizationId);
+	$: targetOrgId = organizationId || $activeOrganizationId || $user?.id;
 	$: isPersonal =
-		current?.kind === 'personal' ||
-		!$activeOrganizationId ||
-		$activeOrganizationId === $user?.id;
-	$: isPlatform = current?.kind === 'platform' || $activeOrganizationId === 'platform';
+		!organizationId &&
+		(current?.kind === 'personal' ||
+			!$activeOrganizationId ||
+			$activeOrganizationId === $user?.id);
+	$: isPlatform = (organizationId || current?.id || $activeOrganizationId) === 'platform';
 	$: isAtLeastAdmin = org?.role === 'owner' || org?.role === 'admin';
 	$: isOwner = org?.role === 'owner';
 
 	const load = async () => {
-		const id = $activeOrganizationId || $user?.id;
+		const id = targetOrgId;
 		if (!id) {
 			org = null;
 			return;
@@ -114,14 +119,14 @@
 		}
 	};
 
-	$: if ($activeOrganizationId !== undefined) {
+	$: if (targetOrgId !== undefined) {
 		load();
 	}
 </script>
 
 <div class="mt-0.5 mb-2 gap-1 flex flex-col md:flex-row justify-between">
 	<div class="flex md:self-center text-lg font-medium px-0.5">
-		{$i18n.t('Organization membership')}
+		{title || $i18n.t('Organization membership')}
 		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 		<span class="text-lg font-medium text-gray-500 dark:text-gray-300">
 			{org?.name ?? current?.name ?? $i18n.t('Personal')}

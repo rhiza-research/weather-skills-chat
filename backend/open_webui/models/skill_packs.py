@@ -6,8 +6,8 @@ from typing import Any, Optional
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, JSONField, get_db
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Column, Text, UniqueConstraint
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import BigInteger, Boolean, Column, Text, UniqueConstraint
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -32,6 +32,8 @@ class SkillPack(Base):
     local_path = Column(Text, nullable=False)
     meta = Column(JSONField, nullable=True)
     access_control = Column(JSONField, nullable=True)
+    enabled_by_default = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
 
@@ -43,8 +45,21 @@ class SkillSummary(BaseModel):
     tool_id: Optional[str] = None
     skill_dir: Optional[str] = None
     relative_path: Optional[str] = None
-    # Global default for chat/automation; chat bar can still enable manually.
+    # Effective enable state after catalog annotation; stored meta also
+    # keeps this as a legacy alias of enabled_by_default.
     enabled: bool = True
+    is_active: bool = True
+    enabled_by_default: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def inherit_legacy_enabled(cls, data):
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        if "enabled_by_default" not in out and "enabled" in out:
+            out["enabled_by_default"] = bool(out["enabled"])
+        return out
 
 
 class SkillPackModel(BaseModel):
@@ -61,6 +76,9 @@ class SkillPackModel(BaseModel):
     local_path: str
     meta: Optional[dict] = None
     access_control: Optional[dict] = None
+    enabled_by_default: bool = True
+    is_active: bool = True
+    enabled: Optional[bool] = None
     created_at: int
     updated_at: int
     skills: list[SkillSummary] = Field(default_factory=list)
@@ -69,6 +87,7 @@ class SkillPackModel(BaseModel):
 class SkillPackInstallForm(BaseModel):
     git_url: str
     ref: str = "main"
+    enabled_by_default: bool = True
 
 
 class SkillPackUpdateForm(BaseModel):
@@ -97,13 +116,13 @@ class SkillPackTable:
         access_control: Optional[dict] = None,
         organization_id: Optional[str] = None,
         visibility: Optional[str] = None,
+        enabled_by_default: bool = True,
+        is_active: bool = True,
         db=None,
     ) -> Optional[SkillPackModel]:
         now = int(time.time())
         organization_id = organization_id or user_id
-        visibility = visibility or "private"
-        if organization_id == user_id:
-            visibility = "private"
+        visibility = visibility or "organization"
         owns = db is None
         with get_db() if owns else nullcontext(db) as session:
             row = SkillPack(
@@ -118,6 +137,8 @@ class SkillPackTable:
                 local_path=local_path,
                 meta=meta or {},
                 access_control={} if access_control is None else access_control,
+                enabled_by_default=enabled_by_default,
+                is_active=is_active,
                 created_at=now,
                 updated_at=now,
             )
@@ -187,6 +208,19 @@ class SkillPackTable:
                 session.flush()
             return self._to_model(row)
 
+    def toggle_active(self, pack_id: str) -> Optional[SkillPackModel]:
+        pack = self.get_by_id(pack_id)
+        if not pack:
+            return None
+        return self.update(
+            pack_id, {"is_active": not bool(getattr(pack, "is_active", True))}
+        )
+
+    def set_enabled_by_default(
+        self, pack_id: str, enabled_by_default: bool
+    ) -> Optional[SkillPackModel]:
+        return self.update(pack_id, {"enabled_by_default": bool(enabled_by_default)})
+
     def delete(self, pack_id: str) -> bool:
         with get_db() as db:
             db.query(SkillPack).filter_by(id=pack_id).delete()
@@ -209,6 +243,8 @@ class SkillPackTable:
             local_path=row.local_path,
             meta=meta,
             access_control=row.access_control,
+            enabled_by_default=bool(getattr(row, "enabled_by_default", True)),
+            is_active=getattr(row, "is_active", True) is not False,
             created_at=row.created_at or 0,
             updated_at=row.updated_at or 0,
             skills=skills,

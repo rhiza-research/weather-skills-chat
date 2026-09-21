@@ -498,15 +498,18 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
 
 
 async def get_filtered_models(models, user):
-    # Filter models based on user access control
+    from open_webui.models.org_catalog import RESOURCE_MODEL
+    from open_webui.models.organizations import Organizations
+    from open_webui.utils.catalog import is_catalog_chat_model, is_usable
+
+    org_ids = Organizations.user_organization_ids(user.id)
     filtered_models = []
     for model in models.get("data", []):
         model_info = Models.get_model_by_id(model["id"])
-        if model_info:
-            if user.id == model_info.user_id or has_access(
-                user.id, type="read", access_control=model_info.access_control
-            ):
-                filtered_models.append(model)
+        if not is_catalog_chat_model(model_info):
+            continue
+        if any(is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids):
+            filtered_models.append(model)
     return filtered_models
 
 
@@ -713,13 +716,15 @@ async def generate_chat_completion(
         payload = apply_model_params_to_body_openai(params, payload)
         payload = apply_model_system_prompt_to_body(params, payload, metadata, user)
 
-        # Check if user has access to the model
-        if not bypass_filter and user.role == "user":
-            if not (
-                user.id == model_info.user_id
-                or has_access(
-                    user.id, type="read", access_control=model_info.access_control
-                )
+        # Check if user has access to the catalog model
+        if not bypass_filter:
+            from open_webui.models.org_catalog import RESOURCE_MODEL
+            from open_webui.models.organizations import Organizations
+            from open_webui.utils.catalog import is_usable
+
+            org_ids = Organizations.user_organization_ids(user.id)
+            if not any(
+                is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids
             ):
                 raise HTTPException(
                     status_code=403,

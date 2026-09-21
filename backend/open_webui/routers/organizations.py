@@ -102,15 +102,26 @@ async def update_organization(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    if org.kind == ORG_KIND_PERSONAL:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update a personal organization",
-        )
-    if not is_at_least(id, user.id, "admin"):
+    updates = form_data.model_dump(exclude_none=True)
+    flag_keys = {"can_add_models", "can_add_skills", "can_add_knowledge"}
+    flags = {k: updates.pop(k) for k in list(updates.keys()) if k in flag_keys}
+    if flags:
         require_platform_admin(user, request)
+    if org.kind == ORG_KIND_PERSONAL:
+        if updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot update a personal organization",
+            )
+        updates = flags
+    else:
+        if not is_at_least(id, user.id, "admin"):
+            require_platform_admin(user, request)
+        updates = {**updates, **flags}
     try:
-        org = Organizations.update_organization(id, form_data)
+        org = Organizations.update_organization(
+            id, OrganizationUpdateForm(**updates)
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if not org:

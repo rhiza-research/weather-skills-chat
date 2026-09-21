@@ -9,11 +9,12 @@
 	import { onMount, getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { WEBUI_NAME, knowledge } from '$lib/stores';
+	import { WEBUI_NAME, knowledge, organizations, activeOrganizationId } from '$lib/stores';
 	import {
 		getKnowledgeBases,
 		deleteKnowledgeById,
-		getKnowledgeBaseList
+		getKnowledgeBaseList,
+		setKnowledgeEnabled
 	} from '$lib/apis/knowledge';
 
 	import { goto } from '$app/navigation';
@@ -26,6 +27,16 @@
 	import Spinner from '../common/Spinner.svelte';
 	import { capitalizeFirstLetter } from '$lib/utils';
 	import Tooltip from '../common/Tooltip.svelte';
+	import Switch from '../common/Switch.svelte';
+	import {
+		canAddKind,
+		canManageCatalogItem,
+		isCatalogEnabled,
+		isOrgAdminRole,
+		isPublicItem
+	} from '$lib/utils/catalog';
+
+	export let catalog: 'public' | 'org' = 'org';
 
 	let loaded = false;
 
@@ -37,6 +48,13 @@
 
 	let knowledgeBases = [];
 	let filteredItems = [];
+
+	$: basePath = catalog === 'public' ? '/admin' : '/workspace';
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: orgAdmin = catalog === 'public' || isOrgAdminRole(currentOrg);
+	$: canCreate = catalog === 'public' || (orgAdmin && canAddKind(currentOrg, 'knowledge'));
+	$: showOrgSection = catalog === 'org' && canAddKind(currentOrg, 'knowledge');
+	$: orgName = currentOrg?.name || $i18n.t('Organization');
 
 	$: if (knowledgeBases) {
 		fuse = new Fuse(knowledgeBases, {
@@ -51,6 +69,29 @@
 				})
 			: knowledgeBases;
 	}
+
+	$: publicItems = filteredItems.filter((item) => isPublicItem(item));
+	$: orgItems = filteredItems.filter((item) => !isPublicItem(item));
+	$: sectionItems = catalog === 'public' ? filteredItems : orgItems;
+
+	const canManage = (item) => canManageCatalogItem(catalog, item, currentOrg);
+
+	const setEnabledHandler = async (item, enabled) => {
+		const previous = !!item.enabled;
+		item.enabled = enabled;
+		knowledgeBases = knowledgeBases;
+		const res = await setKnowledgeEnabled(localStorage.token, item.id, enabled).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		});
+		if (!res) {
+			item.enabled = previous;
+			knowledgeBases = knowledgeBases;
+			return;
+		}
+		knowledgeBases = await getKnowledgeBaseList(localStorage.token);
+		knowledge.set(await getKnowledgeBases(localStorage.token));
+	};
 
 	const deleteHandler = async (item) => {
 		const res = await deleteKnowledgeById(localStorage.token, item.id).catch((e) => {
@@ -107,22 +148,108 @@
 				/>
 			</div>
 
-			<div>
-				<button
-					class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
-					aria-label={$i18n.t('Create Knowledge')}
-					on:click={() => {
-						goto('/workspace/knowledge/create');
-					}}
-				>
-					<Plus className="size-3.5" />
-				</button>
-			</div>
+			{#if canCreate}
+				<div>
+					<button
+						class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+						aria-label={$i18n.t('Create Knowledge')}
+						on:click={() => {
+							goto(`${basePath}/knowledge/create`);
+						}}
+					>
+						<Plus className="size-3.5" />
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 
+	{#if catalog === 'org'}
+		<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			{$i18n.t('Knowledge from catalog')}
+		</div>
+		{#if publicItems.length === 0}
+			<div class="text-xs text-gray-500 py-3">{$i18n.t('No knowledge')}</div>
+		{/if}
+		<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+			{#each publicItems as item}
+				<button
+					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl {isCatalogEnabled(
+						item
+					)
+						? 'cursor-pointer'
+						: 'opacity-60 cursor-default'}"
+					on:click={() => {
+						if (item?.meta?.document) {
+							toast.error(
+								$i18n.t(
+									'Only collections can be edited, create a new knowledge base to edit/add documents.'
+								)
+							);
+						} else {
+							goto(`${basePath}/knowledge/${item.id}`);
+						}
+					}}
+				>
+					<div class=" w-full">
+						<div class="flex items-center justify-between -mt-1">
+							{#if item?.meta?.document}
+								<Badge type="muted" content={$i18n.t('Document')} />
+							{:else}
+								<Badge type="success" content={$i18n.t('Collection')} />
+							{/if}
+
+							<!-- svelte-ignore a11y-click-events-have-key-events -->
+							<!-- svelte-ignore a11y-no-static-element-interactions -->
+							<div
+								class="flex items-center gap-1"
+								on:click|stopPropagation
+								on:mousedown|stopPropagation
+							>
+								<Tooltip content={item.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}>
+									{#if orgAdmin}
+										<Switch
+											state={!!item.enabled}
+											on:change={async (e) => {
+												e.stopPropagation?.();
+												const next = !!e.detail;
+												if (next === !!item.enabled) return;
+												await setEnabledHandler(item, next);
+											}}
+										/>
+									{:else}
+										<span class="text-xs text-gray-500"
+											>{item.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
+										>
+									{/if}
+								</Tooltip>
+							</div>
+						</div>
+
+						<div class=" self-center flex-1 px-1 mb-1">
+							<div class=" font-semibold line-clamp-1 h-fit">{item.name}</div>
+							<div class=" text-xs overflow-hidden text-ellipsis line-clamp-1">
+								{item.description}
+							</div>
+						</div>
+					</div>
+				</button>
+			{/each}
+		</div>
+
+		{#if showOrgSection}
+			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+				{$i18n.t('{{name}} Knowledge', { name: orgName })}
+			</div>
+			{#if sectionItems.length === 0}
+				<div class="text-xs text-gray-500 py-3">{$i18n.t('No knowledge')}</div>
+			{/if}
+		{/if}
+	{/if}
+
+	{#if catalog === 'public' || showOrgSection}
 	<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
-		{#each filteredItems as item}
+		{#each sectionItems as item}
 			<button
 				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl"
 				on:click={() => {
@@ -133,7 +260,7 @@
 							)
 						);
 					} else {
-						goto(`/workspace/knowledge/${item.id}`);
+						goto(`${basePath}/knowledge/${item.id}`);
 					}
 				}}
 			>
@@ -145,14 +272,16 @@
 							<Badge type="success" content={$i18n.t('Collection')} />
 						{/if}
 
-						<div class=" flex self-center -mr-1 translate-y-1">
-							<ItemMenu
-								on:delete={() => {
-									selectedItem = item;
-									showDeleteConfirm = true;
-								}}
-							/>
-						</div>
+						{#if canManage(item)}
+							<div class=" flex self-center -mr-1 translate-y-1">
+								<ItemMenu
+									on:delete={() => {
+										selectedItem = item;
+										showDeleteConfirm = true;
+									}}
+								/>
+							</div>
+						{/if}
 					</div>
 
 					<div class=" self-center flex-1 px-1 mb-1">
@@ -162,20 +291,22 @@
 							{item.description}
 						</div>
 
-						<div class="mt-3 flex justify-between">
-							<div class="text-xs text-gray-500">
-								<Tooltip
-									content={item?.user?.email ?? $i18n.t('Deleted User')}
-									className="flex shrink-0"
-									placement="top-start"
-								>
-									{$i18n.t('By {{name}}', {
-										name: capitalizeFirstLetter(
-											item?.user?.name ?? item?.user?.email ?? $i18n.t('Deleted User')
-										)
-									})}
-								</Tooltip>
-							</div>
+						<div class="mt-3 flex {catalog === 'public' ? 'justify-between' : 'justify-end'}">
+							{#if catalog === 'public'}
+								<div class="text-xs text-gray-500">
+									<Tooltip
+										content={item?.user?.email ?? $i18n.t('Deleted User')}
+										className="flex shrink-0"
+										placement="top-start"
+									>
+										{$i18n.t('By {{name}}', {
+											name: capitalizeFirstLetter(
+												item?.user?.name ?? item?.user?.email ?? $i18n.t('Deleted User')
+											)
+										})}
+									</Tooltip>
+								</div>
+							{/if}
 							<div class=" text-xs text-gray-500 line-clamp-1">
 								{$i18n.t('Updated')}
 								{dayjs(item.updated_at * 1000).fromNow()}
@@ -186,6 +317,7 @@
 			</button>
 		{/each}
 	</div>
+	{/if}
 
 	<div class=" text-gray-500 text-xs mt-1 mb-2">
 		ⓘ {$i18n.t("Use '#' in the prompt input to load and include your knowledge.")}

@@ -1181,8 +1181,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
 
+        org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
         tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), accessible_skill_records(user)
+            list(tool_ids), accessible_skill_records(user, org_id)
         )
         metadata["tool_ids"] = tool_ids
         tools_dict = get_tools(

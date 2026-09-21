@@ -1,19 +1,22 @@
-<script>
+<script lang="ts">
 	import { goto } from '$app/navigation';
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
 	import { createNewKnowledge, getKnowledgeBases } from '$lib/apis/knowledge';
 	import { toast } from 'svelte-sonner';
-	import { knowledge, user } from '$lib/stores';
-	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
-	import AccessControl from '../common/AccessControl.svelte';
+	import { knowledge } from '$lib/stores';
+	import Switch from '$lib/components/common/Switch.svelte';
+
+	export let catalog: 'public' | 'org' = 'org';
 
 	let loading = false;
 
 	let name = '';
 	let description = '';
-	let accessControl = {};
+	let enabledByDefault = true;
+
+	$: basePath = catalog === 'public' ? '/admin' : '/workspace';
 
 	const submitHandler = async () => {
 		loading = true;
@@ -30,7 +33,8 @@
 			localStorage.token,
 			name,
 			description,
-			accessControl
+			{},
+			catalog === 'public' ? enabledByDefault : true
 		).catch((e) => {
 			toast.error(`${e}`);
 		});
@@ -38,7 +42,7 @@
 		if (res) {
 			toast.success($i18n.t('Knowledge created successfully.'));
 			knowledge.set(await getKnowledgeBases(localStorage.token));
-			goto(`/workspace/knowledge/${res.id}`);
+			goto(`${basePath}/knowledge/${res.id}`);
 		}
 
 		loading = false;
@@ -49,7 +53,7 @@
 	<button
 		class="flex space-x-1"
 		on:click={() => {
-			goto('/workspace/knowledge');
+			goto(basePath + '/knowledge');
 		}}
 	>
 		<div class=" self-center">
@@ -112,18 +116,12 @@
 		</div>
 
 		<div class="mt-2">
-			<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg">
-				<AccessControl
-					bind:accessControl
-					accessRoles={['read', 'write']}
-					allowPublic={userCanSetSharingAccess(
-						$user,
-						$user?.id,
-						accessControl,
-						'public_knowledge'
-					)}
-				/>
-			</div>
+			{#if catalog === 'public'}
+				<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg flex items-center justify-between">
+					<div class="text-sm font-medium">{$i18n.t('Enabled by default')}</div>
+					<Switch bind:state={enabledByDefault} />
+				</div>
+			{/if}
 		</div>
 
 		<div class="flex justify-end mt-2">

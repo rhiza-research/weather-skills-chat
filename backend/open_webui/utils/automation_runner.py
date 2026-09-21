@@ -53,14 +53,19 @@ async def _notify_chat_created(user_ids: list[str], chat_id: str, title: str) ->
         log.exception("Failed to notify clients of new automation chat")
 
 
-def _accessible_tool_ids(user) -> list[str]:
-    """Tool/skill IDs the user can read (chat default / automation fallback).
+def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[str]:
+    """Tool/skill IDs the user can use in this organization.
 
-    Skills with manifest.enabled=false are omitted from defaults; chat can still
-    send those IDs explicitly.
+    Skill listing follows org-admin enablement (catalog default only seeds
+    that toggle). Chat can still send explicit IDs.
     """
     from open_webui.models.tools import Tools
     from open_webui.utils.access_control import user_owns_or_has_access
+    from open_webui.utils.tools import accessible_skill_records
+
+    usable_skill_ids = {
+        record["id"] for record in accessible_skill_records(user, organization_id)
+    }
 
     ids: list[str] = []
     for tool in Tools.get_tools():
@@ -69,7 +74,7 @@ def _accessible_tool_ids(user) -> list[str]:
         ):
             continue
         manifest = (tool.meta.manifest if tool.meta else None) or {}
-        if manifest.get("kind") == "skill" and manifest.get("enabled") is False:
+        if manifest.get("kind") == "skill" and tool.id not in usable_skill_ids:
             continue
         ids.append(tool.id)
     return ids
@@ -78,9 +83,11 @@ def _accessible_tool_ids(user) -> list[str]:
 def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[list[str]]:
     if automation.tool_ids is not None:
         return list(automation.tool_ids)
-    # Default: every tool/skill the owner can access (skill versions resolved later).
+    # Default: every tool/skill the owner can use in this organization.
     if user is not None:
-        ids = _accessible_tool_ids(user)
+        ids = _accessible_tool_ids(
+            user, getattr(automation, "organization_id", None)
+        )
         return ids or None
     # Legacy: fall back to the model's stored tool list if present.
     if model:

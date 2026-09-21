@@ -392,8 +392,9 @@
 
 		const model = atSelectedModel ?? $models.find((m) => m.id === selectedModels[0]);
 		if (model) {
-			// Enable accessible tools/skills by default (highest skill version;
-			// pack-level disabled skills stay off until toggled in the chat menu).
+			// Enable org-usable tools/skills by default (highest skill version).
+			// Catalog "enabled by default" only seeds the workspace toggle; the
+			// tools list already reflects org-admin enablement.
 			selectedToolIds = defaultEnabledToolIds($tools ?? []);
 		}
 	};
@@ -2396,30 +2397,32 @@
 
 						<div class=" pb-[1rem]">
 							{#if !chatWritable}
-								<div
-									class="mx-auto max-w-6xl px-4 mb-2 flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm"
-								>
-									<div>
-										{$i18n.t('Owned by')}
-										<span class="font-medium">{chatOwnerName || $i18n.t('a teammate')}</span>.
-										{$i18n.t('Clone to continue.')}
-									</div>
-									<button
-										class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1 text-xs"
-										on:click={async () => {
-											const cloned = await cloneChatById(localStorage.token, $chatId).catch(
-												(error) => {
-													toast.error(`${error}`);
-													return null;
-												}
-											);
-											if (cloned) {
-												await goto(`/c/${cloned.id}`);
-											}
-										}}
+								<div class="mx-auto w-full max-w-[58rem] px-2.5 mb-2">
+									<div
+										class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300"
 									>
-										{$i18n.t('Clone to continue')}
-									</button>
+										<div class="min-w-0 flex-1 leading-snug">
+											{$i18n.t('Owned by')}
+											<span class="font-medium">{chatOwnerName || $i18n.t('a teammate')}</span>.
+											{$i18n.t('Clone to continue.')}
+										</div>
+										<button
+											class="shrink-0 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-[11px]"
+											on:click={async () => {
+												const cloned = await cloneChatById(localStorage.token, $chatId).catch(
+													(error) => {
+														toast.error(`${error}`);
+														return null;
+													}
+												);
+												if (cloned) {
+													await goto(`/c/${cloned.id}`);
+												}
+											}}
+										>
+											{$i18n.t('Clone to continue')}
+										</button>
+									</div>
 								</div>
 							{:else}
 							<MessageInput

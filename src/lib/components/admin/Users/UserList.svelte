@@ -15,7 +15,8 @@
 	import {
 		activateOrganization,
 		deleteOrganizationById,
-		getAllOrganizations
+		getAllOrganizations,
+		updateOrganizationById
 	} from '$lib/apis/organizations';
 
 	import Pagination from '$lib/components/common/Pagination.svelte';
@@ -138,9 +139,35 @@
 		activating = '';
 	};
 
+	const toggleCanAdd = async (row, key) => {
+		const next = !row[key];
+		const kind =
+			key === 'can_add_models' ? 'models' : key === 'can_add_skills' ? 'skills' : 'knowledge';
+		try {
+			await updateOrganizationById(localStorage.token, row.id, {
+				[key]: next
+			});
+			await loadOrgs();
+			toast.success(
+				next
+					? $i18n.t('{{name}} can now add {{kind}}', {
+							name: row.displayName,
+							kind
+						})
+					: $i18n.t('{{name}} can no longer add {{kind}}', {
+							name: row.displayName,
+							kind
+						})
+			);
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
 	$: userById = Object.fromEntries((users ?? []).map((item) => [item.id, item]));
 
 	$: rows = (orgs ?? [])
+		.filter((org) => org.kind !== 'platform')
 		.map((org) => {
 			const person = org.kind === 'personal' ? userById[org.id] : null;
 			return {
@@ -277,20 +304,36 @@
 	</div>
 </div>
 
-<div>
-	<div class="flex items-center gap-3 justify-between text-xs uppercase px-1 font-bold">
-		<div class="w-full">{$i18n.t('Name')}</div>
-		<div class="w-full">{$i18n.t('Type')}</div>
-		<div class="w-full">{$i18n.t('Members')}</div>
-		<div class="w-full"></div>
-	</div>
-	<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
+<div class="overflow-x-auto">
+	<div class="min-w-[56rem]">
+		<div
+			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"
+		>
+			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+				{$i18n.t('Name')}
+			</div>
+			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+				{$i18n.t('Type')}
+			</div>
+			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+				{$i18n.t('Members')}
+			</div>
+			<div class="text-center leading-tight">{$i18n.t('Allow adding models')}</div>
+			<div class="text-center leading-tight">{$i18n.t('Allow adding skills')}</div>
+			<div class="text-center leading-tight">{$i18n.t('Allow adding knowledge')}</div>
+			<div></div>
+		</div>
+		<hr class="mt-0.5 border-gray-100 dark:border-gray-850" />
 
-	{#each paged as row (row.id)}
-		<div class="py-1.5">
-			<div class="flex items-center gap-3 px-1">
+		{#each paged as row, idx (row.id)}
+		<div
+			class="rounded-lg px-2 py-2 {idx % 2 === 0
+				? 'bg-gray-50 dark:bg-gray-850/80'
+				: 'bg-white dark:bg-gray-900'}"
+		>
+			<div class="org-table-row grid items-center gap-x-3">
 				{#if row.kind === 'personal'}
-					<div class="flex items-center gap-2 min-w-0 w-full">
+					<div class="flex items-center gap-2 min-w-0">
 						<span class="shrink-0 w-4"></span>
 						{#if row.person}
 							<img
@@ -318,7 +361,7 @@
 					</div>
 				{:else}
 					<button
-						class="flex items-center gap-2 min-w-0 w-full text-left"
+						class="flex items-center gap-2 min-w-0 text-left"
 						on:click={() => {
 							expandedId = expandedId === row.id ? '' : row.id;
 						}}
@@ -344,7 +387,7 @@
 					</button>
 				{/if}
 
-				<div class="w-full flex items-center gap-1.5">
+				<div class="flex items-center gap-1.5 min-w-0">
 					{#if row.kind === 'personal'}
 						<Badge type="muted" content={$i18n.t('Personal')} />
 						{#if row.person?.role === 'pending'}
@@ -352,20 +395,54 @@
 						{/if}
 					{:else}
 						<Badge type="success" content={$i18n.t('Organization')} />
-						{#if row.kind === 'platform'}
-							<Badge type="info" content={$i18n.t('Platform')} />
-						{/if}
 						{#if row.active === false}
 							<Badge type="warning" content={$i18n.t('Pending')} />
 						{/if}
 					{/if}
 				</div>
 
-				<div class="w-full text-sm text-gray-500">
+				<div class="text-sm text-gray-500">
 					{row.memberCount}
 				</div>
 
-				<div class="w-full flex justify-end items-center gap-0.5">
+				<div class="flex justify-center">
+					{#if row.kind !== 'platform'}
+						<input
+							type="checkbox"
+							class="cursor-pointer"
+							checked={!!row.can_add_models}
+							aria-label={$i18n.t('Allow adding models')}
+							on:click|stopPropagation
+							on:change={() => toggleCanAdd(row, 'can_add_models')}
+						/>
+					{/if}
+				</div>
+				<div class="flex justify-center">
+					{#if row.kind !== 'platform'}
+						<input
+							type="checkbox"
+							class="cursor-pointer"
+							checked={!!row.can_add_skills}
+							aria-label={$i18n.t('Allow adding skills')}
+							on:click|stopPropagation
+							on:change={() => toggleCanAdd(row, 'can_add_skills')}
+						/>
+					{/if}
+				</div>
+				<div class="flex justify-center">
+					{#if row.kind !== 'platform'}
+						<input
+							type="checkbox"
+							class="cursor-pointer"
+							checked={!!row.can_add_knowledge}
+							aria-label={$i18n.t('Allow adding knowledge')}
+							on:click|stopPropagation
+							on:change={() => toggleCanAdd(row, 'can_add_knowledge')}
+						/>
+					{/if}
+				</div>
+
+				<div class="flex justify-end items-center gap-0.5">
 					{#if row.kind === 'workspace' && row.active === false}
 						<button
 							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
@@ -534,6 +611,7 @@
 			{$i18n.t('No users or organizations yet.')}
 		</div>
 	{/each}
+	</div>
 </div>
 
 <div class=" text-gray-500 text-xs mt-1.5 text-right">
@@ -541,3 +619,10 @@
 </div>
 
 <Pagination bind:page count={rows.length} />
+
+<style>
+	.org-table-row {
+		grid-template-columns: minmax(14rem, 1.5fr) minmax(8rem, 0.85fr) 4.5rem repeat(3, 6.5rem)
+			minmax(7rem, auto);
+	}
+</style>

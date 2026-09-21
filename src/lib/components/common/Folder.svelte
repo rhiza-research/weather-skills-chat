@@ -15,8 +15,8 @@
 	export let id = '';
 	export let name = '';
 	export let collapsible = true;
-	/** `strong` for top-level sections (Private, teams); default for time-range groups. */
-	export let emphasis: 'default' | 'strong' = 'default';
+	/** `strong` for top-level sections, `medium` for My/Others, `default` for time-range groups. */
+	export let emphasis: 'default' | 'medium' | 'strong' = 'default';
 
 	export let onAddLabel: string = '';
 	export let onAdd: null | Function = null;
@@ -132,17 +132,23 @@
 				class="w-full group rounded-md relative flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition {emphasis ===
 				'strong'
 					? 'text-gray-800 dark:text-gray-100'
-					: 'text-gray-500 dark:text-gray-500'}"
+					: emphasis === 'medium'
+						? 'text-gray-700 dark:text-gray-200'
+						: 'text-gray-500 dark:text-gray-500'}"
 			>
 				<button
 					class="w-full py-1.5 pl-2 flex items-center gap-1.5 {emphasis === 'strong'
 						? 'text-sm font-semibold'
-						: 'text-xs font-medium'}"
+						: emphasis === 'medium'
+							? 'text-xs font-semibold uppercase tracking-wide'
+							: 'text-xs font-medium'}"
 				>
 					<div
 						class={emphasis === 'strong'
 							? 'text-gray-500 dark:text-gray-400'
-							: 'text-gray-300 dark:text-gray-600'}
+							: emphasis === 'medium'
+								? 'text-gray-400 dark:text-gray-500'
+								: 'text-gray-300 dark:text-gray-600'}
 					>
 						{#if open}
 							<ChevronDown className=" size-3" strokeWidth="2.5" />

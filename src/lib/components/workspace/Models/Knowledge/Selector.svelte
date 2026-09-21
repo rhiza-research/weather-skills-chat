@@ -5,6 +5,7 @@
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { flyAndScale } from '$lib/utils/transitions';
 	import { knowledge } from '$lib/stores';
+	import { isCatalogEnabled } from '$lib/utils/catalog';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 
 	const i18n = getContext('i18n');
@@ -27,7 +28,8 @@
 	}
 
 	onMount(() => {
-		let legacy_documents = $knowledge.filter((item) => item?.meta?.document);
+		const usableKnowledge = ($knowledge ?? []).filter((item) => isCatalogEnabled(item));
+		let legacy_documents = usableKnowledge.filter((item) => item?.meta?.document);
 		let legacy_collections =
 			legacy_documents.length > 0
 				? [
@@ -58,7 +60,7 @@
 					]
 				: [];
 
-		items = [...$knowledge, ...legacy_collections].map((item) => {
+		items = [...usableKnowledge, ...legacy_collections].map((item) => {
 			return {
 				...item,
 				...(item?.legacy || item?.meta?.legacy || item?.meta?.document ? { legacy: true } : {}),

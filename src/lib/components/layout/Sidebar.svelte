@@ -223,6 +223,27 @@
 			kind: 'personal'
 		};
 
+	$: isPersonalOrg =
+		currentOrg?.kind === 'personal' || currentOrg?.id === $user?.id;
+	$: privateChats = ($chats ?? []).filter(
+		(c) => isPersonalOrg || c.visibility !== 'organization'
+	);
+	$: teamChats = isPersonalOrg
+		? []
+		: ($chats ?? []).filter((c) => c.visibility === 'organization');
+	$: myTeamChats = teamChats.filter((c) => c.user_id === $user?.id);
+	$: othersTeamChats = teamChats.filter((c) => c.user_id !== $user?.id);
+	$: privatePinned = ($pinnedChats ?? []).filter(
+		(c) => isPersonalOrg || c.visibility !== 'organization'
+	);
+	$: teamPinned = isPersonalOrg
+		? []
+		: ($pinnedChats ?? []).filter((c) => c.visibility === 'organization');
+	$: teamChatSections = [
+		{ key: 'team-mine', label: 'My chats', chats: myTeamChats },
+		{ key: 'team-others', label: 'Others chats', chats: othersTeamChats }
+	];
+
 	const switchOrganization = async (orgId) => {
 		if (orgId === $activeOrganizationId) {
 			return;
@@ -819,7 +840,7 @@
 			<Folder
 				collapsible={!search}
 				className="px-2 mt-0.5"
-				name={$i18n.t('Private')}
+				name={$i18n.t('Private chats')}
 				emphasis="strong"
 				onAdd={() => {
 					createFolder();
@@ -881,7 +902,7 @@
 				<div
 					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
 				>
-				{#if !search && $pinnedChats.length > 0}
+				{#if !search && privatePinned.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
 						<Folder
 							className=""
@@ -928,7 +949,7 @@
 							name={$i18n.t('Pinned')}
 						>
 							<div class="flex flex-col overflow-y-auto scrollbar-hidden">
-								{#each $pinnedChats as chat, idx}
+								{#each privatePinned as chat, idx}
 									<ChatItem
 										className=""
 										id={chat.id}
@@ -936,7 +957,7 @@
 										ownerName={chat.owner_name}
 										isMine={chat.user_id === $user?.id}
 										visibility={chat.visibility}
-										isPersonal={currentOrg?.kind === 'personal'}
+										isPersonal={isPersonalOrg}
 										selected={selectedChatId === chat.id}
 										on:select={() => {
 											selectedChatId = chat.id;
@@ -977,7 +998,7 @@
 				<div class=" flex-1 flex flex-col overflow-y-auto scrollbar-hidden">
 					<div class="pt-1.5">
 						{#if $chats}
-							{#each groupChatsByTimeRange($chats) as group, groupIdx (group.time_range)}
+							{#each groupChatsByTimeRange(privateChats) as group, groupIdx (group.time_range)}
 								<Folder
 									className={groupIdx === 0 ? '' : 'pt-3'}
 									name={$i18n.t(group.time_range)}
@@ -1013,7 +1034,7 @@
 											ownerName={chat.owner_name}
 											isMine={chat.user_id === $user?.id}
 											visibility={chat.visibility}
-											isPersonal={currentOrg?.kind === 'personal'}
+											isPersonal={isPersonalOrg}
 											selected={selectedChatId === chat.id}
 											on:select={() => {
 												selectedChatId = chat.id;
@@ -1032,23 +1053,6 @@
 									{/each}
 								</Folder>
 							{/each}
-
-							{#if $scrollPaginationEnabled && !allChatsLoaded}
-								<Loader
-									on:visible={(e) => {
-										if (!chatListLoading) {
-											loadMoreChats();
-										}
-									}}
-								>
-									<div
-										class="w-full flex justify-center py-1 text-xs animate-pulse items-center gap-2"
-									>
-										<Spinner className=" size-4" />
-										<div class=" ">Loading...</div>
-									</div>
-								</Loader>
-							{/if}
 						{:else}
 							<div class="w-full flex justify-center py-1 text-xs animate-pulse items-center gap-2">
 								<Spinner className=" size-4" />
@@ -1059,6 +1063,121 @@
 				</div>
 				</div>
 			</Folder>
+
+			{#if !isPersonalOrg}
+				<Folder
+					collapsible={!search}
+					className="px-2 mt-0.5"
+					name={$i18n.t('Team chats')}
+					emphasis="strong"
+					dragAndDrop={false}
+				>
+					<div
+						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+					>
+						{#if !search && teamPinned.length > 0}
+							<div class="flex flex-col space-y-1 rounded-xl">
+								<Folder className="" name={$i18n.t('Pinned')} dragAndDrop={false}>
+									<div class="flex flex-col overflow-y-auto scrollbar-hidden">
+										{#each teamPinned as chat (chat.id)}
+											<ChatItem
+												className=""
+												id={chat.id}
+												title={chat.title}
+												ownerName={chat.owner_name}
+												isMine={chat.user_id === $user?.id}
+												visibility={chat.visibility}
+												isPersonal={isPersonalOrg}
+												selected={selectedChatId === chat.id}
+												on:select={() => {
+													selectedChatId = chat.id;
+												}}
+												on:unselect={() => {
+													selectedChatId = null;
+												}}
+												on:change={async () => {
+													initChatList();
+												}}
+												on:tag={(e) => {
+													const { type, name } = e.detail;
+													tagEventHandler(type, name, chat.id);
+												}}
+											/>
+										{/each}
+									</div>
+								</Folder>
+							</div>
+						{/if}
+
+						<div class="flex-1 flex flex-col overflow-y-auto scrollbar-hidden">
+							<div class="pt-1.5">
+								{#each teamChatSections as section (section.key)}
+									<Folder
+										className="pt-2"
+										name={$i18n.t(section.label)}
+										emphasis="medium"
+										dragAndDrop={false}
+										collapsible={!search}
+									>
+										{#each groupChatsByTimeRange(section.chats) as group, groupIdx (group.time_range)}
+											<Folder
+												className={groupIdx === 0 ? 'ml-1' : 'pt-3 ml-1'}
+												name={$i18n.t(group.time_range)}
+												open={isTimeRangeOpen(section.key, group.time_range)}
+												dragAndDrop={false}
+												on:change={(e) => {
+													setTimeRangeOpen(section.key, group.time_range, e.detail);
+												}}
+											>
+												{#each group.chats as chat (chat.id)}
+													<ChatItem
+														className=""
+														id={chat.id}
+														title={chat.title}
+														ownerName={chat.owner_name}
+														isMine={chat.user_id === $user?.id}
+														visibility={chat.visibility}
+														isPersonal={isPersonalOrg}
+														selected={selectedChatId === chat.id}
+														on:select={() => {
+															selectedChatId = chat.id;
+														}}
+														on:unselect={() => {
+															selectedChatId = null;
+														}}
+														on:change={async () => {
+															initChatList();
+														}}
+														on:tag={(e) => {
+															const { type, name } = e.detail;
+															tagEventHandler(type, name, chat.id);
+														}}
+													/>
+												{/each}
+											</Folder>
+										{/each}
+									</Folder>
+								{/each}
+							</div>
+						</div>
+					</div>
+				</Folder>
+			{/if}
+
+			{#if $chats && $scrollPaginationEnabled && !allChatsLoaded}
+				<Loader
+					on:visible={(e) => {
+						if (!chatListLoading) {
+							loadMoreChats();
+						}
+					}}
+				>
+					<div class="w-full flex justify-center py-1 text-xs animate-pulse items-center gap-2">
+						<Spinner className=" size-4" />
+						<div class=" ">Loading...</div>
+					</div>
+				</Loader>
+			{/if}
 
 		</div>
 

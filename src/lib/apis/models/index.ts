@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { organizationHeaders } from '$lib/apis/organizations';
 
 export const getModels = async (token: string = '') => {
 	let error = null;
@@ -9,7 +10,8 @@ export const getModels = async (token: string = '') => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -40,7 +42,8 @@ export const getBaseModels = async (token: string = '') => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -71,7 +74,8 @@ export const createNewModel = async (token: string, model: object) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		},
 		body: JSON.stringify(model)
 	})
@@ -103,7 +107,8 @@ export const getModelById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -138,7 +143,8 @@ export const toggleModelById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -162,6 +168,85 @@ export const toggleModelById = async (token: string, id: string) => {
 	return res;
 };
 
+export const setModelEnabled = async (token: string, id: string, enabled: boolean) => {
+	let error = null;
+
+	const searchParams = new URLSearchParams();
+	searchParams.append('id', id);
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/models/model/enabled?${searchParams.toString()}`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
+		},
+		body: JSON.stringify({ enabled })
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.then((json) => {
+			return json;
+		})
+		.catch((err) => {
+			error = err;
+			console.log(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const setModelEnabledByDefault = async (
+	token: string,
+	id: string,
+	enabledByDefault: boolean
+) => {
+	let error = null;
+
+	const searchParams = new URLSearchParams();
+	searchParams.append('id', id);
+
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/models/model/enabled-by-default?${searchParams.toString()}`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`,
+				...organizationHeaders()
+			},
+			body: JSON.stringify({ enabled: enabledByDefault })
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.then((json) => {
+			return json;
+		})
+		.catch((err) => {
+			error = err;
+			console.log(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const updateModelById = async (token: string, id: string, model: object) => {
 	let error = null;
 
@@ -173,7 +258,8 @@ export const updateModelById = async (token: string, id: string, model: object) 
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		},
 		body: JSON.stringify(model)
 	})
@@ -209,7 +295,8 @@ export const deleteModelById = async (token: string, id: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {
@@ -241,7 +328,8 @@ export const deleteAllModels = async (token: string) => {
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
 		}
 	})
 		.then(async (res) => {

@@ -9,8 +9,16 @@
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { mobile, showSidebar, knowledge as _knowledge, config, user } from '$lib/stores';
-	import { userCanSetSharingAccess } from '$lib/utils/accessControl';
+	import {
+		mobile,
+		showSidebar,
+		knowledge as _knowledge,
+		config,
+		user,
+		organizations,
+		activeOrganizationId
+	} from '$lib/stores';
+	import { canManageCatalogItem } from '$lib/utils/catalog';
 
 	import { updateFileDataContentById, uploadFile, deleteFileById } from '$lib/apis/files';
 	import {
@@ -39,8 +47,9 @@
 	import EllipsisVertical from '$lib/components/icons/EllipsisVertical.svelte';
 	import Drawer from '$lib/components/common/Drawer.svelte';
 	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
-	import LockClosed from '$lib/components/icons/LockClosed.svelte';
-	import AccessControlModal from '../common/AccessControlModal.svelte';
+	import Switch from '$lib/components/common/Switch.svelte';
+
+	export let catalog: 'public' | 'org' = 'org';
 
 	let largeScreen = true;
 
@@ -52,6 +61,8 @@
 		id: string;
 		name: string;
 		description: string;
+		visibility?: string;
+		enabled_by_default?: boolean;
 		data: {
 			file_ids: string[];
 		};
@@ -64,11 +75,14 @@
 
 	let showAddTextContentModal = false;
 	let showSyncConfirmModal = false;
-	let showAccessControlModal = false;
 
 	let inputFiles = null;
 
 	let filteredItems = [];
+	$: basePath = catalog === 'public' ? '/admin' : '/workspace';
+	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
+	$: canWrite = canManageCatalogItem(catalog, knowledge, currentOrg);
+
 	$: if (knowledge && knowledge.files) {
 		fuse = new Fuse(knowledge.files, {
 			keys: ['meta.name', 'meta.description']
@@ -112,6 +126,7 @@
 	};
 
 	const uploadFileHandler = async (file) => {
+		if (!canWrite) return;
 		console.log(file);
 
 		const tempItemId = uuidv4();
@@ -431,7 +446,7 @@
 				...knowledge,
 				name: knowledge.name,
 				description: knowledge.description,
-				access_control: knowledge.access_control
+				enabled_by_default: knowledge.enabled_by_default
 			}).catch((e) => {
 				toast.error(`${e}`);
 			});
@@ -530,9 +545,12 @@
 		});
 
 		if (res) {
-			knowledge = res;
+			knowledge = {
+				...res,
+				enabled_by_default: res.enabled_by_default !== false
+			};
 		} else {
-			goto('/workspace/knowledge');
+			goto(`${basePath}/knowledge`);
 		}
 
 		const dropZone = document.querySelector('body');
@@ -625,20 +643,6 @@
 
 <div class="flex flex-col w-full translate-y-1" id="collection-container">
 	{#if id && knowledge}
-		<AccessControlModal
-			bind:show={showAccessControlModal}
-			bind:accessControl={knowledge.access_control}
-			allowPublic={userCanSetSharingAccess(
-				$user,
-				knowledge?.user_id,
-				knowledge?.access_control,
-				'public_knowledge'
-			)}
-			onChange={() => {
-				changeDebounceHandler();
-			}}
-			accessRoles={['read', 'write']}
-		/>
 		<div class="w-full mb-2.5">
 			<div class=" flex w-full">
 				<div class="flex-1">
@@ -649,27 +653,24 @@
 								class="text-left w-full font-semibold text-2xl font-primary bg-transparent outline-hidden"
 								bind:value={knowledge.name}
 								placeholder="Knowledge Name"
+								disabled={!canWrite}
 								on:input={() => {
-									changeDebounceHandler();
+									if (canWrite) changeDebounceHandler();
 								}}
 							/>
 						</div>
 
-						<div class="self-center shrink-0">
-							<button
-								class="bg-gray-50 hover:bg-gray-100 text-black dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white transition px-2 py-1 rounded-full flex gap-1 items-center"
-								type="button"
-								on:click={() => {
-									showAccessControlModal = true;
-								}}
-							>
-								<LockClosed strokeWidth="2.5" className="size-3.5" />
-
-								<div class="text-sm font-medium shrink-0">
-									{$i18n.t('Access')}
-								</div>
-							</button>
-						</div>
+						{#if catalog === 'public' && canWrite}
+							<div class="self-center shrink-0 flex items-center gap-2">
+								<span class="text-xs text-gray-500">{$i18n.t('Enabled by default')}</span>
+								<Switch
+									bind:state={knowledge.enabled_by_default}
+									on:change={() => {
+										changeDebounceHandler();
+									}}
+								/>
+							</div>
+						{/if}
 					</div>
 
 					<div class="flex w-full px-1">
@@ -678,8 +679,9 @@
 							class="text-left text-xs w-full text-gray-500 bg-transparent outline-hidden"
 							bind:value={knowledge.description}
 							placeholder="Knowledge Description"
+							disabled={!canWrite}
 							on:input={() => {
-								changeDebounceHandler();
+								if (canWrite) changeDebounceHandler();
 							}}
 						/>
 					</div>
@@ -840,22 +842,24 @@
 									}}
 								/>
 
-								<div>
-									<AddContentMenu
-										on:upload={(e) => {
-											if (e.detail.type === 'directory') {
-												uploadDirectoryHandler();
-											} else if (e.detail.type === 'text') {
-												showAddTextContentModal = true;
-											} else {
-												document.getElementById('files-input').click();
-											}
-										}}
-										on:sync={(e) => {
-											showSyncConfirmModal = true;
-										}}
-									/>
-								</div>
+								{#if canWrite}
+									<div>
+										<AddContentMenu
+											on:upload={(e) => {
+												if (e.detail.type === 'directory') {
+													uploadDirectoryHandler();
+												} else if (e.detail.type === 'text') {
+													showAddTextContentModal = true;
+												} else {
+													document.getElementById('files-input').click();
+												}
+											}}
+											on:sync={(e) => {
+												showSyncConfirmModal = true;
+											}}
+										/>
+									</div>
+								{/if}
 							</div>
 						</div>
 

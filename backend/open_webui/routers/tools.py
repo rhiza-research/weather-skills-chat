@@ -23,7 +23,8 @@ from open_webui.utils.access_control import (
 )
 from open_webui.env import SRC_LOG_LEVELS
 
-from open_webui.utils.tools import get_tool_servers_data
+from open_webui.utils.tools import get_tool_servers_data, accessible_skill_records
+from open_webui.utils.organizations import get_active_organization_id
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -32,6 +33,25 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 router = APIRouter()
 
 SHARING_PERMISSION_KEY = "sharing.public_tools"
+
+
+def _is_skill_tool(tool) -> bool:
+    meta = getattr(tool, "meta", None)
+    manifest = (getattr(meta, "manifest", None) if meta else None) or {}
+    return isinstance(manifest, dict) and manifest.get("kind") == "skill"
+
+
+def _stamp_skill_enabled(tool, enabled: bool):
+    """Overlay org-effective enablement onto the catalog tool payload."""
+    if not _is_skill_tool(tool) or not hasattr(tool, "model_dump"):
+        return tool
+    data = tool.model_dump()
+    meta = dict(data.get("meta") or {})
+    manifest = dict(meta.get("manifest") or {})
+    manifest["enabled"] = bool(enabled)
+    meta["manifest"] = manifest
+    data["meta"] = meta
+    return type(tool).model_validate(data)
 
 
 def _can_read(user, tool) -> bool:
@@ -52,7 +72,11 @@ def _can_write(user, tool) -> bool:
 
 
 @router.get("/", response_model=list[ToolUserResponse])
-async def get_tools(request: Request, user=Depends(get_verified_user)):
+async def get_tools(
+    request: Request,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
 
     if not request.app.state.TOOL_SERVERS:
         # If the tool servers are not set, we need to set them
@@ -89,10 +113,15 @@ async def get_tools(request: Request, user=Depends(get_verified_user)):
             )
         )
 
+    usable_skill_ids = {
+        record["id"] for record in accessible_skill_records(user, organization_id)
+    }
+
     tools = [
-        tool
+        _stamp_skill_enabled(tool, True)
         for tool in tools
         if _can_read(user, tool)
+        and (not _is_skill_tool(tool) or tool.id in usable_skill_ids)
     ]
 
     return tools

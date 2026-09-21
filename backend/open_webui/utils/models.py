@@ -1,6 +1,7 @@
 import time
 import logging
 import sys
+from typing import Optional
 
 from aiocache import cached
 from fastapi import Request
@@ -15,6 +16,9 @@ from open_webui.models.models import Models
 
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.access_control import user_owns_or_has_access
+from open_webui.utils.catalog import is_usable
+from open_webui.models.org_catalog import RESOURCE_MODEL
+from open_webui.models.organizations import Organizations
 
 
 from open_webui.config import (
@@ -227,25 +231,19 @@ async def get_all_models(request, user: UserModel = None):
     return models
 
 
-def check_model_access(user, model):
-    if model.get("arena"):
-        if not user_owns_or_has_access(
-            user.id,
-            None,
-            model.get("info", {}).get("meta", {}).get("access_control", {}),
-            "read",
-            user.role,
-        ):
-            raise Exception("Model not found")
-    else:
-        model_info = Models.get_model_by_id(model.get("id"))
-        if not model_info:
-            raise Exception("Model not found")
-        elif not user_owns_or_has_access(
-            user.id,
-            model_info.user_id,
-            model_info.access_control,
-            "read",
-            user.role,
-        ):
-            raise Exception("Model not found")
+def check_model_access(user, model, organization_id: Optional[str] = None):
+    from open_webui.utils.catalog import is_catalog_chat_model
+
+    model_info = Models.get_model_by_id(model.get("id"))
+    if not is_catalog_chat_model(model_info):
+        raise Exception("Model not found")
+    org_ids = (
+        [organization_id]
+        if organization_id
+        else Organizations.user_organization_ids(user.id)
+    )
+    if any(
+        oid and is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids
+    ):
+        return
+    raise Exception("Model not found")

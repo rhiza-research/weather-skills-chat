@@ -9,6 +9,7 @@
 	import { createEventDispatcher, tick, getContext, onMount } from 'svelte';
 	import { removeLastWordFromString, isValidHttpUrl } from '$lib/utils';
 	import { knowledge } from '$lib/stores';
+	import { isCatalogEnabled } from '$lib/utils/catalog';
 
 	const i18n = getContext('i18n');
 
@@ -76,7 +77,8 @@
 	};
 
 	onMount(() => {
-		let legacy_documents = $knowledge
+		const usableKnowledge = ($knowledge ?? []).filter((item) => isCatalogEnabled(item));
+		let legacy_documents = usableKnowledge
 			.filter((item) => item?.meta?.document)
 			.map((item) => ({
 				...item,
@@ -111,16 +113,16 @@
 					]
 				: [];
 
-		let collections = $knowledge
+		let collections = usableKnowledge
 			.filter((item) => !item?.meta?.document)
 			.map((item) => ({
 				...item,
 				type: 'collection'
 			}));
 		let collection_files =
-			$knowledge.length > 0
+			usableKnowledge.length > 0
 				? [
-						...$knowledge
+						...usableKnowledge
 							.reduce((a, item) => {
 								return [
 									...new Set([

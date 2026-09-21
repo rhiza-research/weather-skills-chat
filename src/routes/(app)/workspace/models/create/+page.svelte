@@ -10,6 +10,8 @@
 	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
 
 	const i18n = getContext('i18n');
+	export let catalog = 'org';
+	$: listPath = catalog === 'public' ? '/admin/models' : '/workspace/models';
 
 	const readCloneModel = () => {
 		if (typeof sessionStorage === 'undefined' || !sessionStorage.model) {
@@ -69,7 +71,7 @@
 					)
 				);
 				toast.success($i18n.t('Model created successfully!'));
-				await goto('/workspace/models');
+				await goto(listPath);
 			}
 		}
 	};
@@ -79,7 +81,7 @@
 	// ModelEditor can leave SvelteKit's $page store out of sync with history on client nav.
 	// Force a full load when leaving create so sidebar / workspace tabs always work.
 	beforeNavigate(({ from, to, cancel }) => {
-		if (!from?.url.pathname.includes('/workspace/models/create')) {
+		if (!from?.url.pathname.includes('/models/create')) {
 			return;
 		}
 		if (!to || from.url.pathname === to.url.pathname) {
@@ -123,4 +125,4 @@
 	});
 </script>
 
-<ModelEditor {model} {onSubmit} />
+<ModelEditor {model} {onSubmit} {catalog} />

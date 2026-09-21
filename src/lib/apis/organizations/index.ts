@@ -1,10 +1,15 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { activeOrganizationId } from '$lib/stores';
+import { PLATFORM_ORG_ID } from '$lib/utils/catalog';
+
+export { PLATFORM_ORG_ID };
+
+export const catalogOrganizationId = writable<string | null>(null);
 
 export const organizationHeaders = (): Record<string, string> => {
-	const id = get(activeOrganizationId);
+	const id = get(catalogOrganizationId) || get(activeOrganizationId);
 	return id ? { 'X-Organization-Id': id } : {};
 };
 
@@ -23,7 +28,7 @@ export const installOrganizationFetch = () => {
 	}
 	const originalFetch = window.fetch.bind(window);
 	window.fetch = (input, init) => {
-		const orgId = get(activeOrganizationId);
+		const orgId = get(catalogOrganizationId) || get(activeOrganizationId);
 		if (!orgId) {
 			return originalFetch(input, init);
 		}
@@ -98,7 +103,14 @@ export const activateOrganization = async (token: string, id: string) =>
 export const updateOrganizationById = async (
 	token: string,
 	id: string,
-	org: { name?: string; description?: string; default_models?: string | null }
+	org: {
+		name?: string;
+		description?: string;
+		default_models?: string | null;
+		can_add_models?: boolean;
+		can_add_skills?: boolean;
+		can_add_knowledge?: boolean;
+	}
 ) =>
 	request(token, `/organizations/${id}/update`, {
 		method: 'POST',

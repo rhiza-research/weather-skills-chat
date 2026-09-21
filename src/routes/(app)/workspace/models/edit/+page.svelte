@@ -14,9 +14,11 @@
 	import ModelEditor from '$lib/components/workspace/Models/ModelEditor.svelte';
 
 	let model = null;
+	export let catalog = 'org';
+	$: listPath = catalog === 'public' ? '/admin/models' : '/workspace/models';
 
 	beforeNavigate(({ from, to, cancel }) => {
-		if (!from?.url.pathname.includes('/workspace/models/edit')) {
+		if (!from?.url.pathname.includes('/models/edit')) {
 			return;
 		}
 		if (!to || from.url.pathname === to.url.pathname) {
@@ -34,10 +36,10 @@
 			});
 
 			if (!model) {
-				goto('/workspace/models');
+				goto(listPath);
 			}
 		} else {
-			goto('/workspace/models');
+			goto(listPath);
 		}
 	});
 
@@ -52,11 +54,11 @@
 				)
 			);
 			toast.success($i18n.t('Model updated successfully'));
-			await goto('/workspace/models');
+			await goto(listPath);
 		}
 	};
 </script>
 
 {#if model}
-	<ModelEditor edit={true} {model} {onSubmit} />
+	<ModelEditor edit={true} {model} {onSubmit} {catalog} />
 {/if}

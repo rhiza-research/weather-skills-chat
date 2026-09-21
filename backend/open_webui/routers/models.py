@@ -1,5 +1,9 @@
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.models import (
     ModelForm,
     ModelModel,
@@ -7,40 +11,32 @@ from open_webui.models.models import (
     ModelUserResponse,
     Models,
 )
-from open_webui.constants import ERROR_MESSAGES
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-
-
+from open_webui.models.org_catalog import RESOURCE_MODEL, OrgCatalogOverrides
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import (
-    can_update_access_control,
-    has_permission,
-    user_owns_or_has_access,
-    visible_in_organization,
+from open_webui.utils.catalog import (
+    annotate,
+    can_manage_public,
+    can_toggle,
+    can_write_item,
+    is_visible,
+    stamp_create,
 )
 from open_webui.utils.organizations import get_active_organization_id
 
-
 router = APIRouter()
 
-SHARING_PERMISSION_KEY = "sharing.public_models"
+
+class CatalogEnabledForm(BaseModel):
+    enabled: bool
 
 
-def _can_read(user, model) -> bool:
-    return user_owns_or_has_access(
-        user.id, model.user_id, model.access_control, "read", user.role
-    )
-
-
-def _can_write(user, model) -> bool:
-    return user_owns_or_has_access(
-        user.id, model.user_id, model.access_control, "write", user.role
-    )
-
-
-###########################
-# GetModels
-###########################
+def _visible_models(user, organization_id: str) -> list[ModelUserResponse]:
+    models = []
+    for model in Models.get_models():
+        if is_visible(organization_id, RESOURCE_MODEL, model):
+            data = annotate(model, organization_id, RESOURCE_MODEL)
+            models.append(ModelUserResponse.model_validate(data))
+    return models
 
 
 @router.get("/", response_model=list[ModelUserResponse])
@@ -49,23 +45,10 @@ async def get_models(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    return [
-        model
-        for model in Models.get_models()
-        if visible_in_organization(
-            user.id,
-            model.user_id,
-            model.access_control,
-            organization_id,
-            "read",
-            user.role,
-        )
-    ]
-
-
-###########################
-# GetBaseModels
-###########################
+    models = _visible_models(user, organization_id)
+    if id:
+        models = [m for m in models if m.id == id]
+    return models
 
 
 @router.get("/base", response_model=list[ModelResponse])
@@ -73,100 +56,134 @@ async def get_base_models(user=Depends(get_admin_user)):
     return Models.get_base_models()
 
 
-############################
-# CreateNewModel
-############################
-
-
 @router.post("/create", response_model=Optional[ModelModel])
 async def create_new_model(
     request: Request,
     form_data: ModelForm,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
-    if user.role != "admin" and not has_permission(
-        user.id, "workspace.models", request.app.state.config.USER_PERMISSIONS
-    ):
+    try:
+        org_id, visibility = stamp_create(user, organization_id, RESOURCE_MODEL)
+    except PermissionError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
 
-    model = Models.get_model_by_id(form_data.id)
-    if model:
+    if Models.get_model_by_id(form_data.id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.MODEL_ID_TAKEN,
         )
 
-    else:
-        model = Models.insert_new_model(form_data, user.id)
-        if model:
-            return model
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.DEFAULT(),
-            )
+    form_data.organization_id = org_id
+    form_data.visibility = visibility
+    if visibility != "public":
+        form_data.enabled_by_default = True
+
+    model = Models.insert_new_model(form_data, user.id)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.DEFAULT(),
+        )
+    return ModelModel.model_validate(
+        annotate(model, organization_id, RESOURCE_MODEL)
+    )
 
 
-###########################
-# GetModelById
-###########################
-
-
-# Note: We're not using the typical url path param here, but instead using a query parameter to allow '/' in the id
 @router.get("/model", response_model=Optional[ModelResponse])
-async def get_model_by_id(id: str, user=Depends(get_verified_user)):
+async def get_model_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     model = Models.get_model_by_id(id)
-    if model:
-        if _can_read(user, model):
-            return model
+    if model and is_visible(organization_id, RESOURCE_MODEL, model):
+        return ModelResponse.model_validate(
+            annotate(model, organization_id, RESOURCE_MODEL)
+        )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=ERROR_MESSAGES.NOT_FOUND,
+    )
+
+
+@router.post("/model/toggle", response_model=Optional[ModelResponse])
+async def toggle_model_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    model = Models.get_model_by_id(id)
+    if not model or not can_write_item(user, organization_id, model):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
-    else:
+    model = Models.toggle_model_by_id(id)
+    if not model:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
         )
+    return ModelResponse.model_validate(
+        annotate(model, organization_id, RESOURCE_MODEL)
+    )
 
 
-############################
-# ToggelModelById
-############################
-
-
-@router.post("/model/toggle", response_model=Optional[ModelResponse])
-async def toggle_model_by_id(id: str, user=Depends(get_verified_user)):
+@router.post("/model/enabled-by-default", response_model=Optional[ModelResponse])
+async def set_model_enabled_by_default(
+    id: str,
+    form_data: CatalogEnabledForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     model = Models.get_model_by_id(id)
-    if model:
-        if _can_write(user, model):
-            model = Models.toggle_model_by_id(id)
+    if not model or not can_write_item(user, organization_id, model):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    model = Models.set_enabled_by_default(id, form_data.enabled)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT("Error updating model"),
+        )
+    return ModelResponse.model_validate(
+        annotate(model, organization_id, RESOURCE_MODEL)
+    )
 
-            if model:
-                return model
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT("Error updating function"),
-                )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.UNAUTHORIZED,
-            )
-    else:
+
+@router.post("/model/enabled", response_model=Optional[ModelResponse])
+async def set_model_enabled(
+    id: str,
+    form_data: CatalogEnabledForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    model = Models.get_model_by_id(id)
+    if not model:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
-
-
-############################
-# UpdateModelById
-############################
+    if getattr(model, "visibility", None) != "public":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if not can_toggle(user, organization_id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+    OrgCatalogOverrides.set(organization_id, RESOURCE_MODEL, id, form_data.enabled)
+    return ModelResponse.model_validate(
+        annotate(model, organization_id, RESOURCE_MODEL)
+    )
 
 
 @router.post("/model/update", response_model=Optional[ModelModel])
@@ -175,64 +192,52 @@ async def update_model_by_id(
     id: str,
     form_data: ModelForm,
     user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     model = Models.get_model_by_id(id)
-
     if not model:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
-
-    if not _can_write(user, model):
+    if not can_write_item(user, organization_id, model):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    if not can_update_access_control(
-        user.id,
-        user.role,
-        model.user_id,
-        model.access_control,
-        form_data.access_control,
-        SHARING_PERMISSION_KEY,
-        request.app.state.config.USER_PERMISSIONS,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+    form_data.organization_id = model.organization_id
+    form_data.visibility = model.visibility
+    if model.visibility != "public":
+        form_data.enabled_by_default = model.enabled_by_default
 
     model = Models.update_model_by_id(id, form_data)
-    return model
-
-
-############################
-# DeleteModelById
-############################
+    return ModelModel.model_validate(
+        annotate(model, organization_id, RESOURCE_MODEL)
+    )
 
 
 @router.delete("/model/delete", response_model=bool)
-async def delete_model_by_id(id: str, user=Depends(get_verified_user)):
+async def delete_model_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     model = Models.get_model_by_id(id)
     if not model:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
-
-    if not _can_write(user, model):
+    if not can_write_item(user, organization_id, model):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
         )
-
-    result = Models.delete_model_by_id(id)
-    return result
+    OrgCatalogOverrides.delete_for_resource(RESOURCE_MODEL, id)
+    return Models.delete_model_by_id(id)
 
 
 @router.delete("/delete/all", response_model=bool)
 async def delete_all_models(user=Depends(get_admin_user)):
-    result = Models.delete_all_models()
-    return result
+    return Models.delete_all_models()

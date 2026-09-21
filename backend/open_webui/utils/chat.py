@@ -209,7 +209,8 @@ async def _generate_chat_completion(
         # Check if user has access to the model
         if not bypass_filter and user.role == "user":
             try:
-                check_model_access(user, model)
+                org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
+                check_model_access(user, model, org_id)
             except Exception as e:
                 raise e
 

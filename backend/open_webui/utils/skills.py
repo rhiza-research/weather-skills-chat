@@ -799,7 +799,15 @@ def _sync_pack_tools(
     prepared = []
     summaries: list[dict] = []
     for skill, tool_id, prev in assignments:
-        enabled = True if prev.get("enabled") is None else bool(prev.get("enabled"))
+        if prev.get("enabled_by_default") is not None:
+            enabled = bool(prev.get("enabled_by_default"))
+        elif prev.get("enabled") is None:
+            enabled = True
+        else:
+            enabled = bool(prev.get("enabled"))
+        is_active = (
+            True if prev.get("is_active") is None else bool(prev.get("is_active"))
+        )
         row = _prepare_skill_tool(
             pack=pack,
             skill=skill,
@@ -817,6 +825,8 @@ def _sync_pack_tools(
                 "skill_dir": str(skill.skill_dir),
                 "relative_path": skill.relative_path,
                 "enabled": enabled,
+                "enabled_by_default": enabled,
+                "is_active": is_active,
             }
         )
 
@@ -931,7 +941,8 @@ def install_skill_pack(
     git_ref: str,
     request_app_tools: dict,
     organization_id: Optional[str] = None,
-    visibility: str = "private",
+    visibility: str = "organization",
+    enabled_by_default: bool = True,
 ) -> SkillPackModel:
     url = validate_public_git_url(git_url)
     ref = (git_ref or "main").strip() or "main"
@@ -977,6 +988,7 @@ def install_skill_pack(
                         meta={"skills": []},
                         organization_id=organization_id,
                         visibility=visibility,
+                        enabled_by_default=enabled_by_default,
                         access_control=access_control,
                         db=db,
                     )
@@ -1130,8 +1142,7 @@ def set_pack_access_control(
     return updated
 
 
-def set_skill_enabled(pack_id: str, tool_id: str, enabled: bool) -> SkillPackModel:
-    """Toggle a skill's global default enabled flag (chat can still override)."""
+def _update_skill_meta(pack_id: str, tool_id: str, **flags) -> SkillPackModel:
     pack = SkillPacks.get_by_id(pack_id)
     if not pack:
         raise SkillInstallError("Skill pack not found")
@@ -1139,13 +1150,20 @@ def set_skill_enabled(pack_id: str, tool_id: str, enabled: bool) -> SkillPackMod
     meta = dict(pack.meta or {})
     skills = list(meta.get("skills") or [])
     found = False
+    merged = {}
     for skill in skills:
         if not isinstance(skill, dict):
             continue
-        if skill.get("tool_id") == tool_id:
-            skill["enabled"] = bool(enabled)
-            found = True
-            break
+        if skill.get("tool_id") != tool_id:
+            continue
+        if "enabled_by_default" in flags and "enabled" not in flags:
+            flags = {**flags, "enabled": bool(flags["enabled_by_default"])}
+        if "enabled" in flags and "enabled_by_default" not in flags:
+            flags = {**flags, "enabled_by_default": bool(flags["enabled"])}
+        skill.update({key: bool(value) for key, value in flags.items()})
+        merged = skill
+        found = True
+        break
     if not found:
         raise SkillInstallError(f"Skill tool {tool_id} not found in pack")
 
@@ -1159,11 +1177,26 @@ def set_skill_enabled(pack_id: str, tool_id: str, enabled: bool) -> SkillPackMod
         tool_meta = tool.meta.model_dump() if tool.meta else {}
         manifest = dict(tool_meta.get("manifest") or {})
         if manifest.get("kind") == "skill" or manifest.get("pack_id") == pack_id:
-            manifest["enabled"] = bool(enabled)
+            if "enabled" in merged:
+                manifest["enabled"] = bool(merged["enabled"])
+            if "is_active" in merged:
+                manifest["is_active"] = bool(merged["is_active"])
             tool_meta["manifest"] = manifest
             Tools.update_tool_by_id(tool_id, {"meta": tool_meta})
 
     return updated
+
+
+def set_skill_enabled(pack_id: str, tool_id: str, enabled: bool) -> SkillPackModel:
+    """Set a skill's catalog enabled-by-default flag (and legacy ``enabled``)."""
+    return _update_skill_meta(
+        pack_id, tool_id, enabled=enabled, enabled_by_default=enabled
+    )
+
+
+def set_skill_active(pack_id: str, tool_id: str, is_active: bool) -> SkillPackModel:
+    """Set whether an individual skill is listed in the public catalog."""
+    return _update_skill_meta(pack_id, tool_id, is_active=is_active)
 
 
 def pack_to_response(pack: SkillPackModel) -> dict:
@@ -1182,6 +1215,8 @@ def pack_to_response(pack: SkillPackModel) -> dict:
     return {
         "id": pack.id,
         "user_id": pack.user_id,
+        "organization_id": pack.organization_id,
+        "visibility": pack.visibility,
         "name": pack.name,
         "git_url": pack.git_url,
         "git_ref": pack.git_ref,
@@ -1189,7 +1224,18 @@ def pack_to_response(pack: SkillPackModel) -> dict:
         "local_path": pack.local_path,
         "meta": pack.meta,
         "access_control": pack.access_control,
+        "enabled_by_default": bool(getattr(pack, "enabled_by_default", True)),
+        "is_active": getattr(pack, "is_active", True) is not False,
         "created_at": pack.created_at,
         "updated_at": pack.updated_at,
         "skills": skills,
     }
+
+
+def respond_pack(pack: SkillPackModel, organization_id: str) -> dict:
+    from open_webui.models.org_catalog import RESOURCE_SKILL
+    from open_webui.utils.catalog import annotate, annotate_skills
+
+    data = {**pack_to_response(pack), **annotate(pack, organization_id, RESOURCE_SKILL)}
+    data["skills"] = annotate_skills(pack, organization_id, data.get("skills") or [])
+    return data

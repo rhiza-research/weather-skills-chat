@@ -104,22 +104,20 @@ describe('defaultEnabledToolIds', () => {
 		expect(isSkillDefaultEnabled(skill('a', 'plot', '1.0.0'))).toBe(true);
 	});
 
-	it('excludes globally disabled skills from defaults', () => {
+	it('enables listed tools even when catalog default is off', () => {
 		const tools = [
 			skill('on', 'plot', '2.0.0', 'main', undefined, true),
-			skill('off', 'fetch', '1.0.0', 'main', undefined, false),
+			skill('off-default', 'fetch', '1.0.0', 'main', undefined, false),
 			{ id: 'custom', name: 'Custom Tool' }
 		];
-		expect(defaultEnabledToolIds(tools as any).sort()).toEqual(['custom', 'on']);
+		expect(defaultEnabledToolIds(tools as any).sort()).toEqual(['custom', 'off-default', 'on']);
 	});
 
-	it('still prefers highest version among enabled skills', () => {
+	it('still prefers highest version among listed skills', () => {
 		const tools = [
 			skill('old', 'plot', '1.0.0', 'main', undefined, true),
-			skill('new', 'plot', '2.0.0', 'main', undefined, true),
-			skill('disabled-higher', 'plot', '3.0.0', 'main', undefined, false)
+			skill('new', 'plot', '2.0.0', 'main', undefined, true)
 		];
-		// disabled 3.0 is excluded from eligible; remap among remaining still picks 2.0
 		expect(defaultEnabledToolIds(tools)).toEqual(['new']);
 	});
 });
