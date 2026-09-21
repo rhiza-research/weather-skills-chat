@@ -44,6 +44,7 @@ class TestOrganizations(AbstractPostgresTest):
         assert "owner" in ids
         personal = next(org for org in response.json() if org["id"] == "owner")
         assert personal["kind"] == "personal"
+        assert personal["monthly_limit_usd"] == 300
 
         with mock_webui_user(id="owner"):
             response = self.fast_api_client.post(
@@ -55,6 +56,7 @@ class TestOrganizations(AbstractPostgresTest):
         assert workspace["kind"] == "workspace"
         assert workspace["role"] == "owner"
         assert workspace["active"] is False
+        assert workspace["monthly_limit_usd"] == 300
         workspace_id = workspace["id"]
 
         with mock_webui_user(id="owner"):
@@ -288,3 +290,65 @@ class TestOrganizations(AbstractPostgresTest):
         assert kept.user_id == "member"
         assert Organizations.get_member(workspace_id, "member") is None
         assert Organizations.get_member(PLATFORM_ORG_ID, "owner") is not None
+
+    def test_monthly_limit_requires_platform_org_header(self):
+        from open_webui.models.organizations import Organizations, PLATFORM_ORG_ID
+
+        Organizations.ensure_platform("owner")
+        with mock_webui_user(id="owner"):
+            workspace = self.fast_api_client.post(
+                self.create_url("/"),
+                json={"name": "Capped Org"},
+            ).json()
+        workspace_id = workspace["id"]
+
+        with mock_webui_user(id="owner"):
+            denied = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/update"),
+                headers={"X-Organization-Id": workspace_id},
+                json={"monthly_limit_usd": 50},
+            )
+        assert denied.status_code == 403
+
+        with mock_webui_user(id="outsider"):
+            denied_all = self.fast_api_client.get(
+                self.create_url("/all"),
+                headers={"X-Organization-Id": PLATFORM_ORG_ID},
+            )
+        assert denied_all.status_code == 403
+
+        with mock_webui_user(id="owner"):
+            denied_list = self.fast_api_client.get(
+                self.create_url("/all"),
+                headers={"X-Organization-Id": workspace_id},
+            )
+        assert denied_list.status_code == 403
+
+        with mock_webui_user(id="owner"):
+            updated = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/update"),
+                headers={"X-Organization-Id": PLATFORM_ORG_ID},
+                json={"monthly_limit_usd": 50},
+            )
+        assert updated.status_code == 200
+        assert updated.json()["monthly_limit_usd"] == 50
+
+        with mock_webui_user(id="owner"):
+            personal = self.fast_api_client.post(
+                self.create_url("/owner/update"),
+                headers={"X-Organization-Id": PLATFORM_ORG_ID},
+                json={"monthly_limit_usd": 125},
+            )
+        assert personal.status_code == 200
+        assert personal.json()["monthly_limit_usd"] == 125
+
+        with mock_webui_user(id="owner"):
+            listed = self.fast_api_client.get(
+                self.create_url("/all"),
+                headers={"X-Organization-Id": PLATFORM_ORG_ID},
+            )
+        assert listed.status_code == 200
+        capped = next(org for org in listed.json() if org["id"] == workspace_id)
+        assert capped["monthly_limit_usd"] == 50
+        owner_personal = next(org for org in listed.json() if org["id"] == "owner")
+        assert owner_personal["monthly_limit_usd"] == 125

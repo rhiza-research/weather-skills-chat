@@ -12,15 +12,7 @@
 	let loaded = false;
 
 	$: if (loaded) {
-		if (
-			$page.url.pathname.startsWith('/admin/models') ||
-			$page.url.pathname.startsWith('/admin/skills') ||
-			$page.url.pathname.startsWith('/admin/knowledge')
-		) {
-			catalogOrganizationId.set(PLATFORM_ORG_ID);
-		} else {
-			catalogOrganizationId.set(null);
-		}
+		catalogOrganizationId.set(PLATFORM_ORG_ID);
 	}
 
 	onMount(async () => {

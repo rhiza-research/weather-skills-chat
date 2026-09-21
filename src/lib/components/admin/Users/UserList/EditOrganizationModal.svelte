@@ -14,24 +14,53 @@
 
 	let name = '';
 	let description = '';
+	let unlimited = false;
+	let limitUsd = 300;
 	let loading = false;
+	let initialized = false;
 
-	$: if (show && selectedOrg) {
+	$: isPersonal = selectedOrg?.kind === 'personal';
+
+	$: if (show && selectedOrg && !initialized) {
 		name = selectedOrg.name ?? '';
 		description = selectedOrg.description ?? '';
+		if (selectedOrg.monthly_limit_usd == null) {
+			unlimited = true;
+			limitUsd = 300;
+		} else {
+			unlimited = false;
+			limitUsd = Number(selectedOrg.monthly_limit_usd);
+		}
+		initialized = true;
+	}
+	$: if (!show) {
+		initialized = false;
 	}
 
 	const submitHandler = async () => {
-		if (!selectedOrg?.id || !name.trim()) {
+		if (!selectedOrg?.id || (!isPersonal && !name.trim())) {
 			toast.error($i18n.t('Organization name cannot be empty.'));
 			return;
 		}
+		let monthlyLimit = null;
+		if (!unlimited) {
+			const parsed = Number(limitUsd);
+			if (!Number.isFinite(parsed) || parsed < 0) {
+				toast.error($i18n.t('Monthly limit must be a number greater than or equal to 0.'));
+				return;
+			}
+			monthlyLimit = parsed;
+		}
 		loading = true;
 		try {
-			await updateOrganizationById(localStorage.token, selectedOrg.id, {
-				name: name.trim(),
-				description: description.trim()
-			});
+			const payload = {
+				monthly_limit_usd: monthlyLimit
+			};
+			if (!isPersonal) {
+				payload.name = name.trim();
+				payload.description = description.trim();
+			}
+			await updateOrganizationById(localStorage.token, selectedOrg.id, payload);
 			dispatch('save');
 			show = false;
 		} catch (error) {
@@ -72,26 +101,46 @@
 					submitHandler();
 				}}
 			>
-				<div class="flex flex-col w-full">
-					<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
-					<input
-						class="w-full text-sm bg-transparent outline-hidden"
-						type="text"
-						bind:value={name}
-						placeholder={$i18n.t('Organization name')}
-						autocomplete="off"
-						required
-					/>
-				</div>
+				{#if !isPersonal}
+					<div class="flex flex-col w-full">
+						<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
+						<input
+							class="w-full text-sm bg-transparent outline-hidden"
+							type="text"
+							bind:value={name}
+							placeholder={$i18n.t('Organization name')}
+							autocomplete="off"
+							required
+						/>
+					</div>
 
-				<div class="flex flex-col w-full mt-3">
-					<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Description')}</div>
-					<Textarea
-						className="w-full text-sm bg-transparent outline-hidden resize-none"
-						rows={2}
-						bind:value={description}
-						placeholder={$i18n.t('Organization description')}
-					/>
+					<div class="flex flex-col w-full mt-3">
+						<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Description')}</div>
+						<Textarea
+							className="w-full text-sm bg-transparent outline-hidden resize-none"
+							rows={2}
+							bind:value={description}
+							placeholder={$i18n.t('Organization description')}
+						/>
+					</div>
+				{/if}
+
+				<div class="flex flex-col w-full {isPersonal ? '' : 'mt-3'}">
+					<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Monthly usage limit (USD)')}</div>
+					<label class="flex items-center gap-2 text-sm mt-1">
+						<input type="checkbox" bind:checked={unlimited} />
+						{$i18n.t('Unlimited')}
+					</label>
+					{#if !unlimited}
+						<input
+							class="w-full text-sm bg-transparent outline-hidden mt-2"
+							type="number"
+							min="0"
+							step="0.01"
+							bind:value={limitUsd}
+							placeholder="300"
+						/>
+					{/if}
 				</div>
 
 				<div class="flex justify-end pt-4">

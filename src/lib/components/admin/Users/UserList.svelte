@@ -18,6 +18,7 @@
 		getAllOrganizations,
 		updateOrganizationById
 	} from '$lib/apis/organizations';
+	import { formatTokenCount, formatUsd, remainingUsd, tokenUsageLabel, tokenUsageTooltip } from '$lib/utils/usage';
 
 	import Pagination from '$lib/components/common/Pagination.svelte';
 	import ChatBubbles from '$lib/components/icons/ChatBubbles.svelte';
@@ -203,6 +204,11 @@
 
 	$: paged = rows.slice((page - 1) * 20, page * 20);
 
+	const tokenLine = (usage) => {
+		if (!usage) return '—';
+		return `${formatTokenCount(usage.prompt_tokens)} / ${formatTokenCount(usage.completion_tokens)} / ${formatTokenCount(usage.total_tokens)} / ${formatTokenCount(usage.uncached_tokens)}`;
+	};
+
 	onMount(loadOrgs);
 </script>
 
@@ -228,6 +234,7 @@
 	<EditUserModal
 		bind:show={showEditUserModal}
 		{selectedUser}
+		selectedOrg={selectedUser ? orgs.find((org) => org.id === selectedUser.id) : null}
 		sessionUser={$user}
 		on:save={refreshUsers}
 	/>
@@ -305,7 +312,7 @@
 </div>
 
 <div class="overflow-x-auto">
-	<div class="min-w-[56rem]">
+	<div class="min-w-[76rem]">
 		<div
 			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"
 		>
@@ -318,6 +325,14 @@
 			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
 				{$i18n.t('Members')}
 			</div>
+			<div class="text-right leading-tight">{$i18n.t('Used')}</div>
+			<div class="text-right leading-tight">{$i18n.t('Cap')}</div>
+			<div class="text-right leading-tight">{$i18n.t('Remaining')}</div>
+			<div class="leading-tight">
+				<Tooltip content={tokenUsageLabel()} className="inline-flex">
+					<span>{$i18n.t('Tokens')}</span>
+				</Tooltip>
+			</div>
 			<div class="text-center leading-tight">{$i18n.t('Allow adding models')}</div>
 			<div class="text-center leading-tight">{$i18n.t('Allow adding skills')}</div>
 			<div class="text-center leading-tight">{$i18n.t('Allow adding knowledge')}</div>
@@ -327,11 +342,11 @@
 
 		{#each paged as row, idx (row.id)}
 		<div
-			class="rounded-lg px-2 py-2 {idx % 2 === 0
+			class="rounded-lg py-2 {idx % 2 === 0
 				? 'bg-gray-50 dark:bg-gray-850/80'
 				: 'bg-white dark:bg-gray-900'}"
 		>
-			<div class="org-table-row grid items-center gap-x-3">
+			<div class="org-table-row grid items-center gap-x-3 px-2">
 				{#if row.kind === 'personal'}
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="shrink-0 w-4"></span>
@@ -404,6 +419,23 @@
 				<div class="text-sm text-gray-500">
 					{row.memberCount}
 				</div>
+
+				<div class="text-sm text-right tabular-nums">
+					{formatUsd(row.usage?.cost_usd ?? 0, '$0.00')}
+				</div>
+				<div class="text-sm text-right tabular-nums">
+					{formatUsd(row.monthly_limit_usd, $i18n.t('Unlimited'))}
+				</div>
+				<div class="text-sm text-right tabular-nums text-gray-500">
+					{row.monthly_limit_usd == null
+						? '—'
+						: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
+				</div>
+				<Tooltip content={tokenUsageTooltip(row.usage)} className="min-w-0 block">
+					<div class="text-[11px] text-gray-500 tabular-nums truncate">
+						{tokenLine(row.usage)}
+					</div>
+				</Tooltip>
 
 				<div class="flex justify-center">
 					{#if row.kind !== 'platform'}
@@ -622,7 +654,21 @@
 
 <style>
 	.org-table-row {
-		grid-template-columns: minmax(14rem, 1.5fr) minmax(8rem, 0.85fr) 4.5rem repeat(3, 6.5rem)
-			minmax(7rem, auto);
+		grid-template-columns:
+			minmax(0, 1.5fr)
+			7.25rem
+			4.25rem
+			5.25rem
+			5.25rem
+			6.25rem
+			minmax(0, 0.9fr)
+			4.75rem
+			4.75rem
+			5.25rem
+			8.5rem;
+	}
+
+	.org-table-row > :global(*) {
+		min-width: 0;
 	}
 </style>

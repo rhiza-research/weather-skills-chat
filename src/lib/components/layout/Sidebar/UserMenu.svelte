@@ -23,7 +23,9 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { userSignOut } from '$lib/apis/auths';
 	import { createOrganization } from '$lib/apis/organizations';
+	import { getMyUsage } from '$lib/apis/usage';
 	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
+	import { formatUsd, usageBarPercent } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
@@ -38,6 +40,7 @@
 	let requestName = '';
 	let requestDescription = '';
 	let requesting = false;
+	let usage = null;
 
 	$: currentOrg =
 		($organizations ?? []).find((org) => org.id === $activeOrganizationId) ?? {
@@ -46,6 +49,18 @@
 			kind: 'personal'
 		};
 	$: isOrgManager = isWorkspaceManagerContext(currentOrg);
+
+	const loadUsage = async () => {
+		if (!localStorage.token) {
+			usage = null;
+			return;
+		}
+		try {
+			usage = await getMyUsage(localStorage.token);
+		} catch {
+			usage = null;
+		}
+	};
 
 	const resetOrgUi = () => {
 		showOrgPicker = false;
@@ -92,7 +107,9 @@
 <DropdownMenu.Root
 	bind:open={show}
 	onOpenChange={(state) => {
-		if (!state) {
+		if (state) {
+			loadUsage();
+		} else {
 			resetOrgUi();
 		}
 		dispatch('change', state);
@@ -190,6 +207,42 @@
 								{$i18n.t('Submit request')}
 							</button>
 						</form>
+					{/if}
+				</div>
+			{/if}
+
+			{#if usage}
+				<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+				<div class="px-3 py-2">
+					<div class="text-[11px] uppercase tracking-wide text-gray-400 truncate">
+						{#if currentOrg.kind === 'personal'}
+							{$i18n.t('Personal usage')}
+						{:else}
+							{$i18n.t('{{name}} usage', {
+								name: usage.organization_name || currentOrg.name
+							})}
+						{/if}
+					</div>
+					<div class="text-xs font-medium tabular-nums">
+						{formatUsd(usage.cost_usd, '$0.00')}{#if usage.effective_limit_usd != null}
+							/ {formatUsd(usage.effective_limit_usd)}{/if}
+					</div>
+					{#if usage.effective_limit_usd != null}
+						<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+							<div
+								class="h-full rounded-full {usage.over_limit
+									? 'bg-red-500'
+									: 'bg-gray-900 dark:bg-white'}"
+								style="width: {usageBarPercent(
+									usage.cost_usd,
+									usage.effective_limit_usd,
+									usage.over_limit
+								)}%"
+							></div>
+						</div>
+					{/if}
+					{#if usage.over_limit && usage.message}
+						<div class="mt-1 text-[11px] text-red-600 leading-snug">{usage.message}</div>
 					{/if}
 				</div>
 			{/if}

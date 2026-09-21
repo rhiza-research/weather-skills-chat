@@ -86,6 +86,7 @@ from open_webui.routers import (
     evaluations,
     tools,
     users,
+    usage,
     utils,
 )
 
@@ -402,6 +403,8 @@ from open_webui.utils.catalog import (
 )
 from open_webui.models.org_catalog import RESOURCE_MODEL
 from open_webui.utils.organizations import get_active_organization_id
+from open_webui.models.usage import UsageLimitExceeded
+from open_webui.utils.usage import check_usage_caps
 
 from open_webui.utils.auth import (
     get_license_data,
@@ -1066,6 +1069,7 @@ app.include_router(groups.router, prefix="/api/v1/groups", tags=["groups"])
 app.include_router(
     organizations.router, prefix="/api/v1/organizations", tags=["organizations"]
 )
+app.include_router(usage.router, prefix="/api/v1/usage", tags=["usage"])
 app.include_router(
     automations.router, prefix="/api/v1/automations", tags=["automations"]
 )
@@ -1213,6 +1217,13 @@ async def chat_completion(
             request.state.direct = True
             request.state.model = model
 
+        try:
+            check_usage_caps(organization_id, user.id)
+        except UsageLimitExceeded as e:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.detail
+            ) from e
+
         metadata = {
             "user_id": user.id,
             "chat_id": form_data.pop("chat_id", None),
@@ -1225,6 +1236,8 @@ async def chat_completion(
             "variables": form_data.get("variables", None),
             "model": model,
             "direct": model_item.get("direct", False),
+            "organization_id": organization_id,
+            "usage_source": "chat",
             **(
                 {"function_calling": "native"}
                 if form_data.get("params", {}).get("function_calling") == "native"
@@ -1240,6 +1253,8 @@ async def chat_completion(
         request.state.metadata = metadata
         form_data["metadata"] = metadata
 
+    except HTTPException:
+        raise
     except Exception as e:
         log.debug(f"Error preparing chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):
@@ -1337,6 +1352,12 @@ async def chat_completion(
                 job_metadata.get("chat_id"),
                 job_metadata.get("message_id"),
             )
+            if isinstance(e, HTTPException) and isinstance(e.detail, str):
+                error_content = e.detail
+            elif isinstance(e, UsageLimitExceeded):
+                error_content = e.detail
+            else:
+                error_content = str(e)
             event_emitter = get_event_emitter(job_metadata)
             if event_emitter:
                 try:
@@ -1345,7 +1366,7 @@ async def chat_completion(
                             "type": "chat:completion",
                             "data": {
                                 "done": True,
-                                "error": {"content": str(e)},
+                                "error": {"content": error_content},
                             },
                         }
                     )
@@ -1358,7 +1379,7 @@ async def chat_completion(
                         job_metadata["message_id"],
                         {
                             "done": True,
-                            "error": {"content": str(e)},
+                            "error": {"content": error_content},
                         },
                     )
                 except Exception:

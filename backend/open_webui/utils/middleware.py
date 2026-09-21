@@ -2779,6 +2779,9 @@ async def process_chat_response(
                                     "session_id": metadata.get("session_id"),
                                     "user_id": metadata.get("user_id")
                                     or getattr(user, "id", None),
+                                    "organization_id": metadata.get("organization_id"),
+                                    "usage_source": metadata.get("usage_source")
+                                    or "chat",
                                 },
                             },
                             user,
@@ -2990,6 +2993,11 @@ async def process_chat_response(
                                         "session_id": metadata.get("session_id"),
                                         "user_id": metadata.get("user_id")
                                         or getattr(user, "id", None),
+                                        "organization_id": metadata.get(
+                                            "organization_id"
+                                        ),
+                                        "usage_source": metadata.get("usage_source")
+                                        or "chat",
                                     },
                                 },
                                 user,

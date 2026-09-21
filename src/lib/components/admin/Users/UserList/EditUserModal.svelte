@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import dayjs from 'dayjs';
-	import { createEventDispatcher } from 'svelte';
-	import { onMount, getContext } from 'svelte';
+	import { createEventDispatcher, getContext } from 'svelte';
 
 	import { updateUserById } from '$lib/apis/users';
+	import { updateOrganizationById } from '$lib/apis/organizations';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -15,6 +15,7 @@
 
 	export let show = false;
 	export let selectedUser;
+	export let selectedOrg = null;
 	export let sessionUser;
 
 	let _user = {
@@ -23,24 +24,59 @@
 		email: '',
 		password: ''
 	};
+	let unlimited = false;
+	let limitUsd = 300;
+	let initialized = false;
+
+	$: if (show && selectedUser && !initialized) {
+		_user = { ...selectedUser, password: '' };
+		if (selectedOrg) {
+			if (selectedOrg.monthly_limit_usd == null) {
+				unlimited = true;
+				limitUsd = 300;
+			} else {
+				unlimited = false;
+				limitUsd = Number(selectedOrg.monthly_limit_usd);
+			}
+		}
+		initialized = true;
+	}
+	$: if (!show) {
+		initialized = false;
+	}
 
 	const submitHandler = async () => {
 		const res = await updateUserById(localStorage.token, selectedUser.id, _user).catch((error) => {
 			toast.error(`${error}`);
 		});
 
-		if (res) {
-			dispatch('save');
-			show = false;
+		if (!res) {
+			return;
 		}
-	};
 
-	onMount(() => {
-		if (selectedUser) {
-			_user = selectedUser;
-			_user.password = '';
+		if (selectedOrg?.id) {
+			let monthlyLimit = null;
+			if (!unlimited) {
+				const parsed = Number(limitUsd);
+				if (!Number.isFinite(parsed) || parsed < 0) {
+					toast.error($i18n.t('Monthly limit must be a number greater than or equal to 0.'));
+					return;
+				}
+				monthlyLimit = parsed;
+			}
+			try {
+				await updateOrganizationById(localStorage.token, selectedOrg.id, {
+					monthly_limit_usd: monthlyLimit
+				});
+			} catch (error) {
+				toast.error(`${error}`);
+				return;
+			}
 		}
-	});
+
+		dispatch('save');
+		show = false;
+	};
 </script>
 
 <Modal size="sm" bind:show>
@@ -138,6 +174,25 @@
 								/>
 							</div>
 						</div>
+
+						{#if selectedOrg}
+							<div class="flex flex-col w-full pt-2">
+								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit (USD)')}</div>
+								<label class="flex items-center gap-2 text-sm mb-2">
+									<input type="checkbox" bind:checked={unlimited} />
+									{$i18n.t('Unlimited')}
+								</label>
+								{#if !unlimited}
+									<input
+										class="w-full rounded-sm py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-hidden"
+										type="number"
+										min="0"
+										step="0.01"
+										bind:value={limitUsd}
+									/>
+								{/if}
+							</div>
+						{/if}
 					</div>
 
 					<div class="flex justify-end pt-3 text-sm font-medium">

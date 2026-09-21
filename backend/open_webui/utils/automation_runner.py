@@ -4,14 +4,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from fastapi import HTTPException, status
+
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, SRC_LOG_LEVELS
 from open_webui.models.automations import AutomationRuns, Automations
 from open_webui.models.chats import ChatForm, Chats
+from open_webui.models.usage import UsageLimitExceeded
 from open_webui.models.users import Users
 from open_webui.tasks import create_task, get_task
 from open_webui.utils.chat import generate_chat_completion as chat_completion_handler
 from open_webui.utils.middleware import process_chat_payload, process_chat_response
 from open_webui.utils.models import check_model_access, get_all_models
+from open_webui.utils.usage import check_usage_caps
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -109,6 +113,7 @@ async def _stream_automation_chat(
     prompt: str,
     tool_ids: Optional[list[str]],
     features: dict,
+    organization_id: Optional[str] = None,
 ) -> None:
     """Run the chat middleware + streaming tool loop for an automation chat."""
     form_data = {
@@ -139,6 +144,8 @@ async def _stream_automation_chat(
         "direct": False,
         "function_calling": "native",
         "headless": True,
+        "organization_id": organization_id,
+        "usage_source": "automation",
     }
     request.state.metadata = metadata
     form_data["metadata"] = metadata
@@ -196,6 +203,14 @@ async def execute_automation(
 
     if not BYPASS_MODEL_ACCESS_CONTROL and user.role == "user":
         check_model_access(user, model)
+
+    org_id = automation.organization_id or owner_id
+    try:
+        check_usage_caps(org_id, owner_id)
+    except UsageLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.detail
+        ) from e
 
     run = AutomationRuns.insert_run(
         automation.id, status="running", triggered_by=triggered_by
@@ -261,19 +276,26 @@ async def execute_automation(
                     prompt=automation.prompt,
                     tool_ids=tool_ids,
                     features=features,
+                    organization_id=org_id,
                 )
                 AutomationRuns.update_run(run.id, status="success", finished=True)
             except Exception as e:
                 log.exception("Automation run failed")
+                if isinstance(e, HTTPException) and isinstance(e.detail, str):
+                    error_content = e.detail
+                elif isinstance(e, UsageLimitExceeded):
+                    error_content = e.detail
+                else:
+                    error_content = str(e)
                 AutomationRuns.update_run(
-                    run.id, status="error", error=str(e), finished=True
+                    run.id, status="error", error=error_content, finished=True
                 )
                 Chats.upsert_message_to_chat_by_id_and_message_id(
                     chat.id,
                     assistant["id"],
                     {
                         "done": True,
-                        "error": {"content": str(e)},
+                        "error": {"content": error_content},
                     },
                 )
                 if wait:

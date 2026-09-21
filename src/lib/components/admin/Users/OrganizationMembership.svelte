@@ -7,10 +7,12 @@
 		getOrganizationById,
 		getOrganizations,
 		removeOrganizationMember,
+		updateOrganizationMemberLimit,
 		updateOrganizationMemberRole
 	} from '$lib/apis/organizations';
 	import { searchUsers } from '$lib/apis/users';
 	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { formatTokenCount, formatUsd, remainingUsd, tokenUsageLabel, tokenUsageTooltip } from '$lib/utils/usage';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -119,6 +121,32 @@
 		}
 	};
 
+	const saveMemberLimit = async (userId: string, raw: string) => {
+		if (!org) return;
+		const trimmed = raw.trim();
+		let value = null;
+		if (trimmed !== '') {
+			const parsed = Number(trimmed);
+			if (!Number.isFinite(parsed) || parsed < 0) {
+				toast.error($i18n.t('Member limit must be a number greater than or equal to 0.'));
+				await load();
+				return;
+			}
+			value = parsed;
+		}
+		try {
+			org = await updateOrganizationMemberLimit(localStorage.token, org.id, userId, value);
+		} catch (error) {
+			toast.error(`${error}`);
+			await load();
+		}
+	};
+
+	const tokenLine = (usage) => {
+		if (!usage) return '—';
+		return `${formatTokenCount(usage.prompt_tokens)} / ${formatTokenCount(usage.completion_tokens)} / ${formatTokenCount(usage.total_tokens)} / ${formatTokenCount(usage.uncached_tokens)}`;
+	};
+
 	$: if (targetOrgId !== undefined) {
 		load();
 	}
@@ -154,6 +182,23 @@
 	<div class="text-sm text-gray-500 dark:text-gray-400 px-0.5 py-4">
 		{$i18n.t('This is your personal workspace. It cannot have members or be shared.')}
 	</div>
+	{#if org}
+		<div class="text-sm px-0.5 pb-4">
+			<div class="font-medium">
+				{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
+				{#if org.monthly_limit_usd == null}
+					{$i18n.t('this month')}
+				{:else}
+					/ {formatUsd(org.monthly_limit_usd)}
+					<span class="text-gray-500 font-normal">
+						({formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
+						{$i18n.t('remaining')})
+					</span>
+				{/if}
+			</div>
+			<div class="text-xs text-gray-500 mt-1">{tokenLine(org.usage)}</div>
+		</div>
+	{/if}
 {:else if org}
 	{#if isAtLeastAdmin && showAdd}
 		<div class="mb-4">
@@ -191,16 +236,44 @@
 		</div>
 	{/if}
 
-	<div class="flex items-center gap-3 justify-between text-xs uppercase px-1 font-bold">
-		<div class="w-full">{$i18n.t('Member')}</div>
-		<div class="w-full">{$i18n.t('Role')}</div>
-		<div class="w-full"></div>
+	<div class="text-sm px-0.5 mb-3">
+		<span class="font-medium">
+			{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
+			{#if org.monthly_limit_usd == null}
+				{$i18n.t('this month')} ({$i18n.t('Unlimited')})
+			{:else}
+				/ {formatUsd(org.monthly_limit_usd)}
+			{/if}
+		</span>
+		{#if org.monthly_limit_usd != null}
+			<span class="text-gray-500">
+				· {formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
+				{$i18n.t('remaining')}
+			</span>
+		{/if}
+		<span class="text-xs text-gray-500 ml-2">{tokenLine(org.usage)}</span>
+	</div>
+
+	<div class="overflow-x-auto">
+	<div class="min-w-[52rem]">
+	<div class="member-table-row grid items-end gap-x-3 px-1 text-xs uppercase font-bold">
+		<div>{$i18n.t('Member')}</div>
+		<div>{$i18n.t('Role')}</div>
+		<div class="text-right">{$i18n.t('Used')}</div>
+		<div class="text-right">{$i18n.t('Cap')}</div>
+		<div class="text-right">{$i18n.t('Remaining')}</div>
+		<div>
+			<Tooltip content={tokenUsageLabel()} className="inline-flex">
+				<span>{$i18n.t('Tokens')}</span>
+			</Tooltip>
+		</div>
+		<div></div>
 	</div>
 	<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
 
 	{#each org.members ?? [] as member (member.user_id)}
-		<div class="flex items-center gap-3 justify-between px-1 py-2 text-sm">
-			<div class="flex items-center gap-2.5 w-full min-w-0">
+		<div class="member-table-row grid items-center gap-x-3 px-1 py-2 text-sm">
+			<div class="flex items-center gap-2.5 min-w-0">
 				<img
 					class="rounded-full w-6 h-6 object-cover shrink-0"
 					src={member.profile_image_url?.startsWith(WEBUI_BASE_URL) ||
@@ -215,10 +288,10 @@
 					<div class="text-xs text-gray-500 truncate">{member.email ?? ''}</div>
 				</div>
 			</div>
-			<div class="w-full">
+			<div class="min-w-0">
 				{#if isAtLeastAdmin}
 					<select
-						class="bg-transparent text-sm pr-8 outline-hidden cursor-pointer w-fit"
+						class="bg-transparent text-sm pr-8 outline-hidden cursor-pointer w-fit max-w-full"
 						value={member.role}
 						on:change={(e) => changeRole(member.user_id, e.currentTarget.value)}
 					>
@@ -234,7 +307,35 @@
 					<Badge type="muted" content={$i18n.t(member.role)} />
 				{/if}
 			</div>
-			<div class="w-full flex justify-end">
+			<div class="text-right text-sm tabular-nums">
+				{formatUsd(member.usage?.cost_usd ?? 0, '$0.00')}
+			</div>
+			<div class="text-right">
+				{#if isAtLeastAdmin}
+					<input
+						class="w-full text-right text-sm bg-transparent outline-hidden tabular-nums"
+						type="number"
+						min="0"
+						step="0.01"
+						value={member.monthly_limit_usd ?? ''}
+						placeholder={$i18n.t('None')}
+						on:change={(e) => saveMemberLimit(member.user_id, e.currentTarget.value)}
+					/>
+				{:else}
+					<span class="tabular-nums">{formatUsd(member.monthly_limit_usd, $i18n.t('None'))}</span>
+				{/if}
+			</div>
+			<div class="text-right text-sm tabular-nums text-gray-500">
+				{member.monthly_limit_usd == null
+					? '—'
+					: formatUsd(remainingUsd(member.monthly_limit_usd, member.usage?.cost_usd ?? 0))}
+			</div>
+			<Tooltip content={tokenUsageTooltip(member.usage)} className="min-w-0 block">
+				<div class="text-[11px] text-gray-500 tabular-nums truncate">
+					{tokenLine(member.usage)}
+				</div>
+			</Tooltip>
+			<div class="flex justify-end">
 				{#if isAtLeastAdmin}
 					<button
 						class="text-xs text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950"
@@ -248,4 +349,23 @@
 	{:else}
 		<div class="text-sm text-gray-500 py-6 text-center">{$i18n.t('No members yet.')}</div>
 	{/each}
+	</div>
+	</div>
 {/if}
+
+<style>
+	.member-table-row {
+		grid-template-columns:
+			minmax(0, 1.5fr)
+			6rem
+			5rem
+			6rem
+			5.25rem
+			minmax(0, 1fr)
+			4.5rem;
+	}
+
+	.member-table-row > :global(*) {
+		min-width: 0;
+	}
+</style>

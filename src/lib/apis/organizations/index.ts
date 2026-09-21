@@ -13,6 +13,10 @@ export const organizationHeaders = (): Record<string, string> => {
 	return id ? { 'X-Organization-Id': id } : {};
 };
 
+const platformAdminHeaders = (): Record<string, string> => ({
+	'X-Organization-Id': PLATFORM_ORG_ID
+});
+
 let fetchPatched = false;
 
 export const installOrganizationFetch = () => {
@@ -87,7 +91,8 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 
 export const getOrganizations = async (token: string) => request(token, '/organizations/');
 
-export const getAllOrganizations = async (token: string) => request(token, '/organizations/all');
+export const getAllOrganizations = async (token: string) =>
+	request(token, '/organizations/all', { headers: platformAdminHeaders() });
 
 export const getOrganizationById = async (token: string, id: string) =>
 	request(token, `/organizations/${id}`);
@@ -98,7 +103,10 @@ export const createOrganization = async (
 ) => request(token, '/organizations/', { method: 'POST', body: JSON.stringify(org) });
 
 export const activateOrganization = async (token: string, id: string) =>
-	request(token, `/organizations/${id}/activate`, { method: 'POST' });
+	request(token, `/organizations/${id}/activate`, {
+		method: 'POST',
+		headers: platformAdminHeaders()
+	});
 
 export const updateOrganizationById = async (
 	token: string,
@@ -110,11 +118,13 @@ export const updateOrganizationById = async (
 		can_add_models?: boolean;
 		can_add_skills?: boolean;
 		can_add_knowledge?: boolean;
+		monthly_limit_usd?: number | null;
 	}
 ) =>
 	request(token, `/organizations/${id}/update`, {
 		method: 'POST',
-		body: JSON.stringify(org)
+		body: JSON.stringify(org),
+		headers: platformAdminHeaders()
 	});
 
 export const addOrganizationMember = async (
@@ -139,8 +149,22 @@ export const updateOrganizationMemberRole = async (
 		body: JSON.stringify({ role })
 	});
 
+export const updateOrganizationMemberLimit = async (
+	token: string,
+	id: string,
+	userId: string,
+	monthlyLimitUsd: number | null
+) =>
+	request(token, `/organizations/${id}/members/${userId}/usage-limit`, {
+		method: 'POST',
+		body: JSON.stringify({ monthly_limit_usd: monthlyLimitUsd })
+	});
+
 export const removeOrganizationMember = async (token: string, id: string, userId: string) =>
 	request(token, `/organizations/${id}/members/${userId}`, { method: 'DELETE' });
 
 export const deleteOrganizationById = async (token: string, id: string) =>
-	request(token, `/organizations/${id}`, { method: 'DELETE' });
+	request(token, `/organizations/${id}`, {
+		method: 'DELETE',
+		headers: platformAdminHeaders()
+	});

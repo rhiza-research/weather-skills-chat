@@ -5,8 +5,9 @@ from typing import Optional
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, get_db
+from open_webui.models.usage import UsageTotalsModel
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import BigInteger, Boolean, Column, Text, and_
+from sqlalchemy import BigInteger, Boolean, Column, Float, Text, and_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -37,6 +38,7 @@ class Organization(Base):
     can_add_models = Column(Boolean, nullable=False, default=False)
     can_add_skills = Column(Boolean, nullable=False, default=False)
     can_add_knowledge = Column(Boolean, nullable=False, default=False)
+    monthly_limit_usd = Column(Float, nullable=True, default=300.0)
 
 
 class OrganizationMember(Base):
@@ -46,6 +48,7 @@ class OrganizationMember(Base):
     user_id = Column(Text, primary_key=True)
     role = Column(Text, nullable=False)
     created_at = Column(BigInteger)
+    monthly_limit_usd = Column(Float, nullable=True)
 
 
 class OrganizationMemberModel(BaseModel):
@@ -58,6 +61,8 @@ class OrganizationMemberModel(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     profile_image_url: Optional[str] = None
+    monthly_limit_usd: Optional[float] = None
+    usage: Optional[UsageTotalsModel] = None
 
 
 class OrganizationModel(BaseModel):
@@ -77,6 +82,8 @@ class OrganizationModel(BaseModel):
     can_add_models: bool = False
     can_add_skills: bool = False
     can_add_knowledge: bool = False
+    monthly_limit_usd: Optional[float] = None
+    usage: Optional[UsageTotalsModel] = None
 
 
 class OrganizationForm(BaseModel):
@@ -100,6 +107,14 @@ class OrganizationUpdateForm(BaseModel):
     can_add_models: Optional[bool] = None
     can_add_skills: Optional[bool] = None
     can_add_knowledge: Optional[bool] = None
+    monthly_limit_usd: Optional[float] = None
+
+    @field_validator("monthly_limit_usd")
+    @classmethod
+    def org_limit_not_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError("monthly_limit_usd must be >= 0")
+        return v
 
 
 class OrganizationMemberAddForm(BaseModel):
@@ -111,6 +126,17 @@ class OrganizationMemberAddForm(BaseModel):
     def valid_role(cls, v: str) -> str:
         if v not in ORG_ROLES:
             raise ValueError("Role must be owner, admin, or user")
+        return v
+
+
+class OrganizationMemberLimitForm(BaseModel):
+    monthly_limit_usd: Optional[float] = None
+
+    @field_validator("monthly_limit_usd")
+    @classmethod
+    def limit_not_negative(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v < 0:
+            raise ValueError("monthly_limit_usd must be >= 0")
         return v
 
 
@@ -175,6 +201,7 @@ class OrganizationTable:
                 created_at=now,
                 updated_at=now,
                 active=True,
+                monthly_limit_usd=None,
             )
             db.add(org)
             if owner_user_id:
@@ -318,9 +345,12 @@ class OrganizationTable:
     def update_organization(
         self, organization_id: str, form_data: OrganizationUpdateForm
     ) -> Optional[OrganizationModel]:
-        updates = form_data.model_dump(exclude_none=True)
+        updates = form_data.model_dump(exclude_unset=True)
+        if "monthly_limit_usd" in updates and updates["monthly_limit_usd"] is not None:
+            if updates["monthly_limit_usd"] < 0:
+                raise ValueError("monthly_limit_usd must be >= 0")
         if "name" in updates:
-            updates["name"] = updates["name"].strip()
+            updates["name"] = (updates["name"] or "").strip()
             if not updates["name"]:
                 raise ValueError("Organization name cannot be empty")
         if not updates:
@@ -331,6 +361,30 @@ class OrganizationTable:
             db.query(Organization).filter_by(id=organization_id).update(updates)
             db.commit()
         return self.get_organization_by_id(organization_id)
+
+    def update_member_limit(
+        self, organization_id: str, user_id: str, monthly_limit_usd: Optional[float]
+    ) -> Optional[OrganizationMemberModel]:
+        if monthly_limit_usd is not None and monthly_limit_usd < 0:
+            raise ValueError("monthly_limit_usd must be >= 0")
+        org = self.get_organization_by_id(organization_id)
+        if not org:
+            raise ValueError("Organization not found")
+        if (
+            monthly_limit_usd is not None
+            and org.monthly_limit_usd is not None
+            and monthly_limit_usd > org.monthly_limit_usd
+        ):
+            raise ValueError("Member limit cannot exceed the organization monthly limit")
+        member = self.get_member(organization_id, user_id)
+        if not member:
+            return None
+        with get_db() as db:
+            db.query(OrganizationMember).filter_by(
+                organization_id=organization_id, user_id=user_id
+            ).update({"monthly_limit_usd": monthly_limit_usd})
+            db.commit()
+        return self.get_member(organization_id, user_id)
 
     def add_member(
         self, organization_id: str, user_id: str, role: str = "user"
@@ -437,6 +491,7 @@ class OrganizationTable:
         from open_webui.models.org_catalog import OrgCatalogOverride
         from open_webui.models.secrets import Secret
         from open_webui.models.skill_packs import SkillPack
+        from open_webui.models.usage import Usage
 
         with get_db() as db:
             chat_ids = [
@@ -467,6 +522,7 @@ class OrganizationTable:
             db.query(Model).filter_by(organization_id=organization_id).delete()
             db.query(OrgCatalogOverride).filter_by(organization_id=organization_id).delete()
             db.commit()
+        Usage.delete_for_organization(organization_id)
 
     def delete_personal_org(self, user_id: str) -> bool:
         if self.get_organization_by_id(user_id):

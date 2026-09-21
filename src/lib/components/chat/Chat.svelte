@@ -59,7 +59,7 @@
 		finalizeOrphanAssistantMessages,
 		formatGenerationRequestError
 	} from '$lib/utils/generationLiveness';
-	import { accumulateUsage } from '$lib/utils/usage';
+	import { accumulateUsage, isUsageLimitMessage } from '$lib/utils/usage';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
 	import {
@@ -2002,10 +2002,16 @@
 		}
 
 		console.error(innerError);
-		if ('detail' in innerError) {
+		if (typeof innerError === 'string') {
+			toast.error(innerError);
+			errorMessage = innerError;
+		} else if (innerError && 'detail' in innerError) {
 			// FastAPI error
 			toast.error(innerError.detail);
 			errorMessage = innerError.detail;
+		} else if (innerError && typeof innerError.content === 'string') {
+			toast.error(innerError.content);
+			errorMessage = innerError.content;
 		} else if ('error' in innerError) {
 			// OpenAI error
 			if ('message' in innerError.error) {
@@ -2022,7 +2028,9 @@
 		}
 
 		responseMessage.error = {
-			content: $i18n.t(`Uh-oh! There was an issue with the response.`) + '\n' + errorMessage
+			content: isUsageLimitMessage(errorMessage)
+				? errorMessage
+				: $i18n.t(`Uh-oh! There was an issue with the response.`) + '\n' + errorMessage
 		};
 		responseMessage.done = true;
 		stopGenerationWatchdogs();
