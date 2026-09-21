@@ -326,7 +326,7 @@
 				{$i18n.t('Members')}
 			</div>
 			<div class="text-right leading-tight">{$i18n.t('Used')}</div>
-			<div class="text-right leading-tight">{$i18n.t('Cap')}</div>
+			<div class="text-right leading-tight">{$i18n.t('Monthly usage limit')}</div>
 			<div class="text-right leading-tight">{$i18n.t('Remaining')}</div>
 			<div class="leading-tight">
 				<Tooltip content={tokenUsageLabel()} className="inline-flex">
@@ -659,7 +659,7 @@
 			7.25rem
 			4.25rem
 			5.25rem
-			5.25rem
+			7.25rem
 			6.25rem
 			minmax(0, 0.9fr)
 			4.75rem

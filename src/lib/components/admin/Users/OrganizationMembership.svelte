@@ -7,7 +7,6 @@
 		getOrganizationById,
 		getOrganizations,
 		removeOrganizationMember,
-		updateOrganizationMemberLimit,
 		updateOrganizationMemberRole
 	} from '$lib/apis/organizations';
 	import { searchUsers } from '$lib/apis/users';
@@ -17,6 +16,7 @@
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import EditMemberLimitModal from '$lib/components/admin/Users/UserList/EditMemberLimitModal.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -29,6 +29,8 @@
 	let results = [];
 	let showAdd = false;
 	let searchInput;
+	let showEditLimitModal = false;
+	let selectedMember = null;
 
 	$: current = ($organizations ?? []).find((item) => item.id === $activeOrganizationId);
 	$: targetOrgId = organizationId || $activeOrganizationId || $user?.id;
@@ -121,25 +123,9 @@
 		}
 	};
 
-	const saveMemberLimit = async (userId: string, raw: string) => {
-		if (!org) return;
-		const trimmed = raw.trim();
-		let value = null;
-		if (trimmed !== '') {
-			const parsed = Number(trimmed);
-			if (!Number.isFinite(parsed) || parsed < 0) {
-				toast.error($i18n.t('Member limit must be a number greater than or equal to 0.'));
-				await load();
-				return;
-			}
-			value = parsed;
-		}
-		try {
-			org = await updateOrganizationMemberLimit(localStorage.token, org.id, userId, value);
-		} catch (error) {
-			toast.error(`${error}`);
-			await load();
-		}
+	const openLimitEditor = (member) => {
+		selectedMember = member;
+		showEditLimitModal = true;
 	};
 
 	const tokenLine = (usage) => {
@@ -196,7 +182,11 @@
 					</span>
 				{/if}
 			</div>
-			<div class="text-xs text-gray-500 mt-1">{tokenLine(org.usage)}</div>
+			<Tooltip content={tokenUsageTooltip(org.usage)} className="inline-flex mt-2">
+				<div class="text-xs text-gray-500">
+					{$i18n.t('Tokens')}: {tokenLine(org.usage)}
+				</div>
+			</Tooltip>
 		</div>
 	{/if}
 {:else if org}
@@ -236,32 +226,38 @@
 		</div>
 	{/if}
 
-	<div class="text-sm px-0.5 mb-3">
-		<span class="font-medium">
-			{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
-			{#if org.monthly_limit_usd == null}
-				{$i18n.t('this month')} ({$i18n.t('Unlimited')})
-			{:else}
-				/ {formatUsd(org.monthly_limit_usd)}
-			{/if}
-		</span>
-		{#if org.monthly_limit_usd != null}
-			<span class="text-gray-500">
-				· {formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
-				{$i18n.t('remaining')}
+	<div class="flex items-baseline gap-16 text-sm px-0.5 mb-3">
+		<div>
+			<span class="font-medium">
+				{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
+				{#if org.monthly_limit_usd == null}
+					{$i18n.t('this month')} ({$i18n.t('Unlimited')})
+				{:else}
+					/ {formatUsd(org.monthly_limit_usd)}
+				{/if}
 			</span>
-		{/if}
-		<span class="text-xs text-gray-500 ml-2">{tokenLine(org.usage)}</span>
+			{#if org.monthly_limit_usd != null}
+				<span class="text-gray-500">
+					· {formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
+					{$i18n.t('remaining')}
+				</span>
+			{/if}
+		</div>
+		<Tooltip content={tokenUsageTooltip(org.usage)} className="inline-flex">
+			<span class="text-xs text-gray-500">
+				{$i18n.t('Tokens')}: {tokenLine(org.usage)}
+			</span>
+		</Tooltip>
 	</div>
 
 	<div class="overflow-x-auto">
-	<div class="min-w-[52rem]">
+	<div class="min-w-[56rem]">
 	<div class="member-table-row grid items-end gap-x-3 px-1 text-xs uppercase font-bold">
 		<div>{$i18n.t('Member')}</div>
 		<div>{$i18n.t('Role')}</div>
 		<div class="text-right">{$i18n.t('Used')}</div>
-		<div class="text-right">{$i18n.t('Cap')}</div>
-		<div class="text-right">{$i18n.t('Remaining')}</div>
+		<div class="text-right">{$i18n.t('Monthly usage limit')}</div>
+		<div class="text-right whitespace-nowrap">{$i18n.t('Remaining')}</div>
 		<div>
 			<Tooltip content={tokenUsageLabel()} className="inline-flex">
 				<span>{$i18n.t('Tokens')}</span>
@@ -310,20 +306,8 @@
 			<div class="text-right text-sm tabular-nums">
 				{formatUsd(member.usage?.cost_usd ?? 0, '$0.00')}
 			</div>
-			<div class="text-right">
-				{#if isAtLeastAdmin}
-					<input
-						class="w-full text-right text-sm bg-transparent outline-hidden tabular-nums"
-						type="number"
-						min="0"
-						step="0.01"
-						value={member.monthly_limit_usd ?? ''}
-						placeholder={$i18n.t('None')}
-						on:change={(e) => saveMemberLimit(member.user_id, e.currentTarget.value)}
-					/>
-				{:else}
-					<span class="tabular-nums">{formatUsd(member.monthly_limit_usd, $i18n.t('None'))}</span>
-				{/if}
+			<div class="text-right tabular-nums">
+				{formatUsd(member.monthly_limit_usd, $i18n.t('Unlimited'))}
 			</div>
 			<div class="text-right text-sm tabular-nums text-gray-500">
 				{member.monthly_limit_usd == null
@@ -335,8 +319,29 @@
 					{tokenLine(member.usage)}
 				</div>
 			</Tooltip>
-			<div class="flex justify-end">
+			<div class="flex justify-end items-center">
 				{#if isAtLeastAdmin}
+					<Tooltip content={$i18n.t('Edit monthly usage limit')}>
+						<button
+							class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							on:click={() => openLimitEditor(member)}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke-width="1.5"
+								stroke="currentColor"
+								class="w-4 h-4"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+								/>
+							</svg>
+						</button>
+					</Tooltip>
 					<button
 						class="text-xs text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950"
 						on:click={() => remove(member.user_id)}
@@ -353,19 +358,39 @@
 	</div>
 {/if}
 
+{#key selectedMember}
+	<EditMemberLimitModal
+		bind:show={showEditLimitModal}
+		orgId={org?.id}
+		member={selectedMember}
+		orgLimit={org?.monthly_limit_usd}
+		on:save={(e) => {
+			org = e.detail;
+		}}
+	/>
+{/key}
+
 <style>
 	.member-table-row {
 		grid-template-columns:
 			minmax(0, 1.5fr)
 			6rem
 			5rem
-			6rem
-			5.25rem
+			7.5rem
+			8.5rem
 			minmax(0, 1fr)
-			4.5rem;
+			7.5rem;
 	}
 
 	.member-table-row > :global(*) {
 		min-width: 0;
+	}
+
+	.member-table-row > :global(*:nth-child(5)) {
+		padding-right: 1.75rem;
+	}
+
+	.member-table-row > :global(*:nth-child(6)) {
+		padding-left: 0.75rem;
 	}
 </style>

@@ -1,29 +1,20 @@
 <script lang="ts">
-	import { onMount, onDestroy, getContext } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
 	import { WEBUI_NAME, showSidebar, user } from '$lib/stores';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { page } from '$app/stores';
-	import { catalogOrganizationId, PLATFORM_ORG_ID } from '$lib/apis/organizations';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
-
-	$: if (loaded) {
-		catalogOrganizationId.set(PLATFORM_ORG_ID);
-	}
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
 			await goto('/');
 		}
 		loaded = true;
-	});
-
-	onDestroy(() => {
-		catalogOrganizationId.set(null);
 	});
 
 	$: if (loaded && $user && $user.role !== 'admin') {

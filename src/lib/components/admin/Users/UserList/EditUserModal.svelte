@@ -59,7 +59,7 @@
 			if (!unlimited) {
 				const parsed = Number(limitUsd);
 				if (!Number.isFinite(parsed) || parsed < 0) {
-					toast.error($i18n.t('Monthly limit must be a number greater than or equal to 0.'));
+					toast.error($i18n.t('Monthly usage limit must be a number greater than or equal to 0.'));
 					return;
 				}
 				monthlyLimit = parsed;
@@ -177,19 +177,22 @@
 
 						{#if selectedOrg}
 							<div class="flex flex-col w-full pt-2">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit (USD)')}</div>
+								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
 								<label class="flex items-center gap-2 text-sm mb-2">
 									<input type="checkbox" bind:checked={unlimited} />
 									{$i18n.t('Unlimited')}
 								</label>
 								{#if !unlimited}
-									<input
-										class="w-full rounded-sm py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-hidden"
-										type="number"
-										min="0"
-										step="0.01"
-										bind:value={limitUsd}
-									/>
+									<div class="flex items-center gap-1.5">
+										<span class="text-sm text-gray-500">$</span>
+										<input
+											class="w-full rounded-sm py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-hidden"
+											type="number"
+											min="0"
+											step="0.01"
+											bind:value={limitUsd}
+										/>
+									</div>
 								{/if}
 							</div>
 						{/if}

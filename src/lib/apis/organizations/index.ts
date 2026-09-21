@@ -1,21 +1,15 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
-import { get, writable } from 'svelte/store';
+import { get } from 'svelte/store';
 import { activeOrganizationId } from '$lib/stores';
 import { PLATFORM_ORG_ID } from '$lib/utils/catalog';
 
 export { PLATFORM_ORG_ID };
 
-export const catalogOrganizationId = writable<string | null>(null);
-
 export const organizationHeaders = (): Record<string, string> => {
-	const id = get(catalogOrganizationId) || get(activeOrganizationId);
+	const id = get(activeOrganizationId);
 	return id ? { 'X-Organization-Id': id } : {};
 };
-
-const platformAdminHeaders = (): Record<string, string> => ({
-	'X-Organization-Id': PLATFORM_ORG_ID
-});
 
 let fetchPatched = false;
 
@@ -32,7 +26,7 @@ export const installOrganizationFetch = () => {
 	}
 	const originalFetch = window.fetch.bind(window);
 	window.fetch = (input, init) => {
-		const orgId = get(catalogOrganizationId) || get(activeOrganizationId);
+		const orgId = get(activeOrganizationId);
 		if (!orgId) {
 			return originalFetch(input, init);
 		}
@@ -91,8 +85,7 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 
 export const getOrganizations = async (token: string) => request(token, '/organizations/');
 
-export const getAllOrganizations = async (token: string) =>
-	request(token, '/organizations/all', { headers: platformAdminHeaders() });
+export const getAllOrganizations = async (token: string) => request(token, '/organizations/all');
 
 export const getOrganizationById = async (token: string, id: string) =>
 	request(token, `/organizations/${id}`);
@@ -103,10 +96,7 @@ export const createOrganization = async (
 ) => request(token, '/organizations/', { method: 'POST', body: JSON.stringify(org) });
 
 export const activateOrganization = async (token: string, id: string) =>
-	request(token, `/organizations/${id}/activate`, {
-		method: 'POST',
-		headers: platformAdminHeaders()
-	});
+	request(token, `/organizations/${id}/activate`, { method: 'POST' });
 
 export const updateOrganizationById = async (
 	token: string,
@@ -123,8 +113,7 @@ export const updateOrganizationById = async (
 ) =>
 	request(token, `/organizations/${id}/update`, {
 		method: 'POST',
-		body: JSON.stringify(org),
-		headers: platformAdminHeaders()
+		body: JSON.stringify(org)
 	});
 
 export const addOrganizationMember = async (
@@ -164,7 +153,4 @@ export const removeOrganizationMember = async (token: string, id: string, userId
 	request(token, `/organizations/${id}/members/${userId}`, { method: 'DELETE' });
 
 export const deleteOrganizationById = async (token: string, id: string) =>
-	request(token, `/organizations/${id}`, {
-		method: 'DELETE',
-		headers: platformAdminHeaders()
-	});
+	request(token, `/organizations/${id}`, { method: 'DELETE' });
