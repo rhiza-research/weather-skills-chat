@@ -110,6 +110,27 @@ def resolve_visibility(organization_id: str, visibility: Optional[str]) -> str:
     return VISIBILITY_PRIVATE
 
 
+def folder_chat_error(folder, chat) -> Optional[str]:
+    """Why a chat cannot be filed in this folder, or None when it can."""
+    if folder is None or chat is None:
+        return "Folder not found"
+    folder_visibility = getattr(folder, "visibility", VISIBILITY_PRIVATE) or VISIBILITY_PRIVATE
+    chat_visibility = getattr(chat, "visibility", VISIBILITY_PRIVATE) or VISIBILITY_PRIVATE
+    if folder_visibility != chat_visibility:
+        if folder_visibility == VISIBILITY_ORGANIZATION:
+            return (
+                "Share the chat with the organization before moving it into a team folder."
+            )
+        return "Team chats stay in team folders."
+    if folder_visibility == VISIBILITY_ORGANIZATION:
+        if getattr(folder, "organization_id", None) != getattr(chat, "organization_id", None):
+            return "That folder belongs to a different organization."
+        return None
+    if getattr(folder, "user_id", None) != getattr(chat, "user_id", None):
+        return "That folder belongs to another user."
+    return None
+
+
 def can_read_chat(user: UserModel, chat: Optional[ChatModel]) -> bool:
     if chat is None:
         return False

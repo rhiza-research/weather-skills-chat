@@ -14,6 +14,7 @@ from open_webui.models.folders import (
     Folders,
 )
 from open_webui.models.chats import Chats
+from open_webui.models.users import Users
 
 from open_webui.config import UPLOAD_DIR
 from open_webui.env import SRC_LOG_LEVELS
@@ -26,7 +27,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
-from open_webui.utils.organizations import get_active_organization_id
+from open_webui.utils.organizations import (
+    get_active_organization_id,
+    is_member,
+    resolve_visibility,
+)
 
 
 log = logging.getLogger(__name__)
@@ -34,6 +39,57 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 
 
 router = APIRouter()
+
+
+def _can_read_folder(folder: Optional[FolderModel], user) -> bool:
+    if folder is None:
+        return False
+    if folder.user_id == user.id:
+        return True
+    return folder.visibility == "organization" and is_member(
+        folder.organization_id, user.id
+    )
+
+
+def _require_folder(folder_id: str, user) -> FolderModel:
+    folder = Folders.get_folder_by_id(folder_id)
+    if not _can_read_folder(folder, user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+    return folder
+
+
+def _owner_names(user_ids: list[str]) -> dict[str, str]:
+    users = Users.get_users_by_user_ids([uid for uid in user_ids if uid])
+    return {u.id: u.name for u in users}
+
+
+def _folder_chat_items(folder: FolderModel, user) -> list[dict]:
+    chats = Chats.get_chats_in_folders([folder.id], user.id, folder.visibility)
+    names = _owner_names([chat.user_id for chat in chats])
+    return [
+        {
+            "id": chat.id,
+            "title": chat.title,
+            "user_id": chat.user_id,
+            "visibility": chat.visibility,
+            "owner_name": names.get(chat.user_id) or "Unknown user",
+        }
+        for chat in chats
+    ]
+
+
+def _sibling_name_taken(folder: FolderModel, name: str, parent_id: Optional[str]) -> bool:
+    existing = Folders.get_folder_by_parent_visibility_and_name(
+        parent_id,
+        name,
+        folder.visibility,
+        folder.user_id,
+        folder.organization_id,
+    )
+    return existing is not None and existing.id != folder.id
 
 
 ############################
@@ -51,14 +107,7 @@ async def get_folders(
     return [
         {
             **folder.model_dump(),
-            "items": {
-                "chats": [
-                    {"title": chat.title, "id": chat.id}
-                    for chat in Chats.get_chats_by_folder_id_and_user_id(
-                        folder.id, user.id
-                    )
-                ]
-            },
+            "items": {"chats": _folder_chat_items(folder, user)},
         }
         for folder in folders
     ]
@@ -75,8 +124,11 @@ def create_folder(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    folder = Folders.get_folder_by_parent_id_and_user_id_and_name(
-        None, user.id, form_data.name
+    visibility = resolve_visibility(
+        organization_id, getattr(form_data, "visibility", None)
+    )
+    folder = Folders.get_folder_by_parent_visibility_and_name(
+        None, form_data.name, visibility, user.id, organization_id
     )
 
     if folder:
@@ -87,7 +139,10 @@ def create_folder(
 
     try:
         folder = Folders.insert_new_folder(
-            user.id, form_data.name, organization_id=organization_id
+            user.id,
+            form_data.name,
+            organization_id=organization_id,
+            visibility=visibility,
         )
         return folder
     except Exception as e:
@@ -106,14 +161,7 @@ def create_folder(
 
 @router.get("/{id}", response_model=Optional[FolderModel])
 async def get_folder_by_id(id: str, user=Depends(get_verified_user)):
-    folder = Folders.get_folder_by_id_and_user_id(id, user.id)
-    if folder:
-        return folder
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ERROR_MESSAGES.NOT_FOUND,
-        )
+    return _require_folder(id, user)
 
 
 ############################
@@ -125,12 +173,9 @@ async def get_folder_by_id(id: str, user=Depends(get_verified_user)):
 async def update_folder_name_by_id(
     id: str, form_data: FolderForm, user=Depends(get_verified_user)
 ):
-    folder = Folders.get_folder_by_id_and_user_id(id, user.id)
+    folder = _require_folder(id, user)
     if folder:
-        existing_folder = Folders.get_folder_by_parent_id_and_user_id_and_name(
-            folder.parent_id, user.id, form_data.name
-        )
-        if existing_folder:
+        if _sibling_name_taken(folder, form_data.name, folder.parent_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT("Folder already exists"),
@@ -169,13 +214,29 @@ class FolderParentIdForm(BaseModel):
 async def update_folder_parent_id_by_id(
     id: str, form_data: FolderParentIdForm, user=Depends(get_verified_user)
 ):
-    folder = Folders.get_folder_by_id_and_user_id(id, user.id)
+    folder = _require_folder(id, user)
     if folder:
-        existing_folder = Folders.get_folder_by_parent_id_and_user_id_and_name(
-            form_data.parent_id, user.id, folder.name
-        )
+        if form_data.parent_id:
+            parent = _require_folder(form_data.parent_id, user)
+            if parent.visibility != folder.visibility or (
+                parent.visibility == "organization"
+                and parent.organization_id != folder.organization_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT(
+                        "Folders can only be moved within the same chat section."
+                    ),
+                )
+            if parent.id == folder.id or any(
+                child.id == parent.id for child in Folders.descendant_folders(folder)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT("A folder cannot contain itself."),
+                )
 
-        if existing_folder:
+        if _sibling_name_taken(folder, folder.name, form_data.parent_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT("Folder already exists"),
@@ -213,7 +274,7 @@ class FolderIsExpandedForm(BaseModel):
 async def update_folder_is_expanded_by_id(
     id: str, form_data: FolderIsExpandedForm, user=Depends(get_verified_user)
 ):
-    folder = Folders.get_folder_by_id_and_user_id(id, user.id)
+    folder = _require_folder(id, user)
     if folder:
         try:
             folder = Folders.update_folder_is_expanded_by_id_and_user_id(
@@ -243,17 +304,20 @@ async def update_folder_is_expanded_by_id(
 async def delete_folder_by_id(
     request: Request, id: str, user=Depends(get_verified_user)
 ):
-    chat_delete_permission = has_permission(
-        user.id, "chat.delete", request.app.state.config.USER_PERMISSIONS
-    )
+    folder = _require_folder(id, user)
 
-    if user.role != "admin" and not chat_delete_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+    # Private folders delete the owner's chats. Team folders only remove the
+    # grouping, so they do not require permission to delete chats.
+    if folder.visibility != "organization":
+        chat_delete_permission = has_permission(
+            user.id, "chat.delete", request.app.state.config.USER_PERMISSIONS
         )
+        if user.role != "admin" and not chat_delete_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
 
-    folder = Folders.get_folder_by_id_and_user_id(id, user.id)
     if folder:
         try:
             result = Folders.delete_folder_by_id_and_user_id(id, user.id)

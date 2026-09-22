@@ -2,7 +2,11 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
 import { organizationHeaders } from '$lib/apis/organizations';
 
-export const createNewFolder = async (token: string, name: string) => {
+export const createNewFolder = async (
+	token: string,
+	name: string,
+	visibility: string = 'private'
+) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/`, {
@@ -14,7 +18,8 @@ export const createNewFolder = async (token: string, name: string) => {
 			...organizationHeaders()
 		},
 		body: JSON.stringify({
-			name: name
+			name: name,
+			visibility: visibility
 		})
 	})
 		.then(async (res) => {

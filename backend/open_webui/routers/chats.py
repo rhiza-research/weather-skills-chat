@@ -27,6 +27,7 @@ from open_webui.utils.access_control import has_permission
 from open_webui.utils.organizations import (
     can_read_chat,
     can_write_chat,
+    folder_chat_error,
     get_active_organization_id,
     is_member,
     is_personal_org,
@@ -261,16 +262,22 @@ async def search_user_chats(
 
 @router.get("/folder/{folder_id}", response_model=list[ChatResponse])
 async def get_chats_by_folder_id(folder_id: str, user=Depends(get_verified_user)):
-    folder_ids = [folder_id]
-    children_folders = Folders.get_children_folders_by_id_and_user_id(
-        folder_id, user.id
-    )
-    if children_folders:
-        folder_ids.extend([folder.id for folder in children_folders])
+    folder = Folders.get_folder_by_id(folder_id)
+    if folder is None or (
+        folder.user_id != user.id
+        and not (
+            folder.visibility == "organization"
+            and is_member(folder.organization_id, user.id)
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    folder_ids = [folder.id, *[child.id for child in Folders.descendant_folders(folder)]]
 
     return [
         ChatResponse(**chat.model_dump())
-        for chat in Chats.get_chats_by_folder_ids_and_user_id(folder_ids, user.id)
+        for chat in Chats.get_chats_in_folders(folder_ids, user.id, folder.visibility)
     ]
 
 
@@ -806,6 +813,25 @@ async def update_chat_folder_id_by_id(
 ):
     chat = _require_writable_chat(id, user)
     if chat:
+        if form_data.folder_id:
+            folder = Folders.get_folder_by_id(form_data.folder_id)
+            if folder is None or (
+                folder.user_id != user.id
+                and not (
+                    folder.visibility == "organization"
+                    and is_member(folder.organization_id, user.id)
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ERROR_MESSAGES.NOT_FOUND,
+                )
+            error = folder_chat_error(folder, chat)
+            if error:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT(error),
+                )
         chat = Chats.update_chat_folder_id_by_id_and_user_id(
             id, user.id, form_data.folder_id
         )

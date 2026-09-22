@@ -584,8 +584,9 @@ class ChatTable:
             with get_db() as db:
                 chat = db.get(Chat, id)
                 chat.visibility = visibility
-                if visibility == "organization":
-                    chat.folder_id = None
+                # A private folder and a team folder are different lists. Leave
+                # the chat unfiled so it shows up in the section it now belongs to.
+                chat.folder_id = None
                 chat.updated_at = int(time.time())
                 db.commit()
                 db.refresh(chat)
@@ -845,30 +846,37 @@ class ChatTable:
     def get_chats_by_folder_id_and_user_id(
         self, folder_id: str, user_id: str
     ) -> list[ChatModel]:
+        return self.get_chats_in_folders([folder_id], user_id, "private")
+
+    def get_chats_in_folders(
+        self, folder_ids: list[str], user_id: str, visibility: str
+    ) -> list[ChatModel]:
+        if not folder_ids:
+            return []
         with get_db() as db:
-            query = db.query(Chat).filter_by(folder_id=folder_id, user_id=user_id)
+            query = db.query(Chat).filter(Chat.folder_id.in_(folder_ids))
             query = query.filter(or_(Chat.pinned == False, Chat.pinned == None))
             query = query.filter_by(archived=False)
-
+            if visibility == "organization":
+                query = query.filter(Chat.visibility == "organization")
+            else:
+                query = query.filter_by(user_id=user_id)
             query = query.order_by(Chat.updated_at.desc())
+            return [ChatModel.model_validate(chat) for chat in query.all()]
 
-            all_chats = query.all()
-            return [ChatModel.model_validate(chat) for chat in all_chats]
+    def clear_chat_folder_ids(self, folder_ids: list[str]) -> None:
+        if not folder_ids:
+            return
+        with get_db() as db:
+            db.query(Chat).filter(Chat.folder_id.in_(folder_ids)).update(
+                {Chat.folder_id: None}, synchronize_session=False
+            )
+            db.commit()
 
     def get_chats_by_folder_ids_and_user_id(
         self, folder_ids: list[str], user_id: str
     ) -> list[ChatModel]:
-        with get_db() as db:
-            query = db.query(Chat).filter(
-                Chat.folder_id.in_(folder_ids), Chat.user_id == user_id
-            )
-            query = query.filter(or_(Chat.pinned == False, Chat.pinned == None))
-            query = query.filter_by(archived=False)
-
-            query = query.order_by(Chat.updated_at.desc())
-
-            all_chats = query.all()
-            return [ChatModel.model_validate(chat) for chat in all_chats]
+        return self.get_chats_in_folders(folder_ids, user_id, "private")
 
     def update_chat_folder_id_by_id_and_user_id(
         self, id: str, user_id: str, folder_id: str

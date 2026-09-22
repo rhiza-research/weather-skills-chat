@@ -59,6 +59,7 @@ class FolderModel(BaseModel):
 
 class FolderForm(BaseModel):
     name: str
+    visibility: Optional[str] = None
     model_config = ConfigDict(extra="allow")
 
 
@@ -69,15 +70,19 @@ class FolderTable:
         name: str,
         parent_id: Optional[str] = None,
         organization_id: Optional[str] = None,
+        visibility: str = "private",
     ) -> Optional[FolderModel]:
+        organization_id = organization_id or user_id
+        if organization_id == user_id or visibility != "organization":
+            visibility = "private"
         with get_db() as db:
             id = str(uuid.uuid4())
             folder = FolderModel(
                 **{
                     "id": id,
                     "user_id": user_id,
-                    "organization_id": organization_id or user_id,
-                    "visibility": "private",
+                    "organization_id": organization_id,
+                    "visibility": visibility,
                     "name": name,
                     "parent_id": parent_id,
                     "created_at": int(time.time()),
@@ -97,19 +102,74 @@ class FolderTable:
                 log.exception(f"Error inserting a new folder: {e}")
                 return None
 
-    def get_folder_by_id_and_user_id(
-        self, id: str, user_id: str
-    ) -> Optional[FolderModel]:
+    def get_folder_by_id(self, id: str) -> Optional[FolderModel]:
         try:
             with get_db() as db:
-                folder = db.query(Folder).filter_by(id=id, user_id=user_id).first()
-
+                folder = db.get(Folder, id)
                 if not folder:
                     return None
-
                 return FolderModel.model_validate(folder)
         except Exception:
             return None
+
+    def get_folder_by_id_and_user_id(
+        self, id: str, user_id: str
+    ) -> Optional[FolderModel]:
+        folder = self.get_folder_by_id(id)
+        if folder and folder.user_id == user_id:
+            return folder
+        return None
+
+    def get_folder_by_parent_visibility_and_name(
+        self,
+        parent_id: Optional[str],
+        name: str,
+        visibility: str,
+        user_id: str,
+        organization_id: str,
+    ) -> Optional[FolderModel]:
+        try:
+            with get_db() as db:
+                query = db.query(Folder).filter(
+                    Folder.parent_id == parent_id,
+                    Folder.name.ilike(name),
+                    Folder.visibility == visibility,
+                )
+                if visibility == "organization":
+                    query = query.filter(Folder.organization_id == organization_id)
+                else:
+                    query = query.filter(Folder.user_id == user_id)
+                folder = query.first()
+                if not folder:
+                    return None
+                return FolderModel.model_validate(folder)
+        except Exception as e:
+            log.error(f"get_folder_by_parent_visibility_and_name: {e}")
+            return None
+
+    def descendant_folders(self, folder: FolderModel) -> list[FolderModel]:
+        """Child folders in the same scope (private owner, or shared team folder)."""
+        found: list[FolderModel] = []
+        with get_db() as db:
+            stack = [folder.id]
+            while stack:
+                parent_id = stack.pop()
+                query = db.query(Folder).filter(Folder.parent_id == parent_id)
+                if folder.visibility == "organization":
+                    query = query.filter(
+                        Folder.visibility == "organization",
+                        Folder.organization_id == folder.organization_id,
+                    )
+                else:
+                    query = query.filter(
+                        Folder.visibility == "private",
+                        Folder.user_id == folder.user_id,
+                    )
+                for child in query.all():
+                    model = FolderModel.model_validate(child)
+                    found.append(model)
+                    stack.append(model.id)
+        return found
 
     def get_children_folders_by_id_and_user_id(
         self, id: str, user_id: str
@@ -193,7 +253,7 @@ class FolderTable:
     ) -> Optional[FolderModel]:
         try:
             with get_db() as db:
-                folder = db.query(Folder).filter_by(id=id, user_id=user_id).first()
+                folder = db.query(Folder).filter_by(id=id).first()
 
                 if not folder:
                     return None
@@ -213,16 +273,24 @@ class FolderTable:
     ) -> Optional[FolderModel]:
         try:
             with get_db() as db:
-                folder = db.query(Folder).filter_by(id=id, user_id=user_id).first()
+                folder = db.query(Folder).filter_by(id=id).first()
 
                 if not folder:
                     return None
 
-                existing_folder = (
-                    db.query(Folder)
-                    .filter_by(name=name, parent_id=folder.parent_id, user_id=user_id)
-                    .first()
+                existing_query = db.query(Folder).filter(
+                    Folder.id != id,
+                    Folder.name == name,
+                    Folder.parent_id == folder.parent_id,
+                    Folder.visibility == folder.visibility,
                 )
+                if folder.visibility == "organization":
+                    existing_query = existing_query.filter(
+                        Folder.organization_id == folder.organization_id
+                    )
+                else:
+                    existing_query = existing_query.filter(Folder.user_id == folder.user_id)
+                existing_folder = existing_query.first()
 
                 if existing_folder:
                     return None
@@ -242,7 +310,7 @@ class FolderTable:
     ) -> Optional[FolderModel]:
         try:
             with get_db() as db:
-                folder = db.query(Folder).filter_by(id=id, user_id=user_id).first()
+                folder = db.query(Folder).filter_by(id=id).first()
 
                 if not folder:
                     return None
@@ -261,34 +329,26 @@ class FolderTable:
         self, id: str, user_id: str, delete_chats=True
     ) -> bool:
         try:
+            folder = self.get_folder_by_id(id)
+            if not folder:
+                return False
+
+            # Team folders are shared structure. Removing one puts chats back
+            # in the team list instead of deleting other people's chats.
+            remove_chats = delete_chats and folder.visibility != "organization"
+            descendants = self.descendant_folders(folder)
+            folder_ids = [folder.id, *[child.id for child in descendants]]
+
+            if remove_chats:
+                for folder_id in folder_ids:
+                    Chats.delete_chats_by_user_id_and_folder_id(user_id, folder_id)
+            else:
+                Chats.clear_chat_folder_ids(folder_ids)
+
             with get_db() as db:
-                folder = db.query(Folder).filter_by(id=id, user_id=user_id).first()
-                if not folder:
-                    return False
-
-                if delete_chats:
-                    # Delete all chats in the folder
-                    Chats.delete_chats_by_user_id_and_folder_id(user_id, folder.id)
-
-                # Delete all children folders
-                def delete_children(folder):
-                    folder_children = self.get_folders_by_parent_id_and_user_id(
-                        folder.id, user_id
-                    )
-                    for folder_child in folder_children:
-                        if delete_chats:
-                            Chats.delete_chats_by_user_id_and_folder_id(
-                                user_id, folder_child.id
-                            )
-
-                        delete_children(folder_child)
-
-                        folder = db.query(Folder).filter_by(id=folder_child.id).first()
-                        db.delete(folder)
-                        db.commit()
-
-                delete_children(folder)
-                db.delete(folder)
+                db.query(Folder).filter(Folder.id.in_(folder_ids)).delete(
+                    synchronize_session=False
+                )
                 db.commit()
                 return True
         except Exception as e:

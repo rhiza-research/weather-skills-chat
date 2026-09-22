@@ -153,13 +153,16 @@
 		}
 	};
 
-	const createFolder = async (name = 'Untitled') => {
+	const createFolder = async (name = 'Untitled', visibility = 'private') => {
 		if (name === '') {
 			toast.error($i18n.t('Folder name cannot be empty.'));
 			return;
 		}
 
-		const rootFolders = Object.values(folders).filter((folder) => folder.parent_id === null);
+		const rootFolders = Object.values(folders).filter(
+			(folder) =>
+				folder?.parent_id === null && (folder.visibility || 'private') === visibility
+		);
 		if (rootFolders.find((folder) => folder.name.toLowerCase() === name.toLowerCase())) {
 			// If a folder with the same name already exists, append a number to the name
 			let i = 1;
@@ -172,19 +175,21 @@
 			name = `${name} ${i}`;
 		}
 
-		// Add a dummy folder to the list to show the user that the folder is being created
 		const tempId = uuidv4();
 		folders = {
 			...folders,
-			tempId: {
+			[tempId]: {
 				id: tempId,
 				name: name,
+				visibility,
+				parent_id: null,
+				childrenIds: [],
 				created_at: Date.now(),
 				updated_at: Date.now()
 			}
 		};
 
-		const res = await createNewFolder(localStorage.token, name).catch((error) => {
+		const res = await createNewFolder(localStorage.token, name, visibility).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
@@ -192,6 +197,10 @@
 		if (res) {
 			newFolderId = res.id;
 			await initFolders();
+		} else {
+			const next = { ...folders };
+			delete next[tempId];
+			folders = next;
 		}
 	};
 
@@ -231,18 +240,34 @@
 	$: teamChats = isPersonalOrg
 		? []
 		: ($chats ?? []).filter((c) => c.visibility === 'organization');
-	$: myTeamChats = teamChats.filter((c) => c.user_id === $user?.id);
-	$: othersTeamChats = teamChats.filter((c) => c.user_id !== $user?.id);
 	$: privatePinned = ($pinnedChats ?? []).filter(
 		(c) => isPersonalOrg || c.visibility !== 'organization'
 	);
 	$: teamPinned = isPersonalOrg
 		? []
 		: ($pinnedChats ?? []).filter((c) => c.visibility === 'organization');
-	$: teamChatSections = [
-		{ key: 'team-mine', label: 'My chats', chats: myTeamChats },
-		{ key: 'team-others', label: 'Others chats', chats: othersTeamChats }
-	];
+
+	const foldersWithVisibility = (source, visibility) => {
+		const selected = {};
+		for (const folder of Object.values(source ?? {})) {
+			if (!folder?.id) continue;
+			if ((folder.visibility || 'private') !== visibility) continue;
+			selected[folder.id] = { ...folder, childrenIds: [] };
+		}
+		for (const folder of Object.values(selected)) {
+			if (folder.parent_id && selected[folder.parent_id]) {
+				selected[folder.parent_id].childrenIds.push(folder.id);
+			}
+		}
+		for (const folder of Object.values(selected)) {
+			folder.childrenIds.sort(
+				(a, b) => (selected[b]?.updated_at ?? 0) - (selected[a]?.updated_at ?? 0)
+			);
+		}
+		return selected;
+	};
+	$: privateFolders = foldersWithVisibility(folders, 'private');
+	$: teamFolders = foldersWithVisibility(folders, 'organization');
 
 	const switchOrganization = async (orgId) => {
 		if (orgId === $activeOrganizationId) {
@@ -862,6 +887,9 @@
 
 						if (chat) {
 							console.log(chat);
+							if ((chat.visibility || 'private') === 'organization') {
+								return;
+							}
 							if (chat.folder_id) {
 								const res = await updateChatFolderIdById(localStorage.token, chat.id, null).catch(
 									(error) => {
@@ -878,6 +906,9 @@
 							initChatList();
 						}
 					} else if (type === 'folder') {
+						if ((folders[id]?.visibility || 'private') !== 'private') {
+							return;
+						}
 						if (folders[id].parent_id === null) {
 							return;
 						}
@@ -927,6 +958,9 @@
 
 									if (chat) {
 										console.log(chat);
+										if ((chat.visibility || 'private') === 'organization') {
+											return;
+										}
 										if (chat.folder_id) {
 											const res = await updateChatFolderIdById(
 												localStorage.token,
@@ -979,9 +1013,10 @@
 					</div>
 				{/if}
 
-				{#if !search && folders}
+				{#if !search && privateFolders}
 					<Folders
-						{folders}
+						folders={privateFolders}
+						isPersonal={isPersonalOrg}
 						on:import={(e) => {
 							const { folderId, items } = e.detail;
 							importChatHandler(items, false, folderId);
@@ -1070,14 +1105,84 @@
 					className="px-2 mt-0.5"
 					name={$i18n.t('Team chats')}
 					emphasis="strong"
-					dragAndDrop={false}
+					onAdd={() => {
+						createFolder('Untitled', 'organization');
+					}}
+					onAddLabel={$i18n.t('New Folder')}
+					on:drop={async (e) => {
+						const { type, id, item } = e.detail;
+
+						if (type === 'chat') {
+							let chat = await getChatById(localStorage.token, id).catch(() => null);
+							if (!chat && item) {
+								chat = await importChat(localStorage.token, item.chat, item?.meta ?? {});
+							}
+							if (!chat || chat.visibility !== 'organization') {
+								return;
+							}
+							if (chat.folder_id) {
+								await updateChatFolderIdById(localStorage.token, chat.id, null).catch((error) => {
+									toast.error(`${error}`);
+									return null;
+								});
+							}
+							if (chat.pinned) {
+								await toggleChatPinnedStatusById(localStorage.token, chat.id);
+							}
+							initChatList();
+						} else if (type === 'folder') {
+							if ((folders[id]?.visibility || 'private') !== 'organization') {
+								return;
+							}
+							if (folders[id].parent_id === null) {
+								return;
+							}
+							const res = await updateFolderParentIdById(localStorage.token, id, null).catch(
+								(error) => {
+									toast.error(`${error}`);
+									return null;
+								}
+							);
+							if (res) {
+								await initFolders();
+							}
+						}
+					}}
 				>
 					<div
 						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
 					>
 						{#if !search && teamPinned.length > 0}
 							<div class="flex flex-col space-y-1 rounded-xl">
-								<Folder className="" name={$i18n.t('Pinned')} dragAndDrop={false}>
+								<Folder
+									className=""
+									name={$i18n.t('Pinned')}
+									on:drop={async (e) => {
+										const { type, id, item } = e.detail;
+										if (type !== 'chat') {
+											return;
+										}
+										let chat = await getChatById(localStorage.token, id).catch(() => null);
+										if (!chat && item) {
+											chat = await importChat(localStorage.token, item.chat, item?.meta ?? {});
+										}
+										if (!chat || chat.visibility !== 'organization') {
+											return;
+										}
+										if (chat.folder_id) {
+											await updateChatFolderIdById(localStorage.token, chat.id, null).catch(
+												(error) => {
+													toast.error(`${error}`);
+													return null;
+												}
+											);
+										}
+										if (!chat.pinned) {
+											await toggleChatPinnedStatusById(localStorage.token, chat.id);
+										}
+										initChatList();
+									}}
+								>
 									<div class="flex flex-col overflow-y-auto scrollbar-hidden">
 										{#each teamPinned as chat (chat.id)}
 											<ChatItem
@@ -1109,55 +1214,60 @@
 							</div>
 						{/if}
 
+						{#if !search && teamFolders}
+							<Folders
+								folders={teamFolders}
+								isPersonal={isPersonalOrg}
+								on:update={async () => {
+									initChatList();
+								}}
+								on:change={async () => {
+									initChatList();
+								}}
+							/>
+						{/if}
+
 						<div class="flex-1 flex flex-col overflow-y-auto scrollbar-hidden">
 							<div class="pt-1.5">
-								{#each teamChatSections as section (section.key)}
-									<Folder
-										className="pt-2"
-										name={$i18n.t(section.label)}
-										emphasis="medium"
-										dragAndDrop={false}
-										collapsible={!search}
-									>
-										{#each groupChatsByTimeRange(section.chats) as group, groupIdx (group.time_range)}
-											<Folder
-												className={groupIdx === 0 ? 'ml-1' : 'pt-3 ml-1'}
-												name={$i18n.t(group.time_range)}
-												open={isTimeRangeOpen(section.key, group.time_range)}
-												dragAndDrop={false}
-												on:change={(e) => {
-													setTimeRangeOpen(section.key, group.time_range, e.detail);
-												}}
-											>
-												{#each group.chats as chat (chat.id)}
-													<ChatItem
-														className=""
-														id={chat.id}
-														title={chat.title}
-														ownerName={chat.owner_name}
-														isMine={chat.user_id === $user?.id}
-														visibility={chat.visibility}
-														isPersonal={isPersonalOrg}
-														selected={selectedChatId === chat.id}
-														on:select={() => {
-															selectedChatId = chat.id;
-														}}
-														on:unselect={() => {
-															selectedChatId = null;
-														}}
-														on:change={async () => {
-															initChatList();
-														}}
-														on:tag={(e) => {
-															const { type, name } = e.detail;
-															tagEventHandler(type, name, chat.id);
-														}}
-													/>
-												{/each}
-											</Folder>
-										{/each}
-									</Folder>
-								{/each}
+								{#if $chats}
+									{#each groupChatsByTimeRange(teamChats) as group, groupIdx (group.time_range)}
+										<Folder
+											className={groupIdx === 0 ? '' : 'pt-3'}
+											name={$i18n.t(group.time_range)}
+											open={isTimeRangeOpen('team', group.time_range)}
+											dragAndDrop={false}
+											on:change={(e) => {
+												setTimeRangeOpen('team', group.time_range, e.detail);
+											}}
+										>
+											{#each group.chats as chat (chat.id)}
+												<ChatItem
+													className=""
+													id={chat.id}
+													title={chat.title}
+													ownerName={chat.owner_name}
+													isMine={chat.user_id === $user?.id}
+													visibility={chat.visibility}
+													isPersonal={isPersonalOrg}
+													selected={selectedChatId === chat.id}
+													on:select={() => {
+														selectedChatId = chat.id;
+													}}
+													on:unselect={() => {
+														selectedChatId = null;
+													}}
+													on:change={async () => {
+														initChatList();
+													}}
+													on:tag={(e) => {
+														const { type, name } = e.detail;
+														tagEventHandler(type, name, chat.id);
+													}}
+												/>
+											{/each}
+										</Folder>
+									{/each}
+								{/if}
 							</div>
 						</div>
 					</div>

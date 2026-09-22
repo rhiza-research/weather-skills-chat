@@ -29,6 +29,7 @@
 		updateChatFolderIdById
 	} from '$lib/apis/chats';
 	import ChatItem from './ChatItem.svelte';
+	import { user } from '$lib/stores';
 	import FolderMenu from './Folders/FolderMenu.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
@@ -36,6 +37,7 @@
 
 	export let folders;
 	export let folderId;
+	export let isPersonal = false;
 
 	export let className = '';
 
@@ -340,11 +342,17 @@
 	}}
 >
 	<div class=" text-sm text-gray-700 dark:text-gray-300 flex-1 line-clamp-3">
-		{@html DOMPurify.sanitize(
-			$i18n.t('This will delete <strong>{{NAME}}</strong> and <strong>all its contents</strong>.', {
-				NAME: folders[folderId].name
-			})
-		)}
+		{#if (folders[folderId]?.visibility || 'private') === 'organization'}
+			{$i18n.t('This will remove')}
+			<span class="font-semibold">{folders[folderId].name}</span>.
+			{$i18n.t('Chats inside it will move back to the team list.')}
+		{:else}
+			{@html DOMPurify.sanitize(
+				$i18n.t('This will delete <strong>{{NAME}}</strong> and <strong>all its contents</strong>.', {
+					NAME: folders[folderId].name
+				})
+			)}
+		{/if}
 	</div>
 </DeleteConfirmDialog>
 
@@ -475,6 +483,7 @@
 						{#each children as childFolder (`${folderId}-${childFolder.id}`)}
 							<svelte:self
 								{folders}
+								{isPersonal}
 								folderId={childFolder.id}
 								parentDragged={dragged}
 								on:import={(e) => {
@@ -495,6 +504,10 @@
 							<ChatItem
 								id={chat.id}
 								title={chat.title}
+								ownerName={chat.owner_name}
+								isMine={!chat.user_id || chat.user_id === $user?.id}
+								visibility={chat.visibility}
+								{isPersonal}
 								on:change={(e) => {
 									dispatch('change', e.detail);
 								}}
