@@ -30,12 +30,14 @@ from open_webui.mcp.auth import MCP_PATH
 from open_webui.mcp_oauth.provider import (
     ACCESS_LIFETIME_SECONDS,
     CONSENT_PATH,
+    REFRESH_REUSE_GRACE_SECONDS,
     EndpointOAuthProvider,
     _same_loopback_redirect,
     consent_request_path,
     redirect_uri_allowed,
 )
-from open_webui.models.mcp_oauth import ACCESS, McpOAuth
+from open_webui.internal.db import get_db
+from open_webui.models.mcp_oauth import ACCESS, REFRESH, McpOAuth, McpOAuthToken, digest
 from open_webui.models.users import Users
 from open_webui.test.util.mcp_host import (
     SERVICE_URL,
@@ -68,6 +70,14 @@ def new_account(role="user"):
     user_id = str(uuid.uuid4())
     Users.insert_new_user(user_id, "Test user", f"{user_id}@example.com", role=role)
     return user_id
+
+
+@contextmanager
+def after_refresh_grace():
+    """Run with the clock past the refresh-reuse grace window of a token rotated just now."""
+    later = time.time() + REFRESH_REUSE_GRACE_SECONDS + 1
+    with patch("time.time", return_value=later):
+        yield
 
 
 def session_cookie(user_id):
@@ -385,6 +395,7 @@ class CodeReplayTest(EndpointCase):
         self.assertEqual(second.json()["error"], "invalid_grant")
 
     def test_a_replayed_code_revokes_the_tokens_issued_for_it(self):
+        # Immediately, with no grace window as refresh tokens have.
         client_id = self.flow.registered_client_id()
         code = self.flow.code(client_id, new_account())
         tokens = self.flow.exchange(client_id, code).json()
@@ -559,24 +570,115 @@ class RefreshReuseTest(EndpointCase):
             self.flow.mcp_initialize(refreshed.json()["access_token"]).status_code, 200
         )
 
-    def test_the_rotated_refresh_token_is_refused(self):
+    def test_the_rotated_refresh_token_is_refused_after_the_grace_window(self):
         client_id = self.flow.registered_client_id()
         tokens = self.flow.tokens(client_id, new_account())
         self.flow.refresh(client_id, tokens["refresh_token"])
-        again = self.flow.refresh(client_id, tokens["refresh_token"])
+        with after_refresh_grace():
+            again = self.flow.refresh(client_id, tokens["refresh_token"])
         self.assertEqual(again.json()["error"], "invalid_grant")
 
-    def test_reusing_a_rotated_refresh_token_revokes_the_grant(self):
+    def test_reusing_a_rotated_refresh_token_after_the_grace_window_revokes_the_grant(self):
         client_id = self.flow.registered_client_id()
         tokens = self.flow.tokens(client_id, new_account())
         rotated = self.flow.refresh(client_id, tokens["refresh_token"]).json()
         self.assertEqual(self.flow.mcp_initialize(rotated["access_token"]).status_code, 200)
+        with after_refresh_grace():
+            self.flow.refresh(client_id, tokens["refresh_token"])
+            self.assertEqual(self.flow.mcp_initialize(rotated["access_token"]).status_code, 401)
+            self.assertEqual(
+                self.flow.refresh(client_id, rotated["refresh_token"]).json()["error"],
+                "invalid_grant",
+            )
+
+    def _live_refresh_tokens(self, value):
+        """Live refresh tokens in the grant of the token `value`."""
+        with get_db() as db:
+            grant_id = db.query(McpOAuthToken).filter_by(token_hash=digest(value)).one().grant_id
+            return (
+                db.query(McpOAuthToken)
+                .filter(
+                    McpOAuthToken.grant_id == grant_id,
+                    McpOAuthToken.kind == REFRESH,
+                    McpOAuthToken.revoked_at.is_(None),
+                )
+                .count()
+            )
+
+    def test_a_retry_within_the_grace_window_gets_a_new_pair_and_keeps_the_grant(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        first = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        retried = self.flow.refresh(client_id, tokens["refresh_token"])
+        self.assertEqual(retried.status_code, 200, retried.text)
+        second = retried.json()
+        self.assertNotEqual(second["refresh_token"], first["refresh_token"])
+        self.assertEqual(self.flow.mcp_initialize(second["access_token"]).status_code, 200)
+        self.assertEqual(self.flow.refresh(client_id, second["refresh_token"]).status_code, 200)
+
+    def test_a_grace_retry_replaces_the_first_successor(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        first = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        second = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        self.assertEqual(self.flow.mcp_initialize(second["access_token"]).status_code, 200)
+        self.assertEqual(self.flow.mcp_initialize(first["access_token"]).status_code, 401)
+
+    def test_a_raced_client_can_refresh_with_its_replaced_successor_within_the_window(self):
+        # Two refreshes of R1 (the second handled as a grace retry) give R2 and R3. The client
+        # that kept R2 refreshes with it inside the window.
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        r2 = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        r3 = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        response = self.flow.refresh(client_id, r2["refresh_token"])
+        self.assertEqual(response.status_code, 200, response.text)
+        latest = response.json()
+        self.assertEqual(self._live_refresh_tokens(tokens["refresh_token"]), 1)
+        self.assertEqual(self.flow.mcp_initialize(latest["access_token"]).status_code, 200)
+        self.assertEqual(self.flow.mcp_initialize(r3["access_token"]).status_code, 401)
+        self.assertEqual(self.flow.refresh(client_id, latest["refresh_token"]).status_code, 200)
+
+    def test_a_replaced_successor_after_the_window_is_reuse(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        r2 = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        r3 = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        with after_refresh_grace():
+            refused = self.flow.refresh(client_id, r2["refresh_token"])
+            self.assertEqual(refused.json()["error"], "invalid_grant")
+            self.assertEqual(self.flow.mcp_initialize(r3["access_token"]).status_code, 401)
+
+    def test_repeated_grace_retries_leave_one_live_refresh_token(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
         self.flow.refresh(client_id, tokens["refresh_token"])
-        self.assertEqual(self.flow.mcp_initialize(rotated["access_token"]).status_code, 401)
-        self.assertEqual(
-            self.flow.refresh(client_id, rotated["refresh_token"]).json()["error"],
-            "invalid_grant",
-        )
+        self.flow.refresh(client_id, tokens["refresh_token"])
+        third = self.flow.refresh(client_id, tokens["refresh_token"])
+        self.assertEqual(third.status_code, 200, third.text)
+        self.assertEqual(self._live_refresh_tokens(tokens["refresh_token"]), 1)
+
+    def test_no_grace_after_the_grant_was_revoked(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        rotated = self.flow.refresh(client_id, tokens["refresh_token"]).json()
+        self.flow.revoke(client_id, rotated["refresh_token"])
+        again = self.flow.refresh(client_id, tokens["refresh_token"])
+        self.assertEqual(again.json()["error"], "invalid_grant")
+        self.assertEqual(self._live_refresh_tokens(tokens["refresh_token"]), 0)
+
+    def test_the_grace_window_is_thirty_seconds(self):
+        client_id = self.flow.registered_client_id()
+        tokens = self.flow.tokens(client_id, new_account())
+        rotated_at = time.time()
+        self.flow.refresh(client_id, tokens["refresh_token"])
+        with patch("time.time", return_value=rotated_at + 29):
+            inside = self.flow.refresh(client_id, tokens["refresh_token"])
+        self.assertEqual(inside.status_code, 200, inside.text)
+        with patch("time.time", return_value=rotated_at + 32):
+            outside = self.flow.refresh(client_id, tokens["refresh_token"])
+        self.assertEqual(outside.json()["error"], "invalid_grant")
+
 
 class WrongAudienceTest(EndpointCase):
     def test_a_token_for_another_resource_gets_401(self):

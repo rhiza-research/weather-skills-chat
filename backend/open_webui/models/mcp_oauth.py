@@ -118,6 +118,8 @@ class McpOAuthToken(Base):
     resource = Column(Text, nullable=False)
     expires_at = Column(BigInteger, nullable=False)
     revoked_at = Column(BigInteger, nullable=True)
+    # Set on a refresh token when a refresh replaced it, with revoked_at. Not set by revocation.
+    rotated_at = Column(BigInteger, nullable=True)
     created_at = Column(BigInteger, nullable=False)
 
 
@@ -489,12 +491,18 @@ class McpOAuthTable:
         new_refresh: str,
         access_expires_at: int,
         refresh_expires_at: int,
+        grace_seconds: int = 0,
     ) -> Optional[IssuedTokens]:
         """Revoke the refresh token and store its replacements, in one transaction.
 
         The replacements carry `scopes`, which the token endpoint has checked are a subset of the
-        presented token's. Returns None unless this call's UPDATE revoked the presented token, so
-        a rotated token presented again is refused.
+        presented token's.
+
+        A token rotated at most `grace_seconds` ago, whose grant still has a live refresh token,
+        is a retry after a lost response or a refresh that raced another. In the same transaction
+        every live token of the grant (the tokens issued since that rotation) is revoked and a new
+        pair is added, so one refresh chain stays live per grant and the grant is not revoked. Any
+        other rotated or revoked token revokes its grant and returns None.
         """
         now = int(time.time())
         with self._session() as db:
@@ -507,9 +515,11 @@ class McpOAuthTable:
                     McpOAuthToken.revoked_at.is_(None),
                     McpOAuthToken.expires_at > now,
                 )
-                .values(revoked_at=now)
+                .values(revoked_at=now, rotated_at=now)
             )
-            if result.rowcount != 1:
+            if result.rowcount != 1 and not self._replace_chain_in_grace(
+                db, value, client_id=client_id, grace_seconds=grace_seconds, now=now
+            ):
                 db.rollback()
                 self.revoke_reused_refresh(value)
                 return None
@@ -536,17 +546,81 @@ class McpOAuthTable:
             )
 
     @staticmethod
-    def _revoke_grant_id(db, grant_id: str) -> int:
-        result = db.execute(
+    def _grace_row(db, value: str, grace_seconds: int, now: int):
+        """The refresh token row when rotation (not revocation) replaced it within the window."""
+        if grace_seconds <= 0:
+            return None
+        return (
+            db.query(McpOAuthToken)
+            .filter(
+                McpOAuthToken.token_hash == digest(value),
+                McpOAuthToken.kind == REFRESH,
+                McpOAuthToken.rotated_at.is_not(None),
+                McpOAuthToken.rotated_at >= now - grace_seconds,
+                McpOAuthToken.expires_at > now,
+            )
+            .first()
+        )
+
+    def _replace_chain_in_grace(
+        self, db, value: str, *, client_id: str, grace_seconds: int, now: int
+    ) -> bool:
+        """Revoke the grant's live tokens when `value` is in its grace window. Caller commits.
+
+        Returns False, changing nothing, when the token is not in grace, belongs to another
+        client, or its grant has no live refresh token (it was revoked).
+
+        The replaced refresh tokens get the presented token's rotated_at, so a client that raced
+        and received one of them can still present it until the same window ends; that is handled
+        here again, and one refresh chain stays live.
+        """
+        row = self._grace_row(db, value, grace_seconds, now)
+        if row is None or row.client_id != client_id:
+            return False
+        live_refresh = db.execute(
             update(McpOAuthToken)
             .where(
-                McpOAuthToken.grant_id == grant_id,
+                McpOAuthToken.grant_id == row.grant_id,
+                McpOAuthToken.kind == REFRESH,
+                McpOAuthToken.revoked_at.is_(None),
+                McpOAuthToken.expires_at > now,
+            )
+            .values(revoked_at=now, rotated_at=row.rotated_at)
+        )
+        if live_refresh.rowcount == 0:
+            return False
+        db.execute(
+            update(McpOAuthToken)
+            .where(
+                McpOAuthToken.grant_id == row.grant_id,
+                McpOAuthToken.kind == ACCESS,
                 McpOAuthToken.revoked_at.is_(None),
             )
-            .values(revoked_at=int(time.time()))
+            .values(revoked_at=now)
         )
-        db.commit()
-        return result.rowcount
+        return True
+
+    # Rounds of revocation per grant. A token pair committed by a concurrent rotation after the
+    # first UPDATE's snapshot is caught by a later round.
+    REVOKE_ROUNDS = 3
+
+    @classmethod
+    def _revoke_grant_id(cls, db, grant_id: str) -> int:
+        revoked = 0
+        for _ in range(cls.REVOKE_ROUNDS):
+            result = db.execute(
+                update(McpOAuthToken)
+                .where(
+                    McpOAuthToken.grant_id == grant_id,
+                    McpOAuthToken.revoked_at.is_(None),
+                )
+                .values(revoked_at=int(time.time()))
+            )
+            db.commit()
+            revoked += result.rowcount
+            if result.rowcount == 0:
+                break
+        return revoked
 
     def revoke_grant(self, value: str) -> int:
         """Revoke every token sharing a grant with this token. Returns the rows revoked."""
@@ -575,6 +649,31 @@ class McpOAuthTable:
             if row is None:
                 return 0
             return self._revoke_grant_id(db, row.grant_id)
+
+    def refresh_in_grace(self, value: str, grace_seconds: int) -> Optional[TokenRecord]:
+        """The refresh token, when it was rotated at most `grace_seconds` ago and is still usable.
+
+        Rotation sets the token's rotated_at and adds a live refresh token to the same grant.
+        Revocation sets only revoked_at, so a token replaced by a grace retry or revoked through
+        /revoke is never in grace, and a grant revoked through /revoke or by reuse has no live
+        refresh token left. rotate_refresh checks the same conditions again in its transaction.
+        """
+        now = int(time.time())
+        with self._session() as db:
+            row = self._grace_row(db, value, grace_seconds, now)
+            if row is None:
+                return None
+            live_successor = (
+                db.query(McpOAuthToken)
+                .filter(
+                    McpOAuthToken.grant_id == row.grant_id,
+                    McpOAuthToken.kind == REFRESH,
+                    McpOAuthToken.revoked_at.is_(None),
+                    McpOAuthToken.expires_at > now,
+                )
+                .first()
+            )
+            return TokenRecord.model_validate(row) if live_successor else None
 
     def revoke_reused_refresh(self, value: str) -> int:
         """When this refresh token was already rotated or revoked, revoke its whole grant.
