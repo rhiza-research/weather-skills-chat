@@ -27,6 +27,7 @@ from open_webui.test.util.test_mcp_oauth import (
     IDENTIFIER,
     REDIRECT_URI,
     EndpointCase,
+    after_refresh_grace,
     new_account,
 )
 
@@ -140,8 +141,9 @@ class PurgeTest(EndpointCase):
         tokens = self.flow.tokens(client_id, new_account())
         rotated = self.flow.refresh(client_id, tokens["refresh_token"]).json()
         purge_once()
-        self.flow.refresh(client_id, tokens["refresh_token"])
-        self.assertEqual(self.flow.mcp_initialize(rotated["access_token"]).status_code, 401)
+        with after_refresh_grace():
+            self.flow.refresh(client_id, tokens["refresh_token"])
+            self.assertEqual(self.flow.mcp_initialize(rotated["access_token"]).status_code, 401)
 
 
 class IdleClientTest(EndpointCase):

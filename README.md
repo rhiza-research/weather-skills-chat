@@ -232,7 +232,7 @@ Clients may redirect only to loopback `http` addresses (`localhost`, `127.0.0.1`
 
 The endpoint reads `WEBUI_URL` at startup, so a value changed later in the admin settings takes effect only after a restart.
 
-Access tokens expire after one hour. Clients refresh them with a refresh token, which is replaced on every use. A client revokes its tokens at `/revoke`.
+Access tokens expire after one hour. Clients refresh them with a refresh token, which is replaced on every use. A refresh token presented again within 30 seconds of being replaced gets a new pair, so a client that retries after losing the response stays signed in; presented again later, it revokes all of that grant's tokens. A client revokes its tokens at `/revoke`.
 
 `cd /app/backend && python -m open_webui.mcp_oauth.retention` deletes expired and unusable authorization rows, and deletes a registered client that has no live token, code or pending request, 30 days after it registered. Nothing runs the command automatically, so it has to be scheduled.
 
