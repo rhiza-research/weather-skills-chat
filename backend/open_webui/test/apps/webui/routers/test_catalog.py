@@ -61,7 +61,7 @@ class TestCatalogAccess(AbstractPostgresTest):
 
         with mock_webui_user(id="owner"):
             listed = self.fast_api_client.get(
-                self.create_url("/models/"),
+                "/api/v1/models/",
                 headers={"X-Organization-Id": "owner"},
             )
         assert listed.status_code == 200
@@ -81,7 +81,7 @@ class TestCatalogAccess(AbstractPostgresTest):
 
         with mock_webui_user(id="owner"):
             listed = self.fast_api_client.get(
-                self.create_url("/models/"),
+                "/api/v1/models/",
                 headers={"X-Organization-Id": "owner"},
             )
         assert listed.status_code == 200
@@ -100,7 +100,7 @@ class TestCatalogAccess(AbstractPostgresTest):
 
         with mock_webui_user(id="outsider"):
             listed = self.fast_api_client.get(
-                self.create_url("/models/"),
+                "/api/v1/models/",
                 headers={"X-Organization-Id": "outsider"},
             )
         assert "catalog-wrapper" in {m["id"] for m in listed.json()}
@@ -136,14 +136,14 @@ class TestCatalogAccess(AbstractPostgresTest):
 
         with mock_webui_user(id="outsider"):
             listed = self.fast_api_client.get(
-                self.create_url("/models/"),
+                "/api/v1/models/",
                 headers={"X-Organization-Id": "outsider"},
             )
         assert "org-private" not in {m["id"] for m in listed.json()}
 
         with mock_webui_user(id="owner"):
             listed = self.fast_api_client.get(
-                self.create_url("/models/"),
+                "/api/v1/models/",
                 headers={"X-Organization-Id": "owner"},
             )
         assert "org-private" in {m["id"] for m in listed.json()}

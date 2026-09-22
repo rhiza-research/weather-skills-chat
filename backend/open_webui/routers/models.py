@@ -31,12 +31,7 @@ class CatalogEnabledForm(BaseModel):
 
 
 def _visible_models(user, organization_id: str) -> list[ModelUserResponse]:
-    models = []
-    for model in Models.get_models():
-        if is_visible(organization_id, RESOURCE_MODEL, model):
-            data = annotate(model, organization_id, RESOURCE_MODEL)
-            models.append(ModelUserResponse.model_validate(data))
-    return models
+    return Models.list_for_organization(organization_id)
 
 
 @router.get("/", response_model=list[ModelUserResponse])

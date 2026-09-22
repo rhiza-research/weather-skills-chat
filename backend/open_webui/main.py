@@ -377,8 +377,9 @@ from open_webui.env import (
 
 
 from open_webui.utils.models import (
-    get_all_models,
     get_all_base_models,
+    get_catalog_chat_models,
+    remember_catalog_model,
     check_model_access,
 )
 from open_webui.utils.chat import (
@@ -403,8 +404,6 @@ from open_webui.utils.access_control import visible_in_organization
 from open_webui.utils.catalog import (
     can_create_private,
     can_manage_public,
-    is_catalog_chat_model,
-    is_usable,
 )
 from open_webui.models.org_catalog import RESOURCE_MODEL
 from open_webui.utils.organizations import get_active_organization_id
@@ -1120,22 +1119,8 @@ async def get_models(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    def get_filtered_models(models, user):
-        filtered_models = []
-        for model in models:
-            if model.get("arena"):
-                continue
-            model_info = Models.get_model_by_id(model["id"])
-            if not is_catalog_chat_model(model_info):
-                continue
-            if is_usable(organization_id, RESOURCE_MODEL, model_info):
-                filtered_models.append(model)
-        return filtered_models
-
-    all_models = await get_all_models(request, user=user)
-
     models = []
-    for model in all_models:
+    for model in get_catalog_chat_models(request, organization_id):
         # Filter out filter pipelines
         if "pipeline" in model and model["pipeline"].get("type", None) == "filter":
             continue
@@ -1163,9 +1148,6 @@ async def get_models(
         models.sort(
             key=lambda x: (model_order_dict.get(x["id"], float("inf")), x["name"])
         )
-
-    # Always restrict the chat picker to curated catalog models.
-    models = get_filtered_models(models, user)
 
     log.debug(
         f"/api/models returned filtered models accessible to the user: {json.dumps([model['id'] for model in models])}"
@@ -1198,9 +1180,6 @@ async def chat_completion(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    if not request.app.state.MODELS:
-        await get_all_models(request, user=user)
-
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
 
@@ -1208,10 +1187,15 @@ async def chat_completion(
     try:
         if not model_item.get("direct", False):
             model_id = form_data.get("model", None)
-            if model_id not in request.app.state.MODELS:
+            model = remember_catalog_model(request, model_id)
+            if model is None:
                 raise Exception("Model not found")
+            task_model = getattr(
+                request.app.state.config, "TASK_MODEL_EXTERNAL", None
+            )
+            if task_model:
+                remember_catalog_model(request, task_model)
 
-            model = request.app.state.MODELS[model_id]
             model_info = Models.get_model_by_id(model_id)
 
             # Check if user has access to the curated catalog model

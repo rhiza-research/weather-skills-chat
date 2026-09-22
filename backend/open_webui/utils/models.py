@@ -16,7 +16,7 @@ from open_webui.models.models import Models
 
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.access_control import user_owns_or_has_access
-from open_webui.utils.catalog import is_usable
+from open_webui.utils.catalog import is_catalog_chat_model, is_usable
 from open_webui.models.org_catalog import RESOURCE_MODEL
 from open_webui.models.organizations import Organizations
 
@@ -175,11 +175,70 @@ async def get_all_models(request, user: UserModel = None):
                 }
             )
 
-    # Process action_ids to get the actions
+    _attach_actions(request, models, global_action_ids, enabled_action_ids)
+    log.debug(f"get_all_models() returned {len(models)} models")
+
+    request.app.state.MODELS = {model["id"]: model for model in models}
+    return models
+
+
+def catalog_model_entry(model_info) -> dict:
+    info = model_info.model_dump()
+    meta = info.get("meta") or {}
+    action_ids = list(meta.get("actionIds") or []) if isinstance(meta, dict) else []
+    return {
+        "id": model_info.id,
+        "name": model_info.name,
+        "object": "model",
+        "created": model_info.created_at,
+        "owned_by": "openai",
+        "info": info,
+        "preset": True,
+        "action_ids": action_ids,
+        "actions": [],
+    }
+
+
+def remember_catalog_model(request, model_id: str) -> Optional[dict]:
+    """Cache one workspace model for this process. Does not call the provider."""
+    if not model_id:
+        return None
+    cached = (request.app.state.MODELS or {}).get(model_id)
+    if cached:
+        return cached
+    model_info = Models.get_model_by_id(model_id)
+    if not is_catalog_chat_model(model_info):
+        return None
+    entry = catalog_model_entry(model_info)
+    if request.app.state.MODELS is None:
+        request.app.state.MODELS = {}
+    request.app.state.MODELS[model_id] = entry
+    return entry
+
+
+def get_catalog_chat_models(request, organization_id: str):
+    """Enabled workspace chat models for one org. Does not call the provider."""
+    rows = Models.list_for_organization(organization_id, enabled_only=True)
+    models = []
+    for row in rows:
+        entry = catalog_model_entry(row)
+        entry["info"].pop("user", None)
+        models.append(entry)
+
+    global_action_ids = [
+        function.id for function in Functions.get_global_action_functions()
+    ]
+    enabled_action_ids = [
+        function.id
+        for function in Functions.get_functions_by_type("action", active_only=True)
+    ]
+    _attach_actions(request, models, global_action_ids, enabled_action_ids)
+    return models
+
+
+def _attach_actions(request, models, global_action_ids, enabled_action_ids):
     def get_action_items_from_module(function, module):
-        actions = []
         if hasattr(module, "actions"):
-            actions = module.actions
             return [
                 {
                     "id": f"{function.id}.{action['id']}",
@@ -189,17 +248,16 @@ async def get_all_models(request, user: UserModel = None):
                         "icon_url", function.meta.manifest.get("icon_url", None)
                     ),
                 }
-                for action in actions
+                for action in module.actions
             ]
-        else:
-            return [
-                {
-                    "id": function.id,
-                    "name": function.name,
-                    "description": function.meta.description,
-                    "icon_url": function.meta.manifest.get("icon_url", None),
-                }
-            ]
+        return [
+            {
+                "id": function.id,
+                "name": function.name,
+                "description": function.meta.description,
+                "icon_url": function.meta.manifest.get("icon_url", None),
+            }
+        ]
 
     def get_function_module_by_id(function_id):
         if function_id in request.app.state.FUNCTIONS:
@@ -207,28 +265,24 @@ async def get_all_models(request, user: UserModel = None):
         else:
             function_module, _, _ = load_function_module_by_id(function_id)
             request.app.state.FUNCTIONS[function_id] = function_module
+        return function_module
 
+    enabled = set(enabled_action_ids)
     for model in models:
         action_ids = [
             action_id
             for action_id in list(set(model.pop("action_ids", []) + global_action_ids))
-            if action_id in enabled_action_ids
+            if action_id in enabled
         ]
-
         model["actions"] = []
         for action_id in action_ids:
             action_function = Functions.get_function_by_id(action_id)
             if action_function is None:
                 raise Exception(f"Action not found: {action_id}")
-
             function_module = get_function_module_by_id(action_id)
             model["actions"].extend(
                 get_action_items_from_module(action_function, function_module)
             )
-    log.debug(f"get_all_models() returned {len(models)} models")
-
-    request.app.state.MODELS = {model["id"]: model for model in models}
-    return models
 
 
 def check_model_access(user, model, organization_id: Optional[str] = None):

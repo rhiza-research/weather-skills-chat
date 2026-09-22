@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import or_, and_, func
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy import BigInteger, Column, Text, JSON, Boolean
+from sqlalchemy.orm import aliased
 
 
 from open_webui.utils.access_control import has_access
@@ -201,6 +202,88 @@ class ModelsTable:
                         }
                     )
                 )
+            return models
+
+    def list_for_organization(
+        self, organization_id: str, *, enabled_only: bool = False
+    ) -> list[ModelUserResponse]:
+        """Catalog chat models visible to one org, including each owner's row.
+
+        ``enabled_only`` keeps models the org can actually use in chat.
+        Otherwise the list includes public models that are turned off, so the
+        workspace page can turn them back on. One query either way.
+        """
+        from open_webui.models.org_catalog import RESOURCE_MODEL, OrgCatalogOverride
+        from open_webui.models.organizations import PLATFORM_ORG_ID, VISIBILITY_PUBLIC
+        from open_webui.models.users import User
+
+        override = aliased(OrgCatalogOverride)
+        public = Model.visibility == VISIBILITY_PUBLIC
+        private_here = and_(
+            Model.visibility != VISIBILITY_PUBLIC,
+            Model.organization_id == organization_id,
+        )
+        active = or_(Model.is_active.is_(True), Model.is_active.is_(None))
+        if organization_id == PLATFORM_ORG_ID:
+            visible = or_(public, private_here)
+        else:
+            visible = or_(and_(public, active), private_here)
+
+        enabled = or_(
+            private_here,
+            and_(
+                public,
+                or_(
+                    override.enabled.is_(True),
+                    and_(
+                        override.enabled.is_(None),
+                        Model.enabled_by_default.is_(True),
+                    ),
+                ),
+            ),
+        )
+
+        with get_db() as db:
+            query = (
+                db.query(Model, User, override.enabled.label("override_enabled"))
+                .outerjoin(User, User.id == Model.user_id)
+                .outerjoin(
+                    override,
+                    and_(
+                        override.organization_id == organization_id,
+                        override.resource_type == RESOURCE_MODEL,
+                        override.resource_id == Model.id,
+                    ),
+                )
+                .filter(Model.base_model_id.isnot(None))
+                .filter(visible)
+            )
+            if enabled_only:
+                query = query.filter(active).filter(enabled)
+
+            models = []
+            for model, user, override_enabled in query.all():
+                data = ModelModel.model_validate(model).model_dump()
+                if model.visibility == VISIBILITY_PUBLIC:
+                    data["enabled"] = (
+                        bool(model.enabled_by_default)
+                        if override_enabled is None
+                        else bool(override_enabled)
+                    )
+                else:
+                    data["enabled"] = True
+                data["user"] = (
+                    {
+                        "id": user.id,
+                        "name": user.name,
+                        "email": user.email,
+                        "role": user.role,
+                        "profile_image_url": user.profile_image_url,
+                    }
+                    if user
+                    else None
+                )
+                models.append(ModelUserResponse.model_validate(data))
             return models
 
     def get_base_models(self) -> list[ModelModel]:

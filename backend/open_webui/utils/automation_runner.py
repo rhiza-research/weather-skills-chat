@@ -14,7 +14,7 @@ from open_webui.models.users import Users
 from open_webui.tasks import create_task, get_task
 from open_webui.utils.chat import generate_chat_completion as chat_completion_handler
 from open_webui.utils.middleware import process_chat_payload, process_chat_response
-from open_webui.utils.models import check_model_access, get_all_models
+from open_webui.utils.models import check_model_access, remember_catalog_model
 from open_webui.utils.usage import check_usage_caps
 
 log = logging.getLogger(__name__)
@@ -193,14 +193,10 @@ async def execute_automation(
     if not user:
         raise ValueError("Automation owner not found")
 
-    if not request.app.state.MODELS:
-        await get_all_models(request, user=user)
-
     model_id = automation.model
-    if not model_id or model_id not in request.app.state.MODELS:
+    model = remember_catalog_model(request, model_id)
+    if model is None:
         raise ValueError(f"Model not found: {model_id}")
-
-    model = request.app.state.MODELS[model_id]
 
     if not BYPASS_MODEL_ACCESS_CONTROL and user.role == "user":
         check_model_access(user, model)

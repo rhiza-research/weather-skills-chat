@@ -152,6 +152,7 @@ class AbstractPostgresTest(AbstractIntegrationTest):
             "document",
             "memory",
             "model",
+            "org_catalog_override",
             "prompt",
             "tag",
             '"user"',

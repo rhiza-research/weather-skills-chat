@@ -690,6 +690,32 @@ async def verify_connection(
             raise HTTPException(status_code=500, detail=error_detail)
 
 
+def connection_index_for_model(request: Request, model_id: str) -> Optional[int]:
+    """Which configured connection should serve this base model id.
+
+    An empty model allowlist accepts any id. The last matching connection
+    wins, matching the previous full-catalog merge.
+    """
+    if not model_id:
+        return None
+    urls = request.app.state.config.OPENAI_API_BASE_URLS or []
+    configs = request.app.state.config.OPENAI_API_CONFIGS or {}
+    found = None
+    for idx, url in enumerate(urls):
+        api_config = configs.get(str(idx), configs.get(url, {})) or {}
+        if not api_config.get("enable", True):
+            continue
+        prefix_id = api_config.get("prefix_id")
+        bare = model_id
+        if prefix_id and model_id.startswith(f"{prefix_id}."):
+            bare = model_id[len(prefix_id) + 1 :]
+        allowed = api_config.get("model_ids") or []
+        if allowed and bare not in allowed and model_id not in allowed:
+            continue
+        found = idx
+    return found
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
@@ -699,8 +725,6 @@ async def generate_chat_completion(
 ):
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
-
-    idx = 0
 
     payload = {**form_data}
     metadata = payload.pop("metadata", None)
@@ -748,21 +772,20 @@ async def generate_chat_completion(
             )
 
     t_models = time.perf_counter()
-    await get_all_models(request, user=user)
+    idx = connection_index_for_model(request, model_id)
     log_timing(
-        "openai.get_all_models",
+        "openai.connection_for_model",
         time.perf_counter() - t_models,
         chat_id=chat_id,
-        n=len(getattr(request.app.state, "OPENAI_MODELS", {}) or {}),
+        model_id=model_id,
+        url_idx=idx,
     )
-    model = request.app.state.OPENAI_MODELS.get(model_id)
-    if model:
-        idx = model["urlIdx"]
-    else:
+    if idx is None:
         raise HTTPException(
             status_code=404,
             detail="Model not found",
         )
+    model = {"id": model_id, "owned_by": "openai", "urlIdx": idx}
 
     # Get the API config for the model
     api_config = request.app.state.config.OPENAI_API_CONFIGS.get(

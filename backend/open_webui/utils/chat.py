@@ -41,7 +41,7 @@ from open_webui.models.models import Models
 
 
 from open_webui.utils.plugin import load_function_module_by_id
-from open_webui.utils.models import get_all_models, check_model_access
+from open_webui.utils.models import check_model_access, remember_catalog_model
 from open_webui.utils.payload import convert_payload_openai_to_ollama
 from open_webui.utils.response import (
     convert_response_ollama_to_openai,
@@ -309,8 +309,10 @@ chat_completion = generate_chat_completion
 
 
 async def chat_completed(request: Request, form_data: dict, user: Any):
-    if not request.app.state.MODELS:
-        await get_all_models(request, user=user)
+    if not (
+        getattr(request.state, "direct", False) and hasattr(request.state, "model")
+    ):
+        remember_catalog_model(request, form_data.get("model"))
 
     if getattr(request.state, "direct", False) and hasattr(request.state, "model"):
         models = {
@@ -380,8 +382,10 @@ async def chat_action(request: Request, action_id: str, form_data: dict, user: A
     if not action:
         raise Exception(f"Action not found: {action_id}")
 
-    if not request.app.state.MODELS:
-        await get_all_models(request, user=user)
+    if not (
+        getattr(request.state, "direct", False) and hasattr(request.state, "model")
+    ):
+        remember_catalog_model(request, form_data.get("model"))
 
     if getattr(request.state, "direct", False) and hasattr(request.state, "model"):
         models = {
