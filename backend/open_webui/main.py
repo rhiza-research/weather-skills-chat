@@ -73,9 +73,11 @@ from open_webui.routers import (
     configs,
     groups,
     organizations,
+    invitations,
     automations,
     artifacts,
     secrets,
+    preferences,
     skills,
     files,
     functions,
@@ -358,6 +360,7 @@ from open_webui.env import (
     SRC_LOG_LEVELS,
     VERSION,
     WEBUI_BUILD_HASH,
+    WEBUI_HELP_EMAIL,
     WEBUI_IMAGE_TAG,
     WEBUI_SECRET_KEY,
     WEBUI_SESSION_COOKIE_SAME_SITE,
@@ -1054,6 +1057,8 @@ app.include_router(retrieval.router, prefix="/api/v1/retrieval", tags=["retrieva
 app.include_router(configs.router, prefix="/api/v1/configs", tags=["configs"])
 
 app.include_router(auths.router, prefix="/api/v1/auths", tags=["auths"])
+# Register before users so /users/invitations is not captured by /users/{user_id}.
+app.include_router(invitations.router, prefix="/api/v1", tags=["invitations"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 
 
@@ -1077,6 +1082,9 @@ app.include_router(
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
+app.include_router(
+    preferences.router, prefix="/api/v1/preferences", tags=["preferences"]
+)
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(functions.router, prefix="/api/v1/functions", tags=["functions"])
@@ -1531,6 +1539,7 @@ async def get_app_config(request: Request):
         "name": app.state.WEBUI_NAME,
         "version": VERSION,
         "image_tag": WEBUI_IMAGE_TAG or None,
+        "help_email": WEBUI_HELP_EMAIL,
         "default_locale": str(DEFAULT_LOCALE),
         "oauth": {
             "providers": {

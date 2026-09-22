@@ -15,6 +15,53 @@ from open_webui.utils.skill_runtime import (
 )
 
 
+class SecretUsageHintTest(unittest.TestCase):
+    def test_hint_links_to_secrets_page_and_does_not_ask_for_values(self):
+        from types import SimpleNamespace
+        from open_webui.utils.secrets import secret_usage_hint
+
+        user = SimpleNamespace(id="user-1")
+
+        def metadata(_user, organization_id):
+            if organization_id == "org-2":
+                return [
+                    {"name": "SHARED_KEY", "overridden": False},
+                    {"name": "ECMWF_API_KEY", "overridden": True},
+                    {"name": "PRIVATE_KEY", "overridden": False},
+                ]
+            return [{"name": "PERSONAL_KEY", "overridden": False}]
+
+        with patch(
+            "open_webui.utils.secrets.list_secret_metadata",
+            side_effect=metadata,
+        ):
+            hint = secret_usage_hint(
+                user, organization_id="org-2", webui_url="http://localhost:3000"
+            )
+            other = secret_usage_hint(user, webui_url="http://localhost:3000")
+        self.assertIn("http://localhost:3000/workspace/secrets", hint)
+        self.assertIn("secrets_page", hint)
+        self.assertIn("{{secret:SHARED_KEY}}", hint)
+        self.assertIn("{{secret:PRIVATE_KEY}}", hint)
+        self.assertNotIn("{{secret:ECMWF_API_KEY}}", hint)
+        self.assertNotIn("{{secret:PERSONAL_KEY}}", hint)
+        self.assertIn("{{secret:PERSONAL_KEY}}", other)
+        self.assertNotIn("{{secret:SHARED_KEY}}", other)
+        self.assertNotIn("call create_secret", hint)
+        self.assertIn("Do not ask the user to paste", hint)
+
+        from open_webui.utils.secrets import secrets_page_url
+
+        self.assertEqual(
+            secrets_page_url("http://localhost:3000", "ECMWF_API_KEY"),
+            "http://localhost:3000/workspace/secrets?name=ECMWF_API_KEY",
+        )
+        self.assertEqual(
+            secrets_page_url("http://localhost:3000", "bad name"),
+            "http://localhost:3000/workspace/secrets",
+        )
+
+
 class NormalizeEnvSecretNamesTest(unittest.TestCase):
     def test_strip_dedupe_preserve_order(self):
         self.assertEqual(
@@ -51,6 +98,48 @@ class RedactSkillResultTest(unittest.TestCase):
         self.assertIn("{{secret:SMOKE_TOKEN}}", result["stdout"])
         self.assertIn("{{secret:SMOKE_TOKEN}}", result["stderr"])
         self.assertEqual(result["argv"], ["--x", "{{secret:SMOKE_TOKEN}}"])
+
+
+class ResolveEnvSecretsOrganizationTest(unittest.TestCase):
+    def test_resolves_in_active_organization_and_does_not_inject_missing(self):
+        from types import SimpleNamespace
+        from open_webui.utils.skill_runtime import resolve_env_secrets_for_user
+
+        seen = {}
+
+        def fake_resolve(user, name, organization_id=None):
+            seen["organization_id"] = organization_id
+            if name == "MISSING":
+                raise ValueError("nope")
+            return "plaintext"
+
+        user = SimpleNamespace(id="user-1")
+        with (
+            patch(
+                "open_webui.models.users.Users.get_user_by_id",
+                return_value=user,
+            ),
+            patch(
+                "open_webui.utils.secrets.resolve_secret_value",
+                side_effect=fake_resolve,
+            ),
+        ):
+            resolved = resolve_env_secrets_for_user(
+                ["ECMWF_API_KEY"],
+                __user__={"id": "user-1"},
+                organization_id="org-2",
+            )
+            self.assertEqual(resolved, {"ECMWF_API_KEY": "plaintext"})
+            self.assertEqual(seen["organization_id"], "org-2")
+
+            with self.assertRaises(ValueError) as ctx:
+                resolve_env_secrets_for_user(
+                    ["MISSING"],
+                    __user__={"id": "user-1"},
+                    organization_id="org-2",
+                )
+        self.assertIn("not injected", str(ctx.exception))
+        self.assertIn("MISSING", str(ctx.exception))
 
 
 class RunSkillEnvSecretsTest(unittest.TestCase):
@@ -107,6 +196,40 @@ class RunSkillEnvSecretsTest(unittest.TestCase):
             self.assertNotIn("super-secret-value", result.get("stderr") or "")
             self.assertIn("{{secret:SMOKE_TOKEN}}", result.get("stderr") or "")
             self.assertEqual(result.get("env_secrets"), ["SMOKE_TOKEN"])
+
+    def test_missing_secret_is_not_injected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp)
+            scripts = skill / "scripts"
+            scripts.mkdir()
+            (scripts / "main.py").write_text(
+                "# /// script\n# requires-python = \">=3.11\"\n# dependencies = []\n# ///\nprint('ran')\n",
+                encoding="utf-8",
+            )
+            seen = {}
+
+            def fake_resolve(names, __user__=None, organization_id=None):
+                seen["organization_id"] = organization_id
+                raise ValueError(
+                    "Secret(s) not available in the current organization and not injected: GONE"
+                )
+
+            with patch(
+                "open_webui.utils.skill_runtime.resolve_env_secrets_for_user",
+                side_effect=fake_resolve,
+            ):
+                result = asyncio.run(
+                    run_skill(
+                        skill,
+                        env_secrets=["GONE"],
+                        __user__={"id": "u1"},
+                        __metadata__={"organization_id": "org-9"},
+                    )
+                )
+            self.assertEqual(seen["organization_id"], "org-9")
+            self.assertFalse(result["ok"])
+            self.assertIn("not injected", result["stderr"])
+            self.assertNotIn("ran", result.get("stdout") or "")
 
 
 if __name__ == "__main__":

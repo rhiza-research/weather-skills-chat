@@ -5,7 +5,10 @@ from fastapi import FastAPI
 
 @contextmanager
 def mock_webui_user(**kwargs):
-    from open_webui.routers.webui import app
+    try:
+        from open_webui.routers.webui import app
+    except ImportError:
+        from main import app
 
     with mock_user(app, **kwargs):
         yield

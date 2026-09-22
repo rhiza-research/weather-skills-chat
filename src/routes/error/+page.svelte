@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { WEBUI_NAME, config } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
+	import HelpContact from '$lib/components/common/HelpContact.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -22,12 +23,12 @@
 			<div class="m-auto pb-44 flex flex-col justify-center">
 				<div class="max-w-md">
 					<div class="text-center text-2xl font-medium z-50">
-						{$i18n.t('{{webUIName}} Backend Required', { webUIName: $WEBUI_NAME })}
+						{$i18n.t("{{webUIName}} isn't responding", { webUIName: $WEBUI_NAME })}
 					</div>
 
 					<div class=" mt-4 text-center text-sm w-full">
 						{$i18n.t(
-							"Oops! You're using an unsupported method (frontend only). Please serve the WebUI from the backend."
+							'We could not reach the server. Please check your connection and try again in a moment.'
 						)}
 					</div>
 
@@ -41,6 +42,11 @@
 							{$i18n.t('Check Again')}
 						</button>
 					</div>
+
+					<HelpContact
+						className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400"
+						label={$i18n.t('Still stuck? Contact')}
+					/>
 				</div>
 			</div>
 		</div>

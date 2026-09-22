@@ -2,7 +2,8 @@
 	import { DropdownMenu } from 'bits-ui';
 	import { getContext } from 'svelte';
 
-	import { showSettings } from '$lib/stores';
+	import { config, showSettings } from '$lib/stores';
+	import { helpEmailAddress } from '$lib/constants';
 	import { flyAndScale } from '$lib/utils/transitions';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
@@ -15,6 +16,8 @@
 	export let showShortcutsHandler: Function;
 
 	export let onClose: Function = () => {};
+
+	$: helpEmail = helpEmailAddress($config?.help_email);
 </script>
 
 <Dropdown
@@ -36,13 +39,13 @@
 		>
 			<DropdownMenu.Item
 				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-				id="chat-share-button"
+				id="chat-help-email-button"
 				on:click={() => {
-					window.open('https://docs.openwebui.com', '_blank');
+					window.location.href = `mailto:${helpEmail}`;
 				}}
 			>
 				<QuestionMarkCircle className="size-5" />
-				<div class="flex items-center">{$i18n.t('Documentation')}</div>
+				<div class="flex items-center">{$i18n.t('Contact support')}</div>
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item

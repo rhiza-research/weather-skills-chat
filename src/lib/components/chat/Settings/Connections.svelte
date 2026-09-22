@@ -6,7 +6,7 @@
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
-	import { models, settings, user } from '$lib/stores';
+	import { models, settings, user, WEBUI_NAME } from '$lib/stores';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -130,7 +130,8 @@
 							{$i18n.t('Connect to your own OpenAI compatible API endpoints.')}
 							<br />
 							{$i18n.t(
-								'CORS must be properly configured by the provider to allow requests from Open WebUI.'
+								'CORS must be properly configured by the provider to allow requests from {{WEBUI_NAME}}.',
+								{ WEBUI_NAME: $WEBUI_NAME }
 							)}
 						</div>
 					</div>

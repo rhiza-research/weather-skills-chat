@@ -10,7 +10,13 @@ from open_webui.models.tools import ToolCatalogModel, ToolMeta
 from open_webui.utils.tools import accessible_skill_records, get_tools
 
 
-def _skill(tool_id: str, name: str, version: str, user_id: str = "alice") -> ToolCatalogModel:
+def _skill(
+    tool_id: str,
+    name: str,
+    version: str,
+    user_id: str = "alice",
+    access_control=None,
+) -> ToolCatalogModel:
     return ToolCatalogModel(
         id=tool_id,
         user_id=user_id,
@@ -30,7 +36,7 @@ def _skill(tool_id: str, name: str, version: str, user_id: str = "alice") -> Too
                 "enabled": True,
             },
         ),
-        access_control=None,
+        access_control=access_control,
         valves={},
         updated_at=1,
         created_at=1,
@@ -103,6 +109,50 @@ class GetToolsCatalogTest(unittest.TestCase):
         mock_catalog.assert_not_called()
         mock_get.assert_not_called()
         mock_load.assert_not_called()
+        self.assertIn("plot", tools)
+        self.assertEqual(tools["plot"]["tool_id"], "skill_plot__v1")
+
+    def test_member_can_use_enabled_catalog_skill_with_private_acl(self):
+        user = SimpleNamespace(id="member", role="user", settings=None)
+        catalog = [
+            _skill(
+                "skill_plot__v1",
+                "plot",
+                "0.1.0",
+                user_id="platform-admin",
+                access_control={},
+            )
+        ]
+        module = SimpleNamespace()
+
+        def plot():
+            """Plot something."""
+            return None
+
+        module.plot = plot
+        request = MagicMock()
+        request.headers.get.return_value = "org-1"
+        request.app.state.TOOLS = {"skill_plot__v1": module}
+
+        with patch(
+            "open_webui.utils.tools.accessible_skill_records",
+            return_value=[
+                {
+                    "id": "skill_plot__v1",
+                    "skill_name": "plot",
+                    "version": "0.1.0",
+                    "enabled": True,
+                }
+            ],
+        ):
+            tools = get_tools(
+                request,
+                ["skill_plot__v1"],
+                user,
+                {"__user__": {"id": "member"}},
+                catalog=catalog,
+            )
+
         self.assertIn("plot", tools)
         self.assertEqual(tools["plot"]["tool_id"], "skill_plot__v1")
 

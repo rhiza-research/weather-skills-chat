@@ -93,6 +93,17 @@
 						>
 							{$i18n.t('Secrets')}
 						</a>
+
+						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+								'/workspace/preferences'
+							)
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/workspace/preferences"
+						>
+							{$i18n.t('Preferences')}
+						</a>
 					</div>
 				</div>
 

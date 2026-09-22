@@ -124,11 +124,14 @@ def normalize_env_secret_names(env_secrets: Optional[list] = None) -> list[str]:
 def resolve_env_secrets_for_user(
     names: list[str],
     __user__: Optional[dict] = None,
+    organization_id: Optional[str] = None,
 ) -> dict[str, str]:
-    """Resolve secret names to plaintext for the calling user.
+    """Resolve secret names in the active organization for subprocess env injection.
 
-    Returns a mapping suitable for subprocess env injection.
-    Raises ValueError when the user is missing or a secret cannot be used.
+    A name is injected only when it is a private secret or an organization
+    secret in that organization. Missing names are not injected.
+    Raises ValueError when the user is missing or any requested secret is
+    not available there.
     """
     if not names:
         return {}
@@ -143,9 +146,19 @@ def resolve_env_secrets_for_user(
     if not user:
         raise ValueError("Cannot inject env_secrets: user not found.")
 
+    org_id = (organization_id or "").strip() or None
     resolved: dict[str, str] = {}
+    missing: list[str] = []
     for name in names:
-        resolved[name] = resolve_secret_value(user, name)
+        try:
+            resolved[name] = resolve_secret_value(user, name, org_id)
+        except ValueError:
+            missing.append(name)
+    if missing:
+        listed = ", ".join(missing)
+        raise ValueError(
+            f"Secret(s) not available in the current organization and not injected: {listed}"
+        )
     return resolved
 
 
@@ -225,7 +238,11 @@ async def run_skill(
 
     try:
         secret_names = normalize_env_secret_names(env_secrets)
-        used_secrets = resolve_env_secrets_for_user(secret_names, __user__)
+        used_secrets = resolve_env_secrets_for_user(
+            secret_names,
+            __user__,
+            organization_id=(__metadata__ or {}).get("organization_id"),
+        )
     except ValueError as e:
         return _error_result(
             str(e),

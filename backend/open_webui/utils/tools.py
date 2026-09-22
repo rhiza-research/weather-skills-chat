@@ -245,7 +245,8 @@ def get_tools(
             else:
                 continue
         else:
-            if not user_owns_or_has_access(
+            # Usable skills follow org enablement, not the installer's private ACL.
+            if _tool_manifest(tool).get("kind") != "skill" and not user_owns_or_has_access(
                 user.id, tool.user_id, tool.access_control, "read", user.role
             ):
                 continue

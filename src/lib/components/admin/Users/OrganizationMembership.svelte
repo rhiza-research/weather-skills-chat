@@ -1,19 +1,23 @@
 <script lang="ts">
-	import { getContext, tick } from 'svelte';
+	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { organizations, activeOrganizationId, user } from '$lib/stores';
 	import {
-		addOrganizationMember,
 		getOrganizationById,
-		getOrganizations,
 		removeOrganizationMember,
 		updateOrganizationMemberRole
 	} from '$lib/apis/organizations';
-	import { searchUsers } from '$lib/apis/users';
+	import {
+		createOrganizationInvitation,
+		getOrganizationInvitations,
+		resendOrganizationInvitation,
+		cancelOrganizationInvitation
+	} from '$lib/apis/invitations';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { formatTokenCount, formatUsd, remainingUsd, tokenUsageLabel, tokenUsageTooltip } from '$lib/utils/usage';
 	import Badge from '$lib/components/common/Badge.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
+	import Modal from '$lib/components/common/Modal.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import EditMemberLimitModal from '$lib/components/admin/Users/UserList/EditMemberLimitModal.svelte';
@@ -25,11 +29,16 @@
 
 	let org = null;
 	let loading = false;
-	let query = '';
-	let results = [];
-	let showAdd = false;
-	let searchInput;
+	let showInvite = false;
+	let inviteEmail = '';
+	let inviteLimit = 300;
+	let inviteUnlimited = true;
+	let inviting = false;
+	let invitations = [];
+	let search = '';
 	let showEditLimitModal = false;
+	let showRemoveConfirm = false;
+	let pendingRemove = null;
 	let selectedMember = null;
 
 	$: current = ($organizations ?? []).find((item) => item.id === $activeOrganizationId);
@@ -57,48 +66,80 @@
 			org = null;
 		}
 		loading = false;
+		await loadInvitations();
 	};
 
-	const search = async () => {
-		if (!query.trim()) {
-			results = [];
+	const loadInvitations = async () => {
+		const id = targetOrgId;
+		if (!id || isPersonal) {
+			invitations = [];
 			return;
 		}
 		try {
-			const memberIds = new Set((org?.members ?? []).map((member) => member.user_id));
-			results = (await searchUsers(localStorage.token, query.trim())).filter(
-				(result) => !memberIds.has(result.id)
+			invitations = await getOrganizationInvitations(localStorage.token, id);
+		} catch (error) {
+			invitations = [];
+		}
+	};
+
+	const inviteLimitValue = () => {
+		if (inviteUnlimited) return null;
+		const parsed = Number(inviteLimit);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			toast.error(
+				$i18n.t('Monthly usage limit must be a number greater than or equal to 0.')
 			);
+			return undefined;
+		}
+		return parsed;
+	};
+
+	const openInvite = () => {
+		inviteEmail = '';
+		inviteUnlimited = true;
+		inviteLimit = 300;
+		showInvite = true;
+	};
+
+	const sendInvite = async () => {
+		if (!org || !inviteEmail.trim()) return;
+		const monthlyLimit = inviteLimitValue();
+		if (monthlyLimit === undefined) return;
+		inviting = true;
+		try {
+			await createOrganizationInvitation(
+				localStorage.token,
+				org.id,
+				inviteEmail.trim(),
+				monthlyLimit
+			);
+			inviteEmail = '';
+			showInvite = false;
+			toast.success($i18n.t('Invitation sent'));
+			await loadInvitations();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		inviting = false;
+	};
+
+	const resendInvite = async (id) => {
+		if (!org) return;
+		try {
+			await resendOrganizationInvitation(localStorage.token, org.id, id);
+			toast.success($i18n.t('Invitation resent'));
+			await loadInvitations();
 		} catch (error) {
 			toast.error(`${error}`);
 		}
 	};
 
-	const openAdd = async () => {
-		showAdd = !showAdd;
-		if (showAdd) {
-			await tick();
-			searchInput?.focus();
-		} else {
-			query = '';
-			results = [];
-		}
-	};
-
-	const add = async (userId: string) => {
+	const cancelInvite = async (id) => {
 		if (!org) return;
 		try {
-			org = await addOrganizationMember(
-				localStorage.token,
-				org.id,
-				userId,
-				isPlatform ? 'admin' : 'user'
-			);
-			query = '';
-			results = [];
-			showAdd = false;
-			organizations.set(await getOrganizations(localStorage.token));
-			toast.success($i18n.t('Member added'));
+			await cancelOrganizationInvitation(localStorage.token, org.id, id);
+			toast.success($i18n.t('Invitation canceled'));
+			await loadInvitations();
 		} catch (error) {
 			toast.error(`${error}`);
 		}
@@ -114,19 +155,48 @@
 		}
 	};
 
-	const remove = async (userId: string) => {
-		if (!org) return;
+	const askRemove = (member) => {
+		pendingRemove = member;
+		showRemoveConfirm = true;
+	};
+
+	const confirmRemove = async () => {
+		if (!org || !pendingRemove) return;
 		try {
-			org = await removeOrganizationMember(localStorage.token, org.id, userId);
+			org = await removeOrganizationMember(localStorage.token, org.id, pendingRemove.user_id);
 		} catch (error) {
 			toast.error(`${error}`);
 		}
+		pendingRemove = null;
 	};
 
 	const openLimitEditor = (member) => {
 		selectedMember = member;
 		showEditLimitModal = true;
 	};
+
+	$: tableRows = [
+		...(org?.members ?? []).map((member) => ({
+			kind: 'member',
+			id: member.user_id,
+			member
+		})),
+		...(isAtLeastAdmin ? invitations : []).map((invite) => ({
+			kind: 'invite',
+			id: `invite:${invite.id}`,
+			invite
+		}))
+	].filter((row) => {
+		if (!search.trim()) return true;
+		const q = search.toLowerCase();
+		if (row.kind === 'invite') {
+			return (row.invite.email || '').toLowerCase().includes(q);
+		}
+		return (
+			(row.member.name || '').toLowerCase().includes(q) ||
+			(row.member.email || '').toLowerCase().includes(q)
+		);
+	});
 
 	const tokenLine = (usage) => {
 		if (!usage) return '—';
@@ -148,15 +218,28 @@
 	</div>
 
 	{#if isAtLeastAdmin && !isPersonal}
-		<Tooltip content={$i18n.t('Add member')}>
-			<button
-				class="p-2 rounded-xl hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition font-medium text-sm flex items-center space-x-1"
-				aria-label={$i18n.t('Add member')}
-				on:click={openAdd}
+		<input
+			class="text-sm py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden md:w-64"
+			placeholder={$i18n.t('Search')}
+			bind:value={search}
+		/>
+		<button
+			class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+			type="button"
+			on:click={openInvite}
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 20 20"
+				fill="currentColor"
+				class="size-4"
 			>
-				<Plus className="size-3.5" />
-			</button>
-		</Tooltip>
+				<path
+					d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
+				/>
+			</svg>
+			{$i18n.t('Invite a user')}
+		</button>
 	{/if}
 </div>
 
@@ -190,41 +273,71 @@
 		</div>
 	{/if}
 {:else if org}
-	{#if isAtLeastAdmin && showAdd}
-		<div class="mb-4">
-			<input
-				bind:this={searchInput}
-				class="w-full text-sm py-1.5 px-0 outline-hidden bg-transparent"
-				placeholder={$i18n.t('Search users to add')}
-				bind:value={query}
-				on:input={search}
-			/>
-			{#if results.length}
-				<div class="mt-1 rounded-lg border border-gray-100 dark:border-gray-850 overflow-hidden">
-					{#each results as result}
-						<button
-							class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-850 flex items-center gap-2"
-							on:click={() => add(result.id)}
-						>
-							<img
-								class="rounded-full w-6 h-6 object-cover"
-								src={result.profile_image_url?.startsWith(WEBUI_BASE_URL) ||
-								result.profile_image_url?.startsWith('https://www.gravatar.com/avatar/') ||
-								result.profile_image_url?.startsWith('data:')
-									? result.profile_image_url
-									: `/user.png`}
-								alt=""
+	<Modal bind:show={showInvite} size="sm">
+		<div>
+			<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
+				<div class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</div>
+				<button
+					class="self-center"
+					type="button"
+					on:click={() => {
+						showInvite = false;
+					}}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+						<path
+							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+						/>
+					</svg>
+				</button>
+			</div>
+			<hr class="border-gray-100 dark:border-gray-850" />
+			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
+				<input
+					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					type="email"
+					required
+					placeholder={$i18n.t('Email')}
+					bind:value={inviteEmail}
+				/>
+				<div>
+					<div class="mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
+					<label class="flex items-center gap-2 text-sm">
+						<input type="checkbox" bind:checked={inviteUnlimited} />
+						{$i18n.t('No limit')}
+					</label>
+					{#if !inviteUnlimited}
+						<div class="flex items-center gap-1.5 mt-2">
+							<span class="text-sm text-gray-500">$</span>
+							<input
+								class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+								type="number"
+								min="0"
+								step="0.01"
+								bind:value={inviteLimit}
 							/>
-							<span class="font-medium">{result.name}</span>
-							<span class="text-gray-500">· {result.email}</span>
-						</button>
-					{/each}
+						</div>
+					{/if}
+					{#if org?.monthly_limit_usd != null}
+						<div class="text-xs text-gray-500 mt-2">
+							{$i18n.t('Cannot exceed the organization monthly usage limit of {{limit}}.', {
+								limit: formatUsd(org.monthly_limit_usd)
+							})}
+						</div>
+					{/if}
 				</div>
-			{:else if query.trim()}
-				<div class="text-xs text-gray-500 py-2">{$i18n.t('No matching users.')}</div>
-			{/if}
+				<div class="flex justify-end">
+					<button
+						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+						type="submit"
+						disabled={inviting}
+					>
+						{$i18n.t('Send invite')}
+					</button>
+				</div>
+			</form>
 		</div>
-	{/if}
+	</Modal>
 
 	<div class="flex items-baseline gap-16 text-sm px-0.5 mb-3">
 		<div>
@@ -267,29 +380,70 @@
 	</div>
 	<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
 
-	{#each org.members ?? [] as member (member.user_id)}
+	{#each tableRows as row (row.id)}
 		<div class="member-table-row grid items-center gap-x-3 px-1 py-2 text-sm">
+			{#if row.kind === 'invite'}
+			<div class="flex items-center gap-2.5 min-w-0">
+				<div
+					class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-gray-500"
+				>
+					+
+				</div>
+				<div class="min-w-0">
+					<div class="font-medium truncate">{row.invite.email}</div>
+					<div class="text-xs text-gray-500 truncate">
+						{$i18n.t('Sent')} {new Date(row.invite.created_at * 1000).toLocaleDateString()}
+						· {row.invite.expired
+							? $i18n.t('Expired')
+							: `${$i18n.t('Expires')} ${new Date(row.invite.expires_at * 1000).toLocaleDateString()}`}
+					</div>
+				</div>
+			</div>
+			<div>{$i18n.t('Invited')}</div>
+			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
+			<div class="text-right tabular-nums">
+				{formatUsd(row.invite.monthly_limit_usd, $i18n.t('No limit'))}
+			</div>
+			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
+			<div class="text-gray-300 dark:text-gray-600">—</div>
+			<div class="flex justify-end items-center gap-1 flex-wrap">
+				<button
+					class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"
+					type="button"
+					on:click={() => resendInvite(row.invite.id)}
+				>
+					{$i18n.t('Resend')}
+				</button>
+				<button
+					class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
+					type="button"
+					on:click={() => cancelInvite(row.invite.id)}
+				>
+					{$i18n.t('Cancel')}
+				</button>
+			</div>
+			{:else}
 			<div class="flex items-center gap-2.5 min-w-0">
 				<img
 					class="rounded-full w-6 h-6 object-cover shrink-0"
-					src={member.profile_image_url?.startsWith(WEBUI_BASE_URL) ||
-					member.profile_image_url?.startsWith('https://www.gravatar.com/avatar/') ||
-					member.profile_image_url?.startsWith('data:')
-						? member.profile_image_url
+					src={row.member.profile_image_url?.startsWith(WEBUI_BASE_URL) ||
+					row.member.profile_image_url?.startsWith('https://www.gravatar.com/avatar/') ||
+					row.member.profile_image_url?.startsWith('data:')
+						? row.member.profile_image_url
 						: `/user.png`}
 					alt=""
 				/>
 				<div class="min-w-0">
-					<div class="font-medium truncate">{member.name ?? member.user_id}</div>
-					<div class="text-xs text-gray-500 truncate">{member.email ?? ''}</div>
+					<div class="font-medium truncate">{row.member.name ?? row.member.user_id}</div>
+					<div class="text-xs text-gray-500 truncate">{row.member.email ?? ''}</div>
 				</div>
 			</div>
 			<div class="min-w-0">
 				{#if isAtLeastAdmin}
 					<select
 						class="bg-transparent text-sm pr-8 outline-hidden cursor-pointer w-fit max-w-full"
-						value={member.role}
-						on:change={(e) => changeRole(member.user_id, e.currentTarget.value)}
+						value={row.member.role}
+						on:change={(e) => changeRole(row.member.user_id, e.currentTarget.value)}
 					>
 						{#if isOwner}
 							<option value="owner">{$i18n.t('Owner')}</option>
@@ -300,23 +454,23 @@
 						{/if}
 					</select>
 				{:else}
-					<Badge type="muted" content={$i18n.t(member.role)} />
+					<Badge type="muted" content={$i18n.t(row.member.role)} />
 				{/if}
 			</div>
 			<div class="text-right text-sm tabular-nums">
-				{formatUsd(member.usage?.cost_usd ?? 0, '$0.00')}
+				{formatUsd(row.member.usage?.cost_usd ?? 0, '$0.00')}
 			</div>
 			<div class="text-right tabular-nums">
-				{formatUsd(member.monthly_limit_usd, $i18n.t('Unlimited'))}
+				{formatUsd(row.member.monthly_limit_usd, $i18n.t('Unlimited'))}
 			</div>
 			<div class="text-right text-sm tabular-nums text-gray-500">
-				{member.monthly_limit_usd == null
+				{row.member.monthly_limit_usd == null
 					? '—'
-					: formatUsd(remainingUsd(member.monthly_limit_usd, member.usage?.cost_usd ?? 0))}
+					: formatUsd(remainingUsd(row.member.monthly_limit_usd, row.member.usage?.cost_usd ?? 0))}
 			</div>
-			<Tooltip content={tokenUsageTooltip(member.usage)} className="min-w-0 block">
+			<Tooltip content={tokenUsageTooltip(row.member.usage)} className="min-w-0 block">
 				<div class="text-[11px] text-gray-500 tabular-nums truncate">
-					{tokenLine(member.usage)}
+					{tokenLine(row.member.usage)}
 				</div>
 			</Tooltip>
 			<div class="flex justify-end items-center">
@@ -324,7 +478,7 @@
 					<Tooltip content={$i18n.t('Edit monthly usage limit')}>
 						<button
 							class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
-							on:click={() => openLimitEditor(member)}
+							on:click={() => openLimitEditor(row.member)}
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -344,12 +498,13 @@
 					</Tooltip>
 					<button
 						class="text-xs text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950"
-						on:click={() => remove(member.user_id)}
+						on:click={() => askRemove(row.member)}
 					>
 						{$i18n.t('Remove')}
 					</button>
 				{/if}
 			</div>
+			{/if}
 		</div>
 	{:else}
 		<div class="text-sm text-gray-500 py-6 text-center">{$i18n.t('No members yet.')}</div>
@@ -357,6 +512,16 @@
 	</div>
 	</div>
 {/if}
+
+<ConfirmDialog
+	bind:show={showRemoveConfirm}
+	title={$i18n.t('Remove member')}
+	message={$i18n.t('Remove {{name}} from this organization?', {
+		name: pendingRemove?.name || pendingRemove?.email || ''
+	})}
+	confirmLabel={$i18n.t('Remove')}
+	onConfirm={confirmRemove}
+/>
 
 {#key selectedMember}
 	<EditMemberLimitModal
@@ -379,7 +544,7 @@
 			7.5rem
 			8.5rem
 			minmax(0, 1fr)
-			7.5rem;
+			8.5rem;
 	}
 
 	.member-table-row > :global(*) {

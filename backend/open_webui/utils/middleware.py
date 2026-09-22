@@ -435,7 +435,11 @@ async def chat_completion_tools_handler(
     try:
         from open_webui.utils.secrets import secret_usage_hint
 
-        hint = secret_usage_hint(user)
+        hint = secret_usage_hint(
+            user,
+            organization_id=metadata.get("organization_id"),
+            webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
+        )
         if hint:
             tools_function_calling_prompt = f"{tools_function_calling_prompt}\n\n{hint}"
     except Exception:
@@ -498,6 +502,7 @@ async def chat_completion_tools_handler(
                         tool_function_params,
                         user,
                         direct=tool.get("direct", False),
+                        organization_id=metadata.get("organization_id"),
                     )
                     used_secrets.update(substituted)
 
@@ -1252,7 +1257,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 from open_webui.utils.secrets import secret_usage_hint
 
                 hints = []
-                hint = secret_usage_hint(user)
+                hint = secret_usage_hint(
+                    user,
+                    organization_id=metadata.get("organization_id"),
+                    webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
+                )
                 if hint:
                     hints.append(hint)
                 # Help the model answer "what tools do you have?" without guessing.
@@ -1406,6 +1415,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception:
         log.debug("Rendering prompt inject skipped", exc_info=True)
+
+    try:
+        from open_webui.utils.preferences import inject_preferences, preferences_prompt
+
+        org_id = metadata.get("organization_id") or getattr(user, "id", None)
+        if org_id:
+            form_data["messages"] = inject_preferences(
+                form_data.get("messages") or [],
+                preferences_prompt(user, org_id),
+            )
+    except Exception:
+        log.debug("Preference prompt inject skipped", exc_info=True)
 
     clock.done(n_tools=len(tools_dict) if tools_dict else 0)
     return form_data, metadata, events
@@ -2698,6 +2719,7 @@ async def process_chat_response(
                                     tool_function_params,
                                     user,
                                     direct=tool.get("direct", False),
+                                    organization_id=metadata.get("organization_id"),
                                 )
                                 used_secrets.update(substituted)
 

@@ -29,11 +29,16 @@
 	import EditUserModal from '$lib/components/admin/Users/UserList/EditUserModal.svelte';
 	import EditOrganizationModal from '$lib/components/admin/Users/UserList/EditOrganizationModal.svelte';
 	import UserChatsModal from '$lib/components/admin/Users/UserList/UserChatsModal.svelte';
-	import AddUserModal from '$lib/components/admin/Users/UserList/AddUserModal.svelte';
+	import {
+		createPlatformInvitation,
+		getPlatformInvitations,
+		resendPlatformInvitation,
+		cancelPlatformInvitation
+	} from '$lib/apis/invitations';
 
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
+	import Modal from '$lib/components/common/Modal.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
 	import Banner from '$lib/components/common/Banner.svelte';
 
 	const i18n = getContext('i18n');
@@ -48,7 +53,12 @@
 	let activating = '';
 
 	let showDeleteConfirmDialog = false;
-	let showAddUserModal = false;
+	let showInvite = false;
+	let inviteEmail = '';
+	let inviteLimit = 300;
+	let inviteUnlimited = false;
+	let inviting = false;
+	let invitations = [];
 	let showUserChatsModal = false;
 	let showEditUserModal = false;
 	let showEditOrgModal = false;
@@ -63,6 +73,7 @@
 			: '/user.png';
 
 	const kindRank = (org) => {
+		if (org.kind === 'invite') return -1;
 		if (org.kind === 'workspace' && org.active === false) return 0;
 		if (org.kind === 'personal') return 1;
 		if (org.kind === 'platform') return 2;
@@ -167,19 +178,29 @@
 
 	$: userById = Object.fromEntries((users ?? []).map((item) => [item.id, item]));
 
-	$: rows = (orgs ?? [])
-		.filter((org) => org.kind !== 'platform')
-		.map((org) => {
-			const person = org.kind === 'personal' ? userById[org.id] : null;
-			return {
-				...org,
-				person,
-				displayName: person?.name ?? org.name,
-				email: person?.email ?? '',
-				image: person?.profile_image_url ?? '',
-				memberCount: (org.members ?? []).length
-			};
-		})
+	$: rows = [
+		...(orgs ?? [])
+			.filter((org) => org.kind !== 'platform')
+			.map((org) => {
+				const person = org.kind === 'personal' ? userById[org.id] : null;
+				return {
+					...org,
+					person,
+					displayName: person?.name ?? org.name,
+					email: person?.email ?? '',
+					image: person?.profile_image_url ?? '',
+					memberCount: (org.members ?? []).length
+				};
+			}),
+		...(invitations ?? []).map((invite) => ({
+			id: `invite:${invite.id}`,
+			kind: 'invite',
+			displayName: invite.email,
+			email: invite.email,
+			name: invite.email,
+			invite
+		}))
+	]
 		.filter((row) => {
 			if (!search.trim()) return true;
 			const q = search.toLowerCase();
@@ -189,8 +210,8 @@
 					(member.email || '').toLowerCase().includes(q)
 			);
 			return (
-				row.displayName.toLowerCase().includes(q) ||
-				row.email.toLowerCase().includes(q) ||
+				(row.displayName || '').toLowerCase().includes(q) ||
+				(row.email || '').toLowerCase().includes(q) ||
 				(row.name || '').toLowerCase().includes(q) ||
 				(row.kind || '').toLowerCase().includes(q) ||
 				memberHit
@@ -209,7 +230,67 @@
 		return `${formatTokenCount(usage.prompt_tokens)} / ${formatTokenCount(usage.completion_tokens)} / ${formatTokenCount(usage.total_tokens)} / ${formatTokenCount(usage.uncached_tokens)}`;
 	};
 
-	onMount(loadOrgs);
+	const loadInvitations = async () => {
+		try {
+			invitations = await getPlatformInvitations(localStorage.token);
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
+	const inviteLimitValue = () => {
+		if (inviteUnlimited) return null;
+		const parsed = Number(inviteLimit);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			toast.error(
+				$i18n.t('Monthly usage limit must be a number greater than or equal to 0.')
+			);
+			return undefined;
+		}
+		return parsed;
+	};
+
+	const sendInvite = async () => {
+		if (!inviteEmail.trim()) return;
+		const monthlyLimit = inviteLimitValue();
+		if (monthlyLimit === undefined) return;
+		inviting = true;
+		try {
+			await createPlatformInvitation(localStorage.token, inviteEmail.trim(), monthlyLimit);
+			inviteEmail = '';
+			showInvite = false;
+			toast.success($i18n.t('Invitation sent'));
+			await loadInvitations();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		inviting = false;
+	};
+
+	const resendInvite = async (id) => {
+		try {
+			await resendPlatformInvitation(localStorage.token, id);
+			toast.success($i18n.t('Invitation resent'));
+			await loadInvitations();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
+	const cancelInvite = async (id) => {
+		try {
+			await cancelPlatformInvitation(localStorage.token, id);
+			toast.success($i18n.t('Invitation canceled'));
+			await loadInvitations();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
+	onMount(async () => {
+		await loadOrgs();
+		await loadInvitations();
+	});
 </script>
 
 <ConfirmDialog
@@ -244,7 +325,6 @@
 	<EditOrganizationModal bind:show={showEditOrgModal} {selectedOrg} on:save={loadOrgs} />
 {/key}
 
-<AddUserModal bind:show={showAddUserModal} on:save={refreshUsers} />
 <UserChatsModal bind:show={showUserChatsModal} user={selectedUser} />
 
 {#if ($config?.license_metadata?.seats ?? null) !== null && users.length > $config?.license_metadata?.seats}
@@ -296,20 +376,91 @@
 			</div>
 
 			<div>
-				<Tooltip content={$i18n.t('Add User')}>
-					<button
-						class=" p-2 rounded-xl hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition font-medium text-sm flex items-center space-x-1"
-						on:click={() => {
-							showAddUserModal = !showAddUserModal;
-						}}
+				<button
+					class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+					type="button"
+					on:click={() => {
+						inviteEmail = '';
+						inviteLimit = 300;
+						inviteUnlimited = false;
+						showInvite = true;
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="size-4"
 					>
-						<Plus className="size-3.5" />
-					</button>
-				</Tooltip>
+						<path
+							d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
+						/>
+					</svg>
+					{$i18n.t('Invite a user')}
+				</button>
 			</div>
 		</div>
 	</div>
 </div>
+
+<Modal bind:show={showInvite} size="sm">
+	<div>
+		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
+			<div class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</div>
+			<button
+				class="self-center"
+				type="button"
+				on:click={() => {
+					showInvite = false;
+				}}
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+					<path
+						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+					/>
+				</svg>
+			</button>
+		</div>
+		<hr class="border-gray-100 dark:border-gray-850" />
+		<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
+			<input
+				class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+				type="email"
+				required
+				placeholder={$i18n.t('Email')}
+				bind:value={inviteEmail}
+			/>
+			<div>
+				<div class="mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" bind:checked={inviteUnlimited} />
+					{$i18n.t('Unlimited')}
+				</label>
+				{#if !inviteUnlimited}
+					<div class="flex items-center gap-1.5 mt-2">
+						<span class="text-sm text-gray-500">$</span>
+						<input
+							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+							type="number"
+							min="0"
+							step="0.01"
+							bind:value={inviteLimit}
+						/>
+					</div>
+				{/if}
+			</div>
+			<div class="flex justify-end">
+				<button
+					class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+					type="submit"
+					disabled={inviting}
+				>
+					{$i18n.t('Send invite')}
+				</button>
+			</div>
+		</form>
+	</div>
+</Modal>
 
 <div class="overflow-x-auto">
 	<div class="min-w-[76rem]">
@@ -322,7 +473,7 @@
 			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
 				{$i18n.t('Type')}
 			</div>
-			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
 				{$i18n.t('Members')}
 			</div>
 			<div class="text-right leading-tight">{$i18n.t('Used')}</div>
@@ -347,7 +498,25 @@
 				: 'bg-white dark:bg-gray-900'}"
 		>
 			<div class="org-table-row grid items-center gap-x-3 px-2">
-				{#if row.kind === 'personal'}
+				{#if row.kind === 'invite'}
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="shrink-0 w-4"></span>
+						<div
+							class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+						>
+							<UserCircleSolid className="size-4" />
+						</div>
+						<div class="min-w-0">
+							<div class="text-sm font-medium truncate">{row.email}</div>
+							<div class="text-xs text-gray-500 truncate">
+								{$i18n.t('Sent')} {dayjs(row.invite.created_at * 1000).format('LL')}
+								· {row.invite.expired
+									? $i18n.t('Expired')
+									: `${$i18n.t('Expires')} ${dayjs(row.invite.expires_at * 1000).format('LL')}`}
+							</div>
+						</div>
+					</div>
+				{:else if row.kind === 'personal'}
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="shrink-0 w-4"></span>
 						{#if row.person}
@@ -402,8 +571,14 @@
 					</button>
 				{/if}
 
-				<div class="flex items-center gap-1.5 min-w-0">
-					{#if row.kind === 'personal'}
+				<div class="type-tags flex flex-wrap items-center gap-1">
+					{#if row.kind === 'invite'}
+						<Badge type="muted" content={$i18n.t('Invite')} />
+						<Badge
+							type="warning"
+							content={row.invite.expired ? $i18n.t('Expired') : $i18n.t('Pending')}
+						/>
+					{:else if row.kind === 'personal'}
 						<Badge type="muted" content={$i18n.t('Personal')} />
 						{#if row.person?.role === 'pending'}
 							<Badge type="warning" content={$i18n.t('Pending')} />
@@ -416,29 +591,37 @@
 					{/if}
 				</div>
 
-				<div class="text-sm text-gray-500">
-					{row.memberCount}
+				<div class="text-sm {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500'}">
+					{row.kind === 'invite' ? '—' : row.memberCount}
 				</div>
 
-				<div class="text-sm text-right tabular-nums">
-					{formatUsd(row.usage?.cost_usd ?? 0, '$0.00')}
+				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : ''}">
+					{row.kind === 'invite' ? '—' : formatUsd(row.usage?.cost_usd ?? 0, '$0.00')}
 				</div>
 				<div class="text-sm text-right tabular-nums">
-					{formatUsd(row.monthly_limit_usd, $i18n.t('Unlimited'))}
+					{row.kind === 'invite'
+						? formatUsd(row.invite.monthly_limit_usd, $i18n.t('Unlimited'))
+						: formatUsd(row.monthly_limit_usd, $i18n.t('Unlimited'))}
 				</div>
-				<div class="text-sm text-right tabular-nums text-gray-500">
-					{row.monthly_limit_usd == null
+				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500'}">
+					{row.kind === 'invite'
 						? '—'
-						: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
+						: row.monthly_limit_usd == null
+							? '—'
+							: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
 				</div>
+				{#if row.kind === 'invite'}
+					<div class="text-[11px] text-gray-300 dark:text-gray-600">—</div>
+				{:else}
 				<Tooltip content={tokenUsageTooltip(row.usage)} className="min-w-0 block">
 					<div class="text-[11px] text-gray-500 tabular-nums truncate">
 						{tokenLine(row.usage)}
 					</div>
 				</Tooltip>
+				{/if}
 
 				<div class="flex justify-center">
-					{#if row.kind !== 'platform'}
+					{#if row.kind !== 'platform' && row.kind !== 'invite'}
 						<input
 							type="checkbox"
 							class="cursor-pointer"
@@ -450,7 +633,7 @@
 					{/if}
 				</div>
 				<div class="flex justify-center">
-					{#if row.kind !== 'platform'}
+					{#if row.kind !== 'platform' && row.kind !== 'invite'}
 						<input
 							type="checkbox"
 							class="cursor-pointer"
@@ -462,7 +645,7 @@
 					{/if}
 				</div>
 				<div class="flex justify-center">
-					{#if row.kind !== 'platform'}
+					{#if row.kind !== 'platform' && row.kind !== 'invite'}
 						<input
 							type="checkbox"
 							class="cursor-pointer"
@@ -474,10 +657,25 @@
 					{/if}
 				</div>
 
-				<div class="flex justify-end items-center gap-0.5">
-					{#if row.kind === 'workspace' && row.active === false}
+				<div class="flex justify-end items-center gap-1 shrink-0 flex-wrap">
+					{#if row.kind === 'invite'}
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"
+							type="button"
+							on:click={() => resendInvite(row.invite.id)}
+						>
+							{$i18n.t('Resend')}
+						</button>
+						<button
+							class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
+							type="button"
+							on:click={() => cancelInvite(row.invite.id)}
+						>
+							{$i18n.t('Cancel')}
+						</button>
+					{:else if row.kind === 'workspace' && row.active === false}
+						<button
+							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50 whitespace-nowrap"
 							disabled={activating === row.id}
 							on:click={() => activate(row.id)}
 						>
@@ -613,7 +811,7 @@
 				</div>
 			</div>
 
-			{#if row.kind !== 'personal' && expandedId === row.id}
+			{#if row.kind !== 'personal' && row.kind !== 'invite' && expandedId === row.id}
 				<div class="ml-10 mt-1 mb-2 rounded-lg bg-gray-50 dark:bg-gray-850/60 px-3 py-2">
 					{#if (row.members ?? []).length === 0}
 						<div class="text-xs text-gray-500 py-1">{$i18n.t('No members yet.')}</div>
@@ -656,8 +854,8 @@
 	.org-table-row {
 		grid-template-columns:
 			minmax(0, 1.5fr)
-			7.25rem
-			4.25rem
+			8.75rem
+			5.5rem
 			5.25rem
 			7.25rem
 			6.25rem
@@ -665,10 +863,23 @@
 			4.75rem
 			4.75rem
 			5.25rem
-			8.5rem;
+			10.5rem;
 	}
 
 	.org-table-row > :global(*) {
 		min-width: 0;
+	}
+
+	.org-table-row > :global(:nth-child(3)) {
+		min-width: 5.5rem;
+		white-space: nowrap;
+	}
+
+	.type-tags :global(div) {
+		max-width: 100%;
+		white-space: normal;
+		overflow: visible;
+		display: inline-block;
+		-webkit-line-clamp: unset;
 	}
 </style>

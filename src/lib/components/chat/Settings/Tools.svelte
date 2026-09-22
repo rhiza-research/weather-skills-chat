@@ -6,7 +6,7 @@
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
 
-	import { models, settings, toolServers, user } from '$lib/stores';
+	import { models, settings, toolServers, user, WEBUI_NAME } from '$lib/stores';
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -93,13 +93,14 @@
 							{$i18n.t('Connect to your own OpenAPI compatible external tool servers.')}
 							<br />
 							{$i18n.t(
-								'CORS must be properly configured by the provider to allow requests from Open WebUI.'
+								'CORS must be properly configured by the provider to allow requests from {{WEBUI_NAME}}.',
+								{ WEBUI_NAME: $WEBUI_NAME }
 							)}
 						</div>
 					</div>
 
 					<div class=" text-xs text-gray-600 dark:text-gray-300 mb-2">
-						{$i18n.t('Open WebUI can use tools provided by any OpenAPI server.')}
+						{$i18n.t('{{WEBUI_NAME}} can use tools provided by any OpenAPI server.', { WEBUI_NAME: $WEBUI_NAME })}
 					</div>
 				</div>
 			</div>

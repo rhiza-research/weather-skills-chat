@@ -2,6 +2,7 @@
 	import { getAdminDetails } from '$lib/apis/auths';
 	import { onMount, getContext } from 'svelte';
 	import { WEBUI_NAME } from '$lib/stores';
+	import HelpContact from '$lib/components/common/HelpContact.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -39,6 +40,11 @@
 						<div>{$i18n.t('Admin')}: {adminDetails.name} ({adminDetails.email})</div>
 					</div>
 				{/if}
+
+				<HelpContact
+					className="mt-3 text-center text-xs text-gray-500 dark:text-gray-300"
+					label={$i18n.t('Need help? Contact')}
+				/>
 
 				<div class=" mt-6 mx-auto relative group w-fit">
 					<button

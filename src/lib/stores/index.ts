@@ -185,6 +185,7 @@ type Config = {
 	name: string;
 	version: string;
 	image_tag?: string | null;
+	help_email?: string | null;
 	default_locale: string;
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];

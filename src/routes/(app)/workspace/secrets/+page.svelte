@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, getContext, tick } from 'svelte';
+	import { page } from '$app/stores';
 	import { toast } from 'svelte-sonner';
 	import { organizations, activeOrganizationId, WEBUI_NAME, user } from '$lib/stores';
 	import {
@@ -29,6 +30,12 @@
 	let selectedSecret = null;
 	let showDeleteConfirm = false;
 	let nameInput;
+	let valueInput;
+
+	const secretNameFromQuery = (raw) => {
+		const cleaned = (raw || '').trim();
+		return /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(cleaned) ? cleaned : '';
+	};
 
 	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
 	$: isPersonal =
@@ -106,7 +113,16 @@
 
 	onMount(async () => {
 		await refresh();
+		const prefilled = secretNameFromQuery($page.url.searchParams.get('name'));
+		if (prefilled) {
+			name = prefilled;
+			showAdd = true;
+		}
 		loaded = true;
+		if (prefilled) {
+			await tick();
+			valueInput?.focus();
+		}
 	});
 </script>
 
@@ -168,6 +184,7 @@
 				required
 			/>
 			<input
+				bind:this={valueInput}
 				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
 				type="password"
 				placeholder={$i18n.t('Value')}

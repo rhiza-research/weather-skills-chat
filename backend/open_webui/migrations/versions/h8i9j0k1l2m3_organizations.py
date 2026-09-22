@@ -168,7 +168,7 @@ def upgrade():
     )
 
     users = conn.execute(
-        text("SELECT id, role, created_at FROM user ORDER BY created_at ASC")
+        text('SELECT id, role, created_at FROM "user" ORDER BY created_at ASC')
     ).fetchall()
     for user_id, _role, created_at in users:
         created = created_at or now

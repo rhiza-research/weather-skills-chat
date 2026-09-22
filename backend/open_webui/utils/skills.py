@@ -958,17 +958,6 @@ def install_skill_pack(
     dirname = pack_dirname(url, ref, owner_key=organization_id)
     local_path = SKILLS_DIR / dirname
 
-    access_control = {}
-    if visibility == "organization":
-        access_control = {
-            "read": {
-                "organization_ids": [organization_id],
-                "group_ids": [],
-                "user_ids": [],
-            },
-            "write": {"organization_ids": [], "group_ids": [], "user_ids": []},
-        }
-
     with exclusive_git_op():
         if local_path.exists():
             shutil.rmtree(local_path)
@@ -989,7 +978,7 @@ def install_skill_pack(
                         organization_id=organization_id,
                         visibility=visibility,
                         enabled_by_default=enabled_by_default,
-                        access_control=access_control,
+                        access_control=None,
                         db=db,
                     )
                     if not pack:

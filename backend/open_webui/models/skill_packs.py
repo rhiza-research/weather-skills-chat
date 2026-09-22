@@ -136,7 +136,9 @@ class SkillPackTable:
                 commit_sha=commit_sha,
                 local_path=local_path,
                 meta=meta or {},
-                access_control={} if access_control is None else access_control,
+                # Skill use is catalog membership plus the org enablement
+                # toggle, not this field. None is stored as NULL.
+                access_control=access_control,
                 enabled_by_default=enabled_by_default,
                 is_active=is_active,
                 created_at=now,

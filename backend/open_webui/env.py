@@ -107,7 +107,15 @@ log.setLevel(SRC_LOG_LEVELS["CONFIG"])
 
 WEBUI_NAME = os.environ.get("WEBUI_NAME", "Weather Skills")
 
-WEBUI_FAVICON_URL = "https://openwebui.com/favicon.png"
+WEBUI_FAVICON_URL = (
+    os.environ.get("WEBUI_FAVICON_URL", "").strip()
+    or f"{os.environ.get('WEBUI_URL', 'http://localhost:3000').rstrip('/')}/static/favicon.png"
+)
+
+# Address shown to users when something fails (error screens, failed responses).
+WEBUI_HELP_EMAIL = (
+    os.environ.get("WEBUI_HELP_EMAIL", "").strip() or "info@rhizaresearch.org"
+)
 
 TRUSTED_SIGNATURE_KEY = os.environ.get("TRUSTED_SIGNATURE_KEY", "")
 

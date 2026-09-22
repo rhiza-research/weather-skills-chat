@@ -689,18 +689,6 @@
 														createMessagePair(prompt);
 													}
 
-													// Check if Ctrl + R is pressed
-													if (prompt === '' && isCtrlPressed && e.key.toLowerCase() === 'r') {
-														e.preventDefault();
-														console.log('regenerate');
-
-														const regenerateButton = [
-															...document.getElementsByClassName('regenerate-response-button')
-														]?.at(-1);
-
-														regenerateButton?.click();
-													}
-
 													if (prompt === '' && e.key == 'ArrowUp') {
 														e.preventDefault();
 
@@ -869,18 +857,6 @@
 												if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
 													e.preventDefault();
 													createMessagePair(prompt);
-												}
-
-												// Check if Ctrl + R is pressed
-												if (prompt === '' && isCtrlPressed && e.key.toLowerCase() === 'r') {
-													e.preventDefault();
-													console.log('regenerate');
-
-													const regenerateButton = [
-														...document.getElementsByClassName('regenerate-response-button')
-													]?.at(-1);
-
-													regenerateButton?.click();
 												}
 
 												if (prompt === '' && e.key == 'ArrowUp') {

@@ -74,10 +74,13 @@ def _resolve_row(user: UserModel, name: str, organization_id: str) -> Optional[S
 def resolve_secret_value(
     user: UserModel, name: str, organization_id: Optional[str] = None
 ) -> str:
-    organization_id = organization_id or user.id
+    organization_id = (organization_id or "").strip() or user.id
     row = _resolve_row(user, name, organization_id)
     if not row or not can_use_secret(user, row):
-        raise ValueError(f"Unknown secret: {name}")
+        raise ValueError(
+            f"Unknown secret: {name}. It is not a private or organization "
+            "secret in the current organization."
+        )
     return Secrets.decrypt(row)
 
 
@@ -89,7 +92,7 @@ def substitute_secrets(
 ) -> Any:
     if used is None:
         used = {}
-    organization_id = organization_id or user.id
+    organization_id = (organization_id or "").strip() or user.id
 
     if isinstance(value, str):
         def repl(match: re.Match) -> str:
@@ -161,19 +164,61 @@ def redact_secrets(text: Any, used: dict) -> Any:
     return text
 
 
-def secret_usage_hint(user: UserModel, organization_id: Optional[str] = None) -> str:
+def secrets_page_url(webui_url: str = "", name: str = "") -> str:
+    from urllib.parse import quote
+
+    from open_webui.models.secrets import SECRET_NAME_RE
+
+    base = (webui_url or "").rstrip("/")
+    url = f"{base}/workspace/secrets" if base else "/workspace/secrets"
+    cleaned = (name or "").strip()
+    if cleaned and SECRET_NAME_RE.match(cleaned):
+        url = f"{url}?name={quote(cleaned)}"
+    return url
+
+
+def available_secret_names(
+    user: UserModel, organization_id: Optional[str] = None
+) -> list[str]:
+    """Names the user can use in the current organization.
+
+    That is their private secrets in this organization, plus organization-shared
+    secrets. A shared secret overridden by a private one of the same name is
+    omitted.
+    """
     organization_id = organization_id or user.id
-    names = [item["name"] for item in list_secret_metadata(user, organization_id)]
+    names: list[str] = []
+    seen_names: set[str] = set()
+    for item in list_secret_metadata(user, organization_id):
+        if item.get("overridden"):
+            continue
+        name = item.get("name")
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
+        names.append(name)
+    return names
+
+
+def secret_usage_hint(
+    user: UserModel,
+    organization_id: Optional[str] = None,
+    webui_url: str = "",
+) -> str:
+    names = available_secret_names(user, organization_id)
+    page = secrets_page_url(webui_url)
     hint = (
-        "If the user provides a credential, API key, token, or password to store, "
-        "call create_secret with a name and the value. After it is saved, never "
-        "repeat the raw value in your reply or in later tool arguments — use "
-        "{{secret:NAME}} instead; the server substitutes it before the tool runs. "
+        "Do not ask the user to paste a credential, API key, token, or password "
+        "into the chat, and do not try to save secrets yourself. If they need a "
+        "secret that is not saved yet, call secrets_page with its name and give "
+        "them the returned link. That page opens with the name filled in so they "
+        f"can paste the value there. Secrets page: {page}. "
+        "Once a secret exists, refer to it as {{secret:NAME}} in tool arguments; "
+        "the server substitutes the value before the tool runs. "
         "For skill tools that read credentials from the environment, pass "
         'env_secrets=["NAME"] so the secret is injected as an env var with the '
         "same name (preferred over putting placeholders in argv). "
-        "Private secrets in this organization override organization-shared secrets "
-        "with the same name."
+        "A private secret overrides an organization-shared secret with the same name."
     )
     if names:
         placeholders = ", ".join(f"{{{{secret:{n}}}}}" for n in names)
@@ -201,7 +246,7 @@ def parse_tool_arguments(raw: Any) -> dict:
 
 def sensitive_values_from_params(tool_name: str, params: dict) -> dict:
     used = {}
-    if tool_name == "create_secret" and isinstance(params, dict):
+    if tool_name in ("create_secret", "secrets_page") and isinstance(params, dict):
         name = (params.get("name") or "secret").strip() or "secret"
         value = params.get("value")
         if value:
@@ -211,14 +256,14 @@ def sensitive_values_from_params(tool_name: str, params: dict) -> dict:
 
 def _scrubbed_params(tool_name: str, params: dict) -> dict:
     out = copy.deepcopy(params)
-    if tool_name == "create_secret" and "value" in out:
+    if tool_name in ("create_secret", "secrets_page") and "value" in out:
         name = (out.get("name") or "NAME").strip() or "NAME"
         out["value"] = f"{{{{secret:{name}}}}}"
     return out
 
 
 def display_tool_arguments(tool_name: str, arguments: Any) -> Any:
-    if tool_name != "create_secret":
+    if tool_name not in ("create_secret", "secrets_page"):
         return arguments
     if isinstance(arguments, dict):
         return _scrubbed_params(tool_name, arguments)

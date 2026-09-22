@@ -255,6 +255,7 @@
 					}
 				});
 				capabilities = { ...capabilities, ...(model?.meta?.capabilities ?? {}) };
+				delete capabilities.tool_search;
 
 				enabledByDefault = model?.enabled_by_default !== false;
 

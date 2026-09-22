@@ -93,6 +93,10 @@ spec:
               value: {{ .Values.webui.name | quote }}
             - name: WEBUI_IMAGE_TAG
               value: {{ include "weather-skills-chat.imageTag" . | quote }}
+            {{- with .Values.webui.helpEmail }}
+            - name: WEBUI_HELP_EMAIL
+              value: {{ . | quote }}
+            {{- end }}
             {{- include "weather-skills-chat.optionalEnv" (dict "name" "ENABLE_SIGNUP" "value" .Values.webui.enableSignup) | nindent 12 }}
             - name: DEFAULT_USER_ROLE
               value: {{ .Values.webui.defaultUserRole | quote }}

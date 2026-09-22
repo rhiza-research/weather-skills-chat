@@ -60,6 +60,16 @@ def _can_read(user, tool) -> bool:
     )
 
 
+def _can_read_tool(user, tool, organization_id: str) -> bool:
+    """Skill tools follow org enablement. Other tools follow access control."""
+    if _is_skill_tool(tool):
+        usable = {
+            record["id"] for record in accessible_skill_records(user, organization_id)
+        }
+        return tool.id in usable
+    return _can_read(user, tool)
+
+
 def _can_write(user, tool) -> bool:
     return user_owns_or_has_access(
         user.id, tool.user_id, tool.access_control, "write", user.role
@@ -120,8 +130,11 @@ async def get_tools(
     tools = [
         _stamp_skill_enabled(tool, True)
         for tool in tools
-        if _can_read(user, tool)
-        and (not _is_skill_tool(tool) or tool.id in usable_skill_ids)
+        if (
+            tool.id in usable_skill_ids
+            if _is_skill_tool(tool)
+            else _can_read(user, tool)
+        )
     ]
 
     return tools
@@ -221,11 +234,15 @@ async def create_new_tools(
 
 
 @router.get("/id/{id}", response_model=Optional[ToolModel])
-async def get_tools_by_id(id: str, user=Depends(get_verified_user)):
+async def get_tools_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     tools = Tools.get_tool_by_id(id)
 
     if tools:
-        if _can_read(user, tools):
+        if _can_read_tool(user, tools, organization_id):
             return tools
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -347,10 +364,14 @@ async def delete_tools_by_id(
 
 
 @router.get("/id/{id}/valves", response_model=Optional[dict])
-async def get_tools_valves_by_id(id: str, user=Depends(get_verified_user)):
+async def get_tools_valves_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     tools = Tools.get_tool_by_id(id)
     if tools:
-        if not _can_read(user, tools):
+        if not _can_read_tool(user, tools, organization_id):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.UNAUTHORIZED,
@@ -377,11 +398,14 @@ async def get_tools_valves_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.get("/id/{id}/valves/spec", response_model=Optional[dict])
 async def get_tools_valves_spec_by_id(
-    request: Request, id: str, user=Depends(get_verified_user)
+    request: Request,
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     tools = Tools.get_tool_by_id(id)
     if tools:
-        if not _can_read(user, tools):
+        if not _can_read_tool(user, tools, organization_id):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.UNAUTHORIZED,
@@ -457,10 +481,14 @@ async def update_tools_valves_by_id(
 
 
 @router.get("/id/{id}/valves/user", response_model=Optional[dict])
-async def get_tools_user_valves_by_id(id: str, user=Depends(get_verified_user)):
+async def get_tools_user_valves_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
     tools = Tools.get_tool_by_id(id)
     if tools:
-        if not _can_read(user, tools):
+        if not _can_read_tool(user, tools, organization_id):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.UNAUTHORIZED,
@@ -482,11 +510,14 @@ async def get_tools_user_valves_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.get("/id/{id}/valves/user/spec", response_model=Optional[dict])
 async def get_tools_user_valves_spec_by_id(
-    request: Request, id: str, user=Depends(get_verified_user)
+    request: Request,
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     tools = Tools.get_tool_by_id(id)
     if tools:
-        if not _can_read(user, tools):
+        if not _can_read_tool(user, tools, organization_id):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.UNAUTHORIZED,
@@ -510,12 +541,16 @@ async def get_tools_user_valves_spec_by_id(
 
 @router.post("/id/{id}/valves/user/update", response_model=Optional[dict])
 async def update_tools_user_valves_by_id(
-    request: Request, id: str, form_data: dict, user=Depends(get_verified_user)
+    request: Request,
+    id: str,
+    form_data: dict,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
 ):
     tools = Tools.get_tool_by_id(id)
 
     if tools:
-        if not _can_read(user, tools):
+        if not _can_read_tool(user, tools, organization_id):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.UNAUTHORIZED,

@@ -15,7 +15,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { WEBUI_BUILD_HASH, runningReleaseLabel } from '$lib/constants';
+	import { WEBUI_BUILD_HASH, helpEmailAddress, runningReleaseLabel } from '$lib/constants';
 	import { config } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -23,6 +23,8 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	const i18n = getContext('i18n');
 
 	export let saveHandler: Function;
+
+	$: helpEmail = helpEmailAddress($config?.help_email);
 
 	let adminConfig = null;
 	let webhookUrl = '';
@@ -155,33 +157,28 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									{$i18n.t('Help')}
 								</div>
 								<div class=" text-xs text-gray-500">
-									{$i18n.t('Discover how to use Open WebUI and seek support from the community.')}
+									{$i18n.t('Shown to users on error screens and failed responses.')}
 								</div>
 							</div>
 
 							<a
 								class="flex-shrink-0 text-xs font-medium underline"
-								href="https://docs.openwebui.com/"
-								target="_blank"
+								href={`mailto:${helpEmail}`}
 							>
-								{$i18n.t('Documentation')}
+								{helpEmail}
 							</a>
 						</div>
 					</div>
 
-					<div class="mb-2.5">
-						<div class="flex w-full justify-between items-center">
-							<div class="text-xs pr-2">
-								<div class="">
-									{$i18n.t('License')}
-								</div>
+					{#if $config?.license_metadata}
+						<div class="mb-2.5">
+							<div class="flex w-full justify-between items-center">
+								<div class="text-xs pr-2">
+									<div class="">
+										{$i18n.t('License')}
+									</div>
 
-								{#if $config?.license_metadata}
-									<a
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-										class="text-gray-500 mt-0.5"
-									>
+									<div class="text-gray-500 mt-0.5">
 										<span class=" capitalize text-black dark:text-white"
 											>{$config?.license_metadata?.type}
 											license</span
@@ -194,34 +191,16 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 										<span class=" font-medium text-black dark:text-white"
 											>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
 										>
-									</a>
+									</div>
 									{#if $config?.license_metadata?.html}
 										<div class="mt-0.5">
 											{@html DOMPurify.sanitize($config?.license_metadata?.html)}
 										</div>
 									{/if}
-								{:else}
-									<a
-										class=" text-xs hover:underline"
-										href="https://docs.openwebui.com/enterprise"
-										target="_blank"
-									>
-										<span class="text-gray-500">
-											{$i18n.t(
-												'Upgrade to a licensed plan for enhanced capabilities, including custom theming and branding, and dedicated support.'
-											)}
-										</span>
-									</a>
-								{/if}
+								</div>
 							</div>
-
-							<!-- <button
-								class="flex-shrink-0 text-xs px-3 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-lg font-medium"
-							>
-								{$i18n.t('Activate')}
-							</button> -->
 						</div>
-					</div>
+					{/if}
 				</div>
 
 				<div class="mb-3">
@@ -327,14 +306,9 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								/>
 
 								<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-									<!-- https://docs.openwebui.com/getting-started/advanced-topics/api-endpoints -->
-									<a
-										href="https://docs.openwebui.com/getting-started/api-endpoints"
-										target="_blank"
-										class=" text-gray-300 font-medium underline"
-									>
-										{$i18n.t('To learn more about available endpoints, visit our documentation.')}
-									</a>
+									{$i18n.t(
+										'Comma-separated list of endpoint paths API keys may call. Leave empty to allow all.'
+									)}
 								</div>
 							</div>
 						{/if}

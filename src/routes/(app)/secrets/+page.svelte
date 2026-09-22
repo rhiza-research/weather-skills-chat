@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 
 	onMount(() => {
-		goto('/workspace/secrets');
+		const search = window.location.search || '';
+		goto(`/workspace/secrets${search}`);
 	});
 </script>

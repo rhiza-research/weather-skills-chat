@@ -12,8 +12,7 @@ from email.message import EmailMessage
 
 from open_webui.models.automations import AutomationForm, Automations
 from open_webui.models.chats import Chats
-from open_webui.models.secrets import SecretForm, Secrets
-from open_webui.models.organizations import Organizations
+from open_webui.models.organizations import ORG_KIND_PERSONAL, Organizations
 from open_webui.models.users import Users
 from open_webui.utils.automation_scheduler import sync_automation_job
 from open_webui.utils.schedule import parse_schedule, prompt_from_messages
@@ -21,7 +20,6 @@ from open_webui.utils.organizations import (
     can_read_chat,
     can_write_chat,
     is_member,
-    is_org_admin,
 )
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -206,106 +204,172 @@ async def create_zarr_view(
     return f"Wrote zarr view `{relpath}` for `{zarr}`."
 
 
-def _resolve_org_for_secret(user, organization: Optional[str]):
-    if not organization or not str(organization).strip():
-        return None, None
-    raw = str(organization).strip()
-    found = Organizations.get_organization_by_id(raw)
-    if not found:
-        candidates = Organizations.get_organizations_by_user_id(user.id)
-        matches = [t for t in candidates if (t.name or "").lower() == raw.lower()]
-        if len(matches) == 1:
-            found = matches[0]
-        elif len(matches) > 1:
-            return None, "That organization name is ambiguous; pass the organization id."
-    if not found:
-        return None, "Organization not found."
-    if not is_org_admin(found.id, user.id):
-        return None, "Only organization admins can create organization-shared secrets."
-    return found, None
+async def secrets_page(name: str, __request__=None, **_ignored) -> str:
+    """Return a secrets-page link with the name filled in. Never accept a value."""
+    from open_webui.models.secrets import SECRET_NAME_RE
+    from open_webui.utils.secrets import secrets_page_url
 
-
-async def create_secret(
-    name: str,
-    value: str,
-    team: Optional[str] = None,
-    replace: bool = False,
-    __user__: dict = {},
-) -> str:
-    """Encrypt and store a secret. Never echo the value back."""
-    user = Users.get_user_by_id(__user__.get("id"))
-    if not user:
-        return "User not found."
-    if isinstance(replace, str):
-        replace = replace.lower() in ("1", "true", "yes")
-
-    org_row, error = _resolve_org_for_secret(user, team)
-    if error:
-        return error
-    organization_id = org_row.id if org_row else user.id
-    visibility = "organization" if org_row else "private"
-
-    try:
-        form = SecretForm(
-            name=name,
-            value=value,
-            organization_id=organization_id,
-            visibility=visibility,
-        )
-    except Exception as e:
-        return str(e)
-
-    existing = (
-        Secrets.get_shared(organization_id, form.name)
-        if visibility == "organization"
-        else Secrets.get_private(organization_id, user.id, form.name)
-    )
-
-    if existing:
-        if not replace:
-            scope = (
-                f"organization `{org_row.name}`"
-                if org_row
-                else "your personal secrets"
-            )
-            return (
-                f"A secret named `{form.name}` already exists in {scope}. "
-                "Pass replace=true to overwrite it, or choose a different name."
-            )
-        from open_webui.models.secrets import SecretUpdateForm
-        from open_webui.utils.secrets import can_manage_secret
-
-        if not can_manage_secret(user, existing):
-            return "You cannot replace that secret."
-        updated = Secrets.update(existing.id, SecretUpdateForm(value=form.value))
-        if not updated:
-            return "Failed to replace the secret."
-        placeholder = f"{{{{secret:{updated.name}}}}}"
-        scope = (
-            f"organization `{org_row.name}`" if org_row else "your personal secrets"
-        )
+    cleaned = (name or "").strip()
+    if not SECRET_NAME_RE.match(cleaned):
         return (
-            f"Replaced secret `{updated.name}` in {scope}. "
-            f"Use `{placeholder}` in later tool calls. The value will not be shown again."
+            "Secret name must start with a letter or underscore and contain only "
+            "letters, digits, and underscores. Do not ask the user to paste the "
+            "secret value into the chat."
         )
-
-    created = Secrets.insert(user.id, form)
-    if not created:
-        return "Failed to save the secret."
-    placeholder = f"{{{{secret:{created.name}}}}}"
-    scope = f"organization `{org_row.name}`" if org_row else "your personal secrets"
+    config = getattr(getattr(__request__, "app", None), "state", None)
+    config = getattr(config, "config", None)
+    base = (getattr(config, "WEBUI_URL", "") or "") if config is not None else ""
+    url = secrets_page_url(base, cleaned)
     return (
-        f"Saved secret `{created.name}` in {scope}. "
-        f"Use `{placeholder}` in later tool calls. The value will not be shown again."
+        f"Give the user this link and do not ask them to paste the secret here: {url} "
+        f"The name `{cleaned}` is already filled in. They paste the value on that page."
     )
 
 
-CREATE_SECRET_SPEC = {
-    "name": "create_secret",
+def _preference_actor(__user__, __metadata__):
+    from open_webui.models.users import Users
+
+    user_id = (__user__ or {}).get("id")
+    user = Users.get_user_by_id(user_id) if user_id else None
+    if not user:
+        return None, None
+    org_id = ((__metadata__ or {}).get("organization_id") or "").strip() or user.id
+    return user, org_id
+
+
+async def list_preferences(__user__=None, __metadata__=None, **_ignored) -> str:
+    """List preferences the user can see in the active organization."""
+    from open_webui.utils.preferences import list_preference_metadata
+
+    user, org_id = _preference_actor(__user__, __metadata__)
+    if not user:
+        return "Cannot list preferences without an authenticated user."
+    items = list_preference_metadata(user, org_id)
+    if not items:
+        return (
+            "No preferences in this organization. If the user wants one saved, "
+            "ask them first. Call create_preference only after they agree."
+        )
+    lines = ["Preferences in this organization:"]
+    for item in items:
+        scope = "organization" if item.get("visibility") == "organization" else "private"
+        state = "enabled" if item.get("enabled") else "disabled"
+        lines.append(f"- {item.get('title')} ({scope}, {state})")
+        lines.append((item.get("content") or "").strip())
+    lines.append(
+        "To save a new preference, ask the user if they want it, then call "
+        "create_preference only after they agree."
+    )
+    return "\n".join(lines)
+
+
+async def create_preference(
+    title: str,
+    content: str,
+    visibility: str = "private",
+    __user__=None,
+    __metadata__=None,
+    **_ignored,
+) -> str:
+    """Create a preference after the user has agreed."""
+    from open_webui.models.preferences import PreferenceForm, Preferences
+    from open_webui.utils.organizations import (
+        is_org_admin,
+        is_personal_org,
+        resolve_visibility,
+    )
+
+    user, org_id = _preference_actor(__user__, __metadata__)
+    if not user:
+        return "Cannot create a preference without an authenticated user."
+    title = (title or "").strip()
+    scope = resolve_visibility(org_id, (visibility or "private").strip() or "private")
+    if scope == "organization":
+        if is_personal_org(org_id):
+            return "Cannot save an organization preference in the personal organization."
+        if not is_org_admin(org_id, user.id):
+            return (
+                "Only an organization admin can save an organization preference. "
+                "Ask the user if a private preference is what they want instead."
+            )
+        if Preferences.get_shared(org_id, (title or "").strip()):
+            return "An organization preference with that title already exists."
+    elif Preferences.get_private(org_id, user.id, (title or "").strip()):
+        return "A private preference with that title already exists."
+    try:
+        preference = Preferences.insert(
+            user.id,
+            PreferenceForm(
+                title=title,
+                content=content,
+                organization_id=org_id,
+                visibility=scope,
+                enabled=True,
+            ),
+        )
+    except ValueError as exc:
+        return str(exc)
+    if not preference:
+        return "Could not save that preference."
+    return (
+        f"Saved {scope} preference `{preference.title}`. It is enabled and will be "
+        "included in chats for this organization."
+    )
+
+
+LIST_PREFERENCES_SPEC = {
+    "name": "list_preferences",
     "description": (
-        "Encrypt and store a credential, API key, token, or password. "
-        "Use when the user asks to save a secret. After saving, never repeat "
-        "the raw value; use {{secret:NAME}} in later tool calls."
+        "Read the user's saved preferences for the current organization, including "
+        "private preferences and organization preferences. Each has a title, text, "
+        "and whether it is enabled. Enabled preferences are already added to the "
+        "chat. To add one, ask the user if they want it saved, then call "
+        "create_preference only after they agree."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+
+CREATE_PREFERENCE_SPEC = {
+    "name": "create_preference",
+    "description": (
+        "Save a preference that will be appended to future chats. Ask the user "
+        "whether they want this saved as a preference and wait until they agree "
+        "before calling this tool. Do not create a preference they have not "
+        "confirmed. Use visibility private unless they are an organization admin "
+        "and they confirmed it should apply to the whole organization."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Short name for the preference.",
+            },
+            "content": {
+                "type": "string",
+                "description": "The preference text to follow in later chats.",
+            },
+            "visibility": {
+                "type": "string",
+                "enum": ["private", "organization"],
+                "description": (
+                    "private applies to this user. organization applies to every "
+                    "member and requires an organization admin who agreed to that."
+                ),
+            },
+        },
+        "required": ["title", "content"],
+    },
+}
+
+
+SECRETS_PAGE_SPEC = {
+    "name": "secrets_page",
+    "description": (
+        "Get a link to the user's secrets page with a secret name already filled in, "
+        "so they can paste the value there. Never ask them to paste a secret into "
+        "the chat, and do not accept or store a secret value."
     ),
     "parameters": {
         "type": "object",
@@ -313,27 +377,12 @@ CREATE_SECRET_SPEC = {
             "name": {
                 "type": "string",
                 "description": (
-                    "Secret name: letter or underscore first, then letters, "
-                    "digits, or underscores (e.g. ECMWF_API_KEY)"
+                    "Secret name to prefill, such as ECMWF_API_KEY. "
+                    "Letters, digits, and underscores only. Do not include the secret value."
                 ),
-            },
-            "value": {
-                "type": "string",
-                "description": "The secret value to encrypt. Never echo this back.",
-            },
-            "team": {
-                "type": "string",
-                "description": (
-                    "Optional team id or team name. Omit for a personal secret. "
-                    "Only team admins can create team secrets."
-                ),
-            },
-            "replace": {
-                "type": "boolean",
-                "description": "If true, overwrite an existing secret with the same name.",
-            },
+            }
         },
-        "required": ["name", "value"],
+        "required": ["name"],
     },
 }
 
@@ -700,7 +749,7 @@ def _validate_emails(emails: list[str]) -> tuple[list[str], list[str]]:
     return ok, bad
 
 
-def _email_recipient_directory(user_id: str, chat) -> dict:
+def _email_recipient_directory(user_id: str, _chat) -> dict:
     user = Users.get_user_by_id(user_id)
     self_info = None
     if user:
@@ -711,14 +760,11 @@ def _email_recipient_directory(user_id: str, chat) -> dict:
         }
 
     org_ids = set(Organizations.user_organization_ids(user_id))
-    chat_org_id = getattr(chat, "organization_id", None) if chat else None
-    if chat_org_id:
-        org_ids.add(chat_org_id)
 
     organizations = []
     for org_id in sorted(org_ids):
         org = Organizations.get_organization_by_id(org_id)
-        if not org:
+        if not org or org.kind == ORG_KIND_PERSONAL:
             continue
         members = []
         for member in Organizations.get_members(org_id):
@@ -751,8 +797,8 @@ def _allowed_email_recipients_for_user(user_id: str, chat) -> set[str]:
     self_email = (directory.get("self") or {}).get("email")
     if self_email:
         allowed.add(self_email)
-    for team in directory.get("teams") or []:
-        for member in team.get("members") or []:
+    for organization in directory.get("organizations") or []:
+        for member in organization.get("members") or []:
             allowed.add(member["email"])
     return allowed
 
@@ -762,7 +808,7 @@ async def list_email_recipients(
     __metadata__: dict = None,
     __request__=None,
 ) -> str:
-    """Return the current user's email and teammate emails allowed for send_email."""
+    """Return the current user's email and organization member emails allowed for send_email."""
     user = Users.get_user_by_id(__user__.get("id"))
     if not user:
         return "User not found."
@@ -782,33 +828,33 @@ async def list_email_recipients(
     else:
         lines.append("Your account has no email address on file.")
 
-    teams = directory.get("teams") or []
-    teammate_lines: list[str] = []
-    for team in teams:
-        team_header = f"**{team['team_name']}**"
-        team_members = []
-        for member in team.get("members") or []:
+    organizations = directory.get("organizations") or []
+    member_lines: list[str] = []
+    for organization in organizations:
+        header = f"**{organization['organization_name']}**"
+        org_members = []
+        for member in organization.get("members") or []:
             if member.get("is_self"):
                 continue
             label = member.get("name") or member["email"]
             role = member.get("role")
             role_suffix = f" ({role})" if role else ""
-            team_members.append(f"- `{member['email']}` — {label}{role_suffix}")
-        if team_members:
-            teammate_lines.append(team_header)
-            teammate_lines.extend(team_members)
+            org_members.append(f"- `{member['email']}` — {label}{role_suffix}")
+        if org_members:
+            member_lines.append(header)
+            member_lines.extend(org_members)
 
-    if teammate_lines:
+    if member_lines:
         lines.append("")
-        lines.append("Teammate emails (valid `send_email` recipients):")
-        lines.extend(teammate_lines)
+        lines.append("Organization members (valid `send_email` recipients):")
+        lines.extend(member_lines)
     else:
         lines.append("")
-        lines.append("No teammate email addresses found.")
+        lines.append("No organization member email addresses found.")
 
     lines.append("")
     lines.append(
-        "Only your email and teammate emails listed above may be used with `send_email`."
+        "Only your email and the emails of people in your organizations listed above may be used with `send_email`."
     )
     return "\n".join(lines)
 
@@ -816,7 +862,7 @@ async def list_email_recipients(
 LIST_EMAIL_RECIPIENTS_SPEC = {
     "name": "list_email_recipients",
     "description": (
-        "List your email address and the email addresses of your teammates. "
+        "List your email address and the email addresses of people in your organizations. "
         "Use before send_email to look up valid recipient addresses."
     ),
     "parameters": {"type": "object", "properties": {}, "required": []},
@@ -936,6 +982,9 @@ def _send_via_smtp(
     subject: str,
     body: str,
     attachments: list[tuple[str, bytes, str, str]] | None = None,
+    *,
+    html: str | None = None,
+    inline_images: list[tuple[str, bytes, str]] | None = None,
 ) -> tuple[bool, str]:
     msg = EmailMessage()
     msg["From"] = f"{sender_name} <{sender_email}>"
@@ -943,6 +992,14 @@ def _send_via_smtp(
     msg["Subject"] = subject
     msg["Reply-To"] = reply_to
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
+        html_part = msg.get_payload()[-1]
+        for cid, data, subtype in inline_images or []:
+            content_id = cid if cid.startswith("<") else f"<{cid}>"
+            html_part.add_related(
+                data, maintype="image", subtype=subtype, cid=content_id
+            )
     for filename, data, maintype, subtype in attachments or []:
         msg.add_attachment(
             data,
@@ -976,7 +1033,7 @@ async def send_email(
     __metadata__: dict = None,
     __request__=None,
 ) -> str:
-    """Send a restricted email (self + teammates only) via configured provider."""
+    """Send a restricted email (self and organization members only) via configured provider."""
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     if not chat_id or chat_id == "local":
@@ -1006,7 +1063,7 @@ async def send_email(
     if blocked:
         return (
             "These recipients are not allowed. You can only email yourself or "
-            f"members of one of your teams: {', '.join(blocked)}"
+            f"members of your organizations: {', '.join(blocked)}"
         )
 
     config = __request__.app.state.config
@@ -1075,7 +1132,7 @@ SEND_EMAIL_SPEC = {
     "name": "send_email",
     "description": (
         "Send an email via configured SMTP. Recipients are restricted "
-        "to the current user and members of one of the user's teams. "
+        "to the current user and members of the user's organizations. "
         "Call list_email_recipients first to look up valid addresses. "
         "Optional attachments are read from the chat artifact sandbox."
     ),
@@ -1086,7 +1143,7 @@ SEND_EMAIL_SPEC = {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": (
-                    "Recipient email addresses. Must be your email or a teammate's email."
+                    "Recipient email addresses. Must be your email or the email of someone in your organization."
                 ),
             },
             "subject": {"type": "string", "description": "Email subject line"},
@@ -1170,8 +1227,22 @@ async def list_available_tools(
     )
     lines.append(
         _tool_summary_line(
-            "create_secret",
-            "Encrypt and store a credential for later {{secret:NAME}} use.",
+            "secrets_page",
+            "Link to the secrets page with a secret name already filled in.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "list_preferences",
+            "Read saved preferences for this organization.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "create_preference",
+            "Save a preference after the user agrees. Ask them first.",
             kind="builtin",
         )
     )
@@ -1206,14 +1277,14 @@ async def list_available_tools(
     lines.append(
         _tool_summary_line(
             "list_email_recipients",
-            "List your email and teammate emails allowed for send_email.",
+            "List your email and organization member emails allowed for send_email.",
             kind="builtin",
         )
     )
     lines.append(
         _tool_summary_line(
             "send_email",
-            "Email results to yourself or teammates; optional artifact sandbox attachments.",
+            "Email results to yourself or people in your organizations; optional artifact sandbox attachments.",
             kind="builtin",
         )
     )
@@ -1237,16 +1308,18 @@ async def list_available_tools(
     selected_ids = list(metadata.get("tool_ids") or [])
     catalog = Tools.get_tool_catalog()
     org_id = metadata.get("organization_id")
+    skill_records = accessible_skill_records(
+        user, organization_id=org_id, catalog=catalog
+    )
+    usable_skill_ids = {record["id"] for record in skill_records}
     if selected_ids:
-        selected_ids = resolve_tool_ids_by_skill_version(
-            selected_ids,
-            accessible_skill_records(
-                user, organization_id=org_id, catalog=catalog
-            ),
-        )
+        selected_ids = resolve_tool_ids_by_skill_version(selected_ids, skill_records)
     all_tools = catalog
 
     def _visible(tool) -> bool:
+        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        if manifest.get("kind") == "skill":
+            return tool.id in usable_skill_ids
         return user_owns_or_has_access(
             user.id, tool.user_id, tool.access_control, "read", user.role
         )
@@ -1669,7 +1742,9 @@ def get_builtin_tools(extra_params: dict) -> dict:
     tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
         "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
-        "create_secret": _tool(create_secret, CREATE_SECRET_SPEC),
+        "secrets_page": _tool(secrets_page, SECRETS_PAGE_SPEC),
+        "list_preferences": _tool(list_preferences, LIST_PREFERENCES_SPEC),
+        "create_preference": _tool(create_preference, CREATE_PREFERENCE_SPEC),
         "create_zarr_view": _tool(create_zarr_view, CREATE_ZARR_VIEW_SPEC),
         "copy_intermediate_result": _tool(
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC

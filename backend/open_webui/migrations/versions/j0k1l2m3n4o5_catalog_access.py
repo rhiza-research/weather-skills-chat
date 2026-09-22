@@ -62,11 +62,15 @@ def upgrade():
         batch.alter_column("organization_id", existing_type=sa.Text(), nullable=False)
         batch.alter_column("visibility", existing_type=sa.Text(), nullable=False)
 
+    if "organization_id" not in _column_names("knowledge"):
+        op.add_column("knowledge", sa.Column("organization_id", sa.Text(), nullable=True))
+    if "visibility" not in _column_names("knowledge"):
+        op.add_column("knowledge", sa.Column("visibility", sa.Text(), nullable=True))
     _add_bool("knowledge", "enabled_by_default", True)
     conn.execute(
         text(
             "UPDATE knowledge SET organization_id = :platform, visibility = 'public', "
-            "enabled_by_default = 1 WHERE access_control IS NULL"
+            "enabled_by_default = true WHERE access_control IS NULL"
         ),
         {"platform": PLATFORM_ORG_ID},
     )

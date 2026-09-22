@@ -21,7 +21,7 @@ class ERROR_MESSAGES(str, Enum):
         return super().__str__()
 
     DEFAULT = (
-        lambda err="": f'{"Something went wrong :/" if err == "" else "[ERROR: " + str(err) + "]"}'
+        lambda err="": f'{"Sorry, something went wrong" if err == "" else "[ERROR: " + str(err) + "]"}'
     )
     ENV_VAR_NOT_FOUND = "Required environment variable not found. Terminating now."
     CREATE_USER_ERROR = "Oops! Something went wrong while creating your account. Please try again later. If the issue persists, contact support for assistance."
@@ -60,8 +60,9 @@ class ERROR_MESSAGES(str, Enum):
     FILE_NOT_SENT = "FILE_NOT_SENT"
     FILE_NOT_SUPPORTED = "Oops! It seems like the file format you're trying to upload is not supported. Please upload a file with a supported format and try again."
 
-    NOT_FOUND = "We could not find what you're looking for :/"
-    USER_NOT_FOUND = "We could not find what you're looking for :/"
+    NOT_FOUND = "Sorry, that resource is not available"
+    USER_NOT_FOUND = "Sorry, that resource is not available"
+    INVITATION_NOT_FOUND = "Sorry, we couldn't find that invitation. It may have been canceled"
     API_KEY_NOT_FOUND = "Oops! It looks like there's a hiccup. The API key is missing. Please make sure to provide a valid API key to access this feature."
     API_KEY_NOT_ALLOWED = "Use of API key is not enabled in the environment."
 

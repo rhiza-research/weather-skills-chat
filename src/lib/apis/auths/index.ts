@@ -83,6 +83,18 @@ export const updateAdminConfig = async (token: string, body: object) => {
 	return res;
 };
 
+export const getCookieSessionUser = async () => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json'
+		},
+		credentials: 'include'
+	}).catch(() => null);
+	if (!res || !res.ok) return null;
+	return res.json();
+};
+
 export const getSessionUser = async (token: string) => {
 	let error = null;
 

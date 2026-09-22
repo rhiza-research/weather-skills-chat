@@ -152,7 +152,7 @@
 			const res = await uploadPipeline(localStorage.token, file, selectedPipelinesUrlIdx).catch(
 				(error) => {
 					console.log(error);
-					toast.error('Something went wrong :/');
+					toast.error('Sorry, something went wrong');
 					return null;
 				}
 			);

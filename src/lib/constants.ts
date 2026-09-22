@@ -21,6 +21,14 @@ export function runningReleaseLabel(imageTag?: string | null): string {
 	const tag = imageTag?.trim();
 	return tag ? tag : `v${WEBUI_VERSION}`;
 }
+/** Fallback support address used when the backend config is unavailable. */
+export const DEFAULT_HELP_EMAIL = 'info@rhizaresearch.org';
+
+/** Support address shown when something fails; configurable via WEBUI_HELP_EMAIL. */
+export function helpEmailAddress(configured?: string | null): string {
+	return configured?.trim() || DEFAULT_HELP_EMAIL;
+}
+
 export const REQUIRED_OLLAMA_VERSION = '0.1.16';
 
 export const SUPPORTED_FILE_TYPE = [

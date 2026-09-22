@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
-	import { models, config, toolServers, tools } from '$lib/stores';
+	import { models, config, toolServers, tools, WEBUI_NAME } from '$lib/stores';
 
 	import { toast } from 'svelte-sonner';
 	import { deleteSharedChatById, getChatById, shareChatById } from '$lib/apis/chats';
@@ -106,7 +106,7 @@
 
 			<div class="px-5 pb-5 w-full flex flex-col justify-center">
 				<div class=" text-xs text-gray-600 dark:text-gray-300 mb-2">
-					{$i18n.t('Open WebUI can use tools provided by any OpenAPI server.')}
+					{$i18n.t('{{WEBUI_NAME}} can use tools provided by any OpenAPI server.', { WEBUI_NAME: $WEBUI_NAME })}
 				</div>
 				<div class=" text-sm dark:text-gray-300 mb-1">
 					{#each $toolServers as toolServer}

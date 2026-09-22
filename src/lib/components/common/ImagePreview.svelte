@@ -103,64 +103,73 @@
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<div
 		bind:this={previewElement}
-		class="modal fixed top-0 right-0 left-0 bottom-0 bg-black text-white w-full min-h-screen h-screen flex justify-center z-9999 overflow-hidden overscroll-contain"
+		class="modal fixed inset-0 bg-black text-white w-full h-screen flex flex-col z-9999 overflow-hidden overscroll-contain"
 	>
-		<div class=" absolute left-0 w-full flex justify-between select-none z-10">
-			<div>
-				<button
-					class=" p-5"
-					on:pointerdown={(e) => {
-						e.stopImmediatePropagation();
-						e.preventDefault();
-						show = false;
-					}}
-					on:click={(e) => {
-						show = false;
-					}}
+		<div
+			class="shrink-0 h-14 px-2 flex items-center justify-between select-none relative z-20 bg-black border-b border-white/10"
+		>
+			<button
+				type="button"
+				class="p-3 rounded-md hover:bg-white/10"
+				aria-label="Close"
+				on:pointerdown={(e) => {
+					e.stopImmediatePropagation();
+					e.preventDefault();
+					show = false;
+				}}
+				on:click={() => {
+					show = false;
+				}}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke-width="2"
+					stroke="currentColor"
+					class="w-6 h-6"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="2"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-					</svg>
-				</button>
-			</div>
+					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+				</svg>
+			</button>
 
-			<div>
-				<button
-					class=" p-5"
-					on:pointerdown={(e) => {
-						e.stopImmediatePropagation();
-						e.preventDefault();
-					}}
-					on:click={(e) => {
-						e.stopPropagation();
-						downloadImage(src, downloadBasename(alt, src));
-					}}
+			<button
+				type="button"
+				class="p-3 rounded-md hover:bg-white/10"
+				aria-label="Download"
+				on:pointerdown={(e) => {
+					e.stopImmediatePropagation();
+					e.preventDefault();
+				}}
+				on:click={(e) => {
+					e.stopPropagation();
+					downloadImage(src, downloadBasename(alt, src));
+				}}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 20 20"
+					fill="currentColor"
+					class="w-6 h-6"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-						class="w-6 h-6"
-					>
-						<path
-							d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"
-						/>
-						<path
-							d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"
-						/>
-					</svg>
-				</button>
-			</div>
+					<path
+						d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"
+					/>
+					<path
+						d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"
+					/>
+				</svg>
+			</button>
 		</div>
-		<div bind:this={sceneElement} class="flex h-full max-h-full justify-center items-center">
-			<img {src} {alt} class=" mx-auto h-full object-scale-down select-none" draggable="false" />
+		<div class="flex-1 min-h-0 w-full overflow-hidden">
+			<div bind:this={sceneElement} class="flex h-full w-full justify-center items-center">
+				<img
+					{src}
+					{alt}
+					class="max-h-full max-w-full object-contain select-none"
+					draggable="false"
+				/>
+			</div>
 		</div>
 	</div>
 {/if}

@@ -102,6 +102,61 @@ class EmailHelpersTest(unittest.TestCase):
         params = tools["send_email"]["spec"]["parameters"]["properties"]
         self.assertIn("attachments", params)
 
+    def test_allowed_recipients_include_organization_members(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from open_webui.utils.builtin_tools import (
+            _allowed_email_recipients_for_user,
+            list_email_recipients,
+        )
+
+        directory = {
+            "self": {"email": "me@example.com", "name": "Me"},
+            "organizations": [
+                {
+                    "organization_id": "org1",
+                    "organization_name": "Field Team",
+                    "members": [
+                        {
+                            "email": "me@example.com",
+                            "name": "Me",
+                            "role": "admin",
+                            "is_self": True,
+                        },
+                        {
+                            "email": "ada@example.com",
+                            "name": "Ada",
+                            "role": "user",
+                            "is_self": False,
+                        },
+                    ],
+                }
+            ],
+        }
+        with patch(
+            "open_webui.utils.builtin_tools._email_recipient_directory",
+            return_value=directory,
+        ):
+            allowed = _allowed_email_recipients_for_user("user", None)
+        self.assertEqual(allowed, {"me@example.com", "ada@example.com"})
+
+        with (
+            patch(
+                "open_webui.utils.builtin_tools.Users.get_user_by_id",
+                return_value=SimpleNamespace(id="user", email="me@example.com"),
+            ),
+            patch(
+                "open_webui.utils.builtin_tools._email_recipient_directory",
+                return_value=directory,
+            ),
+        ):
+            listed = asyncio.run(list_email_recipients(__user__={"id": "user"}))
+        self.assertIn("ada@example.com", listed)
+        self.assertIn("Field Team", listed)
+        self.assertNotIn("No organization member email addresses found.", listed)
+
 
 class EmailAttachmentTest(unittest.TestCase):
     def test_load_file_attachment(self):
