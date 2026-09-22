@@ -55,6 +55,10 @@ class McpOAuthAuthorization(Base):
     """An authorization request waiting for the user's decision on the consent page."""
 
     __tablename__ = "mcp_oauth_authorization"
+    __table_args__ = (
+        Index("ix_mcp_oauth_authorization_client_id", "client_id"),
+        Index("ix_mcp_oauth_authorization_expires_at", "expires_at"),
+    )
 
     request_hash = Column(Text, primary_key=True)
     client_id = Column(Text, nullable=False)
@@ -75,6 +79,10 @@ class McpOAuthAuthorization(Base):
 
 class McpOAuthCode(Base):
     __tablename__ = "mcp_oauth_code"
+    __table_args__ = (
+        Index("ix_mcp_oauth_code_client_id", "client_id"),
+        Index("ix_mcp_oauth_code_expires_at", "expires_at"),
+    )
 
     code_hash = Column(Text, primary_key=True)
     client_id = Column(Text, nullable=False)
@@ -95,7 +103,11 @@ class McpOAuthToken(Base):
     """An access or refresh token. Tokens issued from one code share a grant_id."""
 
     __tablename__ = "mcp_oauth_token"
-    __table_args__ = (Index("ix_mcp_oauth_token_grant_id", "grant_id"),)
+    __table_args__ = (
+        Index("ix_mcp_oauth_token_grant_id", "grant_id"),
+        Index("ix_mcp_oauth_token_client_id", "client_id"),
+        Index("ix_mcp_oauth_token_expires_at", "expires_at"),
+    )
 
     token_hash = Column(Text, primary_key=True)
     kind = Column(Text, nullable=False)
@@ -583,6 +595,72 @@ class McpOAuthTable:
             if row is None:
                 return 0
             return self._revoke_grant_id(db, row.grant_id)
+
+    # Retention
+
+    def purge(self, *, now: int, idle_client_seconds: int) -> dict[str, int]:
+        """Delete rows that can no longer be used. Returns the rows deleted per table.
+
+        - Pending requests: expired or decided.
+        - Codes: expired. A used code is kept until it expires, so presenting it again still
+          revokes the tokens issued for it.
+        - Access tokens: expired or revoked.
+        - Refresh tokens: expired. A rotated or revoked refresh token is kept until it expires, so
+          presenting it again still revokes its grant.
+        - Registered clients: created more than `idle_client_seconds` ago, with no live token and
+          no live code or pending request.
+        """
+        idle_before = now - idle_client_seconds
+        with self._session() as db:
+            deleted = {
+                "authorizations": db.query(McpOAuthAuthorization)
+                .filter(
+                    or_(
+                        McpOAuthAuthorization.expires_at <= now,
+                        McpOAuthAuthorization.consumed_at.is_not(None),
+                    )
+                )
+                .delete(synchronize_session=False),
+                "codes": db.query(McpOAuthCode)
+                .filter(McpOAuthCode.expires_at <= now)
+                .delete(synchronize_session=False),
+                "tokens": db.query(McpOAuthToken)
+                .filter(
+                    or_(
+                        McpOAuthToken.expires_at <= now,
+                        and_(
+                            McpOAuthToken.kind == ACCESS,
+                            McpOAuthToken.revoked_at.is_not(None),
+                        ),
+                    )
+                )
+                .delete(synchronize_session=False),
+            }
+            live_token = exists().where(
+                McpOAuthToken.client_id == McpOAuthClient.client_id,
+                McpOAuthToken.revoked_at.is_(None),
+                McpOAuthToken.expires_at > now,
+            )
+            live_code = exists().where(
+                McpOAuthCode.client_id == McpOAuthClient.client_id,
+                McpOAuthCode.expires_at > now,
+            )
+            live_request = exists().where(
+                McpOAuthAuthorization.client_id == McpOAuthClient.client_id,
+                McpOAuthAuthorization.expires_at > now,
+            )
+            deleted["clients"] = (
+                db.query(McpOAuthClient)
+                .filter(
+                    McpOAuthClient.created_at <= idle_before,
+                    ~live_token,
+                    ~live_code,
+                    ~live_request,
+                )
+                .delete(synchronize_session=False)
+            )
+            db.commit()
+            return deleted
 
 
 McpOAuth = McpOAuthTable()

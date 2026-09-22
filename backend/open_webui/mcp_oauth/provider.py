@@ -66,6 +66,13 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, request_response
 
 from open_webui.mcp_oauth.accounts import active_account
+from open_webui.mcp_oauth.limits import (
+    AUTHORIZE_LIMIT,
+    REGISTER_LIMIT,
+    RateLimited,
+    RateLimiter,
+    redis_client_from_env,
+)
 from open_webui.models.mcp_oauth import (
     ACCESS,
     REFRESH,
@@ -107,6 +114,7 @@ REGISTRATION_AUTH_METHOD = "none"
 
 AUTHORIZATION_SERVER_METADATA_PATH = "/.well-known/oauth-authorization-server"
 AUTHORIZE_PATH = "/authorize"
+REGISTER_PATH = "/register"
 TOKEN_PATH = "/token"
 REVOKE_PATH = "/revoke"
 
@@ -338,6 +346,7 @@ class EndpointOAuthProvider(OAuthProvider):
         allowed_redirect_uris: Iterable[str] = (),
         store: McpOAuthTable = McpOAuth,
         document_fetcher: Optional[CIMDFetcher] = None,
+        rate_limiter: Optional[RateLimiter] = None,
     ):
         super().__init__(
             base_url=service_url,
@@ -353,6 +362,7 @@ class EndpointOAuthProvider(OAuthProvider):
         self.document_fetcher = document_fetcher or CIMDFetcher()
         # Used only to verify private_key_jwt assertions of metadata-document clients.
         self._assertion_manager = CIMDClientManager()
+        self.rate_limiter = rate_limiter or RateLimiter()
 
     @property
     def issuer(self) -> str:
@@ -463,10 +473,11 @@ class EndpointOAuthProvider(OAuthProvider):
         - Token: accepts private_key_jwt from metadata-document clients.
         - Revoke: accepts public clients without a client_secret field, and private_key_jwt.
 
-        Authorize, token and revoke are rebuilt with the SDK's request body limit
-        (RequestBodyLimitMiddleware with DEFAULT_MAX_REQUEST_BODY_SIZE) in the SDK's order: CORS
-        outside, then the body limit, then the handler. Register keeps the SDK's endpoint, which
-        already has the limit.
+        Authorize and register are also rate-limited per client IP. Authorize, token and revoke
+        are rebuilt with the SDK's request body limit (RequestBodyLimitMiddleware with
+        DEFAULT_MAX_REQUEST_BODY_SIZE) in the SDK's order: CORS outside, then the body limit, then
+        the handler; the rate limit is outermost on authorize. Register keeps the SDK's endpoint,
+        which already has both.
         """
         routes = []
         for route in super().get_routes(mcp_path):
@@ -485,8 +496,24 @@ class EndpointOAuthProvider(OAuthProvider):
             elif route.path == AUTHORIZE_PATH:
                 route = Route(
                     AUTHORIZE_PATH,
-                    endpoint=_body_limited(request_response(self._authorize_endpoint())),
+                    endpoint=RateLimited(
+                        _body_limited(request_response(self._authorize_endpoint())),
+                        limiter=self.rate_limiter,
+                        name="authorize",
+                        limit=AUTHORIZE_LIMIT,
+                    ),
                     methods=["GET", "POST"],
+                )
+            elif route.path == REGISTER_PATH:
+                route = Route(
+                    REGISTER_PATH,
+                    endpoint=RateLimited(
+                        route.endpoint,
+                        limiter=self.rate_limiter,
+                        name="register",
+                        limit=REGISTER_LIMIT,
+                    ),
+                    methods=route.methods,
                 )
             elif route.path == TOKEN_PATH:
                 token_handler = TokenHandler(
@@ -785,6 +812,7 @@ def build_provider(service_url: str, resource_identifier: str) -> EndpointOAuthP
         service_url=service_url,
         resource_identifier=resource_identifier,
         allowed_redirect_uris=allowed_redirect_uris_from_env(),
+        rate_limiter=RateLimiter(redis_client=redis_client_from_env()),
     )
 
 

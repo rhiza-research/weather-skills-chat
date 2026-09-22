@@ -10,7 +10,7 @@ import threading
 import time
 import random
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlencode, parse_qs, urlparse
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -567,8 +567,20 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
     # Starlette does not run a mounted app's lifespan. The endpoint's lifespan starts FastMCP's
     # Streamable HTTP session manager, so it is run here.
-    async with mcp_endpoint.asgi_app.lifespan(app):
-        yield
+    retention_task = None
+    try:
+        from open_webui.mcp_oauth.retention import purge_forever
+
+        # Deletes the endpoint's expired and unusable authorization rows every hour.
+        # Cancelled in the finally below when the lifespan exits.
+        retention_task = asyncio.create_task(purge_forever())
+        async with mcp_endpoint.asgi_app.lifespan(app):
+            yield
+    finally:
+        if retention_task is not None:
+            retention_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await retention_task
     shutdown_langfuse()
     shutdown_scheduler()
 
