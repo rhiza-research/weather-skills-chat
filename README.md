@@ -234,6 +234,8 @@ The endpoint reads `WEBUI_URL` at startup, so a value changed later in the admin
 
 Access tokens expire after one hour. Clients refresh them with a refresh token, which is replaced on every use. A client revokes its tokens at `/revoke`.
 
+Each backend process deletes expired and unusable authorization rows every hour, and deletes a registered client that has no live token, code or pending request, 30 days after it registered. `/register` accepts 20 requests and `/authorize` 60 requests per client IP per minute; further requests get HTTP 429. The counters are in Redis when `REDIS_URL` is set, and in each process otherwise.
+
 A call runs in the organization named by its `X-Organization-Id` header, the header the web interface sends. Without the header, or with the account's own id, it runs in the account's personal organization. The organization decides which skills are listed and which stored secrets a run receives.
 
 Each account's endpoint calls in an organization are recorded in a private chat titled "MCP session" in that organization. The web interface can view that chat but cannot change its messages. A tab that has it open shows new calls after a reload.

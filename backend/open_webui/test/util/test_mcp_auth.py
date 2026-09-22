@@ -70,6 +70,17 @@ class BuildAuthProviderTest(unittest.TestCase):
             metadata = client.get("/.well-known/oauth-authorization-server").json()
         self.assertEqual(metadata["issuer"], endpoint.provider.issuer)
 
+    def test_the_rate_limiter_uses_redis_when_redis_url_is_set(self):
+        connection = object()
+        with service_configured(SERVICE_URL), patch(
+            "open_webui.mcp_oauth.limits.REDIS_URL", "redis://redis:6379/0"
+        ), patch(
+            "open_webui.utils.redis.get_redis_connection", return_value=connection
+        ) as connect:
+            built = build_auth_provider()
+        self.assertIs(built.rate_limiter.redis, connection)
+        self.assertEqual(connect.call_args.args[0], "redis://redis:6379/0")
+
     def test_allowed_redirect_uris_are_read_from_the_environment(self):
         with service_configured(SERVICE_URL), patch.dict(
             os.environ,
@@ -79,6 +90,10 @@ class BuildAuthProviderTest(unittest.TestCase):
         self.assertEqual(
             built.allowed_redirect_uris, ("https://a.example/cb", "https://b.example/*")
         )
+
+    def test_the_rate_limiter_counts_in_process_without_redis_url(self):
+        with service_configured(SERVICE_URL), patch("open_webui.mcp_oauth.limits.REDIS_URL", ""):
+            self.assertIsNone(build_auth_provider().rate_limiter.redis)
 
     def test_no_scope_is_required(self):
         self.assertEqual(list(self.built.required_scopes), [])
