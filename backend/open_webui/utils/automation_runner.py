@@ -72,7 +72,7 @@ def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[st
     }
 
     ids: list[str] = []
-    for tool in Tools.get_tools():
+    for tool in Tools.get_tool_catalog():
         if not user_owns_or_has_access(
             user.id, tool.user_id, tool.access_control, "read", user.role
         ):

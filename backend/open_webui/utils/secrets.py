@@ -35,6 +35,10 @@ def can_use_secret(user: UserModel, row: Optional[Secret]) -> bool:
 def list_secret_metadata(
     user: UserModel, organization_id: str
 ) -> list[dict]:
+    from open_webui.utils.chat_timing import log_timing
+    import time as _time
+
+    t0 = _time.perf_counter()
     items = []
     for row in Secrets.list_for_org(organization_id, user.id):
         items.append(
@@ -51,6 +55,12 @@ def list_secret_metadata(
     for item in items:
         if item["visibility"] == "organization":
             item["overridden"] = item["name"] in private_names
+    log_timing(
+        "db.list_secret_metadata",
+        _time.perf_counter() - t0,
+        n=len(items),
+        user_id=user.id,
+    )
     return items
 
 

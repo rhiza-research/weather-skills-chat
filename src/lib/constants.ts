@@ -15,6 +15,12 @@ export const RETRIEVAL_API_BASE_URL = `${WEBUI_BASE_URL}/api/v1/retrieval`;
 
 export const WEBUI_VERSION = APP_VERSION;
 export const WEBUI_BUILD_HASH = APP_BUILD_HASH;
+
+/** Deployed image tag (sha-… on staging, vX.Y.Z on prod) or the package version locally. */
+export function runningReleaseLabel(imageTag?: string | null): string {
+	const tag = imageTag?.trim();
+	return tag ? tag : `v${WEBUI_VERSION}`;
+}
 export const REQUIRED_OLLAMA_VERSION = '0.1.16';
 
 export const SUPPORTED_FILE_TYPE = [

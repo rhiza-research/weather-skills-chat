@@ -6,6 +6,7 @@ from importlib import util
 import types
 import tempfile
 import logging
+import time
 
 from open_webui.env import SRC_LOG_LEVELS, PIP_OPTIONS, PIP_PACKAGE_INDEX_OPTIONS
 from open_webui.models.functions import Functions
@@ -69,20 +70,31 @@ def replace_imports(content):
 
 
 def load_tool_module_by_id(tool_id, content=None):
+    from open_webui.utils.chat_timing import log_timing
+
+    t0 = time.perf_counter()
+    db_read_s = db_write_s = exec_s = None
+    content_bytes = None
 
     if content is None:
+        t_read = time.perf_counter()
         tool = Tools.get_tool_by_id(tool_id)
+        db_read_s = time.perf_counter() - t_read
         if not tool:
             raise Exception(f"Toolkit not found: {tool_id}")
 
         content = tool.content
 
         content = replace_imports(content)
+        content_bytes = len(content or "")
+        t_write = time.perf_counter()
         Tools.update_tool_by_id(tool_id, {"content": content})
+        db_write_s = time.perf_counter() - t_write
     else:
         frontmatter = extract_frontmatter(content)
         # Install required packages found within the frontmatter
         install_frontmatter_requirements(frontmatter.get("requirements", ""))
+        content_bytes = len(content or "")
 
     module_name = f"tool_{tool_id}"
     module = types.ModuleType(module_name)
@@ -98,9 +110,20 @@ def load_tool_module_by_id(tool_id, content=None):
         module.__dict__["__file__"] = temp_file.name
 
         # Executing the modified content in the created module's namespace
+        t_exec = time.perf_counter()
         exec(content, module.__dict__)
+        exec_s = time.perf_counter() - t_exec
         frontmatter = extract_frontmatter(content)
         log.info(f"Loaded module: {module.__name__}")
+        log_timing(
+            "db.load_tool_module_by_id",
+            time.perf_counter() - t0,
+            tool_id=tool_id,
+            content_bytes=content_bytes,
+            db_read_s=f"{db_read_s:.3f}" if db_read_s is not None else None,
+            db_write_s=f"{db_write_s:.3f}" if db_write_s is not None else None,
+            exec_s=f"{exec_s:.3f}" if exec_s is not None else None,
+        )
 
         # Create and return the object if the class 'Tools' is found in the module
         if hasattr(module, "Tools"):

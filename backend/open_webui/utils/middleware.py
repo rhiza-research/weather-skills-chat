@@ -70,6 +70,7 @@ from open_webui.utils.misc import (
 )
 from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
 from open_webui.utils.tools import get_tools
+from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.tool_parallel import (
     execution_waves,
     inject_depends_on_spec,
@@ -162,6 +163,10 @@ class WaitingResponseHeartbeat:
         self._cleared = False
         await self._emit(done=False)
         self._task = asyncio.create_task(self._loop())
+
+    @property
+    def is_active(self) -> bool:
+        return self._active
 
     async def _loop(self):
         try:
@@ -1011,9 +1016,15 @@ def apply_params_to_form_data(form_data, model):
 
 
 async def process_chat_payload(request, form_data, user, metadata, model):
+    clock = StageClock(
+        "process_chat_payload",
+        chat_id=metadata.get("chat_id"),
+        message_id=metadata.get("message_id"),
+    )
 
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f"form_data: {form_data}")
+    clock.mark("apply_params")
 
     event_emitter = get_event_emitter(metadata)
     event_call = get_event_call(metadata)
@@ -1062,6 +1073,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception:
         log.exception("expand_ui_tool_history_messages failed")
+    clock.mark("expand_history")
 
     user_message = get_last_user_message(form_data["messages"])
     model_knowledge = model.get("info", {}).get("meta", {}).get("knowledge", False)
@@ -1113,6 +1125,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise e
+    clock.mark("pipeline_inlet")
 
     try:
         filter_functions = [
@@ -1129,6 +1142,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise Exception(f"Error: {e}")
+    clock.mark("db.inlet_filters", n_filters=len(filter_functions))
 
     features = form_data.pop("features", None)
     if features:
@@ -1147,6 +1161,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # <code_interpreter> prompt — that bypasses tool_calls and breaks
         # Anthropic, which rejects a trailing assistant prefill.
 
+    clock.mark("features")
     tool_ids = form_data.pop("tool_ids", None)
     files = form_data.pop("files", None)
 
@@ -1180,18 +1195,28 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if tool_ids:
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
+        from open_webui.models.tools import Tools
 
         org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
+        catalog = Tools.get_tool_catalog()
+        clock.mark("db.tool_catalog", n=len(catalog))
+        skill_records = accessible_skill_records(
+            user, organization_id=org_id, catalog=catalog
+        )
+        clock.mark("accessible_skill_records", n=len(skill_records))
         tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), accessible_skill_records(user, org_id)
+            list(tool_ids), skill_records
         )
         metadata["tool_ids"] = tool_ids
+        clock.mark("resolve_tool_ids", n=len(tool_ids))
         tools_dict = get_tools(
             request,
             tool_ids,
             user,
             tool_extra,
+            catalog=catalog,
         )
+        clock.mark("get_tools", n_out=len(tools_dict))
 
     try:
         from open_webui.utils.builtin_tools import get_builtin_tools
@@ -1199,6 +1224,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         tools_dict = {**get_builtin_tools(tool_extra), **tools_dict}
     except Exception:
         log.exception("Failed to load built-in tools")
+    clock.mark("builtins", n_tools=len(tools_dict))
 
     if tool_servers:
         for tool_server in tool_servers:
@@ -1282,11 +1308,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             except Exception as e:
                 log.exception(e)
 
+    clock.mark("tool_specs")
     try:
         form_data, flags = await chat_completion_files_handler(request, form_data, user)
         sources.extend(flags.get("sources", []))
     except Exception as e:
         log.exception(e)
+    clock.mark("files_handler")
 
     # If context is not empty, insert it into the messages
     if len(sources) > 0:
@@ -1379,6 +1407,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     except Exception:
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
+    clock.done(n_tools=len(tools_dict) if tools_dict else 0)
     return form_data, metadata, events
 
 
@@ -1497,7 +1526,16 @@ async def emit_chat_title_if_needed(
 
 
 async def process_chat_response(
-    request, response, form_data, user, metadata, model, events, tasks, detach=True
+    request,
+    response,
+    form_data,
+    user,
+    metadata,
+    model,
+    events,
+    tasks,
+    detach=True,
+    waiting_heartbeat=None,
 ):
     async def background_tasks_handler():
         message_map = Chats.get_messages_by_chat_id(metadata["chat_id"])
@@ -1678,6 +1716,8 @@ async def process_chat_response(
     if event_emitter and event_caller:
         task_id = str(uuid4())  # Create a unique task ID.
         model_id = form_data.get("model", "")
+        if waiting_heartbeat is None:
+            waiting_heartbeat = WaitingResponseHeartbeat(event_emitter)
 
         Chats.upsert_message_to_chat_by_id_and_message_id(
             metadata["chat_id"],
@@ -2235,8 +2275,17 @@ async def process_chat_response(
                     response_tool_calls = []
                     stream_parse_errors = 0
                     stream_events_seen = 0
-                    heartbeat = WaitingResponseHeartbeat(event_emitter)
-                    await heartbeat.start()
+                    heartbeat = waiting_heartbeat
+                    if heartbeat is None:
+                        heartbeat = WaitingResponseHeartbeat(event_emitter)
+                    if not heartbeat.is_active:
+                        log_timing(
+                            "waiting_response_heartbeat_start",
+                            0.0,
+                            chat_id=metadata.get("chat_id"),
+                            message_id=metadata.get("message_id"),
+                        )
+                        await heartbeat.start()
 
                     try:
                         async for line in response.body_iterator:
@@ -2763,6 +2812,14 @@ async def process_chat_response(
                     try:
                         from open_webui.utils.model_messages import deepcopy_messages
 
+                        await waiting_heartbeat.start()
+                        log_timing(
+                            "waiting_response_heartbeat_start",
+                            0.0,
+                            chat_id=metadata.get("chat_id"),
+                            message_id=metadata.get("message_id"),
+                            followup="tools",
+                        )
                         res = await generate_chat_completion(
                             request,
                             {
@@ -2975,6 +3032,14 @@ async def process_chat_response(
                         try:
                             from open_webui.utils.model_messages import deepcopy_messages
 
+                            await waiting_heartbeat.start()
+                            log_timing(
+                                "waiting_response_heartbeat_start",
+                                0.0,
+                                chat_id=metadata.get("chat_id"),
+                                message_id=metadata.get("message_id"),
+                                followup="code",
+                            )
                             res = await generate_chat_completion(
                                 request,
                                 {

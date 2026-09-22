@@ -133,10 +133,11 @@ class StartChatTraceTest(unittest.TestCase):
         lf._client_failed = False
         lf._trace_var.set(None)
         lf._propagate_cm_var.set(None)
+        lf._pending_trace_var.set(None)
 
     @patch.object(lf, "tracing_enabled", return_value=True)
     @patch.object(lf, "get_client")
-    @patch("langfuse.propagate_attributes")
+    @patch("langfuse.propagate_attributes", create=True)
     def test_uses_email_as_user_id(self, mock_propagate, mock_get_client, _enabled):
         client = MagicMock()
         trace = MagicMock()
@@ -156,6 +157,50 @@ class StartChatTraceTest(unittest.TestCase):
         self.assertEqual(mock_propagate.call_args.kwargs["user_id"], "bob@example.com")
         self.assertEqual(mock_propagate.call_args.kwargs["session_id"], "chat-1")
         cm.__enter__.assert_called_once()
+
+
+class ScheduleStartChatTraceTest(unittest.TestCase):
+    def setUp(self):
+        lf._client = None
+        lf._client_failed = False
+        lf._trace_var.set(None)
+        lf._propagate_cm_var.set(None)
+        lf._pending_trace_var.set(None)
+
+    def tearDown(self):
+        pending = lf._pending_trace_var.get()
+        if pending is not None:
+            pending.done.wait(timeout=1)
+        lf._pending_trace_var.set(None)
+        lf._trace_var.set(None)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    def test_schedule_returns_before_create_finishes(self, _enabled):
+        import threading
+        import time
+
+        gate = threading.Event()
+        trace = MagicMock()
+        cm = MagicMock()
+
+        def _create(**kwargs):
+            gate.wait(timeout=1)
+            return trace, cm
+
+        with patch.object(lf, "_create_chat_trace", side_effect=_create):
+            t0 = time.perf_counter()
+            lf.schedule_start_chat_trace(
+                user=MagicMock(email="bob@example.com", id="uid-99"),
+                metadata={"chat_id": "chat-1"},
+                form_data={"model": "gpt-4", "messages": []},
+            )
+            self.assertLess(time.perf_counter() - t0, 0.2)
+            self.assertIsNone(lf._trace_var.get())
+            gate.set()
+            pending = lf._pending_trace_var.get()
+            self.assertTrue(pending.done.wait(timeout=1))
+            self.assertIs(lf.current_trace(), trace)
+            cm.__enter__.assert_called_once()
 
 
 if __name__ == "__main__":
