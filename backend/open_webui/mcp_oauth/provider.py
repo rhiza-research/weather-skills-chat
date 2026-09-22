@@ -96,6 +96,10 @@ CODE_LIFETIME_SECONDS = 10 * 60
 PENDING_LIFETIME_SECONDS = 10 * 60
 ACCESS_LIFETIME_SECONDS = 60 * 60
 REFRESH_LIFETIME_SECONDS = 30 * 24 * 60 * 60
+# A refresh token presented again within this many seconds of its rotation gets a new pair and the
+# grant stays live, for a client that retries after losing the response. Later reuse revokes the
+# grant. Codes have no such window.
+REFRESH_REUSE_GRACE_SECONDS = 30
 
 # Bytes of randomness in each code, token and request id. The SDK asks for at least 160 bits.
 RANDOM_BYTES = 32
@@ -739,7 +743,13 @@ class EndpointOAuthProvider(OAuthProvider):
     ) -> RefreshToken | None:
         record = await asyncio.to_thread(self.store.get_token, refresh_token, REFRESH)
         if record is None:
-            # A rotated refresh token presented again revokes its whole grant.
+            # A token rotated within the grace window is still accepted; exchange_refresh_token
+            # then issues a new pair without revoking the grant.
+            record = await asyncio.to_thread(
+                self.store.refresh_in_grace, refresh_token, REFRESH_REUSE_GRACE_SECONDS
+            )
+        if record is None:
+            # Any other rotated refresh token presented again revokes its whole grant.
             await asyncio.to_thread(self.store.revoke_reused_refresh, refresh_token)
             return None
         if record.client_id != client.client_id:
@@ -768,6 +778,7 @@ class EndpointOAuthProvider(OAuthProvider):
                 scopes=list(scopes),
                 new_access=new_value(),
                 new_refresh=new_value(),
+                grace_seconds=REFRESH_REUSE_GRACE_SECONDS,
                 **self._lifetimes(),
             )
         )
