@@ -14,12 +14,16 @@ services:
       - open-webui:/app/backend/data
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
+    # Runs an init process that reaps killed skill subprocesses so they do not remain as zombies.
+    init: true
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
       - OPENAI_API_BASE_URL
       - OPENAI_API_KEY
+      - WEBUI_URL
       - WEBUI_SECRET_KEY
+      - REDIS_URL
       - SKILL_SANDLOCK
       - LANGFUSE_PUBLIC_KEY
       - LANGFUSE_SECRET_KEY
