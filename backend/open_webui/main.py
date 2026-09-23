@@ -1747,7 +1747,9 @@ async def healthcheck_with_db():
 
 
 # Registered before the "/" SPA mount below, which would otherwise match these paths. The
-# discovery routes are at the root because clients fetch them at root-absolute paths.
+# discovery routes are at the root because clients fetch them at root-absolute paths. The
+# authorization server's authorize, token, register and revoke routes and its consent page are
+# root routes too, on the web interface's origin so the consent page can read its session.
 app.router.routes.extend(mcp_endpoint.root_routes)
 app.mount(mcp_endpoint.mount_path, mcp_endpoint.asgi_app)
 
