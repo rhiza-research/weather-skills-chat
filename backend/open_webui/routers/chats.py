@@ -27,6 +27,11 @@ from pydantic import BaseModel
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
+from open_webui.utils.endpoint_session import (
+    READ_ONLY_MESSAGE,
+    TRANSCRIPT_KEYS,
+    is_endpoint_session,
+)
 from open_webui.utils.organizations import (
     can_read_chat,
     can_write_chat,
@@ -529,7 +534,9 @@ async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def update_chat_by_id(
     id: str, form_data: ChatForm, user=Depends(get_verified_user)
 ):
-    _require_writable_chat(id, user)
+    chat = _require_writable_chat(id, user)
+    if is_endpoint_session(chat.chat) and TRANSCRIPT_KEYS & form_data.chat.keys():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=READ_ONLY_MESSAGE)
     try:
         chat = await asyncio.to_thread(Chats.update_chat_fields, id, form_data.chat)
     except ChatWriteError as exc:
@@ -613,6 +620,9 @@ async def update_chat_message_by_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+
+    if is_endpoint_session(chat.chat):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=READ_ONLY_MESSAGE)
 
     chat = await asyncio.to_thread(
         Chats.upsert_message_to_chat_by_id_and_message_id,
