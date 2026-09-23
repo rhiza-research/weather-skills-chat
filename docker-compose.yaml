@@ -22,9 +22,17 @@ services:
       - ollama
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
+    # Runs an init process that reaps killed skill subprocesses so they do not remain as zombies.
+    init: true
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
-      - 'WEBUI_SECRET_KEY='
+      - 'WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY-}'
+      # The address clients use to reach this service. The MCP endpoint uses it as its resource
+      # identifier. It is passed only when set in .env or the shell; otherwise the application's
+      # default, http://localhost:3000, applies. A .env file is optional: copy .env.example to .env
+      # to override these defaults.
+      - WEBUI_URL
+      - 'REDIS_URL=${REDIS_URL-}'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
