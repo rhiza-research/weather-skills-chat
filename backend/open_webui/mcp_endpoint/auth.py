@@ -1,29 +1,28 @@
-"""The MCP endpoint's resource identifier, and the call that builds its auth provider.
+"""The endpoint's resource identifier and its authorization server.
 
-The endpoint authenticates requests with its own provider, separate from the interface's. An auth
-implementation supplies the body of build_auth_provider.
+The backend is the authorization server itself. Clients register, the user signs in through the
+web interface and approves the client, and the issued tokens resolve to Open WebUI user ids.
 """
 
 import logging
 from urllib.parse import urlsplit
 
-from fastmcp.server.auth import AuthProvider
-
 from open_webui.config import WEBUI_URL
+from open_webui.mcp_oauth.provider import EndpointOAuthProvider, build_provider
 
 log = logging.getLogger(__name__)
 
-# The endpoint's path. Also the suffix of the resource identifier.
+# The endpoint's path. Also the suffix of the resource identifier, which every access token must
+# carry.
 MCP_PATH = "/mcp"
 
-MISSING_BASE_URL_MESSAGE = (
-    "WEBUI_URL is empty. The MCP endpoint uses WEBUI_URL as its resource identifier. Set WEBUI_URL "
-    "to this service's external address."
+CONFIGURED_MESSAGE = (
+    "MCP endpoint enabled. Resource identifier %s, authorization server %s."
 )
 
-NO_AUTH_IMPLEMENTATION_MESSAGE = (
-    "No auth implementation supplies build_auth_provider. The MCP endpoint is always served and "
-    "cannot be built without one."
+MISSING_BASE_URL_MESSAGE = (
+    "WEBUI_URL is empty. The MCP endpoint uses WEBUI_URL as its resource identifier and as its "
+    "authorization server's address. Set WEBUI_URL to this service's external address."
 )
 
 
@@ -31,16 +30,21 @@ def _configured(setting) -> str:
     return str(setting.value or "").strip()
 
 
-def canonical_resource_identifier() -> str:
-    """WEBUI_URL plus MCP_PATH, with no trailing slash.
-
-    Advertised as the resource. RFC 9728 clients reject the metadata document if the advertised
-    resource differs, including by a trailing slash. Raises when WEBUI_URL is empty.
-    """
+def service_url() -> str:
+    """WEBUI_URL with no trailing slash: the authorization server's issuer and route origin."""
     base_url = _configured(WEBUI_URL).rstrip("/")
     if not base_url:
         raise RuntimeError(MISSING_BASE_URL_MESSAGE)
-    return f"{base_url}{MCP_PATH}"
+    return base_url
+
+
+def canonical_resource_identifier() -> str:
+    """WEBUI_URL plus MCP_PATH, with no trailing slash.
+
+    Carried by every access token and advertised as the resource. RFC 9728 clients reject the
+    metadata document if the advertised resource differs, including by a trailing slash.
+    """
+    return f"{service_url()}{MCP_PATH}"
 
 
 def service_origin() -> str:
@@ -49,13 +53,8 @@ def service_origin() -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def build_auth_provider() -> AuthProvider:
-    """Build the provider the endpoint's FastMCP server authenticates requests with.
-
-    An auth implementation supplies this body. The provider it returns verifies bearer tokens,
-    answers a request without a valid token with the 401 challenge, and serves the protected
-    resource metadata for canonical_resource_identifier(). It makes no network call. It raises
-    when its configuration is missing or invalid, because the endpoint is always served and
-    startup stops on that error.
-    """
-    raise NotImplementedError(NO_AUTH_IMPLEMENTATION_MESSAGE)
+def build_auth_provider() -> EndpointOAuthProvider:
+    """Build the endpoint's authorization server. Makes no network call."""
+    provider = build_provider(service_url(), canonical_resource_identifier())
+    log.info(CONFIGURED_MESSAGE, provider.resource_identifier, provider.service_url)
+    return provider

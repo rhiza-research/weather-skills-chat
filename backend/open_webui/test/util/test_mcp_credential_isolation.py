@@ -1,6 +1,9 @@
-"""The endpoint's modules import and read none of the interface's credential paths.
+"""The endpoint's modules import and read none of the interface's credential paths directly.
 
-Checked against the module source, because the property is that these names are absent.
+Checked against the module source, because the property is that these names are absent. Only
+direct imports by modules in the endpoint's package are checked. The package imports the
+authorization server's consent routes from open_webui.mcp_oauth, which read the interface's
+session cookie; tool code does not use them.
 """
 
 import ast
@@ -114,6 +117,30 @@ class NoTokenIsForwardedTest(unittest.TestCase):
                         "headers",
                         f"{path.name} reads headers off {ast.unparse(node.value)}",
                     )
+
+
+class AuthorizationServerOutboundTest(unittest.TestCase):
+    """The authorization server's modules open no HTTP client of their own.
+
+    Its only outbound request is the Client ID Metadata Document fetch, made by fastmcp's
+    SSRF-protected fetcher.
+    """
+
+    def _modules(self):
+        return sorted((ENDPOINT_MODULE_DIR.parent / "mcp_oauth").glob("*.py"))
+
+    def test_there_is_something_to_check(self):
+        self.assertGreater(len(self._modules()), 1)
+
+    def test_no_module_imports_an_outbound_http_client(self):
+        for path in self._modules():
+            names = imported_names(path.read_text())
+            for client in (*NoTokenIsForwardedTest.OUTBOUND_CLIENTS, "httpx2", "urllib.request"):
+                self.assertNotIn(
+                    client,
+                    names,
+                    f"{path.name} imports {client}, an outbound HTTP client",
+                )
 
 
 class EndpointModuleSourceTest(unittest.TestCase):
