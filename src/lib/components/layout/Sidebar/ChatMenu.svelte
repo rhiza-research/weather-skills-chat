@@ -6,9 +6,6 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import jsPDF from 'jspdf';
-	import html2canvas from 'html2canvas-pro';
-
 	const dispatch = createEventDispatcher();
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
@@ -91,6 +88,10 @@
 
 		if (containerElement) {
 			try {
+				const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+					import('html2canvas-pro'),
+					import('jspdf')
+				]);
 				const isDarkMode = $theme.includes('dark'); // Check theme mode
 
 				// Define a fixed virtual screen size

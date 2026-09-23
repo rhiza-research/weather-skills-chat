@@ -1,7 +1,6 @@
 <script>
 	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
-	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
 	import { parseApiError } from '$lib/apis/response';
 
 	let loadingProgress = spring(0, {
@@ -122,7 +121,8 @@
 			)
 		);
 
-	const executePythonAsWorker = (id, code, cb, options = {}) => {
+	const executePythonAsWorker = async (id, code, cb, options = {}) => {
+		const { default: PyodideWorker } = await import('$lib/workers/pyodide.worker?worker');
 		return new Promise((resolve) => {
 			let result = null;
 			let stdout = null;

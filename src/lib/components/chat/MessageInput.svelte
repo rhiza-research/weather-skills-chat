@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
-	import { createPicker, getAuthToken } from '$lib/utils/google-drive-picker';
-	import { pickAndDownloadFile } from '$lib/utils/onedrive-file-picker';
 
 	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -53,7 +51,6 @@
 	import CommandLine from '../icons/CommandLine.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 	import ToolServersModal from './ToolServersModal.svelte';
 	import Wrench from '../icons/Wrench.svelte';
 
@@ -1048,6 +1045,7 @@
 											}}
 											uploadGoogleDriveHandler={async () => {
 												try {
+													const { createPicker } = await import('$lib/utils/google-drive-picker');
 													const fileData = await createPicker();
 													if (fileData) {
 														const file = new File([fileData.blob], fileData.name, {
@@ -1068,6 +1066,9 @@
 											}}
 											uploadOneDriveHandler={async () => {
 												try {
+													const { pickAndDownloadFile } = await import(
+														'$lib/utils/onedrive-file-picker'
+													);
 													const fileData = await pickAndDownloadFile();
 													if (fileData) {
 														const file = new File([fileData.blob], fileData.name, {
@@ -1311,6 +1312,7 @@
 																if ($settings.audio?.tts?.engine === 'browser-kokoro') {
 																	// If the user has not initialized the TTS worker, initialize it
 																	if (!$TTSWorker) {
+																		const { KokoroWorker } = await import('$lib/workers/KokoroWorker');
 																		await TTSWorker.set(
 																			new KokoroWorker({
 																				dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'

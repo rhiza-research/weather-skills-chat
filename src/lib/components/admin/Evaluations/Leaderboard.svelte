@@ -1,9 +1,4 @@
 <script lang="ts">
-	import * as ort from 'onnxruntime-web';
-	import { env, AutoModel, AutoTokenizer } from '@huggingface/transformers';
-
-	env.backends.onnx.wasm.wasmPaths = '/wasm/';
-
 	import { onMount, getContext } from 'svelte';
 	import { models } from '$lib/stores';
 
@@ -198,6 +193,9 @@
 	//////////////////////
 
 	const loadEmbeddingModel = async () => {
+		const { env, AutoModel, AutoTokenizer } = await import('@huggingface/transformers');
+		env.backends.onnx.wasm.wasmPaths = '/wasm/';
+
 		// Check if the tokenizer and model are already loaded and stored in the window object
 		if (!window.tokenizer) {
 			window.tokenizer = await AutoTokenizer.from_pretrained(EMBEDDING_MODEL);

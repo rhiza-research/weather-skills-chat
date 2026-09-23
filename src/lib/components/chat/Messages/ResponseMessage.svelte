@@ -46,7 +46,6 @@
 	import Citations from './Citations.svelte';
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 
 	interface MessageType {
@@ -274,6 +273,7 @@
 
 			if ($settings.audio?.tts?.engine === 'browser-kokoro') {
 				if (!$TTSWorker) {
+					const { KokoroWorker } = await import('$lib/workers/KokoroWorker');
 					await TTSWorker.set(
 						new KokoroWorker({
 							dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'

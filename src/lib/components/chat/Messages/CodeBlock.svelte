@@ -1,6 +1,4 @@
 <script lang="ts">
-	import mermaid from 'mermaid';
-
 	import { v4 as uuidv4 } from 'uuid';
 
 	import { getContext, onMount, tick, onDestroy } from 'svelte';
@@ -8,8 +6,6 @@
 
 	import 'highlight.js/styles/github-dark.min.css';
 
-	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
-	import CodeEditor from '$lib/components/common/CodeEditor.svelte';
 	import SvgPanZoom from '$lib/components/common/SVGPanZoom.svelte';
 	import { config } from '$lib/stores';
 	import { executeCode } from '$lib/apis/utils';
@@ -39,6 +35,7 @@
 	export let stickyButtonsClassName = 'top-8';
 
 	let pyodideWorker = null;
+	let CodeEditorComponent = null;
 
 	let _code = '';
 	$: if (code) {
@@ -205,6 +202,7 @@
 	};
 
 	const executePythonAsWorker = async (code) => {
+		const { default: PyodideWorker } = await import('$lib/workers/pyodide.worker?worker');
 		let packages = [
 			code.includes('requests') ? 'requests' : null,
 			code.includes('bs4') ? 'beautifulsoup4' : null,
@@ -329,6 +327,12 @@
 
 	const drawMermaidDiagram = async () => {
 		try {
+			const mermaid = (await import('mermaid')).default;
+			mermaid.initialize({
+				startOnLoad: false,
+				theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+				securityLevel: 'loose'
+			});
 			if (await mermaid.parse(code)) {
 				const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);
 				mermaidHtml = svg;
@@ -388,24 +392,22 @@
 		}
 	};
 
+	const loadCodeEditor = async () => {
+		if (CodeEditorComponent) {
+			return;
+		}
+		CodeEditorComponent = (await import('$lib/components/common/CodeEditor.svelte')).default;
+	};
+
+	$: if (!collapsed) {
+		loadCodeEditor();
+	}
+
 	onMount(async () => {
 		console.log('codeblock', lang, code);
 
 		if (lang) {
 			onCode({ lang, code });
-		}
-		if (document.documentElement.classList.contains('dark')) {
-			mermaid.initialize({
-				startOnLoad: true,
-				theme: 'dark',
-				securityLevel: 'loose'
-			});
-		} else {
-			mermaid.initialize({
-				startOnLoad: true,
-				theme: 'default',
-				securityLevel: 'loose'
-			});
 		}
 	});
 
@@ -501,17 +503,20 @@
 				<div class=" pt-7 bg-gray-50 dark:bg-gray-850"></div>
 
 				{#if !collapsed}
-					<CodeEditor
-						value={code}
-						{id}
-						{lang}
-						onSave={() => {
-							saveCode();
-						}}
-						onChange={(value) => {
-							_code = value;
-						}}
-					/>
+					{#if CodeEditorComponent}
+						<svelte:component
+							this={CodeEditorComponent}
+							value={code}
+							{id}
+							{lang}
+							onSave={() => {
+								saveCode();
+							}}
+							onChange={(value) => {
+								_code = value;
+							}}
+						/>
+					{/if}
 				{:else}
 					<div
 						class="bg-gray-50 dark:bg-black dark:text-white rounded-b-lg! pt-2 pb-2 px-4 flex flex-col gap-2 text-xs"

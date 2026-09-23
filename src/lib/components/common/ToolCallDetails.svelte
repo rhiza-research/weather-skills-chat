@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import Collapsible from './Collapsible.svelte';
-	import CodeBlock from '$lib/components/chat/Messages/CodeBlock.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -28,11 +27,23 @@
 	}
 
 	$: text = outputText(result);
+
+	let CodeBlockComponent = null;
+	const loadCodeBlock = async () => {
+		if (CodeBlockComponent) {
+			return;
+		}
+		CodeBlockComponent = (await import('$lib/components/chat/Messages/CodeBlock.svelte')).default;
+	};
+	$: if (pythonCode) {
+		loadCodeBlock();
+	}
 </script>
 
 <div class="space-y-1.5">
-	{#if pythonCode}
-		<CodeBlock
+	{#if pythonCode && CodeBlockComponent}
+		<svelte:component
+			this={CodeBlockComponent}
 			id={`${blockId}-python`}
 			lang="python"
 			code={pythonCode}

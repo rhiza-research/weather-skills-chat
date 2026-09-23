@@ -1,10 +1,22 @@
 <script lang="ts">
-	import katex from 'katex';
-	import 'katex/contrib/mhchem';
-	import 'katex/dist/katex.min.css';
-
 	export let content: string;
 	export let displayMode: boolean = false;
+
+	let html = '';
+	let request = 0;
+
+	const render = async (nextContent: string, nextDisplayMode: boolean) => {
+		const current = ++request;
+		const katex = (await import('katex')).default;
+		await import('katex/contrib/mhchem');
+		await import('katex/dist/katex.min.css');
+		if (current !== request) {
+			return;
+		}
+		html = katex.renderToString(nextContent, { displayMode: nextDisplayMode, throwOnError: false });
+	};
+
+	$: render(content, displayMode);
 </script>
 
-{@html katex.renderToString(content, { displayMode, throwOnError: false })}
+{@html html}

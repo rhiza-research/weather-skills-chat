@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { Pane, PaneResizer } from 'paneforge';
 
 	import { onDestroy, onMount, tick } from 'svelte';
@@ -7,7 +6,6 @@
 
 	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
-	import Overview from './Overview.svelte';
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
 	import Artifacts from './Artifacts.svelte';
 
@@ -135,9 +133,15 @@
 	$: if (!chatId) {
 		clearPanelFlags();
 	}
+
+	let OverviewHost = null;
+	$: if ($showOverview && !OverviewHost) {
+		import('./OverviewHost.svelte').then((module) => {
+			OverviewHost = module.default;
+		});
+	}
 </script>
 
-<SvelteFlowProvider>
 	{#if !largeScreen}
 		{#if $showControls && panelOpen}
 			<Drawer
@@ -172,8 +176,9 @@
 						<div class="h-full max-h-[100dvh] min-h-0 overflow-hidden">
 							<Artifacts {history} />
 						</div>
-					{:else if $showOverview}
-						<Overview
+					{:else if $showOverview && OverviewHost}
+						<svelte:component
+							this={OverviewHost}
 							{history}
 							on:nodeclick={(e) => {
 								showMessage(e.detail.node.data.message);
@@ -241,8 +246,9 @@
 							<div class="h-full max-h-full min-h-0 overflow-hidden">
 								<Artifacts {history} />
 							</div>
-						{:else if $showOverview}
-							<Overview
+						{:else if $showOverview && OverviewHost}
+							<svelte:component
+								this={OverviewHost}
 								{history}
 								on:nodeclick={(e) => {
 									if (e.detail.node.data.message.favorite) {
@@ -263,4 +269,3 @@
 			{/if}
 		</Pane>
 	{/if}
-</SvelteFlowProvider>
