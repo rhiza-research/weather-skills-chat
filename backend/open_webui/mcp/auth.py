@@ -5,6 +5,7 @@ implementation supplies the body of build_auth_provider.
 """
 
 import logging
+from urllib.parse import urlsplit
 
 from fastmcp.server.auth import AuthProvider
 
@@ -40,6 +41,12 @@ def canonical_resource_identifier() -> str:
     if not base_url:
         raise RuntimeError(MISSING_BASE_URL_MESSAGE)
     return f"{base_url}{MCP_PATH}"
+
+
+def service_origin() -> str:
+    """Scheme and authority of the resource identifier, for comparing with an Origin header."""
+    parts = urlsplit(canonical_resource_identifier())
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def build_auth_provider() -> AuthProvider:
