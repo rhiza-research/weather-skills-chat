@@ -47,6 +47,13 @@ services:
       # stores its persistent configuration here. When empty, the endpoint refuses the one-time
       # link. docker-compose.redis.yaml sets it to the redis service it adds.
       - 'REDIS_URL=${REDIS_URL-}'
+      # Landlock confinement for skill subprocesses. The application defaults it to true, and the
+      # runner then refuses every chat-sandboxed run on a kernel without Landlock, returning
+      # ok: false. This file defaults it to false. With it false, a skill subprocess can read and
+      # write any path the application user can reach in this container, including other
+      # accounts' artifacts. This applies to both the web interface and the MCP endpoint, which use
+      # the same runner. Set it to true where the kernel supports Landlock.
+      - 'SKILL_SANDLOCK=${SKILL_SANDLOCK:-false}'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
