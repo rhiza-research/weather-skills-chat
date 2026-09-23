@@ -15,12 +15,9 @@ from fastmcp.exceptions import ToolError
 
 from open_webui.models.chats import ChatForm, Chats
 from open_webui.models.users import UserModel
+from open_webui.utils.endpoint_session import SESSION_MARKER_KEY, is_endpoint_session
 
 log = logging.getLogger(__name__)
-
-# Chat blob key that marks an endpoint session. Written in the insert and found by scanning the
-# account's own chats.
-SESSION_MARKER_KEY = "mcp_endpoint_session"
 
 SESSION_TITLE = "MCP session"
 
@@ -40,10 +37,6 @@ def _blob() -> dict:
     }
 
 
-def _is_endpoint_session(chat) -> bool:
-    return bool((chat.chat or {}).get(SESSION_MARKER_KEY))
-
-
 def _owns(chat, account: UserModel) -> bool:
     """Whether the chat's user_id is the account's id. Organization and admin access are not
     counted."""
@@ -59,7 +52,7 @@ def _existing(account: UserModel, organization_id: str):
     owned = [
         chat
         for chat in Chats.get_chats_by_user_id(account.id)
-        if _is_endpoint_session(chat)
+        if is_endpoint_session(chat.chat)
         and _owns(chat, account)
         and chat.organization_id == organization_id
     ]

@@ -200,6 +200,14 @@ If you are running Open WebUI in an offline environment, you can set the `HF_HUB
 export HF_HUB_OFFLINE=1
 ```
 
+## MCP Endpoint
+
+The backend serves an MCP endpoint at `/mcp/`. Its resource identifier is `WEBUI_URL` with `/mcp` appended.
+
+A call runs in the organization named by its `X-Organization-Id` header, the header the web interface sends. Without the header, or with the account's own id, it runs in the account's personal organization. The organization decides which skills are listed and which stored secrets a run receives.
+
+Each account's endpoint calls in an organization are recorded in a private chat titled "MCP session" in that organization. The web interface can view that chat but cannot change its messages. A tab that has it open shows new calls after a reload.
+
 ## What's Next? 🌟
 
 Discover upcoming features on our roadmap in the [Open WebUI Documentation](https://docs.openwebui.com/roadmap/).
