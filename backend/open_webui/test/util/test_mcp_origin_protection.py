@@ -5,6 +5,7 @@ because agents usually send none.
 """
 
 import unittest
+from types import SimpleNamespace
 from contextlib import contextmanager
 
 from starlette.testclient import TestClient
@@ -20,6 +21,7 @@ from open_webui.test.util.mcp_stub_auth import stub_auth
 
 SERVICE_URL = "https://chat.example"
 HOSTILE_ORIGIN = "https://attacker.example"
+HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
 
 INITIALIZE_REQUEST = {
     "jsonrpc": "2.0",
@@ -60,7 +62,7 @@ class ServiceOriginTest(unittest.TestCase):
 class OriginGuardTest(unittest.TestCase):
     def setUp(self):
         with configured():
-            self.app = build_endpoint().asgi_app
+            self.app = build_endpoint(HOST_APP).asgi_app
 
     def _post(self, headers):
         with TestClient(self.app, base_url=SERVICE_URL) as client:
