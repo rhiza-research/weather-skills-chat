@@ -14,6 +14,7 @@ from open_webui.models.folders import (
     Folders,
 )
 from open_webui.models.chats import Chats
+from open_webui.models.organizations import VISIBILITY_ORGANIZATION
 from open_webui.models.users import Users
 
 from open_webui.config import UPLOAD_DIR
@@ -62,23 +63,46 @@ def _require_folder(folder_id: str, user) -> FolderModel:
 
 
 def _owner_names(user_ids: list[str]) -> dict[str, str]:
-    users = Users.get_users_by_user_ids([uid for uid in user_ids if uid])
+    ids = [uid for uid in user_ids if uid]
+    if not ids:
+        return {}
+    users = Users.get_users_by_user_ids(ids)
     return {u.id: u.name for u in users}
 
 
-def _folder_chat_items(folder: FolderModel, user) -> list[dict]:
-    chats = Chats.get_chats_in_folders([folder.id], user.id, folder.visibility)
+def _chat_item(chat, names: dict[str, str]) -> dict:
+    return {
+        "id": chat.id,
+        "title": chat.title,
+        "user_id": chat.user_id,
+        "visibility": chat.visibility,
+        "owner_name": names.get(chat.user_id) or "Unknown user",
+    }
+
+
+def _folder_chat_items_by_folder(folders, user) -> dict[str, list[dict]]:
+    """Chats for every folder: one query per visibility, then one owner lookup."""
+    private_ids = []
+    organization_ids = []
+    for folder in folders:
+        if folder.visibility == VISIBILITY_ORGANIZATION:
+            organization_ids.append(folder.id)
+        else:
+            private_ids.append(folder.id)
+    chats = []
+    if private_ids:
+        chats.extend(Chats.get_chats_in_folders(private_ids, user.id, "private"))
+    if organization_ids:
+        chats.extend(
+            Chats.get_chats_in_folders(
+                organization_ids, user.id, VISIBILITY_ORGANIZATION
+            )
+        )
     names = _owner_names([chat.user_id for chat in chats])
-    return [
-        {
-            "id": chat.id,
-            "title": chat.title,
-            "user_id": chat.user_id,
-            "visibility": chat.visibility,
-            "owner_name": names.get(chat.user_id) or "Unknown user",
-        }
-        for chat in chats
-    ]
+    by_folder: dict[str, list[dict]] = {}
+    for chat in chats:
+        by_folder.setdefault(chat.folder_id, []).append(_chat_item(chat, names))
+    return by_folder
 
 
 def _sibling_name_taken(folder: FolderModel, name: str, parent_id: Optional[str]) -> bool:
@@ -103,11 +127,12 @@ async def get_folders(
     organization_id: str = Depends(get_active_organization_id),
 ):
     folders = Folders.get_folders_by_user_id(user.id, organization_id=organization_id)
+    chats_by_folder = _folder_chat_items_by_folder(folders, user)
 
     return [
         {
             **folder.model_dump(),
-            "items": {"chats": _folder_chat_items(folder, user)},
+            "items": {"chats": chats_by_folder.get(folder.id, [])},
         }
         for folder in folders
     ]

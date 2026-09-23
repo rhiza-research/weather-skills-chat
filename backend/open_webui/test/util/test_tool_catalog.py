@@ -56,6 +56,9 @@ class AccessibleSkillRecordsCatalogTest(unittest.TestCase):
             "open_webui.models.skill_packs.SkillPacks.get_all",
             return_value=[pack],
         ), patch(
+            "open_webui.models.org_catalog.OrgCatalogOverrides.for_organizations",
+            return_value={},
+        ), patch(
             "open_webui.utils.catalog.skill_is_usable",
             return_value=True,
         ):
@@ -66,6 +69,42 @@ class AccessibleSkillRecordsCatalogTest(unittest.TestCase):
         mock_get_tools.assert_not_called()
         mock_get.assert_not_called()
         self.assertEqual([r["id"] for r in records], ["skill_plot__v1"])
+
+    def test_loads_catalog_overrides_once(self):
+        user = SimpleNamespace(id="alice", role="user")
+        catalog = [
+            _skill("skill_on", "on", "1"),
+            _skill("skill_off", "off", "1"),
+        ]
+        pack = SimpleNamespace(
+            id="pack-1",
+            organization_id="platform",
+            visibility="public",
+            enabled_by_default=True,
+            is_active=True,
+            meta={
+                "skills": [
+                    {"tool_id": "skill_on", "enabled": True},
+                    {"tool_id": "skill_off", "enabled": True},
+                ]
+            },
+        )
+        overrides = {("alice", "skill", "skill_off"): False}
+        with patch(
+            "open_webui.models.skill_packs.SkillPacks.get_all",
+            return_value=[pack],
+        ), patch(
+            "open_webui.models.org_catalog.OrgCatalogOverrides.for_organizations",
+            return_value=overrides,
+        ) as mock_overrides, patch(
+            "open_webui.utils.catalog.OrgCatalogOverrides.get"
+        ) as mock_get:
+            records = accessible_skill_records(
+                user, organization_id="alice", catalog=catalog
+            )
+        mock_overrides.assert_called_once_with(["alice"])
+        mock_get.assert_not_called()
+        self.assertEqual([r["id"] for r in records], ["skill_on"])
 
 
 class GetToolsCatalogTest(unittest.TestCase):

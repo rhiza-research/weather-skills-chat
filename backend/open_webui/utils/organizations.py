@@ -210,14 +210,22 @@ def get_active_organization_id(
     x_organization_id: Optional[str] = Header(None, alias="X-Organization-Id"),
     user: UserModel = Depends(get_verified_user),
 ) -> str:
-    Organizations.ensure_personal(user.id)
-    org_id = (x_organization_id or "").strip() or user.id
-    org = Organizations.get_organization_by_id(org_id)
+    requested = (x_organization_id or "").strip()
+    if not requested or requested == user.id:
+        org = Organizations.ensure_personal(user.id)
+        if not org.active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Organization is not active",
+            )
+        return org.id
+
+    org, member = Organizations.get_organization_for_member(requested, user.id)
     if not org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    if not is_member(org_id, user.id):
+    if not member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -227,4 +235,4 @@ def get_active_organization_id(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Organization is not active",
         )
-    return org_id
+    return org.id

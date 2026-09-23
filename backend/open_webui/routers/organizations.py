@@ -41,6 +41,18 @@ def _with_members(
     return org
 
 
+def _with_all_members(orgs: list[OrganizationModel], user_id: str) -> list[OrganizationModel]:
+    members_by_org = Organizations.get_members_by_organization_ids(
+        [org.id for org in orgs]
+    )
+    for org in orgs:
+        members = members_by_org.get(org.id, [])
+        org.members = members
+        mine = next((member for member in members if member.user_id == user_id), None)
+        org.role = mine.role if mine else None
+    return orgs
+
+
 @router.get("/", response_model=list[OrganizationModel])
 async def get_organizations(user=Depends(get_verified_user)):
     Organizations.ensure_personal(user.id)
@@ -50,10 +62,7 @@ async def get_organizations(user=Depends(get_verified_user)):
 @router.get("/all", response_model=list[OrganizationModel])
 async def get_all_organizations(request: Request, user=Depends(get_verified_user)):
     require_platform_admin(user, request)
-    orgs = [
-        _with_members(org, user.id, include_usage=False)
-        for org in Organizations.get_all_organizations()
-    ]
+    orgs = _with_all_members(Organizations.get_all_organizations(), user.id)
     return attach_org_usage_list(orgs)
 
 

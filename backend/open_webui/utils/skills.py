@@ -1221,10 +1221,19 @@ def pack_to_response(pack: SkillPackModel) -> dict:
     }
 
 
-def respond_pack(pack: SkillPackModel, organization_id: str) -> dict:
-    from open_webui.models.org_catalog import RESOURCE_SKILL
+def respond_pack(
+    pack: SkillPackModel, organization_id: str, overrides: Optional[dict] = None
+) -> dict:
+    from open_webui.models.org_catalog import RESOURCE_SKILL, OrgCatalogOverrides
     from open_webui.utils.catalog import annotate, annotate_skills
 
-    data = {**pack_to_response(pack), **annotate(pack, organization_id, RESOURCE_SKILL)}
-    data["skills"] = annotate_skills(pack, organization_id, data.get("skills") or [])
+    if overrides is None:
+        overrides = OrgCatalogOverrides.for_organizations([organization_id])
+    data = {
+        **pack_to_response(pack),
+        **annotate(pack, organization_id, RESOURCE_SKILL, overrides),
+    }
+    data["skills"] = annotate_skills(
+        pack, organization_id, data.get("skills") or [], overrides
+    )
     return data

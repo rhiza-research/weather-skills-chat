@@ -107,8 +107,9 @@ async def list_skill_packs(
     organization_id: str = Depends(get_active_organization_id),
 ):
     packs = SkillPacks.get_all()
+    overrides = OrgCatalogOverrides.for_organizations([organization_id])
     return [
-        respond_pack(p, organization_id)
+        respond_pack(p, organization_id, overrides)
         for p in packs
         if is_visible(organization_id, RESOURCE_SKILL, p)
     ]

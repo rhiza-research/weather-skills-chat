@@ -27,10 +27,23 @@ def is_public_item(item) -> bool:
     return getattr(item, "visibility", None) == VISIBILITY_PUBLIC
 
 
-def effective_enabled(organization_id: str, resource_type: str, item) -> bool:
+def _stored_override(
+    overrides: Optional[dict],
+    organization_id: str,
+    resource_type: str,
+    resource_id: str,
+):
+    if overrides is None:
+        return OrgCatalogOverrides.get(organization_id, resource_type, resource_id)
+    return overrides.get((organization_id, resource_type, resource_id))
+
+
+def effective_enabled(
+    organization_id: str, resource_type: str, item, overrides: Optional[dict] = None
+) -> bool:
     if not is_public_item(item):
         return True
-    override = OrgCatalogOverrides.get(organization_id, resource_type, item.id)
+    override = _stored_override(overrides, organization_id, resource_type, item.id)
     if override is not None:
         return override
     return bool(getattr(item, "enabled_by_default", True))
@@ -59,12 +72,14 @@ def is_visible(organization_id: str, resource_type: str, item) -> bool:
     return getattr(item, "organization_id", None) == organization_id
 
 
-def is_usable(organization_id: str, resource_type: str, item) -> bool:
+def is_usable(
+    organization_id: str, resource_type: str, item, overrides: Optional[dict] = None
+) -> bool:
     """Whether the item may be used in chat/tools for this organization."""
     return (
         is_catalog_active(item)
         and is_visible(organization_id, resource_type, item)
-        and effective_enabled(organization_id, resource_type, item)
+        and effective_enabled(organization_id, resource_type, item, overrides)
     )
 
 
@@ -114,9 +129,13 @@ def stamp_create(
     raise PermissionError("Not allowed to add this catalog item")
 
 
-def annotate(item, organization_id: str, resource_type: str) -> dict:
+def annotate(
+    item, organization_id: str, resource_type: str, overrides: Optional[dict] = None
+) -> dict:
     data = item.model_dump() if hasattr(item, "model_dump") else dict(item)
-    data["enabled"] = effective_enabled(organization_id, resource_type, item)
+    data["enabled"] = effective_enabled(
+        organization_id, resource_type, item, overrides
+    )
     data["enabled_by_default"] = bool(getattr(item, "enabled_by_default", True))
     data["is_active"] = is_catalog_active(item)
     return data
@@ -143,11 +162,13 @@ def skill_is_catalog_active(skill) -> bool:
     return _skill_get(skill, "is_active", True) is not False
 
 
-def skill_effective_enabled(organization_id: str, skill) -> bool:
+def skill_effective_enabled(
+    organization_id: str, skill, overrides: Optional[dict] = None
+) -> bool:
     tool_id = _skill_get(skill, "tool_id")
     if tool_id:
-        override = OrgCatalogOverrides.get(
-            organization_id, RESOURCE_SKILL_ITEM, tool_id
+        override = _stored_override(
+            overrides, organization_id, RESOURCE_SKILL_ITEM, tool_id
         )
         if override is not None:
             return override
@@ -170,17 +191,21 @@ def skill_is_visible(organization_id: str, pack, skill) -> bool:
     return skill_is_catalog_active(skill)
 
 
-def skill_is_usable(organization_id: str, pack, skill) -> bool:
+def skill_is_usable(
+    organization_id: str, pack, skill, overrides: Optional[dict] = None
+) -> bool:
     """Pack must be usable, and the skill in-catalog and enabled."""
     return (
-        is_usable(organization_id, RESOURCE_SKILL, pack)
+        is_usable(organization_id, RESOURCE_SKILL, pack, overrides)
         and skill_is_catalog_active(skill)
         and skill_is_visible(organization_id, pack, skill)
-        and skill_effective_enabled(organization_id, skill)
+        and skill_effective_enabled(organization_id, skill, overrides)
     )
 
 
-def annotate_skills(pack, organization_id: str, skills: list) -> list:
+def annotate_skills(
+    pack, organization_id: str, skills: list, overrides: Optional[dict] = None
+) -> list:
     out = []
     for skill in skills or []:
         if hasattr(skill, "model_dump"):
@@ -193,6 +218,6 @@ def annotate_skills(pack, organization_id: str, skills: list) -> list:
             continue
         data["is_active"] = skill_is_catalog_active(data)
         data["enabled_by_default"] = skill_default_enabled(data)
-        data["enabled"] = skill_effective_enabled(organization_id, data)
+        data["enabled"] = skill_effective_enabled(organization_id, data, overrides)
         out.append(data)
     return out

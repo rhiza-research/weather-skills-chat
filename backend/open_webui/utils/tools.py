@@ -95,6 +95,7 @@ def accessible_skill_records(
     catalog: Optional[list[ToolCatalogModel]] = None,
 ) -> list[dict]:
     """Skill tools the user can use, for version-preference substitution."""
+    from open_webui.models.org_catalog import OrgCatalogOverrides
     from open_webui.models.organizations import Organizations
     from open_webui.models.skill_packs import SkillPacks
     from open_webui.utils.catalog import skill_is_usable
@@ -105,6 +106,7 @@ def accessible_skill_records(
         if organization_id
         else Organizations.user_organization_ids(user.id)
     )
+    overrides = OrgCatalogOverrides.for_organizations(org_ids)
     visible_tool_ids = set()
     for pack in SkillPacks.get_all():
         for oid in org_ids:
@@ -113,7 +115,7 @@ def accessible_skill_records(
             for skill in (pack.meta or {}).get("skills") or []:
                 if not isinstance(skill, dict) or not skill.get("tool_id"):
                     continue
-                if skill_is_usable(oid, pack, skill):
+                if skill_is_usable(oid, pack, skill, overrides):
                     visible_tool_ids.add(skill["tool_id"])
 
     tools = catalog if catalog is not None else Tools.get_tool_catalog()

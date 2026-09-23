@@ -11,7 +11,11 @@ from open_webui.models.organizations import (
     VISIBILITY_ORGANIZATION,
     VISIBILITY_PUBLIC,
 )
-from open_webui.models.org_catalog import RESOURCE_MODEL, RESOURCE_SKILL
+from open_webui.models.org_catalog import (
+    RESOURCE_MODEL,
+    RESOURCE_SKILL,
+    RESOURCE_SKILL_ITEM,
+)
 from open_webui.utils.catalog import (
     annotate_skills,
     can_create_private,
@@ -283,6 +287,23 @@ class SkillCatalogTest(unittest.TestCase):
         self.assertEqual(len(annotated), 1)
         self.assertFalse(annotated[0]["enabled_by_default"])
         self.assertFalse(annotated[0]["enabled"])
+
+    def test_preloaded_overrides_skip_per_item_reads(self):
+        pack = _pack()
+        skills = [
+            _skill(tool_id="on"),
+            _skill(name="other", tool_id="off"),
+        ]
+        overrides = {("org-a", RESOURCE_SKILL_ITEM, "off"): False}
+        with patch("open_webui.utils.catalog.OrgCatalogOverrides.get") as mock_get:
+            annotated = annotate_skills(pack, "org-a", skills, overrides)
+            usable_on = skill_is_usable("org-a", pack, skills[0], overrides)
+            usable_off = skill_is_usable("org-a", pack, skills[1], overrides)
+        mock_get.assert_not_called()
+        self.assertTrue(annotated[0]["enabled"])
+        self.assertFalse(annotated[1]["enabled"])
+        self.assertTrue(usable_on)
+        self.assertFalse(usable_off)
 
 
 if __name__ == "__main__":

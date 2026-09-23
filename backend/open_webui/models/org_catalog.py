@@ -44,6 +44,26 @@ class OrgCatalogOverrideTable:
             )
             return None if row is None else bool(row.enabled)
 
+    def for_organizations(
+        self, organization_ids: list[str]
+    ) -> dict[tuple[str, str, str], bool]:
+        """Every override for these orgs, keyed by (org, type, resource)."""
+        ids = list(dict.fromkeys(oid for oid in organization_ids if oid))
+        if not ids:
+            return {}
+        with get_db() as db:
+            rows = (
+                db.query(OrgCatalogOverride)
+                .filter(OrgCatalogOverride.organization_id.in_(ids))
+                .all()
+            )
+            return {
+                (row.organization_id, row.resource_type, row.resource_id): bool(
+                    row.enabled
+                )
+                for row in rows
+            }
+
     def set(
         self,
         organization_id: str,

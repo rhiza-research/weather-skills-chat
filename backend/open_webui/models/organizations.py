@@ -293,6 +293,39 @@ class OrganizationTable:
             )
             return OrganizationMemberModel.model_validate(member) if member else None
 
+    def get_organization_for_member(
+        self, organization_id: str, user_id: str
+    ) -> tuple[Optional[OrganizationModel], Optional[OrganizationMemberModel]]:
+        """Organization plus this user's membership, or (None, None) if missing."""
+        with get_db() as db:
+            row = (
+                db.query(Organization, OrganizationMember)
+                .outerjoin(
+                    OrganizationMember,
+                    and_(
+                        OrganizationMember.organization_id == Organization.id,
+                        OrganizationMember.user_id == user_id,
+                    ),
+                )
+                .filter(Organization.id == organization_id)
+                .first()
+            )
+            if row is None:
+                return None, None
+            org, member = row
+            return (
+                OrganizationModel.model_validate(org),
+                OrganizationMemberModel.model_validate(member) if member else None,
+            )
+
+    def _member_model(self, member, user) -> OrganizationMemberModel:
+        model = OrganizationMemberModel.model_validate(member)
+        if user:
+            model.name = user.name
+            model.email = user.email
+            model.profile_image_url = user.profile_image_url
+        return model
+
     def get_members(self, organization_id: str) -> list[OrganizationMemberModel]:
         from open_webui.models.users import User
 
@@ -304,15 +337,30 @@ class OrganizationTable:
                 .order_by(OrganizationMember.created_at.asc())
                 .all()
             )
-            members = []
+            return [self._member_model(member, user) for member, user in rows]
+
+    def get_members_by_organization_ids(
+        self, organization_ids: list[str]
+    ) -> dict[str, list[OrganizationMemberModel]]:
+        ids = list(dict.fromkeys(oid for oid in organization_ids if oid))
+        grouped: dict[str, list[OrganizationMemberModel]] = {oid: [] for oid in ids}
+        if not ids:
+            return grouped
+        from open_webui.models.users import User
+
+        with get_db() as db:
+            rows = (
+                db.query(OrganizationMember, User)
+                .outerjoin(User, OrganizationMember.user_id == User.id)
+                .filter(OrganizationMember.organization_id.in_(ids))
+                .order_by(OrganizationMember.created_at.asc())
+                .all()
+            )
             for member, user in rows:
-                model = OrganizationMemberModel.model_validate(member)
-                if user:
-                    model.name = user.name
-                    model.email = user.email
-                    model.profile_image_url = user.profile_image_url
-                members.append(model)
-            return members
+                grouped.setdefault(member.organization_id, []).append(
+                    self._member_model(member, user)
+                )
+            return grouped
 
     def count_role(self, organization_id: str, role: str) -> int:
         with get_db() as db:
