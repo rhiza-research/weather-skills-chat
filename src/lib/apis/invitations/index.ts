@@ -24,11 +24,12 @@ export const getPlatformInvitations = (token: string) =>
 export const createPlatformInvitation = (
 	token: string,
 	email: string,
-	monthlyLimitUsd: number | null = 300
+	monthlyLimitUsd: number | null = 300,
+	role: string = 'user'
 ) =>
 	request('/users/invitations', token, {
 		method: 'POST',
-		body: JSON.stringify({ email, monthly_limit_usd: monthlyLimitUsd })
+		body: JSON.stringify({ email, monthly_limit_usd: monthlyLimitUsd, role })
 	});
 
 export const resendPlatformInvitation = (token: string, id: string) =>
@@ -44,11 +45,12 @@ export const createOrganizationInvitation = (
 	token: string,
 	organizationId: string,
 	email: string,
-	monthlyLimitUsd: number | null = null
+	monthlyLimitUsd: number | null = null,
+	role: string = 'user'
 ) =>
 	request(`/organizations/${organizationId}/invitations`, token, {
 		method: 'POST',
-		body: JSON.stringify({ email, monthly_limit_usd: monthlyLimitUsd })
+		body: JSON.stringify({ email, monthly_limit_usd: monthlyLimitUsd, role })
 	});
 
 export const resendOrganizationInvitation = (

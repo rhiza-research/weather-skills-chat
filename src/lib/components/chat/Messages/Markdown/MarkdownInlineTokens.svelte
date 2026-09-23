@@ -7,7 +7,9 @@
 
 	const i18n = getContext('i18n');
 
+	import { artifactHrefForChat } from '$lib/apis/artifacts';
 	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { chatId } from '$lib/stores';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
 
 	const isInternalAppPath = (text: string) => {
@@ -39,26 +41,30 @@
 			{@html html}
 		{/if}
 	{:else if token.type === 'link'}
-		{@const internalLink = isInternalAppPath(token.href ?? '')}
+		{@const sandboxHref = artifactHrefForChat(token.href ?? '', $chatId)}
+		{@const href = sandboxHref ?? token.href}
+		{@const internalLink = !sandboxHref && isInternalAppPath(token.href ?? '')}
 		{#if token.tokens}
 			<a
-				href={token.href}
+				{href}
 				target={internalLink ? undefined : '_blank'}
 				rel={internalLink ? undefined : 'nofollow'}
+				download={sandboxHref ? '' : undefined}
 				title={token.title}
 			>
 				<svelte:self id={`${id}-a`} tokens={token.tokens} {onSourceClick} />
 			</a>
 		{:else}
 			<a
-				href={token.href}
+				{href}
 				target={internalLink ? undefined : '_blank'}
 				rel={internalLink ? undefined : 'nofollow'}
+				download={sandboxHref ? '' : undefined}
 				title={token.title}>{token.text}</a
 			>
 		{/if}
 	{:else if token.type === 'image'}
-		<Image src={token.href} alt={token.text} />
+		<Image src={artifactHrefForChat(token.href ?? '', $chatId) ?? token.href} alt={token.text} />
 	{:else if token.type === 'strong'}
 		<strong><svelte:self id={`${id}-strong`} tokens={token.tokens} {onSourceClick} /></strong>
 	{:else if token.type === 'em'}

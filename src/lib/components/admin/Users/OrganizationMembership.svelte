@@ -3,10 +3,12 @@
 	import { toast } from 'svelte-sonner';
 	import { organizations, activeOrganizationId, user } from '$lib/stores';
 	import {
+		addOrganizationMember,
 		getOrganizationById,
 		removeOrganizationMember,
 		updateOrganizationMemberRole
 	} from '$lib/apis/organizations';
+	import { searchUsers } from '$lib/apis/users';
 	import {
 		createOrganizationInvitation,
 		getOrganizationInvitations,
@@ -33,7 +35,15 @@
 	let inviteEmail = '';
 	let inviteLimit = 300;
 	let inviteUnlimited = true;
+	let inviteRole = 'user';
 	let inviting = false;
+	let showAdd = false;
+	let addQuery = '';
+	let addResults = [];
+	let addUserId = '';
+	let addRole = 'user';
+	let adding = false;
+	let addSearchTimer;
 	let invitations = [];
 	let search = '';
 	let showEditLimitModal = false;
@@ -98,7 +108,55 @@
 		inviteEmail = '';
 		inviteUnlimited = true;
 		inviteLimit = 300;
+		inviteRole = isPlatform ? 'admin' : 'user';
 		showInvite = true;
+	};
+
+	const openAdd = () => {
+		addQuery = '';
+		addResults = [];
+		addUserId = '';
+		addRole = isPlatform ? 'admin' : 'user';
+		showAdd = true;
+	};
+
+	const searchExisting = async () => {
+		const query = addQuery.trim();
+		if (query.length < 2) {
+			addResults = [];
+			return;
+		}
+		try {
+			const found = (await searchUsers(localStorage.token, query)) ?? [];
+			const memberIds = new Set((org?.members ?? []).map((member) => member.user_id));
+			addResults = found.filter((person) => person?.id && !memberIds.has(person.id));
+			if (!addResults.some((person) => person.id === addUserId)) {
+				addUserId = '';
+			}
+		} catch (error) {
+			toast.error(`${error}`);
+			addResults = [];
+		}
+	};
+
+	const onAddQuery = () => {
+		clearTimeout(addSearchTimer);
+		addSearchTimer = setTimeout(searchExisting, 200);
+	};
+
+	const addExistingMember = async () => {
+		if (!org || !addUserId) return;
+		const role = isPlatform ? 'admin' : addRole;
+		adding = true;
+		try {
+			await addOrganizationMember(localStorage.token, org.id, addUserId, role);
+			showAdd = false;
+			toast.success($i18n.t('Member added'));
+			await load();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		adding = false;
 	};
 
 	const sendInvite = async () => {
@@ -111,7 +169,8 @@
 				localStorage.token,
 				org.id,
 				inviteEmail.trim(),
-				monthlyLimit
+				monthlyLimit,
+				isPlatform ? 'admin' : inviteRole
 			);
 			inviteEmail = '';
 			showInvite = false;
@@ -224,6 +283,13 @@
 			bind:value={search}
 		/>
 		<button
+			class="px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-850 transition font-medium text-sm"
+			type="button"
+			on:click={openAdd}
+		>
+			{$i18n.t('Add existing user')}
+		</button>
+		<button
 			class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
 			type="button"
 			on:click={openInvite}
@@ -326,6 +392,20 @@
 						</div>
 					{/if}
 				</div>
+				{#if !isPlatform}
+					<label class="block">
+						<div class="mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
+						<select
+							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+							bind:value={inviteRole}
+						>
+							<option value="user">{$i18n.t('User')}</option>
+							<option value="admin">{$i18n.t('Admin')}</option>
+						</select>
+					</label>
+				{:else}
+					<div class="text-xs text-gray-500">{$i18n.t('Platform organization members are admins.')}</div>
+				{/if}
 				<div class="flex justify-end">
 					<button
 						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
@@ -333,6 +413,68 @@
 						disabled={inviting}
 					>
 						{$i18n.t('Send invite')}
+					</button>
+				</div>
+			</form>
+		</div>
+	</Modal>
+
+	<Modal bind:show={showAdd} size="sm">
+		<div>
+			<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
+				<div class="text-lg font-medium self-center">{$i18n.t('Add existing user')}</div>
+				<button
+					class="self-center"
+					type="button"
+					on:click={() => {
+						showAdd = false;
+					}}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+						<path
+							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+						/>
+					</svg>
+				</button>
+			</div>
+			<hr class="border-gray-100 dark:border-gray-850" />
+			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={addExistingMember}>
+				<input
+					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					type="search"
+					placeholder={$i18n.t('Search by name')}
+					bind:value={addQuery}
+					on:input={onAddQuery}
+				/>
+				<select
+					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					bind:value={addUserId}
+					required
+				>
+					<option value="">{$i18n.t('Select a user')}</option>
+					{#each addResults as person (person.id)}
+						<option value={person.id}>{person.name}</option>
+					{/each}
+				</select>
+				{#if !isPlatform}
+					<label class="block">
+						<div class="mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
+						<select
+							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+							bind:value={addRole}
+						>
+							<option value="user">{$i18n.t('User')}</option>
+							<option value="admin">{$i18n.t('Admin')}</option>
+						</select>
+					</label>
+				{/if}
+				<div class="flex justify-end">
+					<button
+						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+						type="submit"
+						disabled={adding || !addUserId}
+					>
+						{$i18n.t('Add')}
 					</button>
 				</div>
 			</form>
@@ -399,7 +541,9 @@
 					</div>
 				</div>
 			</div>
-			<div>{$i18n.t('Invited')}</div>
+			<div>
+				{$i18n.t('Invited')} · {row.invite.role === 'admin' ? $i18n.t('Admin') : $i18n.t('User')}
+			</div>
 			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
 			<div class="text-right tabular-nums">
 				{formatUsd(row.invite.monthly_limit_usd, $i18n.t('No limit'))}

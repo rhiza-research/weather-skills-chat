@@ -705,8 +705,9 @@ DISPLAY_IMAGE_SPEC = {
     "description": (
         "Display a PNG (or jpeg/gif/webp) from the current chat sandbox inline "
         "in the chat. Pass a relative path such as `plot.png` or "
-        "`intermediate_results/step.png`. Use after a skill writes an image "
-        "you want the user to see in the conversation."
+        "`intermediate_results/step.png`. Show each image either with this tool "
+        "or with a relative markdown link such as `![map](plots/map.png)` or "
+        "`[map](plots/map.png)`. Do not do both for the same image."
     ),
     "parameters": {
         "type": "object",
@@ -1291,7 +1292,7 @@ async def list_available_tools(
     lines.append(
         _tool_summary_line(
             "display_image",
-            "Show a sandbox PNG/JPEG/GIF/WebP inline in the chat.",
+            "Show a sandbox image inline, or link it with a relative markdown path. Do not do both.",
             kind="builtin",
         )
     )

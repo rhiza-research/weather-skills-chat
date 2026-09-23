@@ -78,8 +78,8 @@
 </script>
 
 {#if loaded}
-	<div class="flex flex-col w-full h-full pb-2">
-		<div class="flex-1 overflow-y-scroll">
+	<div class="flex flex-col w-full h-full min-w-0 pb-2">
+		<div class="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
 			<UserList {users} />
 
 			<hr class="mb-2 mt-3 border-gray-100 dark:border-gray-850" />

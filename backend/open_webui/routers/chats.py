@@ -680,7 +680,14 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
             "title": f"Clone of {chat.title}",
         }
 
+        source_id = chat.id
         chat = Chats.insert_new_chat(user.id, ChatForm(**{"chat": updated_chat}))
+        try:
+            from open_webui.utils.artifacts import copy_sandbox
+
+            copy_sandbox(source_id, chat.id)
+        except Exception:
+            log.exception("Failed to copy shared chat artifacts")
         return ChatResponse(**chat.model_dump())
     else:
         raise HTTPException(

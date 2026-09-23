@@ -352,3 +352,51 @@ class TestOrganizations(AbstractPostgresTest):
         assert capped["monthly_limit_usd"] == 50
         owner_personal = next(org for org in listed.json() if org["id"] == "owner")
         assert owner_personal["monthly_limit_usd"] == 125
+
+    def test_platform_admin_can_assign_existing_user(self):
+        self.users.insert_new_user(
+            id="platform-admin",
+            name="platform admin",
+            email="platform-admin@openwebui.com",
+            profile_image_url="/pa.png",
+            role="admin",
+        )
+        from open_webui.models.organizations import OrganizationForm
+
+        workspace = self.orgs.insert_new_organization(
+            "owner",
+            OrganizationForm(name="Assigned Org", description=""),
+        )
+        workspace_id = workspace.id
+        self.orgs.ensure_platform("owner")
+        self.orgs.add_member("platform", "platform-admin", "admin")
+        assert self.orgs.get_member(workspace_id, "platform-admin") is None
+
+        with mock_webui_user(id="platform-admin"):
+            response = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/members"),
+                json={"user_id": "outsider", "role": "admin"},
+            )
+        assert response.status_code == 200
+        roles = {member["user_id"]: member["role"] for member in response.json()["members"]}
+        assert roles["outsider"] == "admin"
+
+        with mock_webui_user(id="member"):
+            forbidden = self.fast_api_client.post(
+                self.create_url(f"/{workspace_id}/members"),
+                json={"user_id": "member", "role": "user"},
+            )
+        assert forbidden.status_code == 403
+
+        with mock_webui_user(id="platform-admin"):
+            removed = self.fast_api_client.delete(
+                self.create_url(f"/{workspace_id}/members/outsider")
+            )
+        assert removed.status_code == 200
+        assert self.orgs.get_member(workspace_id, "outsider") is None
+
+        with mock_webui_user(id="member"):
+            still_forbidden = self.fast_api_client.delete(
+                self.create_url(f"/{workspace_id}/members/owner")
+            )
+        assert still_forbidden.status_code == 403

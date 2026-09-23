@@ -12,6 +12,31 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 
+/** Relative markdown hrefs point at this chat's sandbox. Absolute URLs do not. */
+export const artifactHrefForChat = (href: string, chatId: string | null | undefined) => {
+	if (!chatId || chatId === 'local') return null;
+	let raw = (href || '').trim();
+	if (
+		!raw ||
+		raw.startsWith('#') ||
+		raw.startsWith('/') ||
+		raw.startsWith('//') ||
+		/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)
+	) {
+		return null;
+	}
+	raw = raw.split('#')[0].split('?')[0];
+	try {
+		raw = decodeURIComponent(raw);
+	} catch {
+		return null;
+	}
+	raw = raw.replace(/^\.\//, '').replace(/\\/g, '/');
+	if (!raw || raw === '.') return null;
+	if (raw.split('/').some((part) => part === '' || part === '..')) return null;
+	return getArtifactContentUrl(chatId, raw);
+};
+
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?path=${encodeURIComponent(path)}&format=zip`;
 

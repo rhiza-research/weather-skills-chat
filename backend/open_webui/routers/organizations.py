@@ -20,6 +20,7 @@ from open_webui.utils.organizations import (
     is_at_least,
     is_member,
     is_owner,
+    is_platform_admin,
     require_platform_admin,
 )
 from open_webui.utils.usage import attach_org_usage, attach_org_usage_list
@@ -172,7 +173,7 @@ async def add_organization_member(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
-    elif not is_at_least(id, user.id, "admin"):
+    elif not is_at_least(id, user.id, "admin") and not is_platform_admin(user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -260,12 +261,12 @@ async def remove_organization_member(
 ):
     target = Organizations.get_member(id, user_id)
     if target and target.role == "owner":
-        if not is_owner(id, user.id):
+        if not is_owner(id, user.id) and not is_platform_admin(user.id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
-    elif not is_at_least(id, user.id, "admin"):
+    elif not is_at_least(id, user.id, "admin") and not is_platform_admin(user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

@@ -267,6 +267,56 @@ class TestInvitations(AbstractPostgresTest):
         assert self.users.get_user_by_id(pending.id).role == "user"
         assert self.orgs.get_member(self.org.id, pending.id) is not None
 
+    def test_platform_invite_as_admin_grants_platform_membership(self):
+        with self._smtp(), mock_webui_user(
+            id=self.admin.id, role="admin", email=self.admin.email
+        ):
+            created = self.fast_api_client.post(
+                self.create_url("/users/invitations"),
+                json={"email": "lead@example.com", "role": "admin"},
+            )
+        assert created.status_code == 200
+        assert created.json()["role"] == "admin"
+        accepted = self.fast_api_client.post(
+            self.create_url(f"/invitations/{self.sent['token']}/accept"),
+            json={"name": "Lead", "password": "long-enough-password"},
+        )
+        assert accepted.status_code == 200
+        user = self.users.get_user_by_email("lead@example.com")
+        assert user.role == "admin"
+        member = self.orgs.get_member("platform", user.id)
+        assert member is not None
+        assert member.role == "admin"
+
+    def test_org_invite_as_admin_sets_membership_role(self):
+        with self._smtp(), mock_webui_user(
+            id=self.admin.id, role="admin", email=self.admin.email
+        ):
+            created = self.fast_api_client.post(
+                self.create_url(f"/organizations/{self.org.id}/invitations"),
+                json={"email": "lead@example.com", "role": "admin"},
+            )
+        assert created.status_code == 200
+        assert created.json()["role"] == "admin"
+        accepted = self.fast_api_client.post(
+            self.create_url(f"/invitations/{self.sent['token']}/accept"),
+            json={"name": "Lead", "password": "long-enough-password"},
+        )
+        assert accepted.status_code == 200
+        user = self.users.get_user_by_email("lead@example.com")
+        assert user.role == "user"
+        assert self.orgs.get_member(self.org.id, user.id).role == "admin"
+
+    def test_invite_rejects_unknown_role(self):
+        with self._smtp(), mock_webui_user(
+            id=self.admin.id, role="admin", email=self.admin.email
+        ):
+            created = self.fast_api_client.post(
+                self.create_url("/users/invitations"),
+                json={"email": "lead@example.com", "role": "owner"},
+            )
+        assert created.status_code == 400
+
     def test_invite_email_copy(self):
         from open_webui.utils.invite_email import deliver_invite_email
 

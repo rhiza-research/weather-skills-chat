@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.artifacts import (
+    copy_sandbox,
     copy_upload_into_chat_sandbox,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
@@ -28,6 +29,25 @@ class NormalizePathTest(unittest.TestCase):
             normalize_sandbox_relpath("../secret")
         with self.assertRaises(ValueError):
             normalize_sandbox_relpath("foo/../../secret")
+
+
+class CopySandboxTest(unittest.TestCase):
+    def test_copies_visible_files_and_zarr_dotfiles_not_root_dotdirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                src = artifacts / "src"
+                (src / "plots").mkdir(parents=True)
+                (src / "plots" / "map.png").write_bytes(b"png")
+                (src / "data.zarr").mkdir()
+                (src / "data.zarr" / ".zgroup").write_text("{}")
+                (src / ".local").mkdir()
+                (src / ".local" / "secret").write_text("nope")
+                copy_sandbox("src", "dest")
+                dest = artifacts / "dest"
+                self.assertEqual((dest / "plots" / "map.png").read_bytes(), b"png")
+                self.assertEqual((dest / "data.zarr" / ".zgroup").read_text(), "{}")
+                self.assertFalse((dest / ".local").exists())
 
 
 class ArchiveRoundTripTest(unittest.TestCase):

@@ -14,7 +14,9 @@
 	import { updateUserRole, getUsers, deleteUserById } from '$lib/apis/users';
 	import {
 		activateOrganization,
+		addOrganizationMember,
 		deleteOrganizationById,
+		removeOrganizationMember,
 		getAllOrganizations,
 		updateOrganizationById
 	} from '$lib/apis/organizations';
@@ -53,11 +55,18 @@
 	let activating = '';
 
 	let showDeleteConfirmDialog = false;
+	let showRemoveMemberConfirm = false;
+	let pendingRemoveMember = null;
 	let showInvite = false;
 	let inviteEmail = '';
 	let inviteLimit = 300;
 	let inviteUnlimited = false;
+	let inviteRole = 'user';
 	let inviting = false;
+	let memberUserId = '';
+	let memberRole = 'user';
+	let addingMember = false;
+	let showAddMember = false;
 	let invitations = [];
 	let showUserChatsModal = false;
 	let showEditUserModal = false;
@@ -256,8 +265,14 @@
 		if (monthlyLimit === undefined) return;
 		inviting = true;
 		try {
-			await createPlatformInvitation(localStorage.token, inviteEmail.trim(), monthlyLimit);
+			await createPlatformInvitation(
+				localStorage.token,
+				inviteEmail.trim(),
+				monthlyLimit,
+				inviteRole
+			);
 			inviteEmail = '';
+			inviteRole = 'user';
 			showInvite = false;
 			toast.success($i18n.t('Invitation sent'));
 			await loadInvitations();
@@ -275,6 +290,54 @@
 		} catch (error) {
 			toast.error(`${error}`);
 		}
+	};
+
+	const candidatesFor = (row) => {
+		const memberIds = new Set((row.members ?? []).map((member) => member.user_id));
+		return (users ?? []).filter((person) => person?.id && !memberIds.has(person.id));
+	};
+
+	const addExistingMember = async (row) => {
+		if (!memberUserId) return;
+		const role = row.kind === 'platform' ? 'admin' : memberRole;
+		addingMember = true;
+		try {
+			await addOrganizationMember(localStorage.token, row.id, memberUserId, role);
+			memberUserId = '';
+			memberRole = row.kind === 'platform' ? 'admin' : 'user';
+			showAddMember = false;
+			toast.success($i18n.t('Member added'));
+			await loadOrgs();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		addingMember = false;
+	};
+
+	const askRemoveMember = (row, member) => {
+		pendingRemoveMember = {
+			orgId: row.id,
+			orgName: row.displayName || row.name,
+			userId: member.user_id,
+			name: member.name || member.email || member.user_id
+		};
+		showRemoveMemberConfirm = true;
+	};
+
+	const confirmRemoveMember = async () => {
+		if (!pendingRemoveMember) return;
+		try {
+			await removeOrganizationMember(
+				localStorage.token,
+				pendingRemoveMember.orgId,
+				pendingRemoveMember.userId
+			);
+			toast.success($i18n.t('Member removed'));
+			await loadOrgs();
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+		pendingRemoveMember = null;
 	};
 
 	const cancelInvite = async (id) => {
@@ -308,6 +371,20 @@
 	on:confirm={confirmPendingDelete}
 	on:cancel={() => {
 		pendingDelete = null;
+	}}
+/>
+
+<ConfirmDialog
+	bind:show={showRemoveMemberConfirm}
+	title={$i18n.t('Remove member')}
+	message={$i18n.t('Remove {{name}} from {{organization}}?', {
+		name: pendingRemoveMember?.name ?? '',
+		organization: pendingRemoveMember?.orgName ?? ''
+	})}
+	confirmLabel={$i18n.t('Remove')}
+	onConfirm={confirmRemoveMember}
+	on:cancel={() => {
+		pendingRemoveMember = null;
 	}}
 />
 
@@ -383,6 +460,7 @@
 						inviteEmail = '';
 						inviteLimit = 300;
 						inviteUnlimited = false;
+						inviteRole = 'user';
 						showInvite = true;
 					}}
 				>
@@ -449,6 +527,16 @@
 					</div>
 				{/if}
 			</div>
+			<label class="block">
+				<div class="mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
+				<select
+					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					bind:value={inviteRole}
+				>
+					<option value="user">{$i18n.t('User')}</option>
+					<option value="admin">{$i18n.t('Admin')}</option>
+				</select>
+			</label>
 			<div class="flex justify-end">
 				<button
 					class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
@@ -463,7 +551,7 @@
 </Modal>
 
 <div class="overflow-x-auto">
-	<div class="min-w-[76rem]">
+	<div class="org-table">
 		<div
 			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"
 		>
@@ -473,7 +561,7 @@
 			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
 				{$i18n.t('Type')}
 			</div>
-			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
 				{$i18n.t('Members')}
 			</div>
 			<div class="text-right leading-tight">{$i18n.t('Used')}</div>
@@ -510,6 +598,7 @@
 							<div class="text-sm font-medium truncate">{row.email}</div>
 							<div class="text-xs text-gray-500 truncate">
 								{$i18n.t('Sent')} {dayjs(row.invite.created_at * 1000).format('LL')}
+								· {row.invite.role === 'admin' ? $i18n.t('Admin') : $i18n.t('User')}
 								· {row.invite.expired
 									? $i18n.t('Expired')
 									: `${$i18n.t('Expires')} ${dayjs(row.invite.expires_at * 1000).format('LL')}`}
@@ -547,7 +636,13 @@
 					<button
 						class="flex items-center gap-2 min-w-0 text-left"
 						on:click={() => {
-							expandedId = expandedId === row.id ? '' : row.id;
+							const opening = expandedId !== row.id;
+							expandedId = opening ? row.id : '';
+							showAddMember = false;
+							if (opening) {
+								memberUserId = '';
+								memberRole = row.kind === 'platform' ? 'admin' : 'user';
+							}
 						}}
 					>
 						<span
@@ -813,6 +908,67 @@
 
 			{#if row.kind !== 'personal' && row.kind !== 'invite' && expandedId === row.id}
 				<div class="ml-10 mt-1 mb-2 rounded-lg bg-gray-50 dark:bg-gray-850/60 px-3 py-2">
+					<div class="flex justify-end py-1">
+						<button
+							class="px-2.5 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-xs flex items-center gap-1.5"
+							type="button"
+							on:click={() => {
+								showAddMember = !showAddMember;
+								if (showAddMember) {
+									memberUserId = '';
+									memberRole = row.kind === 'platform' ? 'admin' : 'user';
+								}
+							}}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="size-4"
+							>
+								<path
+									d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
+								/>
+							</svg>
+							{$i18n.t('Add a user')}
+						</button>
+					</div>
+					{#if showAddMember}
+					<form
+						class="flex flex-wrap items-center gap-2 py-1.5"
+						on:submit|preventDefault={() => addExistingMember(row)}
+					>
+						<select
+							class="min-w-[14rem] flex-1 text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
+							bind:value={memberUserId}
+						>
+							<option value="">{$i18n.t('Add an existing user')}</option>
+							{#each candidatesFor(row) as person (person.id)}
+								<option value={person.id}>
+									{person.name}{person.email ? ` (${person.email})` : ''}
+								</option>
+							{/each}
+						</select>
+						{#if row.kind !== 'platform'}
+							<select
+								class="text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
+								bind:value={memberRole}
+							>
+								<option value="user">{$i18n.t('User')}</option>
+								<option value="admin">{$i18n.t('Admin')}</option>
+							</select>
+						{:else}
+							<span class="text-xs text-gray-500">{$i18n.t('Admin')}</span>
+						{/if}
+						<button
+							class="text-xs px-2.5 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+							type="submit"
+							disabled={addingMember || !memberUserId}
+						>
+							{$i18n.t('Add')}
+						</button>
+					</form>
+					{/if}
 					{#if (row.members ?? []).length === 0}
 						<div class="text-xs text-gray-500 py-1">{$i18n.t('No members yet.')}</div>
 					{:else}
@@ -829,7 +985,33 @@
 										<div class="text-xs text-gray-500 truncate">{member.email ?? ''}</div>
 									</div>
 								</div>
-								<div class="text-xs text-gray-500 capitalize shrink-0">{member.role}</div>
+								<div class="flex items-center gap-1 shrink-0">
+									<div class="text-xs text-gray-500 capitalize">{member.role}</div>
+									{#if member.role !== 'owner' || (row.members ?? []).filter((item) => item.role === 'owner').length > 1}
+										<Tooltip content={$i18n.t('Remove from organization')}>
+											<button
+												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-gray-400 hover:text-red-600"
+												type="button"
+												on:click={() => askRemoveMember(row, member)}
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke-width="1.5"
+													stroke="currentColor"
+													class="w-4 h-4"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+													/>
+												</svg>
+											</button>
+										</Tooltip>
+									{/if}
+								</div>
 							</div>
 						{/each}
 					{/if}
@@ -851,28 +1033,28 @@
 <Pagination bind:page count={rows.length} />
 
 <style>
+	.org-table {
+		width: 100%;
+		min-width: 71.5rem;
+	}
+
 	.org-table-row {
 		grid-template-columns:
-			minmax(0, 1.5fr)
-			8.75rem
+			minmax(12rem, 1.8fr)
+			7.5rem
+			3.75rem
+			4.5rem
 			5.5rem
-			5.25rem
-			7.25rem
-			6.25rem
-			minmax(0, 0.9fr)
-			4.75rem
-			4.75rem
-			5.25rem
-			10.5rem;
+			5rem
+			minmax(6rem, 1fr)
+			4rem
+			4rem
+			4.25rem
+			6.5rem;
 	}
 
 	.org-table-row > :global(*) {
 		min-width: 0;
-	}
-
-	.org-table-row > :global(:nth-child(3)) {
-		min-width: 5.5rem;
-		white-space: nowrap;
 	}
 
 	.type-tags :global(div) {

@@ -21,6 +21,7 @@ from open_webui.models.invitations import (
 from open_webui.models.organizations import (
     ORG_KIND_PERSONAL,
     ORG_KIND_PLATFORM,
+    PLATFORM_ORG_ID,
     OrganizationUpdateForm,
     Organizations,
 )
@@ -45,11 +46,13 @@ router = APIRouter()
 class InviteEmailForm(BaseModel):
     email: str
     monthly_limit_usd: Optional[float] = None
+    role: str = "user"
 
 
 class PlatformInviteEmailForm(BaseModel):
     email: str
     monthly_limit_usd: Optional[float] = 300
+    role: str = "user"
 
 
 class AcceptInviteForm(BaseModel):
@@ -180,6 +183,16 @@ def _org_for_invite(organization_id: str, user):
     return org
 
 
+def _clean_role(role: Optional[str]) -> str:
+    chosen = (role or "user").strip().lower()
+    if chosen not in ("user", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role must be user or admin",
+        )
+    return chosen
+
+
 def _clean_limit(monthly_limit_usd: Optional[float]) -> Optional[float]:
     if monthly_limit_usd is not None and monthly_limit_usd < 0:
         raise HTTPException(
@@ -221,7 +234,9 @@ def _apply_invite_limit(invite: InvitationModel, user_id: str) -> None:
         )
 
 
-def _issue_platform(request: Request, email: str, user, monthly_limit_usd) -> InvitationResponse:
+def _issue_platform(
+    request: Request, email: str, user, monthly_limit_usd, role: Optional[str] = None
+) -> InvitationResponse:
     _require_platform_admin(user)
     _require_smtp(request)
     if Users.get_user_by_email(email):
@@ -230,7 +245,7 @@ def _issue_platform(request: Request, email: str, user, monthly_limit_usd) -> In
         email=email,
         kind=KIND_PLATFORM,
         created_by=user.id,
-        role="user",
+        role=_clean_role(role),
         monthly_limit_usd=_clean_limit(monthly_limit_usd),
     )
     _send(request, invite, token)
@@ -238,7 +253,12 @@ def _issue_platform(request: Request, email: str, user, monthly_limit_usd) -> In
 
 
 def _issue_organization(
-    request: Request, organization_id: str, email: str, user, monthly_limit_usd
+    request: Request,
+    organization_id: str,
+    email: str,
+    user,
+    monthly_limit_usd,
+    role: Optional[str] = None,
 ):
     org = _org_for_invite(organization_id, user)
     _require_smtp(request)
@@ -248,7 +268,8 @@ def _issue_organization(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="That user is already a member of this organization",
         )
-    role = "admin" if org.kind == ORG_KIND_PLATFORM else "user"
+    # Platform organization membership cannot be a plain user.
+    role = "admin" if org.kind == ORG_KIND_PLATFORM else _clean_role(role)
     limit = _clean_limit(monthly_limit_usd)
     _check_member_limit(org, limit)
     invite, token = Invitations.issue(
@@ -308,6 +329,7 @@ async def create_platform_invitation(
         _normalize_email(form_data.email),
         user,
         form_data.monthly_limit_usd,
+        form_data.role,
     )
 
 
@@ -380,6 +402,7 @@ async def create_organization_invitation(
         _normalize_email(form_data.email),
         user,
         form_data.monthly_limit_usd,
+        form_data.role,
     )
 
 
@@ -536,7 +559,7 @@ async def accept_invitation(
             get_password_hash(password),
             name,
             "/user.png",
-            "user",
+            "admin" if invite.kind == KIND_PLATFORM and invite.role == "admin" else "user",
         )
         if not existing:
             raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
@@ -554,8 +577,15 @@ async def accept_invitation(
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    elif invite.kind == KIND_PLATFORM and existing.role == "pending":
-        Users.update_user_role_by_id(existing.id, "user")
+    elif invite.kind == KIND_PLATFORM:
+        if invite.role == "admin":
+            if existing.role != "admin":
+                Users.update_user_role_by_id(existing.id, "admin")
+            Organizations.ensure_platform()
+            if not Organizations.get_member(PLATFORM_ORG_ID, existing.id):
+                Organizations.add_member(PLATFORM_ORG_ID, existing.id, "admin")
+        elif existing.role == "pending":
+            Users.update_user_role_by_id(existing.id, "user")
 
     _apply_invite_limit(invite, existing.id)
     Invitations.mark_accepted(invite.id)

@@ -574,13 +574,55 @@ def list_artifacts(chat_id: str) -> list[dict]:
     return entries
 
 
+def _copy_sandbox_entry(src: Path, dest: Path) -> None:
+    """Copy a file or directory. Symlinks are kept as links, not followed."""
+    if src.is_symlink():
+        if dest.is_symlink() or dest.exists():
+            if dest.is_dir() and not dest.is_symlink():
+                shutil.rmtree(dest)
+            else:
+                dest.unlink()
+        dest.symlink_to(src.readlink())
+        return
+    if src.is_dir():
+        dest.mkdir(parents=True, exist_ok=True)
+        for child in src.iterdir():
+            _copy_sandbox_entry(child, dest / child.name)
+        return
+    if src.is_file():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
+
+
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
+    """Copy visible sandbox files onto dest.
+
+    Root dot entries (``.local``, ``.cache``, and similar HOME scratch) are
+    skipped. Dotfiles inside a copied directory, such as zarr ``.zarray``,
+    are kept. Each top-level entry is copied on its own so one failure does
+    not drop the rest.
+    """
     t0 = time.perf_counter()
-    src = (ARTIFACTS_DIR / src_chat_id).resolve()
-    dest = chat_sandbox(dest_chat_id)
-    if src.exists() and src.is_dir():
-        shutil.copytree(src, dest, dirs_exist_ok=True)
-        # Ensure the scratch folder exists even if the source predated it.
+    src = (ARTIFACTS_DIR / str(src_chat_id)).resolve()
+    dest = chat_sandbox(str(dest_chat_id))
+    artifacts_root = ARTIFACTS_DIR.resolve()
+    if (
+        src != dest
+        and src.is_dir()
+        and artifacts_root in src.parents
+    ):
+        for entry in src.iterdir():
+            if entry.name.startswith("."):
+                continue
+            try:
+                _copy_sandbox_entry(entry, dest / entry.name)
+            except Exception:
+                log.exception(
+                    "Failed to copy sandbox entry %s from %s to %s",
+                    entry.name,
+                    src_chat_id,
+                    dest_chat_id,
+                )
         (dest / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
     log_timing(
         "juicefs.copy_sandbox",
