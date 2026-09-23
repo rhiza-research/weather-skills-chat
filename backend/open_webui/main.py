@@ -538,8 +538,8 @@ def _resync_skill_packs(app_ref: FastAPI) -> None:
         log.exception("Skill pack tool resync on startup failed")
 
 
-# Raises when the endpoint's configuration is missing or invalid, which stops startup.
-endpoint = build_endpoint()
+# Set after `app` is created.
+endpoint = None
 
 
 @asynccontextmanager
@@ -584,6 +584,10 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+# Built after `app` because the endpoint reads app state per request. The lifespan above reads this
+# at startup.
+endpoint = build_endpoint(app)
 
 oauth_manager = OAuthManager(app)
 
