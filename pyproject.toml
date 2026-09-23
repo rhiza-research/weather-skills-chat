@@ -156,6 +156,15 @@ classifiers = [
 [project.scripts]
 open-webui = "open_webui:app"
 
+[dependency-groups]
+# The test dependencies listed under "## Tests" in backend/requirements.txt, with the same versions.
+# `uv sync` installs them.
+dev = [
+    "docker~=7.1.0",
+    "pytest~=8.3.2",
+    "pytest-docker~=3.1.1",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

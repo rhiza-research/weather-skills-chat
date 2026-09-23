@@ -3317,6 +3317,13 @@ dependencies = [
     { name = "zarr" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "docker" },
+    { name = "pytest" },
+    { name = "pytest-docker" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate" },
@@ -3419,6 +3426,13 @@ requires-dist = [
     { name = "xlrd", specifier = "==2.0.1" },
     { name = "youtube-transcript-api", specifier = "==1.0.3" },
     { name = "zarr", specifier = ">=2.18.0,<3" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "docker", specifier = "~=7.1.0" },
+    { name = "pytest", specifier = "~=8.3.2" },
+    { name = "pytest-docker", specifier = "~=3.1.1" },
 ]
 
 [[package]]

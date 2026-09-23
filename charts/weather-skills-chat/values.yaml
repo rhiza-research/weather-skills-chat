@@ -199,6 +199,9 @@ ollama:
 
 webui:
   name: Weather Skills
+  # The address clients use to reach this service, with no trailing slash. The MCP endpoint uses it
+  # as its resource identifier. Empty omits the env var, and the application then uses its own
+  # default or the value saved in the admin settings.
   url: ""
   # Shown to users on error screens / failed responses. Empty uses the
   # backend default (info@rhizaresearch.org).

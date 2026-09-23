@@ -45,6 +45,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from open_webui.mcp import build_endpoint
+
 
 from open_webui.utils import logger
 from open_webui.utils.pyodide_assets import (
@@ -535,6 +537,10 @@ def _resync_skill_packs(app_ref: FastAPI) -> None:
         log.exception("Skill pack tool resync on startup failed")
 
 
+# Raises when the endpoint's configuration is missing or invalid, which stops startup.
+mcp_endpoint = build_endpoint()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
@@ -558,7 +564,10 @@ async def lifespan(app: FastAPI):
     # Don't block HTTP listen on HF/model load or skill module imports.
     asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
     asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
-    yield
+    # Starlette does not run a mounted app's lifespan. The endpoint's lifespan starts FastMCP's
+    # Streamable HTTP session manager, so it is run here.
+    async with mcp_endpoint.asgi_app.lifespan(app):
+        yield
     shutdown_langfuse()
     shutdown_scheduler()
 
@@ -1725,6 +1734,11 @@ async def healthcheck_with_db():
     Session.execute(text("SELECT 1;")).all()
     return {"status": True}
 
+
+# Registered before the "/" SPA mount below, which would otherwise match these paths. The
+# discovery routes are at the root because clients fetch them at root-absolute paths.
+app.router.routes.extend(mcp_endpoint.root_routes)
+app.mount(mcp_endpoint.mount_path, mcp_endpoint.asgi_app)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
