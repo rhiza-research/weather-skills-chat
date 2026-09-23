@@ -22,6 +22,7 @@ services:
       - OPENAI_API_BASE_URL
       - OPENAI_API_KEY
       - WEBUI_URL
+      - MCP_OAUTH_ALLOWED_REDIRECT_URIS
       - WEBUI_SECRET_KEY
       - REDIS_URL
       - SKILL_SANDLOCK

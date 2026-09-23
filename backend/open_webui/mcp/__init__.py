@@ -4,20 +4,30 @@ import logging
 from typing import Any, NamedTuple
 
 from fastmcp import FastMCP
-from mcp.server.auth.routes import cors_middleware
+from mcp.server.auth.routes import cors_middleware, validate_issuer_url
 from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
+from open_webui.config import WEBUI_URL
 from open_webui.mcp.auth import (
     MCP_PATH,
     build_auth_provider,
     service_origin,
 )
 from open_webui.mcp.tools import AccountCatalogMiddleware
+from open_webui.mcp_oauth.provider import EndpointOAuthProvider
+from open_webui.mcp_oauth.routes import consent_routes
 
 log = logging.getLogger(__name__)
 
 SERVER_NAME = "Weather Skills"
+
+WELL_KNOWN_PREFIX = "/.well-known/"
+
+REFUSED_ISSUER_MESSAGE = (
+    "WEBUI_URL is not a usable authorization server issuer: {value!r} ({error}). Use an https "
+    "address, or a localhost address for local use."
+)
 
 # A Starlette mount matches only paths with a separator after the prefix, so the endpoint is served
 # at MCP_PATH plus a trailing slash. The bare MCP_PATH redirects here; without that redirect the
@@ -54,7 +64,8 @@ class Endpoint(NamedTuple):
     """What the host application registers: the mount and the root-level routes.
 
     The discovery routes are registered at the host application's root because clients fetch them
-    at root-absolute paths, which a route inside a mount cannot answer.
+    at root-absolute paths, which a route inside a mount cannot answer. The authorization server's
+    authorize, token, register and revoke routes, and the consent page, are root routes too.
     """
 
     mount_path: str
@@ -63,6 +74,8 @@ class Endpoint(NamedTuple):
     # attribute.
     asgi_app: Any
     root_routes: list[Route]
+    # The authorization server behind the root routes.
+    provider: EndpointOAuthProvider
 
 
 async def _redirect_to_served_path(request):
@@ -137,17 +150,50 @@ def _metadata_redirect_routes(well_known_routes: list[Route]) -> list[Route]:
     ]
 
 
+def _authorization_server_routes(provider) -> list[Route]:
+    """The provider's routes for the host's root: metadata, authorize, token, register, revoke.
+
+    get_routes() has the operational routes and the metadata documents. get_well_known_routes()
+    adds the OpenID discovery alias of the authorization server metadata. Each path is registered
+    once.
+    """
+    routes: list[Route] = []
+    seen: set[tuple] = set()
+    for route in [*provider.get_routes(), *provider.get_well_known_routes()]:
+        key = (route.path, tuple(sorted(route.methods or ())))
+        if key in seen:
+            continue
+        seen.add(key)
+        routes.append(route)
+    return routes
+
+
 def build_endpoint(app) -> Endpoint:
     """Build the endpoint. The endpoint is always served.
 
-    Raises when build_auth_provider raises, which it does for a missing or invalid configuration.
+    Raises when WEBUI_URL is empty, does not parse, or is refused by the MCP SDK as an issuer (it
+    must be https unless the host is a loopback name). The error names the value. The web
+    interface builds the endpoint at startup, so it does not start.
 
     Takes the host application because the tool catalog is built per request from its state.
 
     The caller must run the returned app's lifespan: Starlette does not run a mounted app's lifespan,
     and the lifespan starts the session manager.
     """
-    provider = build_auth_provider()
+    # Building the provider parses WEBUI_URL, and the SDK's issuer check runs when the routes are
+    # built; both are run here first so that only these refusals are caught. pydantic's
+    # ValidationError, raised for a URL that does not parse, is a ValueError.
+    try:
+        provider = build_auth_provider()
+        validate_issuer_url(provider.base_url)
+    except ValueError as error:
+        raise RuntimeError(
+            REFUSED_ISSUER_MESSAGE.format(value=WEBUI_URL.value, error=error)
+        ) from error
+    return _build(app, provider)
+
+
+def _build(app, provider: EndpointOAuthProvider) -> Endpoint:
     server = FastMCP(name=SERVER_NAME, auth=provider)
     # Added before the transport is built so it handles every request. No tools are registered
     # statically; the middleware answers list and call from the caller's catalog.
@@ -172,9 +218,16 @@ def build_endpoint(app) -> Endpoint:
             name="mcp-bare-path",
         )
     ]
-    # No mcp_path argument: the provider derives the resource path from base_url, which includes
-    # MCP_PATH. Passing it again registers /.well-known/oauth-protected-resource/mcp/mcp.
-    well_known_routes = provider.get_well_known_routes()
-    root_routes.extend(well_known_routes)
+    # No mcp_path argument: the provider's resource_base_url is the resource identifier, which
+    # includes MCP_PATH. Passing it again registers /.well-known/oauth-protected-resource/mcp/mcp.
+    # This call also resets the resource URL that http_app's get_routes("/") set above.
+    oauth_routes = _authorization_server_routes(provider)
+    root_routes.extend(oauth_routes)
+    well_known_routes = [
+        route for route in oauth_routes if route.path.startswith(WELL_KNOWN_PREFIX)
+    ]
     root_routes.extend(_metadata_redirect_routes(well_known_routes))
-    return Endpoint(mount_path=MCP_PATH, asgi_app=asgi_app, root_routes=root_routes)
+    root_routes.extend(consent_routes(provider))
+    return Endpoint(
+        mount_path=MCP_PATH, asgi_app=asgi_app, root_routes=root_routes, provider=provider
+    )
