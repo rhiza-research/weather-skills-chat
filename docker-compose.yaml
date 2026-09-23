@@ -39,10 +39,13 @@ services:
       - 'OPENAI_API_KEY=${OPENAI_API_KEY-}'
       - 'WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY-}'
       # The address clients use to reach this service. The MCP endpoint uses it as its resource
-      # identifier. It is passed only when set in .env or the shell; otherwise the application's
-      # default, http://localhost:3000, applies. A .env file is optional: copy .env.example to .env
-      # to override these defaults.
+      # identifier and as the audience a token must name. It is passed only when set in .env or the
+      # shell; otherwise the application's default, http://localhost:3000, applies. A .env file is
+      # optional: copy .env.example to .env to override these defaults.
       - WEBUI_URL
+      # The OpenID provider's discovery URL. The MCP endpoint is always served and verifies tokens
+      # against this provider, so when this is empty the application refuses to start.
+      - 'OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL-}'
       # Redis address. The one-time artifact link claims its nonce here, and the web interface
       # stores its persistent configuration here. When empty, the endpoint refuses the one-time
       # link. docker-compose.redis.yaml sets it to the redis service it adds.

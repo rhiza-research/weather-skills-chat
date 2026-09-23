@@ -10,15 +10,17 @@ from contextlib import contextmanager
 
 from starlette.testclient import TestClient
 
-from open_webui.config import WEBUI_URL
+from open_webui.config import OPENID_PROVIDER_URL, WEBUI_URL
 from open_webui.mcp import build_endpoint
 from open_webui.mcp.auth import (
     MCP_PATH,
+    OIDC_DISCOVERY_SUFFIX,
     canonical_resource_identifier,
     service_origin,
 )
-from open_webui.test.util.mcp_stub_auth import stub_auth
 
+REALM = "https://provider.example/realms/weather"
+DISCOVERY_URL = f"{REALM}{OIDC_DISCOVERY_SUFFIX}"
 SERVICE_URL = "https://chat.example"
 HOSTILE_ORIGIN = "https://attacker.example"
 HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
@@ -37,14 +39,13 @@ INITIALIZE_REQUEST = {
 
 @contextmanager
 def configured():
-    """Set WEBUI_URL and build the endpoint with the stub provider, then restore WEBUI_URL."""
-    previous = WEBUI_URL.value
+    previous = (OPENID_PROVIDER_URL.value, WEBUI_URL.value)
+    OPENID_PROVIDER_URL.value = DISCOVERY_URL
     WEBUI_URL.value = SERVICE_URL
     try:
-        with stub_auth():
-            yield
+        yield
     finally:
-        WEBUI_URL.value = previous
+        OPENID_PROVIDER_URL.value, WEBUI_URL.value = previous
 
 
 class ServiceOriginTest(unittest.TestCase):
