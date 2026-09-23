@@ -11,6 +11,7 @@ from starlette.routing import Route
 from open_webui.mcp.auth import (
     MCP_PATH,
     build_auth_provider,
+    service_origin,
 )
 
 log = logging.getLogger(__name__)
@@ -146,7 +147,16 @@ def build_endpoint() -> Endpoint:
     provider = build_auth_provider()
     server = FastMCP(name=SERVER_NAME, auth=provider)
     # path="/" serves the endpoint at the mount point instead of a nested /mcp/mcp.
-    asgi_app = server.http_app(path="/")
+    #
+    # Origin protection defaults to off. "auto" with an explicit origin checks the Origin header
+    # when present and does not check Host: requests without Origin (agents) pass, and browser
+    # requests from another origin are refused. This does not depend on the interface's CORS
+    # middleware settings.
+    asgi_app = server.http_app(
+        path="/",
+        host_origin_protection="auto",
+        allowed_origins=[service_origin()],
+    )
 
     root_routes: list[Route] = [
         Route(
