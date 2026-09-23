@@ -200,9 +200,33 @@ If you are running Open WebUI in an offline environment, you can set the `HF_HUB
 export HF_HUB_OFFLINE=1
 ```
 
-## MCP Endpoint
+## MCP Endpoint (Local Stack)
 
-The backend serves an MCP endpoint at `/mcp/`. Its resource identifier is `WEBUI_URL` with `/mcp` appended. The web interface shows the endpoint URL and the steps to connect Claude Code, claude.ai and other MCP clients under Settings → MCP.
+The backend always serves an MCP endpoint at `/mcp/`, and does not start when `OPENID_PROVIDER_URL` is empty. The local stack runs it with Keycloak as the identity provider and Redis for one-time artifact links. The web interface shows the endpoint URL and the steps to connect Claude Code, claude.ai and other MCP clients under Settings → MCP.
+
+1. Optional: copy `.env.example` to `.env` to override the defaults in `docker-compose.yaml`, and replace every `REPLACE_ME`; the Keycloak overlay (`--enable-keycloak`) reads the `KEYCLOAK_*` admin and user values and `OAUTH_CLIENT_SECRET` from `.env`.
+2. Start the stack:
+
+   ```bash
+   ./run-compose.sh --enable-keycloak --redis --build
+   ```
+
+3. Browsers and MCP clients reach the web interface and Keycloak at `localhost`. MCP clients send OAuth credentials over plain http only to `localhost`. If the Docker daemon runs on another machine, forward both ports from the machine the browser and the client run on, and keep the connection open:
+
+   ```bash
+   ssh -N -L 3000:localhost:3000 -L 8081:localhost:8081 <user>@<docker-host>
+   ```
+
+   Use the values of `OPEN_WEBUI_PORT` and `KEYCLOAK_PORT` for the two port numbers.
+
+4. Sign in to the web interface at `http://localhost:3000` once with the Keycloak user from `.env`. The endpoint accepts tokens only for an existing account.
+5. Add the endpoint to an MCP client. With Claude Code:
+
+   ```bash
+   claude mcp add --transport http weather-skills-chat-local http://localhost:3000/mcp/
+   ```
+
+   Then run `/mcp`, select the server, and authenticate. The browser opens the Keycloak login.
 
 A call runs in the organization named by its `X-Organization-Id` header, the header the web interface sends. Without the header, or with the account's own id, it runs in the account's personal organization. The organization decides which skills are listed and which stored secrets a run receives.
 

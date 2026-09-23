@@ -1,0 +1,63 @@
+# Keycloak, the identity provider. The MCP endpoint verifies tokens against it and the web interface
+# signs in through it. Loaded with:
+#
+#   ./run-compose.sh --enable-keycloak
+#
+# It is a separate overlay so a deployment can point OPENID_PROVIDER_URL at a provider run
+# elsewhere.
+#
+# run-compose.sh passes --force-recreate on every start. That replaces this container and deletes
+# the start-dev database, which is stored in the container's writable layer and has no volume. The
+# realm import recreates the realm and the sign-in user. The user's id is fixed in the realm file, so
+# the application's account stays linked. Changes made in the admin console are lost, and tokens
+# issued before the restart fail verification because the realm gets new signing keys.
+services:
+  keycloak:
+    # Built so the realm file is copied into the image. keycloak/Dockerfile explains why a bind
+    # mount does not work.
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    # Overridable so a local build does not retag an image used by another stack on the same Docker
+    # daemon.
+    image: ${KEYCLOAK_IMAGE:-weather-skills-chat-keycloak}:${KEYCLOAK_DOCKER_TAG:-local}
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      - 'KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME-}'
+      - 'KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD-}'
+      - 'KC_HTTP_ENABLED=true'
+      # The frontend URL: the token issuer and the addresses browsers and MCP clients use. It is
+      # localhost because MCP clients send OAuth credentials over plain http only to localhost.
+      # With a remote Docker daemon, forward KEYCLOAK_PORT and OPEN_WEBUI_PORT from the client
+      # machine over SSH.
+      - 'KC_HOSTNAME=http://localhost:${KEYCLOAK_PORT:-8081}'
+      # A request that reaches Keycloak at another address, such as the application at
+      # http://keycloak:8080, gets that address in the discovery document's token, user info and
+      # signing-key URLs. The issuer and the authorization URL stay KC_HOSTNAME.
+      - 'KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true'
+      # Substituted into the realm import for the client's redirect URI, web origin, and token
+      # audience.
+      - 'WEBUI_URL=${WEBUI_URL:-http://localhost:3000}'
+      # Substituted into the realm import, which creates the user who signs in to the web
+      # interface, so the user survives the container being recreated. The realm requires all five.
+      - 'KEYCLOAK_USER_USERNAME=${KEYCLOAK_USER_USERNAME-}'
+      - 'KEYCLOAK_USER_EMAIL=${KEYCLOAK_USER_EMAIL-}'
+      - 'KEYCLOAK_USER_PASSWORD=${KEYCLOAK_USER_PASSWORD-}'
+      - 'KEYCLOAK_USER_FIRST_NAME=${KEYCLOAK_USER_FIRST_NAME-}'
+      - 'KEYCLOAK_USER_LAST_NAME=${KEYCLOAK_USER_LAST_NAME-}'
+      - 'OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET-}'
+    ports:
+      - '${KEYCLOAK_PORT:-8081}:8080'
+
+  open-webui:
+    depends_on:
+      - keycloak
+    environment:
+      # The application reads Keycloak over the compose network. Keycloak answers with the
+      # issuer and authorization URL from KC_HOSTNAME and with backchannel URLs on this address.
+      - 'OPENID_PROVIDER_URL=http://keycloak:8080/realms/weather-skills-chat/.well-known/openid-configuration'
+      # The realm as MCP clients reach it. The endpoint advertises it and requires it as the
+      # token issuer. Must match KC_HOSTNAME above.
+      - 'MCP_PUBLIC_REALM_URL=http://localhost:${KEYCLOAK_PORT:-8081}/realms/weather-skills-chat'

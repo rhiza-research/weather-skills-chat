@@ -45,7 +45,16 @@ services:
       - WEBUI_URL
       # The OpenID provider's discovery URL. The MCP endpoint is always served and verifies tokens
       # against this provider, so when this is empty the application refuses to start.
+      # docker-compose.keycloak.yaml sets it to its keycloak service.
       - 'OPENID_PROVIDER_URL=${OPENID_PROVIDER_URL-}'
+      - 'OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID-weather-skills-chat}'
+      - 'OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET-}'
+      - 'OAUTH_PROVIDER_NAME=${OAUTH_PROVIDER_NAME-Keycloak}'
+      # The realm's client requires PKCE, so Keycloak refuses an authorization request without
+      # code_challenge_method. The application sends it only when this is set, and accepts only
+      # S256.
+      - 'OAUTH_CODE_CHALLENGE_METHOD=${OAUTH_CODE_CHALLENGE_METHOD:-S256}'
+      - 'ENABLE_OAUTH_SIGNUP=true'
       # Redis address. The one-time artifact link claims its nonce here, and the web interface
       # stores its persistent configuration here. When empty, the endpoint refuses the one-time
       # link. docker-compose.redis.yaml sets it to the redis service it adds.
