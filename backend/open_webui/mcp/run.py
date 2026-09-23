@@ -32,6 +32,25 @@ REFUSED_WITHOUT_SESSION_MESSAGE = (
 )
 
 
+def _caller(account: UserModel) -> dict:
+    """The caller as a __user__ dict: id, email, name and role. No credentials."""
+    return {
+        "id": account.id,
+        "email": account.email,
+        "name": account.name,
+        "role": account.role,
+    }
+
+
+def caller_only_context(account: UserModel) -> dict:
+    """Parameters for building the catalog to list tools.
+
+    Contains only the caller, so listing does not create a session. Callables built with these
+    parameters are not invoked.
+    """
+    return {"__user__": _caller(account)}
+
+
 def run_context(account: UserModel, session_id: str, organization_id: str) -> dict:
     """Parameters for building the catalog to run a tool.
 
@@ -43,12 +62,7 @@ def run_context(account: UserModel, session_id: str, organization_id: str) -> di
         raise ToolError(REFUSED_WITHOUT_SESSION_MESSAGE)
 
     return {
-        "__user__": {
-            "id": account.id,
-            "email": account.email,
-            "name": account.name,
-            "role": account.role,
-        },
+        "__user__": _caller(account),
         "__metadata__": {
             SESSION_METADATA_KEY: session_id,
             ORGANIZATION_METADATA_KEY: organization_id,

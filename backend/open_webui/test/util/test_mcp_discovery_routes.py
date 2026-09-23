@@ -9,6 +9,7 @@ The docstring of `_metadata_redirect_routes` explains which paths redirect.
 
 import unittest
 from contextlib import contextmanager
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from starlette.responses import PlainTextResponse
@@ -29,6 +30,7 @@ from open_webui.test.util.mcp_stub_auth import stub_auth
 SERVICE_URL = "https://chat.example"
 WELL_KNOWN_PREFIX = "/.well-known/"
 DOCUMENT_PATH = f"{PROTECTED_RESOURCE_PREFIX}{MCP_PATH}"
+HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
 
 
 @contextmanager
@@ -46,7 +48,7 @@ def configured():
 def built_endpoint(case):
     """The built endpoint. Fails the test if none was built."""
     with configured():
-        endpoint = build_endpoint()
+        endpoint = build_endpoint(HOST_APP)
     case.assertIsNotNone(endpoint, "no endpoint was built from a configured provider")
     return endpoint
 
