@@ -13,6 +13,7 @@ from open_webui.mcp.auth import (
     build_auth_provider,
     service_origin,
 )
+from open_webui.mcp.tools import AccountCatalogMiddleware
 
 log = logging.getLogger(__name__)
 
@@ -136,16 +137,21 @@ def _metadata_redirect_routes(well_known_routes: list[Route]) -> list[Route]:
     ]
 
 
-def build_endpoint() -> Endpoint:
+def build_endpoint(app) -> Endpoint:
     """Build the endpoint. The endpoint is always served.
 
     Raises when build_auth_provider raises, which it does for a missing or invalid configuration.
+
+    Takes the host application because the tool catalog is built per request from its state.
 
     The caller must run the returned app's lifespan: Starlette does not run a mounted app's lifespan,
     and the lifespan starts the session manager.
     """
     provider = build_auth_provider()
     server = FastMCP(name=SERVER_NAME, auth=provider)
+    # Added before the transport is built so it handles every request. No tools are registered
+    # statically; the middleware answers list and call from the caller's catalog.
+    server.add_middleware(AccountCatalogMiddleware(app))
     # path="/" serves the endpoint at the mount point instead of a nested /mcp/mcp.
     #
     # Origin protection defaults to off. "auto" with an explicit origin checks the Origin header

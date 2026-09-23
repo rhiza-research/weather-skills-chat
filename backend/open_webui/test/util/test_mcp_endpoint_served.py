@@ -6,6 +6,7 @@ service reporting an error.
 
 import unittest
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from open_webui.config import WEBUI_URL
@@ -15,6 +16,7 @@ from open_webui.test.util.mcp_stub_auth import stub_auth, stub_auth_provider
 
 SERVICE_URL = "https://chat.example"
 IDENTIFIER = f"{SERVICE_URL}{MCP_PATH}"
+HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
 
 
 @contextmanager
@@ -51,7 +53,7 @@ class CanonicalResourceIdentifierTest(unittest.TestCase):
 class BuildEndpointTest(unittest.TestCase):
     def test_an_endpoint_is_built(self):
         with base_url(SERVICE_URL), stub_auth():
-            built = build_endpoint()
+            built = build_endpoint(HOST_APP)
         self.assertIsNotNone(built.asgi_app)
 
     def test_the_server_authenticates_with_the_provider_build_auth_provider_returns(self):
@@ -65,14 +67,14 @@ class BuildEndpointTest(unittest.TestCase):
         with base_url(SERVICE_URL), patch(
             "open_webui.mcp.build_auth_provider", side_effect=build
         ), patch("open_webui.mcp.FastMCP") as server:
-            build_endpoint()
+            build_endpoint(HOST_APP)
         self.assertIsNotNone(provider)
         self.assertIs(server.call_args.kwargs["auth"], provider)
 
     def test_an_empty_service_url_raises_instead_of_leaving_the_endpoint_unserved(self):
         with base_url(""), stub_auth():
             with self.assertRaises(RuntimeError) as raised:
-                build_endpoint()
+                build_endpoint(HOST_APP)
             self.assertIn("WEBUI_URL", str(raised.exception))
 
 
