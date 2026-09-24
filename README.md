@@ -200,9 +200,41 @@ If you are running Open WebUI in an offline environment, you can set the `HF_HUB
 export HF_HUB_OFFLINE=1
 ```
 
-## MCP Endpoint
+## MCP Endpoint (Local Stack)
 
-The backend serves an MCP endpoint at `/mcp/`. Its resource identifier is `WEBUI_URL` with `/mcp` appended. The web interface shows the endpoint URL and the steps to connect Claude Code, claude.ai and other MCP clients under Settings → MCP.
+The backend always serves an MCP endpoint at `/mcp/`. The backend is the endpoint's OAuth authorization server: an MCP client registers (or presents a Client ID Metadata Document), the user signs in with a web interface account and approves the client, and tool calls run as that account. The local stack also runs Redis for one-time artifact links. The web interface shows the endpoint URL and the steps to connect Claude Code, claude.ai and other MCP clients under Settings → MCP.
+
+1. Optional: copy `.env.example` to `.env` to override the defaults in `docker-compose.yaml`, and replace every `REPLACE_ME`.
+2. Start the stack:
+
+   ```bash
+   ./run-compose.sh --redis --build
+   ```
+
+3. MCP clients send OAuth credentials over plain http only to `localhost`. If the Docker daemon runs on another machine, forward the port from the machine the browser and the client run on, and keep the connection open:
+
+   ```bash
+   ssh -N -L 3000:localhost:3000 <user>@<docker-host>
+   ```
+
+   Use the value of `OPEN_WEBUI_PORT` for the port number.
+
+4. Create an account in the web interface at `http://localhost:3000`, or use an existing one. Its role must be `user` or `admin`; a `pending` account cannot approve a client.
+5. Add the endpoint to an MCP client. With Claude Code:
+
+   ```bash
+   claude mcp add --transport http weather-skills-chat-local http://localhost:3000/mcp/
+   ```
+
+   Then run `/mcp`, select the server, and authenticate. The browser opens the web interface's sign-in page if you are not signed in, then a page that names the client and asks you to approve or deny it.
+
+Clients may redirect only to loopback `http` addresses (`localhost`, `127.0.0.1`, `::1`, any port) unless `MCP_OAUTH_ALLOWED_REDIRECT_URIS` lists more. It is a comma-separated list; each entry is an exact URL or a prefix ending in `*`. A prefix matches any path that starts with it, including sibling paths: `https://host/cb*` also matches `https://host/cb-other`.
+
+The endpoint reads `WEBUI_URL` at startup, so a value changed later in the admin settings takes effect only after a restart.
+
+Access tokens expire after one hour. Clients refresh them with a refresh token, which is replaced on every use. A refresh token presented again within 30 seconds of being replaced gets a new pair, so a client that retries after losing the response stays signed in; presented again later, it revokes all of that grant's tokens. A client revokes its tokens at `/revoke`.
+
+Each backend process deletes expired and unusable authorization rows every hour, and deletes a registered client that has no live token, code or pending request, 30 days after it registered. `/register` accepts 20 requests and `/authorize` 60 requests per client IP per minute; further requests get HTTP 429. The counters are in Redis when `REDIS_URL` is set, and in each process otherwise.
 
 A call runs in the organization named by its `X-Organization-Id` header, the header the web interface sends. Without the header, or with the account's own id, it runs in the account's personal organization. The organization decides which skills are listed and which stored secrets a run receives.
 
