@@ -67,6 +67,14 @@
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
 							href="/organization">{$i18n.t('Organization membership')}</a
 						>
+						<a
+							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+								'/organization/settings'
+							)
+								? ''
+								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							href="/organization/settings">{$i18n.t('Organization settings')}</a
+						>
 					</div>
 				</div>
 			</div>

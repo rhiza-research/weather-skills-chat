@@ -700,12 +700,20 @@
 			>
 				<div class="flex items-center">
 					<div class="self-center mx-1.5">
-						<img
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" size-5 -translate-x-1.5 rounded-full"
-							alt="logo"
-						/>
+						{#if currentOrg?.logo}
+							<img
+								src={currentOrg.logo}
+								class=" size-5 -translate-x-1.5 rounded-full object-cover"
+								alt={currentOrg.name}
+							/>
+						{:else}
+							<img
+								crossorigin="anonymous"
+								src="{WEBUI_BASE_URL}/static/favicon.png"
+								class=" size-5 -translate-x-1.5 rounded-full"
+								alt="logo"
+							/>
+						{/if}
 					</div>
 					<div class=" self-center font-medium text-sm text-gray-850 dark:text-white font-primary">
 						{$i18n.t('New Chat')}
@@ -1316,8 +1324,15 @@
 							</div>
 							<div class="self-center font-medium min-w-0 flex-1 text-left">
 								<div class="truncate">{$user?.name}</div>
-								<div class="truncate text-xs font-normal text-gray-500 dark:text-gray-400">
-									{currentOrg?.name ?? 'Personal'}
+								<div class="truncate text-xs font-normal text-gray-500 dark:text-gray-400 flex items-center gap-1">
+									{#if currentOrg?.logo}
+										<img
+											src={currentOrg.logo}
+											alt=""
+											class="size-3.5 rounded-full object-cover shrink-0"
+										/>
+									{/if}
+									<span class="truncate">{currentOrg?.name ?? 'Personal'}</span>
 								</div>
 							</div>
 							<svg

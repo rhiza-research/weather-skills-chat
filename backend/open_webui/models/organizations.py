@@ -39,6 +39,7 @@ class Organization(Base):
     can_add_skills = Column(Boolean, nullable=False, default=False)
     can_add_knowledge = Column(Boolean, nullable=False, default=False)
     monthly_limit_usd = Column(Float, nullable=True, default=300.0)
+    logo = Column(Text, nullable=True)
 
 
 class OrganizationMember(Base):
@@ -84,6 +85,7 @@ class OrganizationModel(BaseModel):
     can_add_knowledge: bool = False
     monthly_limit_usd: Optional[float] = None
     usage: Optional[UsageTotalsModel] = None
+    logo: Optional[str] = None
 
 
 class OrganizationForm(BaseModel):
@@ -108,12 +110,24 @@ class OrganizationUpdateForm(BaseModel):
     can_add_skills: Optional[bool] = None
     can_add_knowledge: Optional[bool] = None
     monthly_limit_usd: Optional[float] = None
+    logo: Optional[str] = None
 
     @field_validator("monthly_limit_usd")
     @classmethod
     def org_limit_not_negative(cls, v: Optional[float]) -> Optional[float]:
         if v is not None and v < 0:
             raise ValueError("monthly_limit_usd must be >= 0")
+        return v
+
+    @field_validator("logo")
+    @classmethod
+    def logo_is_jpeg_data_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return v
+        if not v.startswith("data:image/jpeg;base64,"):
+            raise ValueError("Logo must be a JPEG image")
+        if len(v) > 300_000:
+            raise ValueError("Logo is too large")
         return v
 
 
@@ -401,6 +415,8 @@ class OrganizationTable:
             updates["name"] = (updates["name"] or "").strip()
             if not updates["name"]:
                 raise ValueError("Organization name cannot be empty")
+        if "logo" in updates and not updates["logo"]:
+            updates["logo"] = None
         if not updates:
             return self.get_organization_by_id(organization_id)
 

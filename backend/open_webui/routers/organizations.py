@@ -127,7 +127,11 @@ async def update_organization(
     flags = {k: raw.pop(k) for k in list(raw.keys()) if k in flag_keys}
     limit_set = "monthly_limit_usd" in raw
     limit_val = raw.pop("monthly_limit_usd", None)
+    logo_set = "logo" in raw
+    logo_val = raw.pop("logo", None)
     updates = {k: v for k, v in raw.items() if v is not None}
+    if logo_set:
+        updates["logo"] = logo_val or None
     if flags or limit_set:
         require_platform_admin(user, request)
     if limit_set:

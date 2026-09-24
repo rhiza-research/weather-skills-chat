@@ -109,6 +109,7 @@ export const updateOrganizationById = async (
 		can_add_skills?: boolean;
 		can_add_knowledge?: boolean;
 		monthly_limit_usd?: number | null;
+		logo?: string | null;
 	}
 ) =>
 	request(token, `/organizations/${id}/update`, {

@@ -145,7 +145,16 @@
 						<div class="text-[11px] uppercase tracking-wide text-gray-400">
 							{$i18n.t('Organization')}
 						</div>
-						<div class="truncate font-medium">{currentOrg.name}</div>
+						<div class="flex items-center gap-2 min-w-0">
+							{#if currentOrg.logo}
+								<img
+									src={currentOrg.logo}
+									alt=""
+									class="size-5 rounded-full object-cover shrink-0"
+								/>
+							{/if}
+							<div class="truncate font-medium">{currentOrg.name}</div>
+						</div>
 					{/if}
 				</div>
 				<ChevronDown
@@ -164,6 +173,9 @@
 								: 'text-gray-600 dark:text-gray-300'}"
 							on:click={() => selectOrg(org.id)}
 						>
+							{#if org.logo}
+								<img src={org.logo} alt="" class="size-5 rounded-full object-cover shrink-0" />
+							{/if}
 							<span class="truncate flex-1">{org.name}</span>
 							{#if org.id === $activeOrganizationId}
 								<Check className="size-4 shrink-0" strokeWidth="2.5" />

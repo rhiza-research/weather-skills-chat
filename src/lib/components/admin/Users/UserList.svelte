@@ -650,11 +650,19 @@
 						>
 							<ChevronRight className="size-4" strokeWidth="2" />
 						</span>
-						<div
-							class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
-						>
-							<UserCircleSolid className="size-4" />
-						</div>
+						{#if row.logo}
+							<img
+								class="rounded-full w-6 h-6 object-cover shrink-0"
+								src={row.logo}
+								alt=""
+							/>
+						{:else}
+							<div
+								class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+							>
+								<UserCircleSolid className="size-4" />
+							</div>
+						{/if}
 						<div class="min-w-0">
 							<div class="text-sm font-medium truncate">{row.displayName}</div>
 							<div class="text-xs text-gray-500 truncate">

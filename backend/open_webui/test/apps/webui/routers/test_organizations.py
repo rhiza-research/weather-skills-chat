@@ -152,6 +152,46 @@ class TestOrganizations(AbstractPostgresTest):
             missing = self.fast_api_client.get(self.create_url(f"/{workspace_id}"))
         assert missing.status_code == 404
 
+    def test_org_admin_can_set_and_clear_logo(self):
+        from open_webui.models.organizations import OrganizationForm
+
+        org = self.orgs.insert_new_organization(
+            "owner", OrganizationForm(name="Logo Org")
+        )
+        self.orgs.set_active(org.id, True)
+        logo = "data:image/jpeg;base64," + ("a" * 32)
+
+        with mock_webui_user(id="member"):
+            denied = self.fast_api_client.post(
+                self.create_url(f"/{org.id}/update"),
+                json={"logo": logo},
+            )
+        assert denied.status_code == 403
+
+        with mock_webui_user(id="owner"):
+            updated = self.fast_api_client.post(
+                self.create_url(f"/{org.id}/update"),
+                json={"name": "Logo Org Renamed", "logo": logo},
+            )
+        assert updated.status_code == 200
+        assert updated.json()["name"] == "Logo Org Renamed"
+        assert updated.json()["logo"] == logo
+
+        with mock_webui_user(id="owner"):
+            cleared = self.fast_api_client.post(
+                self.create_url(f"/{org.id}/update"),
+                json={"logo": ""},
+            )
+        assert cleared.status_code == 200
+        assert cleared.json()["logo"] is None
+
+        with mock_webui_user(id="owner"):
+            bad = self.fast_api_client.post(
+                self.create_url(f"/{org.id}/update"),
+                json={"logo": "https://example.com/logo.png"},
+            )
+        assert bad.status_code == 422
+
     def test_context_isolation_and_private_chats(self):
 
         with mock_webui_user(id="owner"):
