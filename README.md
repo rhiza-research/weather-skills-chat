@@ -202,7 +202,7 @@ export HF_HUB_OFFLINE=1
 
 ## MCP Endpoint
 
-The backend serves an MCP endpoint at `/mcp/`. Its resource identifier is `WEBUI_URL` with `/mcp` appended.
+The backend serves an MCP endpoint at `/mcp/`. Its resource identifier is `WEBUI_URL` with `/mcp` appended. The web interface shows the endpoint URL and the steps to connect Claude Code, claude.ai and other MCP clients under Settings → MCP.
 
 A call runs in the organization named by its `X-Organization-Id` header, the header the web interface sends. Without the header, or with the account's own id, it runs in the account's personal organization. The organization decides which skills are listed and which stored secrets a run receives.
 
