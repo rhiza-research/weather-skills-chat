@@ -1,18 +1,36 @@
 """Resolves a verified endpoint token to an existing account.
 
-Uses only the verified bearer token. Cookies, interface tokens and API keys are not read. An auth
-implementation supplies the body of resolve_caller.
+Uses only the verified bearer token. Cookies, interface tokens and API keys are not read.
 """
 
 import logging
 
-from open_webui.models.users import UserModel
+from fastmcp.exceptions import ToolError
+from fastmcp.server.dependencies import get_access_token
+
+from open_webui.config import OAUTH_PROVIDERS
+from open_webui.models.users import UserModel, Users
 
 log = logging.getLogger(__name__)
 
-NO_AUTH_IMPLEMENTATION_MESSAGE = (
-    "No auth implementation supplies resolve_caller. The MCP endpoint cannot resolve a caller "
-    "without one."
+# The interface's OpenID client registration name. The interface stores "<name>@<subject>" on the
+# account as its OAuth subject.
+PROVIDER_REGISTRATION_NAME = "oidc"
+
+# Used when the registration sets no sub_claim, as in the interface.
+DEFAULT_SUBJECT_CLAIM = "sub"
+
+NO_TOKEN_MESSAGE = (
+    "No verified token on this request."
+)
+
+NO_SUBJECT_MESSAGE = (
+    "The verified token has no {claim!r} claim."
+)
+
+NO_ACCOUNT_MESSAGE = (
+    "No account is linked to this identity. Sign in to the web interface once with the same "
+    "provider account, then try again."
 )
 
 # Roles the interface allows. Not imported, because a test forbids the endpoint from importing the
@@ -25,12 +43,40 @@ INACTIVE_ACCOUNT_MESSAGE = (
 )
 
 
-def resolve_caller() -> UserModel:
-    """The existing account the current request's verified token was issued to.
+def subject_claim() -> str:
+    """The subject claim name from the oidc registration, as the interface reads it."""
+    registration = OAUTH_PROVIDERS.get(PROVIDER_REGISTRATION_NAME) or {}
+    return registration.get("sub_claim", DEFAULT_SUBJECT_CLAIM)
 
-    An auth implementation supplies this body. It reads the token from fastmcp's
-    get_access_token(), never from cookies, interface tokens or API keys. It does not create or
-    modify accounts. It raises ToolError when there is no token, no matching account, or the
-    account's role is not in ACTIVE_ROLES, with INACTIVE_ACCOUNT_MESSAGE for the last.
+
+def account_key(subject: str) -> str:
+    """The account's stored OAuth subject for this identity, in the interface's format."""
+    return f"{PROVIDER_REGISTRATION_NAME}@{subject}"
+
+
+def resolve_caller() -> UserModel:
+    """The account whose stored OAuth subject matches the verified token.
+
+    Looks up by subject only, never by email. Does not create or modify accounts. Raises ToolError
+    when there is no token, no subject claim, no matching account, or the account's role is not in
+    ACTIVE_ROLES.
     """
-    raise NotImplementedError(NO_AUTH_IMPLEMENTATION_MESSAGE)
+    token = get_access_token()
+    if token is None:
+        raise ToolError(NO_TOKEN_MESSAGE)
+
+    claim = subject_claim()
+    subject = (token.claims or {}).get(claim)
+    if not subject:
+        raise ToolError(NO_SUBJECT_MESSAGE.format(claim=claim))
+
+    account = Users.get_user_by_oauth_sub(account_key(str(subject)))
+    if account is None:
+        raise ToolError(NO_ACCOUNT_MESSAGE)
+    if account.role not in ACTIVE_ROLES:
+        raise ToolError(
+            INACTIVE_ACCOUNT_MESSAGE.format(
+                role=account.role, active=", ".join(sorted(ACTIVE_ROLES))
+            )
+        )
+    return account

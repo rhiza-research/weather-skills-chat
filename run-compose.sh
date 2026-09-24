@@ -75,6 +75,7 @@ usage() {
     echo "  --webui[port=PORT]         Set the port for the web user interface."
     echo "  --data[folder=PATH]        Bind mount for ollama data folder (by default will create the 'ollama' volume)."
     echo "  --playwright               Enable Playwright support for web scraping."
+    echo "  --enable-keycloak[port=PORT]  Run Keycloak, the identity provider for the MCP endpoint, on the specified port."
     echo "  --redis                    Run Redis for the one-time artifact link and the web interface's configuration."
     echo "  --build                    Build the docker image before running the compose project."
     echo "  --drop                     Drop the compose project."
@@ -87,12 +88,18 @@ usage() {
     echo "  $0 --enable-gpu[count=all]"
     echo "  $0 --enable-api[port=11435]"
     echo "  $0 --redis --build"
+    echo "  $0 --enable-keycloak[port=8081]"
+    echo "  $0 --enable-keycloak[port=8081] --redis"
     echo "  $0 --enable-gpu[count=1] --enable-api[port=12345] --webui[port=3000]"
     echo "  $0 --enable-gpu[count=1] --enable-api[port=12345] --webui[port=3000] --data[folder=./ollama-data]"
     echo "  $0 --enable-gpu[count=1] --enable-api[port=12345] --webui[port=3000] --data[folder=./ollama-data] --build"
     echo ""
     echo "This script configures and runs a docker-compose setup with optional GPU support, API exposure, and web UI configuration."
     echo "Every start passes --force-recreate."
+    echo "This recreates the Keycloak container and deletes its start-dev database, which has no"
+    echo "volume. The realm import recreates the realm and the sign-in user. Changes made in the admin"
+    echo "console are lost, and previously issued tokens fail verification because the realm gets new"
+    echo "signing keys."
     echo ""
     echo "About the gpu to use, the script automatically detects it using the "lspci" command."
     echo "In this case the gpu detected is: $(get_gpu_driver)"
@@ -107,6 +114,9 @@ headless=false
 build_image=false
 kill_compose=false
 enable_playwright=false
+enable_keycloak=false
+# Empty unless --enable-keycloak[port=PORT] is given, so KEYCLOAK_PORT from .env applies.
+keycloak_port=
 enable_redis=false
 
 # Function to extract value from the parameter
@@ -142,6 +152,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --playwright)
             enable_playwright=true
+            ;;
+        --enable-keycloak*)
+            enable_keycloak=true
+            value=$(extract_value "$key")
+            keycloak_port=$value
             ;;
         --redis)
             enable_redis=true
@@ -202,6 +217,12 @@ else
     if [[ $enable_playwright == true ]]; then
         DEFAULT_COMPOSE_COMMAND+=" -f docker-compose.playwright.yaml"
     fi
+    if [[ $enable_keycloak == true ]]; then
+        DEFAULT_COMPOSE_COMMAND+=" -f docker-compose.keycloak.yaml"
+        if [[ -n $keycloak_port ]]; then
+            export KEYCLOAK_PORT=$keycloak_port
+        fi
+    fi
     if [[ $enable_redis == true ]]; then
         DEFAULT_COMPOSE_COMMAND+=" -f docker-compose.redis.yaml"
     fi
@@ -225,6 +246,11 @@ echo -e "   ${GREEN}${BOLD}WebAPI Port:${NC} ${OLLAMA_WEBAPI_PORT:-Not Enabled}"
 echo -e "   ${GREEN}${BOLD}Data Folder:${NC} ${data_dir:-Using ollama volume}"
 echo -e "   ${GREEN}${BOLD}WebUI Port:${NC} ${OPEN_WEBUI_PORT:-OPEN_WEBUI_PORT from .env, or 3000}"
 echo -e "   ${GREEN}${BOLD}Playwright:${NC} ${enable_playwright:-false}"
+if [[ $enable_keycloak == true ]]; then
+    echo -e "   ${GREEN}${BOLD}Keycloak Port:${NC} ${KEYCLOAK_PORT:-KEYCLOAK_PORT from .env, or 8081}"
+else
+    echo -e "   ${GREEN}${BOLD}Keycloak Port:${NC} Not Enabled"
+fi
 echo -e "   ${GREEN}${BOLD}Redis:${NC} ${enable_redis:-false}"
 echo
 

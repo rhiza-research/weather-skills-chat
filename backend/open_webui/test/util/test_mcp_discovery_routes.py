@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 
-from open_webui.config import WEBUI_URL
+from open_webui.config import OPENID_PROVIDER_URL, WEBUI_URL
 from open_webui.mcp import (
     MCP_PATH,
     PROTECTED_RESOURCE_PREFIX,
@@ -24,9 +24,11 @@ from open_webui.mcp import (
     _metadata_redirect_routes,
     build_endpoint,
 )
+from open_webui.mcp.auth import OIDC_DISCOVERY_SUFFIX
 from open_webui.test.util.mcp_host import host_application
-from open_webui.test.util.mcp_stub_auth import stub_auth
 
+REALM = "https://provider.example/realms/weather"
+DISCOVERY_URL = f"{REALM}{OIDC_DISCOVERY_SUFFIX}"
 SERVICE_URL = "https://chat.example"
 WELL_KNOWN_PREFIX = "/.well-known/"
 DOCUMENT_PATH = f"{PROTECTED_RESOURCE_PREFIX}{MCP_PATH}"
@@ -35,14 +37,13 @@ HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
 
 @contextmanager
 def configured():
-    """Set WEBUI_URL and build the endpoint with the stub provider, then restore WEBUI_URL."""
-    previous = WEBUI_URL.value
+    previous = (OPENID_PROVIDER_URL.value, WEBUI_URL.value)
+    OPENID_PROVIDER_URL.value = DISCOVERY_URL
     WEBUI_URL.value = SERVICE_URL
     try:
-        with stub_auth():
-            yield
+        yield
     finally:
-        WEBUI_URL.value = previous
+        OPENID_PROVIDER_URL.value, WEBUI_URL.value = previous
 
 
 def built_endpoint(case):

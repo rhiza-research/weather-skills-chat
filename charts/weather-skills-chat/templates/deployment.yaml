@@ -1,3 +1,6 @@
+{{- if and .Values.oauth.oidc.providerUrl (not .Values.webui.url) }}
+{{- fail "webui.url is required when oauth.oidc.providerUrl is set. The MCP endpoint uses webui.url as the token audience, and the application does not start without it. Set webui.url." }}
+{{- end }}
 {{- if and .Values.sandbox.gcs.enabled (not .Values.sandbox.gcs.bucket) }}
 {{- fail "sandbox.gcs.bucket is required when sandbox.gcs.enabled is true" }}
 {{- end }}
