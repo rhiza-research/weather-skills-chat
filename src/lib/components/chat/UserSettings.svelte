@@ -15,6 +15,8 @@
 	import Search from '../icons/Search.svelte';
 	import Connections from './Settings/Connections.svelte';
 	import Tools from './Settings/Tools.svelte';
+	import MCP from './Settings/MCP.svelte';
+	import Link from '../icons/Link.svelte';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -207,6 +209,22 @@
 				'accountpreferences',
 				'securitysettings',
 				'privacysettings'
+			]
+		},
+		{
+			id: 'mcp',
+			title: 'MCP',
+			keywords: [
+				'mcp',
+				'endpoint',
+				'mcpendpoint',
+				'claude',
+				'claudecode',
+				'claudeai',
+				'connector',
+				'customconnector',
+				'integration',
+				'organizationid'
 			]
 		},
 		{
@@ -581,6 +599,21 @@
 								</div>
 								<div class=" self-center">{$i18n.t('Account')}</div>
 							</button>
+						{:else if tabId === 'mcp'}
+							<button
+								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
+								'mcp'
+									? ''
+									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+								on:click={() => {
+									selectedTab = 'mcp';
+								}}
+							>
+								<div class=" self-center mr-2">
+									<Link className="w-4 h-4" />
+								</div>
+								<div class=" self-center">{$i18n.t('MCP')}</div>
+							</button>
 						{:else if tabId === 'about'}
 							<button
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
@@ -688,6 +721,8 @@
 							toast.success($i18n.t('Settings saved successfully!'));
 						}}
 					/>
+				{:else if selectedTab === 'mcp'}
+					<MCP />
 				{:else if selectedTab === 'about'}
 					<About />
 				{/if}
