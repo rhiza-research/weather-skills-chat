@@ -1,0 +1,31 @@
+# Adds a redis service and sets REDIS_URL for the application. Loaded with:
+#
+#   ./run-compose.sh --redis
+#
+# The one-time artifact link claims its nonce with GETDEL, which reads and deletes the key in one
+# command, so only one request can claim a given link. The web interface also stores its persistent
+# configuration in this Redis when REDIS_URL is set.
+#
+# Without this overlay and with REDIS_URL unset, REDIS_URL is empty and the endpoint refuses the
+# one-time link. The refusal message is in backend/open_webui/utils/artifact_handoff.py. Setting
+# REDIS_URL to a Redis run elsewhere enables the link without this overlay.
+services:
+  redis:
+    image: redis:8.8.2
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+    # No persistence: data is lost on restart. One-time links expire within minutes, and a lost
+    # link is requested again.
+    tmpfs:
+      - /data
+
+  open-webui:
+    depends_on:
+      - redis
+    environment:
+      - 'REDIS_URL=${REDIS_URL-redis://redis:6379/0}'

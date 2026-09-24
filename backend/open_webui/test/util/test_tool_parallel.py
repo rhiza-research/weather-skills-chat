@@ -20,10 +20,14 @@ def test_parse_depends_on_accepts_string():
 
 
 def test_inject_depends_on_spec_is_idempotent():
+    # inject_depends_on_spec returns a copy. Built-in entries pass in shared module-level spec
+    # constants, so the input must stay unchanged.
     spec = {"name": "plot", "parameters": {"type": "object", "properties": {}}}
-    inject_depends_on_spec(spec)
-    inject_depends_on_spec(spec)
-    assert DEPENDS_ON_PARAM in spec["parameters"]["properties"]
+    once = inject_depends_on_spec(spec)
+    twice = inject_depends_on_spec(once)
+    assert DEPENDS_ON_PARAM in once["parameters"]["properties"]
+    assert twice["parameters"]["properties"] == once["parameters"]["properties"]
+    assert DEPENDS_ON_PARAM not in spec["parameters"]["properties"]
 
 
 def test_all_independent_calls_are_one_wave():

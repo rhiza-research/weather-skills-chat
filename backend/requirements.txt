@@ -1,7 +1,10 @@
-fastapi==0.115.7
-uvicorn[standard]==0.34.0
-pydantic==2.10.6
-python-multipart==0.0.20
+# fastmcp requires pydantic>=2.12.0, starlette>=1.0.1 (so fastapi>=0.133.0),
+# python-multipart>=0.0.26, uvicorn>=0.35, and authlib>=1.6.11 (further down this file).
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+python-multipart==0.0.32
+fastmcp==4.0.5
 
 python-socketio==5.13.0
 python-jose==3.4.0
@@ -94,10 +97,10 @@ onnxruntime==1.20.1
 faster-whisper==1.1.1
 
 PyJWT[crypto]==2.10.1
-authlib==1.4.1
+authlib==1.8.0
 
 black==25.1.0
-langfuse==4.14.4
+langfuse==4.15.1
 youtube-transcript-api==1.0.3
 pytube==15.0.0
 
@@ -112,6 +115,8 @@ google-auth-oauthlib
 
 ## Tests
 docker~=7.1.0
+gcp-storage-emulator==2026.7.19
+moto~=5.2.3
 pytest~=8.3.2
 pytest-docker~=3.1.1
 

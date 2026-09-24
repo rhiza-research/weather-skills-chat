@@ -2,7 +2,9 @@ services:
   ollama:
     volumes:
       - ollama:/root/.ollama
-    container_name: ollama
+    # Overridable so it does not collide with a container of the same name on the same Docker
+    # daemon. Defaults to ollama.
+    container_name: ${OLLAMA_CONTAINER_NAME-ollama}
     pull_policy: always
     tty: true
     restart: unless-stopped
@@ -14,20 +16,74 @@ services:
       args:
         OLLAMA_BASE_URL: '/ollama'
       dockerfile: Dockerfile
-    image: ghcr.io/open-webui/open-webui:${WEBUI_DOCKER_TAG-main}
-    container_name: open-webui
+    # Image and container name are overridable. A local build tags the image name, which would
+    # retag an image used by another stack on the same Docker daemon, and a fixed container name
+    # collides with a container of the same name. Defaults are the upstream values.
+    image: ${WEBUI_IMAGE-ghcr.io/open-webui/open-webui}:${WEBUI_DOCKER_TAG-main}
+    container_name: ${WEBUI_CONTAINER_NAME-open-webui}
     volumes:
       - open-webui:/app/backend/data
     depends_on:
       - ollama
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
+    # Runs an init process that reaps killed skill subprocesses so they do not remain as zombies.
+    init: true
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
-      - 'WEBUI_SECRET_KEY='
+      # Passed through from the environment to select ollama or an OpenAI-compatible provider.
+      # The defaults match the application's own defaults.
+      - 'ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API-true}'
+      - 'ENABLE_OPENAI_API=${ENABLE_OPENAI_API-true}'
+      - 'OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL-}'
+      - 'OPENAI_API_KEY=${OPENAI_API_KEY-}'
+      - 'WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY-}'
+      # The address clients use to reach this service. The MCP endpoint uses it as its resource
+      # identifier. It is passed only when set in .env or the shell; otherwise the application's
+      # default, http://localhost:3000, applies. A .env file is optional: copy .env.example to .env
+      # to override these defaults.
+      - WEBUI_URL
+      # Redis address. The one-time artifact link claims its nonce here, and the web interface
+      # stores its persistent configuration here. When empty, the endpoint refuses the one-time
+      # link. docker-compose.redis.yaml sets it to the redis service it adds.
+      - 'REDIS_URL=${REDIS_URL-}'
+      # Landlock confinement for skill subprocesses. The application defaults it to true, and the
+      # runner then refuses every chat-sandboxed run on a kernel without Landlock, returning
+      # ok: false. This file defaults it to false. With it false, a skill subprocess can read and
+      # write any path the application user can reach in this container, including other
+      # accounts' artifacts. This applies to both the web interface and the MCP endpoint, which use
+      # the same runner. Set it to true where the kernel supports Landlock.
+      - 'SKILL_SANDLOCK=${SKILL_SANDLOCK:-false}'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
+
+  # Runs the backend test suite in the application image. It is behind the suite profile, so `up`
+  # does not start it. Run with:
+  #   docker compose --profile suite run --rm --build test
+  # It has no container_name, ports, volumes, or Docker socket.
+  test:
+    profiles:
+      - suite
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Reaps killed skill subprocesses. A zombie still answers os.kill(pid, 0), so without this the
+    # cancellation test sees the killed process as alive.
+    init: true
+    working_dir: /app/backend
+    command:
+      - python
+      - -m
+      - pytest
+      - -rf
+      # One test module builds a GCS client at import time and fails without Application Default
+      # Credentials. This flag lets the other modules run. The collection error is still reported.
+      - --continue-on-collection-errors
+    environment:
+      # The application refuses to import without a secret key. This value is used only by the
+      # test run.
+      - 'WEBUI_SECRET_KEY=suite-run-not-a-deployment'
 
 volumes:
   ollama: {}

@@ -653,6 +653,35 @@ def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
     return target
 
 
+# Maximum size of a text artifact returned inline: 128 KiB, about 32,000 tokens at four bytes per
+# token. Same value as the sibling MCP service.
+MAX_RETURNABLE_TEXT_BYTES = 131_072
+
+# Largest source size whose base64 encoding fits in MAX_RETURNABLE_TEXT_BYTES (base64 is 4/3 the
+# size).
+MAX_BASE64_SOURCE_BYTES = MAX_RETURNABLE_TEXT_BYTES // 4 * 3
+
+ARTIFACT_TOO_LARGE_MESSAGE = (
+    "The artifact is {size_bytes} bytes, over the {maximum_bytes}-byte limit for returning it "
+    "inline. It was not returned."
+)
+
+
+def read_artifact_bytes(chat_id: str, relpath: str, maximum_bytes: int) -> bytes:
+    """The artifact's bytes. Raises ValueError if it is larger than maximum_bytes; never truncates."""
+    target = resolve_in_sandbox(chat_id, relpath)
+    if not target.is_file():
+        raise FileNotFoundError(relpath)
+    size_bytes = target.stat().st_size
+    if size_bytes > maximum_bytes:
+        raise ValueError(
+            ARTIFACT_TOO_LARGE_MESSAGE.format(
+                size_bytes=size_bytes, maximum_bytes=maximum_bytes
+            )
+        )
+    return target.read_bytes()
+
+
 def copy_upload_into_chat_sandbox(chat_id: str, filename: str, data: bytes) -> str:
     """Write an uploaded file at the sandbox root (skills cwd) under a safe basename."""
     name = Path(filename or "upload").name.replace("\x00", "").strip()

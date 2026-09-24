@@ -19,16 +19,19 @@ DEPENDS_ON_SCHEMA = {
 
 
 def inject_depends_on_spec(spec: dict | None) -> dict:
-    """Add the reserved depends_on parameter to an OpenAI-style function spec."""
-    spec = spec if isinstance(spec, dict) else {}
-    params = spec.setdefault("parameters", {})
-    if not isinstance(params, dict):
-        spec["parameters"] = params = {"type": "object", "properties": {}}
-    props = params.setdefault("properties", {})
-    if not isinstance(props, dict):
-        params["properties"] = props = {}
+    """Return a copy of an OpenAI-style function spec with the reserved depends_on parameter added.
+
+    The input is not modified. Built-in tool specs are module-level constants that the MCP endpoint
+    also publishes, and depends_on must not appear there.
+    """
+    source = spec if isinstance(spec, dict) else {}
+    params = source.get("parameters")
+    params = dict(params) if isinstance(params, dict) else {"type": "object"}
+    props = params.get("properties")
+    props = dict(props) if isinstance(props, dict) else {}
     props.setdefault(DEPENDS_ON_PARAM, dict(DEPENDS_ON_SCHEMA))
-    return spec
+    params["properties"] = props
+    return {**source, "parameters": params}
 
 
 def parse_depends_on(value: Any) -> list[str]:

@@ -612,6 +612,143 @@ async def list_artifacts(
     return "\n".join(lines)
 
 
+GET_ARTIFACT_SPEC = {
+    "name": "get_artifact",
+    "description": (
+        "Fetch one artifact from the current session. `representation` selects the format: "
+        "`content` returns text or an image directly, `base64` returns the file's bytes as "
+        "base64 text, `link` returns a URL that works for a signed-in user in a browser, and "
+        "`once` returns a URL that serves the file to one unauthenticated request. Use `once` "
+        "to download the file from a shell that has no token."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Relative path of the artifact under the session, as `list_artifacts` "
+                    "reports it (e.g. `plots/rain.png`)."
+                ),
+            },
+            "representation": {
+                "type": "string",
+                "enum": ["content", "base64", "link", "once"],
+                "description": (
+                    "Output format. Defaults to `content`, which fails for a file that is "
+                    "neither text nor an image."
+                ),
+            },
+        },
+        "required": ["path"],
+    },
+}
+
+# Accepted values of get_artifact's `representation` argument.
+ARTIFACT_REPRESENTATIONS = ("content", "base64", "link", "once")
+
+# Suffixes that get_artifact returns as an image data URL.
+ARTIFACT_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+
+UNKNOWN_REPRESENTATION_MESSAGE = (
+    "Unknown representation. Accepted values: "
+    + ", ".join(ARTIFACT_REPRESENTATIONS)
+    + "."
+)
+
+NOT_TEXT_OR_IMAGE_MESSAGE = (
+    "This artifact is neither text nor an image, so `content` cannot return it. Request it as "
+    "`base64` for its bytes, or as `link` to open it while signed in."
+)
+
+
+async def get_artifact(
+    path: str,
+    representation: str = "content",
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """Fetch one artifact from the current session in a chosen representation."""
+    import base64 as _base64
+    from urllib.parse import quote
+
+    from open_webui.config import WEBUI_URL
+    from open_webui.utils.artifact_handoff import (
+        UNAVAILABLE_MESSAGE,
+        handoff_available,
+        mint,
+    )
+    from open_webui.utils.artifacts import (
+        MAX_BASE64_SOURCE_BYTES,
+        MAX_RETURNABLE_TEXT_BYTES,
+        read_artifact_bytes,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot fetch an artifact without a session."
+
+    if representation not in ARTIFACT_REPRESENTATIONS:
+        return UNKNOWN_REPRESENTATION_MESSAGE
+
+    relpath = (path or "").strip().lstrip("/")
+    if not relpath:
+        return "Give the relative path of the artifact to fetch."
+
+    base_url = str(WEBUI_URL.value or "").rstrip("/")
+
+    if representation == "link":
+        # The existing artifact content route. It requires an interface session; an endpoint token
+        # does not work there.
+        return (
+            f"{base_url}/api/v1/chats/{chat_id}/artifacts/content"
+            f"?path={quote(relpath)}"
+        )
+
+    if representation == "once":
+        if not handoff_available():
+            return UNAVAILABLE_MESSAGE
+        try:
+            nonce = mint(chat_id, relpath)
+        except Exception:
+            log.exception("Could not mint an artifact handoff")
+            return UNAVAILABLE_MESSAGE
+        return f"{base_url}/api/v1/artifact-handoff/{nonce}"
+
+    suffix = Path(relpath).suffix.lower()
+    is_image = suffix in ARTIFACT_IMAGE_SUFFIXES
+    if representation == "base64" or is_image:
+        # Images are returned as base64 data URLs, so they use the base64 limit. display_image's
+        # larger limit would produce a data URL that the endpoint's result limit truncates.
+        maximum = MAX_BASE64_SOURCE_BYTES
+    else:
+        maximum = MAX_RETURNABLE_TEXT_BYTES
+
+    try:
+        data = read_artifact_bytes(chat_id, relpath, maximum)
+    except FileNotFoundError:
+        return f"No artifact at `{relpath}`."
+    except ValueError as e:
+        return str(e)
+    except Exception as e:
+        return f"Could not read `{relpath}`: {e}"
+
+    if representation == "base64":
+        return _base64.b64encode(data).decode("ascii")
+
+    if is_image:
+        # Taken from DISPLAY_IMAGE_TYPES; deriving it from the suffix gives `image/jpg` for `.jpg`,
+        # which is not a registered media type.
+        media_type = DISPLAY_IMAGE_TYPES.get(suffix, "application/octet-stream")
+        return f"data:{media_type};base64,{_base64.b64encode(data).decode('ascii')}"
+
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return NOT_TEXT_OR_IMAGE_MESSAGE
+
+
 LIST_ARTIFACTS_SPEC = {
     "name": "list_artifacts",
     "description": (
@@ -1730,7 +1867,14 @@ EXECUTE_CODE_SPEC = {
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
-    def _tool(fn, spec):
+    from open_webui.utils.tool_surfaces import (
+        BOTH_SURFACES,
+        ENDPOINT_ONLY,
+        INTERFACE_ONLY,
+        SURFACES_KEY,
+    )
+
+    def _tool(fn, spec, surfaces=INTERFACE_ONLY):
         return {
             "toolkit_id": "builtin",
             "callable": get_async_tool_function_and_apply_extra_params(fn, extra_params),
@@ -1738,8 +1882,16 @@ def get_builtin_tools(extra_params: dict) -> dict:
             "pydantic_model": None,
             "file_handler": False,
             "citation": False,
+            SURFACES_KEY: surfaces,
         }
 
+    # Built-ins are interface only by default. create_automation, create_preference,
+    # create_zarr_view, copy_intermediate_result, create_folder and send_email write to the account.
+    # Of the read-only ones,
+    # list_available_tools describes tools the endpoint does not publish, list_email_recipients
+    # returns organization rosters, secrets_page and list_preferences return instructions for the
+    # chat model to give the user in the interface, and display_image is replaced on the endpoint
+    # by get_artifact.
     tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
         "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
@@ -1751,7 +1903,9 @@ def get_builtin_tools(extra_params: dict) -> dict:
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
-        "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC),
+        "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC, BOTH_SURFACES),
+        # Endpoint only; the chat interface has no tool that returns artifact content.
+        "get_artifact": _tool(get_artifact, GET_ARTIFACT_SPEC, ENDPOINT_ONLY),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
         "list_email_recipients": _tool(
             list_email_recipients, LIST_EMAIL_RECIPIENTS_SPEC

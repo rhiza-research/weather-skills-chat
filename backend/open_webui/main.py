@@ -45,6 +45,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from open_webui.mcp import build_endpoint
+
 
 from open_webui.utils import logger
 from open_webui.utils.pyodide_assets import (
@@ -75,6 +77,7 @@ from open_webui.routers import (
     organizations,
     invitations,
     automations,
+    artifact_handoff,
     artifacts,
     secrets,
     preferences,
@@ -535,6 +538,10 @@ def _resync_skill_packs(app_ref: FastAPI) -> None:
         log.exception("Skill pack tool resync on startup failed")
 
 
+# Set after `app` is created.
+mcp_endpoint = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
@@ -558,7 +565,10 @@ async def lifespan(app: FastAPI):
     # Don't block HTTP listen on HF/model load or skill module imports.
     asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
     asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
-    yield
+    # Starlette does not run a mounted app's lifespan. The endpoint's lifespan starts FastMCP's
+    # Streamable HTTP session manager, so it is run here.
+    async with mcp_endpoint.asgi_app.lifespan(app):
+        yield
     shutdown_langfuse()
     shutdown_scheduler()
 
@@ -570,6 +580,10 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+# Built after `app` because the endpoint reads app state per request. The lifespan above reads this
+# at startup.
+mcp_endpoint = build_endpoint(app)
 
 oauth_manager = OAuthManager(app)
 
@@ -1080,6 +1094,12 @@ app.include_router(
     automations.router, prefix="/api/v1/automations", tags=["automations"]
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
+# No authentication: the one-time nonce in the URL is the credential.
+app.include_router(
+    artifact_handoff.router,
+    prefix="/api/v1/artifact-handoff",
+    tags=["artifact-handoff"],
+)
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
 app.include_router(
     preferences.router, prefix="/api/v1/preferences", tags=["preferences"]
@@ -1725,6 +1745,11 @@ async def healthcheck_with_db():
     Session.execute(text("SELECT 1;")).all()
     return {"status": True}
 
+
+# Registered before the "/" SPA mount below, which would otherwise match these paths. The
+# discovery routes are at the root because clients fetch them at root-absolute paths.
+app.router.routes.extend(mcp_endpoint.root_routes)
+app.mount(mcp_endpoint.mount_path, mcp_endpoint.asgi_app)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")

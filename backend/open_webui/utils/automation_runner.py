@@ -16,6 +16,7 @@ from open_webui.utils.chat import generate_chat_completion as chat_completion_ha
 from open_webui.utils.middleware import process_chat_payload, process_chat_response
 from open_webui.utils.models import check_model_access, remember_catalog_model
 from open_webui.utils.usage import check_usage_caps
+from open_webui.utils.tools import accessible_tool_ids
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -57,40 +58,12 @@ async def _notify_chat_created(user_ids: list[str], chat_id: str, title: str) ->
         log.exception("Failed to notify clients of new automation chat")
 
 
-def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[str]:
-    """Tool/skill IDs the user can use in this organization.
-
-    Skill listing follows org-admin enablement (catalog default only seeds
-    that toggle). Chat can still send explicit IDs.
-    """
-    from open_webui.models.tools import Tools
-    from open_webui.utils.access_control import user_owns_or_has_access
-    from open_webui.utils.tools import accessible_skill_records
-
-    usable_skill_ids = {
-        record["id"] for record in accessible_skill_records(user, organization_id)
-    }
-
-    ids: list[str] = []
-    for tool in Tools.get_tool_catalog():
-        manifest = (tool.meta.manifest if tool.meta else None) or {}
-        if manifest.get("kind") == "skill":
-            if tool.id not in usable_skill_ids:
-                continue
-        elif not user_owns_or_has_access(
-            user.id, tool.user_id, tool.access_control, "read", user.role
-        ):
-            continue
-        ids.append(tool.id)
-    return ids
-
-
 def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[list[str]]:
     if automation.tool_ids is not None:
         return list(automation.tool_ids)
     # Default: every tool/skill the owner can use in this organization.
     if user is not None:
-        ids = _accessible_tool_ids(
+        ids = accessible_tool_ids(
             user, getattr(automation, "organization_id", None)
         )
         return ids or None
