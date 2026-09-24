@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 DEPENDS_ON_PARAM = "depends_on"
+DISPLAY_PARAM = "display"
 
 DEPENDS_ON_SCHEMA = {
     "type": "array",
@@ -18,8 +19,18 @@ DEPENDS_ON_SCHEMA = {
 }
 
 
-def inject_depends_on_spec(spec: dict | None) -> dict:
-    """Add the reserved depends_on parameter to an OpenAI-style function spec."""
+DISPLAY_SCHEMA = {
+    "type": "string",
+    "description": (
+        "Optional. A short phrase shown to the user instead of the function name "
+        'while this call runs, such as "Checking the most recent available date '
+        'for IMERG" or "Grouping the data into weekly bins". Omit to show the '
+        "function name."
+    ),
+}
+
+
+def _ensure_parameter_properties(spec: dict | None) -> dict:
     spec = spec if isinstance(spec, dict) else {}
     params = spec.setdefault("parameters", {})
     if not isinstance(params, dict):
@@ -27,7 +38,15 @@ def inject_depends_on_spec(spec: dict | None) -> dict:
     props = params.setdefault("properties", {})
     if not isinstance(props, dict):
         params["properties"] = props = {}
+    return props
+
+
+def inject_depends_on_spec(spec: dict | None) -> dict:
+    """Add reserved depends_on and display parameters to a function spec."""
+    spec = spec if isinstance(spec, dict) else {}
+    props = _ensure_parameter_properties(spec)
     props.setdefault(DEPENDS_ON_PARAM, dict(DEPENDS_ON_SCHEMA))
+    props.setdefault(DISPLAY_PARAM, dict(DISPLAY_SCHEMA))
     return spec
 
 
@@ -50,6 +69,13 @@ def strip_depends_on(params: dict | None) -> tuple[dict, list[str]]:
     cleaned = dict(params or {})
     deps = parse_depends_on(cleaned.pop(DEPENDS_ON_PARAM, None))
     return cleaned, deps
+
+
+def strip_display(params: dict | None) -> dict:
+    """Drop the reserved display phrase before a tool function runs."""
+    cleaned = dict(params or {})
+    cleaned.pop(DISPLAY_PARAM, None)
+    return cleaned
 
 
 def execution_waves(

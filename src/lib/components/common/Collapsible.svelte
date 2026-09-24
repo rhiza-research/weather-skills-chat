@@ -121,7 +121,7 @@
 
 	function formatToolCallSignature(name: string, argsRaw: string): string {
 		const toolName = name || 'tool';
-		const args = unwrapJSON(argsRaw);
+		const args = argumentsWithoutDisplay(argsRaw);
 
 		if (args && typeof args === 'object' && !Array.isArray(args) && Array.isArray(args.argv)) {
 			const parts = [toolName];
@@ -155,6 +155,28 @@
 		}
 
 		return `${toolName}(${formatArgValue(args)})`;
+	}
+
+	function argumentsWithoutDisplay(argsRaw: string): any {
+		const args = unwrapJSON(argsRaw);
+		if (args && typeof args === 'object' && !Array.isArray(args) && 'display' in args) {
+			const copy = { ...args };
+			delete copy.display;
+			return copy;
+		}
+		return args;
+	}
+
+	function toolCallDisplay(name: string, argsRaw: string): string {
+		const toolName = name || 'tool';
+		const args = unwrapJSON(argsRaw);
+		if (args && typeof args === 'object' && !Array.isArray(args)) {
+			const display = args.display;
+			if (typeof display === 'string' && display.trim()) {
+				return display.trim();
+			}
+		}
+		return toolName;
 	}
 
 	function parseLegacySkillOutput(text: string) {
@@ -262,6 +284,13 @@
 	}
 
 	$: toolArgsRaw = attributes?.type === 'tool_calls' ? decode(attributes?.arguments ?? '') : '';
+	$: toolCallLabel =
+		attributes?.type === 'tool_calls'
+			? toolCallDisplay(attributes?.name ?? '', toolArgsRaw)
+			: '';
+	$: toolLabelIsCustom =
+		attributes?.type === 'tool_calls' &&
+		toolCallLabel !== (attributes?.name || 'tool');
 	$: toolCallSignature =
 		attributes?.type === 'tool_calls'
 			? formatToolCallSignature(attributes?.name ?? '', toolArgsRaw)
@@ -473,16 +502,22 @@
 						{/if}
 					{:else if attributes?.type === 'tool_calls'}
 						<span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-							{#if attributes?.done === 'true'}
+							{#if toolLabelIsCustom}
+								{toolCallLabel}{attributes?.done === 'true' && toolElapsedLabel
+									? ` (${toolElapsedLabel})`
+									: attributes?.done === 'true'
+										? ''
+										: '…'}
+							{:else if attributes?.done === 'true'}
 								{attributes.name}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}
-								{#if toolFailed}
-									<span class="ml-2 text-xs font-normal text-red-600 dark:text-red-400"
-										>{$i18n.t('failed')}</span
-									>
-								{/if}
 							{:else}
 								{$i18n.t('Running')}
 								{attributes.name}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}…
+							{/if}
+							{#if attributes?.done === 'true' && toolFailed}
+								<span class="ml-2 text-xs font-normal text-red-600 dark:text-red-400"
+									>{$i18n.t('failed')}</span
+								>
 							{/if}
 						</span>
 					{:else}

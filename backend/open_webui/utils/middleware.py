@@ -75,6 +75,7 @@ from open_webui.utils.tool_parallel import (
     execution_waves,
     inject_depends_on_spec,
     strip_depends_on,
+    strip_display,
 )
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
@@ -421,7 +422,7 @@ async def chat_completion_tools_handler(
     skip_files = False
     sources = []
 
-    specs = [tool["spec"] for tool in tools.values()]
+    specs = [inject_depends_on_spec(tool["spec"]) for tool in tools.values()]
     tools_specs = json.dumps(specs)
 
     if request.app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE != "":
@@ -483,11 +484,13 @@ async def chat_completion_tools_handler(
                     allowed_params = (
                         spec.get("parameters", {}).get("properties", {}).keys()
                     )
-                    tool_function_params = {
-                        k: v
-                        for k, v in tool_function_params.items()
-                        if k in allowed_params
-                    }
+                    tool_function_params = strip_display(
+                        {
+                            k: v
+                            for k, v in tool_function_params.items()
+                            if k in allowed_params and k != "depends_on"
+                        }
+                    )
 
                     from open_webui.utils.secrets import (
                         apply_secrets_for_tool,
@@ -1291,6 +1294,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "`depends_on` argument to that sibling's function name "
                         "or tool_call id, or wait and call it in a later turn. "
                         "Omit `depends_on` for independent work."
+                    )
+                    hints.append(
+                        "When you call a tool, set its optional `display` argument "
+                        "to a short phrase the user will see instead of the function "
+                        'name, such as "Checking the most recent available date for '
+                        'IMERG" or "Grouping the data into weekly bins". Omit '
+                        "`display` to show the function name."
                     )
                 if hints:
                     combined = "\n\n".join(hints)
@@ -2643,6 +2653,7 @@ async def process_chat_response(
                     for tool_call in response_tool_calls:
                         real_params = scrub_tool_call_in_place(tool_call)
                         real_params, deps = strip_depends_on(real_params)
+                        real_params = strip_display(real_params)
                         prepared_calls.append((tool_call, real_params))
                         depends_list.append(deps)
 
@@ -2706,11 +2717,13 @@ async def process_chat_response(
                                     .keys()
                                 )
 
-                                tool_function_params = {
-                                    k: v
-                                    for k, v in tool_function_params.items()
-                                    if k in allowed_params and k != "depends_on"
-                                }
+                                tool_function_params = strip_display(
+                                    {
+                                        k: v
+                                        for k, v in tool_function_params.items()
+                                        if k in allowed_params and k != "depends_on"
+                                    }
+                                )
 
                                 used_secrets = sensitive_values_from_params(
                                     tool_name, tool_function_params

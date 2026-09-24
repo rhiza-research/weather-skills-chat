@@ -1,9 +1,11 @@
 from open_webui.utils.tool_parallel import (
     DEPENDS_ON_PARAM,
+    DISPLAY_PARAM,
     execution_waves,
     inject_depends_on_spec,
     parse_depends_on,
     strip_depends_on,
+    strip_display,
 )
 
 
@@ -24,6 +26,17 @@ def test_inject_depends_on_spec_is_idempotent():
     inject_depends_on_spec(spec)
     inject_depends_on_spec(spec)
     assert DEPENDS_ON_PARAM in spec["parameters"]["properties"]
+    assert DISPLAY_PARAM in spec["parameters"]["properties"]
+
+
+def test_strip_display_removes_phrase_and_keeps_args():
+    params = strip_display(
+        {
+            "argv": ["--out", "a.zarr"],
+            "display": "Grouping the data into weekly bins",
+        }
+    )
+    assert params == {"argv": ["--out", "a.zarr"]}
 
 
 def test_all_independent_calls_are_one_wave():
