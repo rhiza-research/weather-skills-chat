@@ -114,7 +114,7 @@ WEBUI_FAVICON_URL = (
 
 # Address shown to users when something fails (error screens, failed responses).
 WEBUI_HELP_EMAIL = (
-    os.environ.get("WEBUI_HELP_EMAIL", "").strip() or "info@rhizaresearch.org"
+    os.environ.get("WEBUI_HELP_EMAIL", "").strip() or "help@weather-skills.org"
 )
 
 TRUSTED_SIGNATURE_KEY = os.environ.get("TRUSTED_SIGNATURE_KEY", "")

@@ -43,6 +43,12 @@ def _favicon_png() -> bytes | None:
     return _FAVICON_PATH.read_bytes()
 
 
+_INVITE_ASSISTANCE = (
+    "Please reply to this email or send a message to help@weather-skills.org "
+    "if you need assistance."
+)
+
+
 def _invite_html(lead: str, link_label: str, link: str, expiry: str, show_icon: bool) -> str:
     icon = ""
     if show_icon:
@@ -57,6 +63,7 @@ def _invite_html(lead: str, link_label: str, link: str, expiry: str, show_icon: 
         f"<p>{html.escape(lead)}</p>"
         f'<p><a href="{safe_link}">{html.escape(link_label)}</a></p>'
         f'<p style="color:#57534e;font-size:14px;">This invitation expires on {html.escape(expiry)}.</p>'
+        f"<p>{html.escape(_INVITE_ASSISTANCE)}</p>"
         f'<p style="color:#a8a29e;font-size:12px;">{safe_link}</p>'
         "</div>"
     )
@@ -85,12 +92,14 @@ def deliver_invite_email(
         subject = f"Invitation to the {organization_name} organization on {app_name}"
         lead = f"{inviter} has invited you to the {organization_name} organization on {app_name}."
         link_label = "Open this link to accept the invitation"
-        body = f"{lead}\n\n{link_label}:\n{link}\n\nThis invitation expires on {expiry}."
     else:
         subject = f"Invitation to create an account on {app_name}"
         lead = f"{inviter} has invited you to create an account on {app_name}."
         link_label = "Open this link to create your account"
-        body = f"{lead}\n\n{link_label}:\n{link}\n\nThis invitation expires on {expiry}."
+    body = (
+        f"{lead}\n\n{link_label}:\n{link}\n\n"
+        f"This invitation expires on {expiry}.\n\n{_INVITE_ASSISTANCE}"
+    )
     favicon = _favicon_png()
     html_body = _invite_html(lead, link_label, link, expiry, show_icon=favicon is not None)
 

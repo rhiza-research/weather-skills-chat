@@ -22,7 +22,7 @@ export function runningReleaseLabel(imageTag?: string | null): string {
 	return tag ? tag : `v${WEBUI_VERSION}`;
 }
 /** Fallback support address used when the backend config is unavailable. */
-export const DEFAULT_HELP_EMAIL = 'info@rhizaresearch.org';
+export const DEFAULT_HELP_EMAIL = 'help@weather-skills.org';
 
 /** Support address shown when something fails; configurable via WEBUI_HELP_EMAIL. */
 export function helpEmailAddress(configured?: string | null): string {

@@ -399,18 +399,26 @@ class TestInvitations(AbstractPostgresTest):
                 config,
                 "ada@example.com",
                 "Grace Hopper",
-                "info@rhizaresearch.org",
+                "help@weather-skills.org",
             )
         platform_subject, platform_body = calls[0][0][9], calls[0][0][10]
         org_subject, org_body = calls[1][0][9], calls[1][0][10]
         assert "create an account on Weather Skills" in platform_subject
         assert "Ada Lovelace has invited you to create an account on Weather Skills" in platform_body
         assert "http://localhost:3000/auth/invite?token=raw-token" in platform_body
+        assistance = (
+            "Please reply to this email or send a message to help@weather-skills.org "
+            "if you need assistance."
+        )
+        assert assistance in platform_body
+        assert assistance in calls[0][1]["html"]
         assert "Field Team" in org_subject
         assert (
             "Ada Lovelace has invited you to the Field Team organization on Weather Skills"
             in org_body
         )
+        assert assistance in org_body
+        assert assistance in calls[1][1]["html"]
         assert "already been added" not in org_body.lower()
         signup_subject, signup_body = calls[-2][0][9], calls[-2][0][10]
         assert signup_subject == "New signup on Weather Skills: Ada Lovelace"
@@ -426,7 +434,7 @@ class TestInvitations(AbstractPostgresTest):
             in approval_body
         )
         assert "You can now sign in at http://localhost:3000." in approval_body
-        assert "info@rhizaresearch.org" in approval_body
+        assert "help@weather-skills.org" in approval_body
         for _, kwargs in calls:
             assert 'src="cid:favicon"' in kwargs["html"]
             cid, data, subtype = kwargs["inline_images"][0]

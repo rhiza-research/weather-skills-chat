@@ -201,7 +201,7 @@ webui:
   name: Weather Skills
   url: ""
   # Shown to users on error screens / failed responses. Empty uses the
-  # backend default (info@rhizaresearch.org).
+  # backend default (help@weather-skills.org).
   helpEmail: ""
   # null = omit env (UI persist / first-user disable signup). true/false pins ENABLE_SIGNUP.
   enableSignup: null
