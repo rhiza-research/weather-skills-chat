@@ -158,7 +158,9 @@ async def update_default_user_permissions(
 
 
 @router.post("/update/role", response_model=Optional[UserModel])
-async def update_user_role(form_data: UserRoleUpdateForm, user=Depends(get_admin_user)):
+async def update_user_role(
+    request: Request, form_data: UserRoleUpdateForm, user=Depends(get_admin_user)
+):
     if user.id == form_data.id or form_data.id == Users.get_first_user().id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -175,7 +177,21 @@ async def update_user_role(form_data: UserRoleUpdateForm, user=Depends(get_admin
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only pending accounts can be activated.",
         )
-    return Users.update_user_role_by_id(form_data.id, "user")
+    updated = Users.update_user_role_by_id(form_data.id, "user")
+    if updated:
+        try:
+            from open_webui.env import WEBUI_HELP_EMAIL
+            from open_webui.utils.invite_email import deliver_signup_approval
+
+            deliver_signup_approval(
+                request.app.state.config,
+                updated.email,
+                (getattr(user, "name", None) or "").strip() or user.email,
+                WEBUI_HELP_EMAIL,
+            )
+        except Exception:
+            log.exception("Failed to email %s about signup approval", updated.email)
+    return updated
 
 
 ############################

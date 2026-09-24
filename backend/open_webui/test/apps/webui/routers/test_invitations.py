@@ -234,10 +234,14 @@ class TestInvitations(AbstractPostgresTest):
         created = self._invite_org("fresh@example.com")
         assert created.status_code == 200
         assert self.sent["organization_name"] == "Field Team"
-        accepted = self.fast_api_client.post(
-            self.create_url(f"/invitations/{self.sent['token']}/accept"),
-            json={"name": "Fresh", "password": "long-enough-password"},
-        )
+        def fail_alert(*_args, **_kwargs):
+            raise AssertionError("invite acceptance emailed admins")
+
+        with patch("open_webui.utils.invite_email.deliver_signup_alert", fail_alert):
+            accepted = self.fast_api_client.post(
+                self.create_url(f"/invitations/{self.sent['token']}/accept"),
+                json={"name": "Fresh", "password": "long-enough-password"},
+            )
         assert accepted.status_code == 200
         user = self.users.get_user_by_email("fresh@example.com")
         assert user.role == "user"
@@ -307,6 +311,33 @@ class TestInvitations(AbstractPostgresTest):
         assert user.role == "user"
         assert self.orgs.get_member(self.org.id, user.id).role == "admin"
 
+    def test_signup_emails_platform_admins(self):
+        sent = {}
+
+        def fake_alert(config, admin_emails, name, email, description):
+            sent["admins"] = list(admin_emails)
+            sent["name"] = name
+            sent["email"] = email
+            sent["description"] = description
+
+        with patch("open_webui.utils.invite_email.deliver_signup_alert", fake_alert):
+            response = self.fast_api_client.post(
+                "/api/v1/auths/signup",
+                json={
+                    "name": "New Person",
+                    "email": "new-person@example.com",
+                    "password": "long-enough-password",
+                    "description": "I study seasonal rainfall.",
+                },
+            )
+        assert response.status_code == 200
+        assert sent["admins"] == [self.admin.email]
+        assert sent["name"] == "New Person"
+        assert sent["email"] == "new-person@example.com"
+        assert sent["description"] == "I study seasonal rainfall."
+        user = self.users.get_user_by_email("new-person@example.com")
+        assert user.info["signup_description"] == "I study seasonal rainfall."
+
     def test_invite_rejects_unknown_role(self):
         with self._smtp(), mock_webui_user(
             id=self.admin.id, role="admin", email=self.admin.email
@@ -353,6 +384,23 @@ class TestInvitations(AbstractPostgresTest):
                 expires_at=1_800_000_000,
                 inviter_name="Ada Lovelace",
             )
+            from open_webui.utils.invite_email import deliver_signup_alert
+
+            deliver_signup_alert(
+                config,
+                ["admin@example.com"],
+                "Ada Lovelace",
+                "ada@example.com",
+                "I forecast rainfall for East Africa.",
+            )
+            from open_webui.utils.invite_email import deliver_signup_approval
+
+            deliver_signup_approval(
+                config,
+                "ada@example.com",
+                "Grace Hopper",
+                "info@rhizaresearch.org",
+            )
         platform_subject, platform_body = calls[0][0][9], calls[0][0][10]
         org_subject, org_body = calls[1][0][9], calls[1][0][10]
         assert "create an account on Weather Skills" in platform_subject
@@ -364,6 +412,21 @@ class TestInvitations(AbstractPostgresTest):
             in org_body
         )
         assert "already been added" not in org_body.lower()
+        signup_subject, signup_body = calls[-2][0][9], calls[-2][0][10]
+        assert signup_subject == "New signup on Weather Skills: Ada Lovelace"
+        assert "Ada Lovelace" in signup_body
+        assert "ada@example.com" in signup_body
+        assert "I forecast rainfall for East Africa." in signup_body
+        assert calls[-2][0][7] == "ada@example.com"
+        assert calls[-2][0][8] == ["admin@example.com"]
+        approval_subject, approval_body = calls[-1][0][9], calls[-1][0][10]
+        assert approval_subject == "Welcome to Weather Skills"
+        assert (
+            "Welcome to Weather Skills! Grace Hopper approved your signup request."
+            in approval_body
+        )
+        assert "You can now sign in at http://localhost:3000." in approval_body
+        assert "info@rhizaresearch.org" in approval_body
         for _, kwargs in calls:
             assert 'src="cid:favicon"' in kwargs["html"]
             cid, data, subtype = kwargs["inline_images"][0]

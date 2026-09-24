@@ -25,6 +25,7 @@
 	let name = '';
 	let email = '';
 	let password = '';
+	let description = '';
 
 	let ldapUsername = '';
 
@@ -61,7 +62,13 @@
 	};
 
 	const signUpHandler = async () => {
-		const sessionUser = await userSignUp(name, email, password, generateInitialsImage(name)).catch(
+		const sessionUser = await userSignUp(
+			name,
+			email,
+			password,
+			generateInitialsImage(name),
+			description.trim()
+		).catch(
 			(error) => {
 				toast.error(`${error}`);
 				return null;
@@ -299,6 +306,23 @@
 												autocomplete="email"
 												name="email"
 												placeholder={$i18n.t('Enter Your Email')}
+												required
+											/>
+										</div>
+									{/if}
+
+									{#if mode === 'signup'}
+										<div class="mb-2">
+											<div class=" text-sm font-medium text-left mb-1">
+												{$i18n.t('Description')}
+											</div>
+											<textarea
+												bind:value={description}
+												class="my-0.5 w-full text-sm outline-hidden bg-transparent resize-none"
+												rows="3"
+												placeholder={$i18n.t(
+													'Tell us who you are and why you would like access'
+												)}
 												required
 											/>
 										</div>

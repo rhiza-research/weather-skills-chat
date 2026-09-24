@@ -104,6 +104,7 @@ class TestAuths(AbstractPostgresTest):
                 "name": "John Doe",
                 "email": "john.doe@openwebui.com",
                 "password": "password",
+                "description": "Researcher requesting access",
             },
         )
         assert response.status_code == 200

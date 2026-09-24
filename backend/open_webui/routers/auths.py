@@ -425,6 +425,29 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
 ############################
 
 
+def _notify_admins_of_signup(request: Request, user, description: str) -> None:
+    from open_webui.models.organizations import PLATFORM_ORG_ID, Organizations
+    from open_webui.utils.invite_email import deliver_signup_alert
+
+    signup_email = (user.email or "").strip().lower()
+    recipients = []
+    for member in Organizations.get_members(PLATFORM_ORG_ID):
+        if member.role not in ("owner", "admin"):
+            continue
+        addr = (member.email or "").strip().lower()
+        if addr and addr != signup_email and addr not in recipients:
+            recipients.append(addr)
+    if not recipients:
+        return
+    deliver_signup_alert(
+        request.app.state.config,
+        recipients,
+        user.name,
+        signup_email,
+        description,
+    )
+
+
 @router.post("/signup", response_model=SessionUserResponse)
 async def signup(request: Request, response: Response, form_data: SignupForm):
 
@@ -450,6 +473,15 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
     if Users.get_user_by_email(form_data.email.lower()):
         raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
+
+    # Only the signup form sends a description. Other callers of this
+    # function (trusted-header sign-in, auth disabled) create accounts quietly.
+    description = (form_data.description or "").strip()
+    if len(description) > 2000:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Description must be 2000 characters or fewer.",
+        )
 
     try:
         role = (
@@ -516,6 +548,15 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
                         "user": user.model_dump_json(exclude_none=True),
                     },
                 )
+
+            if description and user_count > 0:
+                Users.update_user_by_id(
+                    user.id, {"info": {"signup_description": description}}
+                )
+                try:
+                    _notify_admins_of_signup(request, user, description)
+                except Exception:
+                    log.exception("Failed to email admins about a new signup")
 
             user_permissions = get_permissions(
                 user.id, request.app.state.config.USER_PERMISSIONS

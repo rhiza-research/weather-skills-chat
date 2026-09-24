@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { getAdminDetails } from '$lib/apis/auths';
 	import { onMount, getContext } from 'svelte';
-	import { WEBUI_NAME } from '$lib/stores';
-	import HelpContact from '$lib/components/common/HelpContact.svelte';
+	import { config } from '$lib/stores';
+	import { helpEmailAddress } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
 	let adminDetails = null;
+
+	$: helpEmail = helpEmailAddress($config?.help_email);
+	$: adminEmail = (adminDetails?.email || '').trim();
 
 	onMount(async () => {
 		adminDetails = await getAdminDetails(localStorage.token).catch((err) => {
@@ -23,28 +26,34 @@
 		<div class="m-auto pb-10 flex flex-col justify-center">
 			<div class="max-w-md">
 				<div class="text-center dark:text-white text-2xl font-medium z-50">
-					{$i18n.t('Account Activation Pending')}<br />
-					{$i18n.t('Contact Admin for {{WEBUI_NAME}} Access', { WEBUI_NAME: $WEBUI_NAME })}
+					{$i18n.t('Account Activation Pending')}
 				</div>
 
-				<div class=" mt-4 text-center text-sm dark:text-gray-200 w-full">
-					{$i18n.t('Your account status is currently pending activation.')}<br />
+				<div class="mt-4 text-center text-sm dark:text-gray-200 w-full">
+					{$i18n.t('Thank you for your interest in Weather Skills!')}
+				</div>
+
+				<div class="mt-3 text-center text-sm dark:text-gray-200 w-full">
 					{$i18n.t(
-						'To access {{WEBUI_NAME}}, please reach out to the administrator. Admins can manage user statuses from the Admin Panel.',
-						{ WEBUI_NAME: $WEBUI_NAME }
+						'Weather Skills administrators have been notified, and will reach out to you with any follow up questions.'
 					)}
 				</div>
 
-				{#if adminDetails}
-					<div class="mt-4 text-sm font-medium text-center">
-						<div>{$i18n.t('Admin')}: {adminDetails.name} ({adminDetails.email})</div>
-					</div>
-				{/if}
-
-				<HelpContact
-					className="mt-3 text-center text-xs text-gray-500 dark:text-gray-300"
-					label={$i18n.t('Need help? Contact')}
-				/>
+				<div class="mt-3 text-center text-sm dark:text-gray-200 w-full">
+					{#if adminEmail && adminEmail !== helpEmail}
+						{$i18n.t('In the meantime feel free to reach out to the administrator at')}
+						<a class="underline" href={`mailto:${adminEmail}`}>{adminEmail}</a>
+						{$i18n.t('or')}
+						<a class="underline" href={`mailto:${helpEmail}`}>{helpEmail}</a>
+						{$i18n.t('for more information.')}
+					{:else}
+						{$i18n.t('In the meantime feel free to reach out to the administrator at')}
+						<a class="underline" href={`mailto:${adminEmail || helpEmail}`}
+							>{adminEmail || helpEmail}</a
+						>
+						{$i18n.t('for more information.')}
+					{/if}
+				</div>
 
 				<div class=" mt-6 mx-auto relative group w-fit">
 					<button
