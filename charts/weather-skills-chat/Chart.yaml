@@ -5,7 +5,7 @@ type: application
 version: 0.1.1
 # CI writes the deployed image tag on the Argo branch:
 # staging from dev (sha-<short>), prod from a semver tag on main (vX.Y.Z).
-appVersion: "main"
+appVersion: "sha-bc93054"
 keywords:
   - weather-skills
   - open-webui
