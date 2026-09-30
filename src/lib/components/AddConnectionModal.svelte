@@ -33,6 +33,8 @@
 	let prefixId = '';
 	let enable = true;
 	let tags = [];
+	// Who records model calls in Langfuse; see langfuse_tracing.py for styles.
+	let modelCallTracing = 'app';
 
 	let modelId = '';
 	let modelIds = [];
@@ -95,7 +97,8 @@
 				enable: enable,
 				tags: tags,
 				prefix_id: prefixId,
-				model_ids: modelIds
+				model_ids: modelIds,
+				...(ollama || direct ? {} : { model_call_tracing: modelCallTracing })
 			}
 		};
 
@@ -108,6 +111,7 @@
 		key = '';
 		prefixId = '';
 		tags = [];
+		modelCallTracing = 'app';
 		modelIds = [];
 	};
 
@@ -120,6 +124,7 @@
 			tags = connection.config?.tags ?? [];
 			prefixId = connection.config?.prefix_id ?? '';
 			modelIds = connection.config?.model_ids ?? [];
+			modelCallTracing = connection.config?.model_call_tracing ?? 'app';
 		}
 	};
 
@@ -274,6 +279,26 @@
 								</div>
 							</div>
 						</div>
+
+						{#if !ollama && !direct}
+							<div class="flex gap-2 mt-2">
+								<div class="flex flex-col w-full">
+									<div class=" mb-1 text-xs text-gray-500">
+										{$i18n.t('Model-call tracing')}
+									</div>
+
+									<div class="flex-1">
+										<select
+											class="w-full text-sm bg-transparent outline-hidden"
+											bind:value={modelCallTracing}
+										>
+											<option value="app">{$i18n.t('App')}</option>
+											<option value="openrouter">{$i18n.t('OpenRouter Broadcast')}</option>
+										</select>
+									</div>
+								</div>
+							</div>
+						{/if}
 
 						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
 

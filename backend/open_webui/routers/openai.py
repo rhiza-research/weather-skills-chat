@@ -42,6 +42,12 @@ from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
 )
 from open_webui.utils.chat_timing import log_timing
+from open_webui.utils.langfuse_tracing import (
+    MODEL_CALL_TRACING_APP,
+    apply_provider_trace_fields,
+    model_call_tracing_style,
+    tracing_enabled,
+)
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access
@@ -716,6 +722,46 @@ def connection_index_for_model(request: Request, model_id: str) -> Optional[int]
     return found
 
 
+def base_model_id_for(model_info, model_id: str) -> str:
+    """The upstream model id a wrapper model forwards to, else ``model_id``."""
+    if model_info and model_info.base_model_id:
+        return model_info.base_model_id
+    return model_id
+
+
+def api_config_for_index(request: Request, idx: int) -> dict:
+    configs = request.app.state.config.OPENAI_API_CONFIGS
+    return configs.get(
+        str(idx),
+        configs.get(
+            request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
+        ),  # Legacy support
+    )
+
+
+def model_call_tracing_style_for_model(request: Request, model_id: str) -> str:
+    """Tracing style of the connection that generate_chat_completion will use.
+
+    Resolves the model to its connection the same way generate_chat_completion
+    does. The model lookup is skipped while tracing is off or no connection
+    sets a provider style.
+    """
+    if not tracing_enabled():
+        return MODEL_CALL_TRACING_APP
+    configs = request.app.state.config.OPENAI_API_CONFIGS or {}
+    if all(
+        model_call_tracing_style(config) == MODEL_CALL_TRACING_APP
+        for config in configs.values()
+        if isinstance(config, dict)
+    ):
+        return MODEL_CALL_TRACING_APP
+    base_model_id = base_model_id_for(Models.get_model_by_id(model_id), model_id)
+    idx = connection_index_for_model(request, base_model_id)
+    if idx is None:
+        return MODEL_CALL_TRACING_APP
+    return model_call_tracing_style(api_config_for_index(request, idx))
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
@@ -743,8 +789,8 @@ async def generate_chat_completion(
     # Check model info and override the payload
     if model_info:
         if model_info.base_model_id:
-            payload["model"] = model_info.base_model_id
-            model_id = model_info.base_model_id
+            model_id = base_model_id_for(model_info, model_id)
+            payload["model"] = model_id
 
         params = model_info.params.model_dump()
         payload = apply_model_params_to_body_openai(params, payload)
@@ -788,12 +834,7 @@ async def generate_chat_completion(
     model = {"id": model_id, "owned_by": "openai", "urlIdx": idx}
 
     # Get the API config for the model
-    api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
-        str(idx),
-        request.app.state.config.OPENAI_API_CONFIGS.get(
-            request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
-        ),  # Legacy support
-    )
+    api_config = api_config_for_index(request, idx)
 
     prefix_id = api_config.get("prefix_id", None)
     if prefix_id:
@@ -831,6 +872,12 @@ async def generate_chat_completion(
         )
 
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
+    payload = apply_provider_trace_fields(
+        payload,
+        model_call_tracing_style(api_config),
+        user=user,
+        metadata=metadata,
+    )
 
     t_dump = time.perf_counter()
     payload = json.dumps(payload)
