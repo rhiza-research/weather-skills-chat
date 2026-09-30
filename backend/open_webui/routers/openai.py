@@ -872,9 +872,10 @@ async def generate_chat_completion(
         )
 
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
+    # utils.chat decides the style once and carries it in metadata.
     payload = apply_provider_trace_fields(
         payload,
-        model_call_tracing_style(api_config),
+        model_call_tracing_style(metadata if isinstance(metadata, dict) else None),
         user=user,
         metadata=metadata,
     )

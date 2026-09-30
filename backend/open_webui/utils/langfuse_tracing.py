@@ -357,7 +357,7 @@ _PROVIDER_TRACE_FIELD_BUILDERS: dict[str, Callable[..., dict]] = {
 
 
 def model_call_tracing_style(api_config: Optional[dict]) -> str:
-    """The connection's tracing style; unset or unknown values mean "app"."""
+    """The style in a connection config or call metadata; unset or unknown is "app"."""
     style = str(
         (api_config or {}).get(MODEL_CALL_TRACING_KEY) or MODEL_CALL_TRACING_APP
     )

@@ -50,6 +50,7 @@ from open_webui.utils.response import (
 )
 from open_webui.utils.langfuse_tracing import (
     MODEL_CALL_TRACING_APP,
+    MODEL_CALL_TRACING_KEY,
     observe_generation,
     tracing_enabled,
 )
@@ -175,10 +176,12 @@ async def generate_chat_completion(
 ):
     inject_include_usage(form_data)
     enforce_usage_caps(request, form_data, user)
+    style = _model_call_tracing_style(request, form_data)
+    _carry_model_call_tracing_style(form_data, style)
     response = await observe_generation(
         form_data,
         _generate_chat_completion(request, form_data, user, bypass_filter),
-        style=_model_call_tracing_style(request, form_data),
+        style=style,
     )
     return bind_usage_to_response(
         response, resolve_usage_context(request, form_data, user)
@@ -206,6 +209,25 @@ def _model_call_tracing_style(request: Request, form_data: dict) -> str:
     except Exception:
         log.debug("Resolving model-call tracing style failed", exc_info=True)
         return MODEL_CALL_TRACING_APP
+
+
+def _carry_model_call_tracing_style(form_data: dict, style: str) -> None:
+    """Hand the decided style to the OpenAI router in the call's metadata.
+
+    The router adds provider fields only for this style, so a call is never
+    recorded by both the app and the provider. The metadata dict is replaced,
+    not mutated, because it can be shared with request.state and other calls.
+    """
+    metadata = form_data.get("metadata")
+    has_key = isinstance(metadata, dict) and MODEL_CALL_TRACING_KEY in metadata
+    if style == MODEL_CALL_TRACING_APP and not has_key:
+        return
+    metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    if style == MODEL_CALL_TRACING_APP:
+        metadata.pop(MODEL_CALL_TRACING_KEY, None)
+    else:
+        metadata[MODEL_CALL_TRACING_KEY] = style
+    form_data["metadata"] = metadata
 
 
 async def _generate_chat_completion(
