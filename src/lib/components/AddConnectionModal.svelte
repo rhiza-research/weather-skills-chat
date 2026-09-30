@@ -292,9 +292,16 @@
 											class="w-full text-sm bg-transparent outline-hidden"
 											bind:value={modelCallTracing}
 										>
+											<!-- A new provider style is also added to _PROVIDER_TRACE_FIELD_BUILDERS in backend/open_webui/utils/langfuse_tracing.py. -->
 											<option value="app">{$i18n.t('App')}</option>
 											<option value="openrouter">{$i18n.t('OpenRouter Broadcast')}</option>
 										</select>
+									</div>
+
+									<div class="mt-1 text-xs text-gray-500">
+										{$i18n.t(
+											'OpenRouter records model calls only if Broadcast to this Langfuse project is enabled in OpenRouter. Otherwise leave this on App.'
+										)}
 									</div>
 								</div>
 							</div>
