@@ -79,6 +79,42 @@ def test_tracing_style_skips_model_lookup_when_no_connection_opts_in():
         lookup.assert_not_called()
 
 
+def test_api_config_for_index_tolerates_missing_configs():
+    request = _request(["https://openrouter.ai/api/v1"])
+    request.app.state.config.OPENAI_API_CONFIGS = None
+    assert openai_router.api_config_for_index(request, 0) == {}
+
+
+def test_api_config_for_index_tolerates_none_value():
+    request = _request(["https://openrouter.ai/api/v1"], {"0": None})
+    assert openai_router.api_config_for_index(request, 0) == {}
+
+
+def test_api_config_for_index_legacy_url_key():
+    url = "https://openrouter.ai/api/v1"
+    request = _request([url], {url: {"prefix_id": "or"}})
+    assert openai_router.api_config_for_index(request, 0) == {"prefix_id": "or"}
+    request = _request([url], {url: None})
+    assert openai_router.api_config_for_index(request, 0) == {}
+
+
+def test_api_config_for_index_prefers_index_key():
+    url = "https://openrouter.ai/api/v1"
+    request = _request([url], {"0": {"prefix_id": "a"}, url: {"prefix_id": "b"}})
+    assert openai_router.api_config_for_index(request, 0) == {"prefix_id": "a"}
+
+
+def test_provider_trace_style_needs_carried_and_configured_to_match():
+    openrouter = {"model_call_tracing": "openrouter"}
+    style = openai_router.provider_trace_style
+    assert style(openrouter, {}) == "app"
+    assert style({}, openrouter) == "app"
+    assert style({"model_call_tracing": "app"}, openrouter) == "app"
+    assert style(None, openrouter) == "app"
+    assert style({"model_call_tracing": "made-up"}, {"model_call_tracing": "made-up"}) == "app"
+    assert style(openrouter, openrouter) == "openrouter"
+
+
 def test_tracing_style_is_app_when_tracing_off():
     request = _request(
         ["https://openrouter.ai/api/v1"], {"0": {"model_call_tracing": "openrouter"}}

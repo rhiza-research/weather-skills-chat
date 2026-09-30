@@ -139,5 +139,102 @@ class TitleCallThroughChatTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("trace", self.sent[0])
 
 
+    async def test_shared_state_metadata_never_gains_style(self):
+        request = _request("openrouter")
+        shared = {"task": "title_generation", "chat_id": "chat-1"}
+        request.state.metadata = shared
+        form = self._title_form()
+        form["metadata"] = shared
+
+        await chat.generate_chat_completion(request, form, self.user)
+        self.assertNotIn("model_call_tracing", shared)
+        self.assertIn("trace", self.sent[0])
+        self.root.start_observation.assert_not_called()
+
+        request.app.state.config.OPENAI_API_CONFIGS = {"0": {}}
+        await chat.generate_chat_completion(request, form, self.user)
+        self.assertNotIn("model_call_tracing", shared)
+        self.assertEqual(
+            self.root.start_observation.call_args.kwargs["as_type"], "generation"
+        )
+        for key in ("trace", "user"):
+            self.assertNotIn(key, self.sent[1])
+
+        # A task that copies request.state.metadata into a fresh form.
+        await chat.generate_chat_completion(
+            request, {**self._title_form(), "metadata": dict(shared)}, self.user
+        )
+        self.assertNotIn("model_call_tracing", shared)
+        for key in ("trace", "user"):
+            self.assertNotIn(key, self.sent[2])
+
+
+class RouterProviderFieldsTest(unittest.IsolatedAsyncioTestCase):
+    """The router adds provider fields only when the carried style and the
+    serving connection's configured style are the same provider style."""
+
+    async def asyncSetUp(self):
+        lf._trace_var.set(MagicMock(trace_id="c" * 32, id="d" * 16))
+        lf._trace_metadata_var.set({"chat_id": "chat-1"})
+        self.user = SimpleNamespace(
+            id="uid-99", email="bob@example.com", name="Bob", role="admin"
+        )
+        self.sent = []
+        self.patches = [
+            patch.object(lf, "tracing_enabled", return_value=True),
+            patch.object(openai_router.Models, "get_model_by_id", return_value=None),
+            patch.object(
+                openai_router.aiohttp,
+                "ClientSession",
+                side_effect=lambda **kwargs: _FakeSession(self.sent),
+            ),
+        ]
+        for p in self.patches:
+            p.start()
+
+    async def asyncTearDown(self):
+        for p in reversed(self.patches):
+            p.stop()
+        lf._trace_var.set(None)
+        lf._trace_metadata_var.set(None)
+
+    async def _send(self, connection_style, carried_style, top_level=False):
+        form = {
+            "model": "openai/gpt-4o",
+            "messages": [{"role": "user", "content": "hi"}],
+            "metadata": {"chat_id": "chat-1", "model_call_tracing": carried_style},
+        }
+        if top_level:
+            form["model_call_tracing"] = carried_style
+        await openai_router.generate_chat_completion(
+            _request(connection_style), form, user=self.user
+        )
+        body = self.sent[-1]
+        self.assertNotIn("model_call_tracing", body)
+        self.assertNotIn("metadata", body)
+        return body
+
+    async def test_direct_call_injected_style_on_app_connection_adds_nothing(self):
+        body = await self._send("app", "openrouter", top_level=True)
+        for key in ("trace", "user"):
+            self.assertNotIn(key, body)
+
+    async def test_carried_openrouter_on_app_connection_adds_nothing(self):
+        body = await self._send("app", "openrouter")
+        for key in ("trace", "user"):
+            self.assertNotIn(key, body)
+
+    async def test_carried_app_on_openrouter_connection_adds_nothing(self):
+        body = await self._send("openrouter", "app")
+        for key in ("trace", "user"):
+            self.assertNotIn(key, body)
+
+    async def test_both_openrouter_adds_fields(self):
+        body = await self._send("openrouter", "openrouter")
+        self.assertEqual(body["trace"]["trace_id"], "c" * 32)
+        self.assertEqual(body["trace"]["parent_span_id"], "d" * 16)
+        self.assertEqual(body["user"], "bob@example.com")
+
+
 if __name__ == "__main__":
     unittest.main()
