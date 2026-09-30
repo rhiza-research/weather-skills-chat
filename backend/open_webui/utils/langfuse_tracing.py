@@ -21,6 +21,7 @@ from open_webui.env import (
     LANGFUSE_HOST,
     LANGFUSE_PUBLIC_KEY,
     LANGFUSE_SECRET_KEY,
+    LANGFUSE_TRACING_ENVIRONMENT,
 )
 
 log = logging.getLogger(__name__)
@@ -41,18 +42,12 @@ _generation_stack_var: contextvars.ContextVar[list] = contextvars.ContextVar(
 _propagate_cm_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
     "langfuse_propagate_cm", default=None
 )
-_pending_trace_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
-    "langfuse_pending_trace", default=None
+_trace_metadata_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "langfuse_trace_metadata", default=None
 )
-
-
-class _PendingTrace:
-    __slots__ = ("trace", "cm", "done")
-
-    def __init__(self):
-        self.trace = None
-        self.cm = None
-        self.done = threading.Event()
+_input_thread_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "langfuse_input_thread", default=None
+)
 
 
 def tracing_enabled() -> bool:
@@ -136,29 +131,7 @@ def _exit_propagate_attributes() -> None:
         _propagate_cm_var.set(None)
 
 
-def _adopt_pending_trace(*, wait: bool = False, timeout: float = 5.0) -> None:
-    pending = _pending_trace_var.get()
-    if pending is None or _trace_var.get() is not None:
-        return
-    if wait and not pending.done.is_set():
-        pending.done.wait(timeout=timeout)
-    if not pending.done.is_set():
-        return
-    if pending.trace is None:
-        return
-    cm = pending.cm
-    if cm is not None:
-        _safe_call(cm.__enter__)
-        _propagate_cm_var.set(cm)
-        pending.cm = None
-    _trace_var.set(pending.trace)
-
-
 def current_trace():
-    existing = _trace_var.get()
-    if existing is not None:
-        return existing
-    _adopt_pending_trace()
     return _trace_var.get()
 
 
@@ -176,10 +149,10 @@ def _create_chat_trace(
     metadata: Optional[dict],
     form_data: Optional[dict],
     source: str = "chat",
-) -> tuple[Any, Any]:
+) -> tuple[Any, Any, Optional[dict]]:
     client = get_client()
     if not client:
-        return None, None
+        return None, None, None
     metadata = metadata or {}
     form_data = form_data or {}
     if metadata.get("headless"):
@@ -223,8 +196,17 @@ def _create_chat_trace(
         metadata=trace_metadata,
     )
     if trace is None:
-        return None, None
-    return trace, cm
+        return None, None, None
+    return trace, cm, trace_metadata
+
+
+def _activate_chat_trace(trace: Any, cm: Any, trace_metadata: Optional[dict]) -> None:
+    if cm is not None:
+        _safe_call(cm.__enter__)
+        _propagate_cm_var.set(cm)
+    if trace is not None:
+        _trace_var.set(trace)
+        _trace_metadata_var.set(trace_metadata)
 
 
 def start_chat_trace(
@@ -234,55 +216,64 @@ def start_chat_trace(
     form_data: Optional[dict],
     source: str = "chat",
 ) -> Any:
-    trace, cm = _create_chat_trace(
+    trace, cm, trace_metadata = _create_chat_trace(
         user=user, metadata=metadata, form_data=form_data, source=source
     )
-    if cm is not None:
-        _safe_call(cm.__enter__)
-        _propagate_cm_var.set(cm)
-    if trace is not None:
-        _trace_var.set(trace)
+    _activate_chat_trace(trace, cm, trace_metadata)
     return trace
 
 
-def schedule_start_chat_trace(
+def begin_chat_trace(
     *,
     user: Any,
     metadata: Optional[dict],
     form_data: Optional[dict],
     source: str = "chat",
-) -> None:
-    """Create the chat trace off the send path. Later spans adopt it if ready."""
+) -> Any:
+    """Create the root span now so its ids exist before the first model call.
+
+    The span starts with only the model as input. Provider-traced model calls
+    need the span's trace id and id when the request body is built. A
+    background thread truncates the message list and attaches it with
+    ``span.update(input=...)``, off the send path.
+    """
     if not tracing_enabled():
-        return
-    pending = _PendingTrace()
-    _pending_trace_var.set(pending)
-    snapshot_metadata = copy.copy(metadata or {})
-    snapshot_form = {
-        "model": (form_data or {}).get("model"),
-        "messages": copy.deepcopy((form_data or {}).get("messages") or []),
-    }
+        return None
+    model = (form_data or {}).get("model")
+    try:
+        trace, cm, trace_metadata = _create_chat_trace(
+            user=user,
+            metadata=copy.copy(metadata or {}),
+            form_data={"model": model},
+            source=source,
+        )
+    except Exception:
+        log.debug("Langfuse begin_chat_trace failed", exc_info=True)
+        return None
+    _activate_chat_trace(trace, cm, trace_metadata)
+    if trace is None:
+        return None
+    messages = copy.deepcopy((form_data or {}).get("messages") or [])
 
-    def _run():
-        try:
-            pending.trace, pending.cm = _create_chat_trace(
-                user=user,
-                metadata=snapshot_metadata,
-                form_data=snapshot_form,
-                source=source,
-            )
-        except Exception:
-            log.debug("Background Langfuse start_chat_trace failed", exc_info=True)
-        finally:
-            pending.done.set()
+    def _attach_input():
+        _safe_call(
+            trace.update,
+            input=truncate_payload({"model": model, "messages": messages}),
+        )
 
-    threading.Thread(
-        target=_run, name="langfuse-start-chat-trace", daemon=True
-    ).start()
+    thread = threading.Thread(
+        target=_attach_input, name="langfuse-chat-trace-input", daemon=True
+    )
+    thread.start()
+    _input_thread_var.set(thread)
+    return trace
 
 
 def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
-    _adopt_pending_trace(wait=True)
+    # An ended span drops updates, so the input must land first.
+    input_thread = _input_thread_var.get()
+    if input_thread is not None:
+        input_thread.join(timeout=5.0)
     while _generation_stack():
         end_generation(error=error or "trace closed")
     trace = _trace_var.get()
@@ -302,12 +293,112 @@ def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
         log.debug("Langfuse end_chat_trace failed", exc_info=True)
     finally:
         _trace_var.set(None)
+        _trace_metadata_var.set(None)
+        _input_thread_var.set(None)
         _generation_stack_var.set(None)
-        _pending_trace_var.set(None)
         _exit_propagate_attributes()
         client = get_client()
         if client:
             _safe_call(client.flush)
+
+
+# Who records a connection's model calls, set per connection as
+# ``model_call_tracing`` in OPENAI_API_CONFIGS. "app" records a generation
+# here. A provider style sends that provider's trace-linking fields in the
+# request body and the provider records the call with the real model and cost.
+MODEL_CALL_TRACING_KEY = "model_call_tracing"
+MODEL_CALL_TRACING_APP = "app"
+MODEL_CALL_TRACING_OPENROUTER = "openrouter"
+
+_warned_tracing_styles: set = set()
+
+
+def _openrouter_trace_fields(
+    *,
+    trace: Any,
+    trace_metadata: Optional[dict],
+    user: Any,
+    metadata: Optional[dict],
+) -> dict:
+    """OpenRouter Broadcast fields: ``user``, ``session_id``, ``trace``."""
+    fields: dict[str, Any] = {}
+    user_id = _trace_user_id(user)
+    if user_id:
+        fields["user"] = user_id
+    source = trace_metadata if trace is not None and trace_metadata else metadata
+    source = source if isinstance(source, dict) else {}
+    chat_id = source.get("chat_id")
+    if chat_id:
+        fields["session_id"] = str(chat_id)[:256]
+    if trace is None:
+        return fields
+    trace_fields = {
+        "trace_id": getattr(trace, "trace_id", None),
+        "parent_span_id": getattr(trace, "id", None),
+        "environment": LANGFUSE_TRACING_ENVIRONMENT,
+        "generation_name": "llm",
+        "chat_id": source.get("chat_id"),
+        "message_id": source.get("message_id"),
+        "model": source.get("model"),
+        "tool_ids": source.get("tool_ids"),
+    }
+    fields["trace"] = {k: v for k, v in trace_fields.items() if v is not None}
+    return fields
+
+
+# Style -> builder of the request-body fields that let that provider record
+# the call inside the app's trace. To add a provider (for example LiteLLM),
+# write a builder with the same keyword arguments as _openrouter_trace_fields
+# and register its style here. The connection modal's style select lists the
+# styles an admin can pick.
+_PROVIDER_TRACE_FIELD_BUILDERS: dict[str, Callable[..., dict]] = {
+    MODEL_CALL_TRACING_OPENROUTER: _openrouter_trace_fields,
+}
+
+
+def model_call_tracing_style(api_config: Optional[dict]) -> str:
+    """The connection's tracing style; unset or unknown values mean "app"."""
+    style = str(
+        (api_config or {}).get(MODEL_CALL_TRACING_KEY) or MODEL_CALL_TRACING_APP
+    )
+    if style == MODEL_CALL_TRACING_APP or style in _PROVIDER_TRACE_FIELD_BUILDERS:
+        return style
+    if style not in _warned_tracing_styles:
+        _warned_tracing_styles.add(style)
+        log.warning(
+            "Unknown %s %r; the app records these model calls",
+            MODEL_CALL_TRACING_KEY,
+            style,
+        )
+    return MODEL_CALL_TRACING_APP
+
+
+def apply_provider_trace_fields(
+    payload: dict,
+    style: str,
+    *,
+    user: Any,
+    metadata: Optional[dict],
+) -> dict:
+    """Add the style's provider fields to an outgoing request body.
+
+    The body is unchanged for "app" and when Langfuse tracing is off.
+    """
+    builder = _PROVIDER_TRACE_FIELD_BUILDERS.get(style)
+    if builder is None or not tracing_enabled():
+        return payload
+    try:
+        fields = builder(
+            trace=current_trace(),
+            trace_metadata=_trace_metadata_var.get(),
+            user=user,
+            metadata=metadata,
+        )
+    except Exception:
+        log.debug("Building %s trace fields failed", style, exc_info=True)
+        return payload
+    payload.update(fields)
+    return payload
 
 
 def _generation_stack() -> list:
@@ -612,7 +703,16 @@ async def _tee_generation_stream(iterator):
         raise
 
 
-async def observe_generation(form_data: dict, coro):
+async def observe_generation(
+    form_data: dict, coro, *, style: str = MODEL_CALL_TRACING_APP
+):
+    """Record the model call as a generation unless its provider records it.
+
+    Callers resolve the style first, so a provider-traced call never creates
+    a generation here.
+    """
+    if style != MODEL_CALL_TRACING_APP:
+        return await coro
     start_generation(form_data)
     try:
         response = await coro
