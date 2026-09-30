@@ -233,6 +233,7 @@ class BeginChatTraceTest(unittest.TestCase):
     @patch.object(lf, "tracing_enabled", return_value=True)
     @patch.object(lf, "get_client")
     def test_end_waits_for_input_before_ending(self, mock_get_client, _enabled):
+        import contextvars
         import threading
 
         client = MagicMock()
@@ -240,10 +241,13 @@ class BeginChatTraceTest(unittest.TestCase):
         client.start_observation.return_value = trace
         mock_get_client.return_value = client
         calls = []
-        gate = threading.Event()
+        update_started = threading.Event()
+        release_update = threading.Event()
+        end_joining = threading.Event()
 
         def _update(**kwargs):
-            gate.wait(timeout=1)
+            update_started.set()
+            release_update.wait(timeout=5)
             calls.append("update")
 
         trace.update.side_effect = _update
@@ -255,10 +259,29 @@ class BeginChatTraceTest(unittest.TestCase):
                 metadata={"chat_id": "chat-1"},
                 form_data={"model": "m", "messages": []},
             )
-        threading.Timer(0.05, gate.set).start()
-        lf.end_chat_trace()
+        input_thread = lf._input_thread_var.get()
+        self.assertTrue(update_started.wait(timeout=5))
+
+        class _JoinSignal:
+            def join(self, timeout=None):
+                end_joining.set()
+                input_thread.join(timeout)
+
+            def is_alive(self):
+                return input_thread.is_alive()
+
+        lf._input_thread_var.set(_JoinSignal())
+        ctx = contextvars.copy_context()
+        ender = threading.Thread(target=ctx.run, args=(lf.end_chat_trace,))
+        ender.start()
+        self.assertTrue(end_joining.wait(timeout=5))
+        trace.end.assert_not_called()
+        release_update.set()
+        ender.join(timeout=5)
+        input_thread.join(timeout=5)
+        self.assertFalse(ender.is_alive())
         self.assertEqual(calls, ["update", "end"])
-        self.assertIsNone(lf.current_trace())
+        self.assertIsNone(ctx.run(lf.current_trace))
 
     @patch.object(lf, "tracing_enabled", return_value=False)
     def test_disabled_creates_nothing(self, _enabled):
@@ -443,6 +466,188 @@ class ProviderTracedGenerationTest(unittest.IsolatedAsyncioTestCase):
             trace.start_observation.call_args.kwargs["as_type"], "generation"
         )
         generation.end.assert_called_once()
+
+
+class BeginChatTraceNeverRaisesTest(unittest.TestCase):
+    def setUp(self):
+        _reset_trace_state()
+
+    def tearDown(self):
+        _reset_trace_state()
+
+    def _begin(self):
+        return lf.begin_chat_trace(
+            user=MagicMock(email="bob@example.com", id="uid-99"),
+            metadata={"chat_id": "chat-1"},
+            form_data={"model": "m", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    def _assert_no_trace(self, result, threads_before):
+        import threading
+
+        self.assertIsNone(result)
+        self.assertIsNone(lf._trace_var.get())
+        self.assertIsNone(lf._input_thread_var.get())
+        self.assertIsNone(lf._propagate_cm_var.get())
+        names = {t.name for t in threading.enumerate()} - threads_before
+        self.assertNotIn("langfuse-chat-trace-input", names)
+
+    def _threads(self):
+        import threading
+
+        return {t.name for t in threading.enumerate()}
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    def test_create_chat_trace_raises(self, _enabled):
+        before = self._threads()
+        with patch.object(lf, "_create_chat_trace", side_effect=RuntimeError("boom")):
+            result = self._begin()
+        self._assert_no_trace(result, before)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    def test_get_client_raises(self, _enabled):
+        before = self._threads()
+        with patch.object(lf, "get_client", side_effect=RuntimeError("boom")):
+            result = self._begin()
+        self._assert_no_trace(result, before)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    @patch.object(lf, "get_client")
+    def test_deepcopy_raises(self, mock_get_client, _enabled):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        before = self._threads()
+        with patch.object(lf.copy, "deepcopy", side_effect=RuntimeError("boom")):
+            result = self._begin()
+        self._assert_no_trace(result, before)
+        client.start_observation.assert_not_called()
+
+
+class EndChatTraceInputTimeoutTest(unittest.TestCase):
+    def setUp(self):
+        _reset_trace_state()
+
+    def tearDown(self):
+        _reset_trace_state()
+
+    @patch.object(lf, "get_client", return_value=None)
+    def test_logs_when_input_not_attached(self, _client):
+        stuck = MagicMock()
+        stuck.is_alive.return_value = True
+        lf._input_thread_var.set(stuck)
+        trace = MagicMock()
+        lf._trace_var.set(trace)
+        with self.assertLogs(lf.log, level="DEBUG") as logs:
+            lf.end_chat_trace()
+        stuck.join.assert_called_once_with(timeout=5.0)
+        self.assertTrue(any("not attached" in line for line in logs.output))
+        trace.end.assert_called_once()
+
+
+class OpenRouterTraceIdPairTest(unittest.TestCase):
+    def _trace_object(self, trace):
+        return lf._openrouter_trace_fields(
+            trace=trace,
+            trace_metadata={"chat_id": "chat-1"},
+            user=MagicMock(email="bob@example.com", id="uid-99"),
+            metadata=None,
+        )["trace"]
+
+    def test_both_ids_present(self):
+        out = self._trace_object(MagicMock(trace_id="a" * 32, id="b" * 16))
+        self.assertEqual(out["trace_id"], "a" * 32)
+        self.assertEqual(out["parent_span_id"], "b" * 16)
+
+    def test_missing_span_id_drops_both(self):
+        out = self._trace_object(MagicMock(trace_id="a" * 32, id=None))
+        self.assertNotIn("trace_id", out)
+        self.assertNotIn("parent_span_id", out)
+        self.assertEqual(out["generation_name"], "llm")
+
+    def test_missing_trace_id_drops_both(self):
+        out = self._trace_object(MagicMock(trace_id=None, id="b" * 16))
+        self.assertNotIn("trace_id", out)
+        self.assertNotIn("parent_span_id", out)
+
+
+class MetadataStyleNoWarnTest(unittest.TestCase):
+    def setUp(self):
+        lf._warned_tracing_styles.clear()
+
+    def tearDown(self):
+        lf._warned_tracing_styles.clear()
+
+    def test_unknown_metadata_style_is_app_without_logging(self):
+        with patch.object(lf.log, "warning") as warning:
+            style = lf.model_call_tracing_style(
+                {"model_call_tracing": "client-chosen"}, warn_unknown=False
+            )
+        self.assertEqual(style, "app")
+        warning.assert_not_called()
+        self.assertEqual(lf._warned_tracing_styles, set())
+
+    def test_known_metadata_style_passes(self):
+        self.assertEqual(
+            lf.model_call_tracing_style(
+                {"model_call_tracing": "openrouter"}, warn_unknown=False
+            ),
+            "openrouter",
+        )
+
+
+class ProviderCallErrorSpanTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        _reset_trace_state()
+        self.trace = MagicMock()
+        self.span = MagicMock()
+        self.trace.start_observation.return_value = self.span
+        lf._trace_var.set(self.trace)
+
+    async def asyncTearDown(self):
+        _reset_trace_state()
+
+    def _assert_error_span(self, message_part):
+        kwargs = self.trace.start_observation.call_args.kwargs
+        self.assertEqual(kwargs["name"], "llm")
+        self.assertEqual(kwargs["as_type"], "span")
+        self.assertEqual(kwargs["level"], "ERROR")
+        self.assertIn(message_part, kwargs["status_message"])
+        self.assertEqual(kwargs["metadata"], {"model_call_tracing": "openrouter"})
+        for key in ("usage_details", "cost_details", "model"):
+            self.assertNotIn(key, kwargs)
+        self.span.end.assert_called_once()
+
+    async def test_raised_error_records_span_and_reraises(self):
+        from fastapi import HTTPException
+
+        async def coro():
+            raise HTTPException(status_code=502, detail="upstream timeout")
+
+        with self.assertRaises(HTTPException):
+            await lf.observe_generation({"model": "m"}, coro(), style="openrouter")
+        self._assert_error_span("HTTP 502: upstream timeout")
+
+    async def test_error_status_stream_records_span(self):
+        from starlette.responses import StreamingResponse
+
+        async def body():
+            yield b"data: {}\n\n"
+
+        async def coro():
+            return StreamingResponse(body(), status_code=429)
+
+        response = await lf.observe_generation(
+            {"model": "m"}, coro(), style="openrouter"
+        )
+        self.assertEqual(response.status_code, 429)
+        self._assert_error_span("HTTP 429")
+
+    async def test_success_records_nothing(self):
+        async def coro():
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+        await lf.observe_generation({"model": "m"}, coro(), style="openrouter")
+        self.trace.start_observation.assert_not_called()
 
 
 if __name__ == "__main__":

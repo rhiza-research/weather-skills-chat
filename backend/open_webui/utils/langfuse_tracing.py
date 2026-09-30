@@ -236,36 +236,41 @@ def begin_chat_trace(
     need the span's trace id and id when the request body is built. A
     background thread truncates the message list and attaches it with
     ``span.update(input=...)``, off the send path.
+
+    Never raises: on any failure the chat runs without a trace.
     """
-    if not tracing_enabled():
-        return None
-    model = (form_data or {}).get("model")
     try:
+        if not tracing_enabled():
+            return None
+        model = (form_data or {}).get("model")
+        messages = copy.deepcopy((form_data or {}).get("messages") or [])
         trace, cm, trace_metadata = _create_chat_trace(
             user=user,
             metadata=copy.copy(metadata or {}),
             form_data={"model": model},
             source=source,
         )
+        if trace is None:
+            return None
+
+        def _attach_input():
+            _safe_call(
+                trace.update,
+                input=truncate_payload({"model": model, "messages": messages}),
+            )
+
+        thread = threading.Thread(
+            target=_attach_input, name="langfuse-chat-trace-input", daemon=True
+        )
     except Exception:
         log.debug("Langfuse begin_chat_trace failed", exc_info=True)
         return None
     _activate_chat_trace(trace, cm, trace_metadata)
-    if trace is None:
-        return None
-    messages = copy.deepcopy((form_data or {}).get("messages") or [])
-
-    def _attach_input():
-        _safe_call(
-            trace.update,
-            input=truncate_payload({"model": model, "messages": messages}),
-        )
-
-    thread = threading.Thread(
-        target=_attach_input, name="langfuse-chat-trace-input", daemon=True
-    )
-    thread.start()
-    _input_thread_var.set(thread)
+    try:
+        thread.start()
+        _input_thread_var.set(thread)
+    except Exception:
+        log.debug("Langfuse chat trace input thread failed to start", exc_info=True)
     return trace
 
 
@@ -274,6 +279,8 @@ def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
     input_thread = _input_thread_var.get()
     if input_thread is not None:
         input_thread.join(timeout=5.0)
+        if input_thread.is_alive():
+            log.debug("Langfuse chat trace input was not attached before end")
     while _generation_stack():
         end_generation(error=error or "trace closed")
     trace = _trace_var.get()
@@ -311,6 +318,7 @@ MODEL_CALL_TRACING_APP = "app"
 MODEL_CALL_TRACING_OPENROUTER = "openrouter"
 
 _warned_tracing_styles: set = set()
+_warned_tracing_styles_lock = threading.Lock()
 
 
 def _openrouter_trace_fields(
@@ -332,9 +340,12 @@ def _openrouter_trace_fields(
         fields["session_id"] = str(chat_id)[:256]
     if trace is None:
         return fields
+    trace_id = getattr(trace, "trace_id", None)
+    parent_span_id = getattr(trace, "id", None)
     trace_fields = {
-        "trace_id": getattr(trace, "trace_id", None),
-        "parent_span_id": getattr(trace, "id", None),
+        # Both ids or neither; half a pair cannot nest the call.
+        "trace_id": trace_id if trace_id and parent_span_id else None,
+        "parent_span_id": parent_span_id if trace_id and parent_span_id else None,
         "environment": LANGFUSE_TRACING_ENVIRONMENT,
         "generation_name": "llm",
         "chat_id": source.get("chat_id"),
@@ -356,20 +367,27 @@ _PROVIDER_TRACE_FIELD_BUILDERS: dict[str, Callable[..., dict]] = {
 }
 
 
-def model_call_tracing_style(api_config: Optional[dict]) -> str:
-    """The style in a connection config or call metadata; unset or unknown is "app"."""
-    style = str(
-        (api_config or {}).get(MODEL_CALL_TRACING_KEY) or MODEL_CALL_TRACING_APP
-    )
+def model_call_tracing_style(
+    config: Optional[dict], *, warn_unknown: bool = True
+) -> str:
+    """The style in a connection config or call metadata; unset or unknown is "app".
+
+    Pass ``warn_unknown=False`` for call metadata, whose values come from
+    clients and must not grow the warned set or the log.
+    """
+    style = str((config or {}).get(MODEL_CALL_TRACING_KEY) or MODEL_CALL_TRACING_APP)
     if style == MODEL_CALL_TRACING_APP or style in _PROVIDER_TRACE_FIELD_BUILDERS:
         return style
-    if style not in _warned_tracing_styles:
-        _warned_tracing_styles.add(style)
-        log.warning(
-            "Unknown %s %r; the app records these model calls",
-            MODEL_CALL_TRACING_KEY,
-            style,
-        )
+    if warn_unknown:
+        with _warned_tracing_styles_lock:
+            first = style not in _warned_tracing_styles
+            _warned_tracing_styles.add(style)
+        if first:
+            log.warning(
+                "Unknown %s %r; the app records these model calls",
+                MODEL_CALL_TRACING_KEY,
+                style,
+            )
     return MODEL_CALL_TRACING_APP
 
 
@@ -382,7 +400,8 @@ def apply_provider_trace_fields(
 ) -> dict:
     """Add the style's provider fields to an outgoing request body.
 
-    The body is unchanged for "app" and when Langfuse tracing is off.
+    Mutates ``payload`` in place and returns the same dict. The body is
+    unchanged for "app" and when Langfuse tracing is off.
     """
     builder = _PROVIDER_TRACE_FIELD_BUILDERS.get(style)
     if builder is None or not tracing_enabled():
@@ -703,6 +722,46 @@ async def _tee_generation_stream(iterator):
         raise
 
 
+def _error_text(error: Any) -> str:
+    status_code = getattr(error, "status_code", None)
+    detail = getattr(error, "detail", None)
+    if status_code is not None and detail is not None:
+        return f"HTTP {status_code}: {detail}"
+    return str(error) or type(error).__name__
+
+
+def _provider_response_failure(response: Any) -> Optional[str]:
+    """Why a provider-traced call failed on the app side, else None."""
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and status_code >= 400:
+        return f"HTTP {status_code}"
+    if isinstance(response, dict) and response.get("error"):
+        return str(response.get("error"))
+    return None
+
+
+def record_provider_call_error(style: str, error: str) -> None:
+    """Record a failed provider-traced call as an ERROR span under the root.
+
+    The provider may never see or record a call that fails here, so without
+    this span the failure would not appear in Langfuse. It is a span, not a
+    generation, so it carries no usage or cost.
+    """
+    trace = current_trace()
+    if not trace:
+        return
+    span = _safe_call(
+        trace.start_observation,
+        name="llm",
+        as_type="span",
+        level="ERROR",
+        status_message=error,
+        metadata={MODEL_CALL_TRACING_KEY: style},
+    )
+    if span is not None:
+        _safe_call(span.end)
+
+
 async def observe_generation(
     form_data: dict, coro, *, style: str = MODEL_CALL_TRACING_APP
 ):
@@ -712,7 +771,15 @@ async def observe_generation(
     a generation here.
     """
     if style != MODEL_CALL_TRACING_APP:
-        return await coro
+        try:
+            response = await coro
+        except Exception as e:
+            record_provider_call_error(style, _error_text(e))
+            raise
+        failure = _provider_response_failure(response)
+        if failure is not None:
+            record_provider_call_error(style, failure)
+        return response
     start_generation(form_data)
     try:
         response = await coro

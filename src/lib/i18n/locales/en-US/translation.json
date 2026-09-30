@@ -856,6 +856,7 @@
 	"OpenAI URL/Key required.": "",
 	"openapi.json Path": "",
 	"OpenRouter Broadcast": "",
+	"OpenRouter records model calls only if Broadcast to this Langfuse project is enabled in OpenRouter. Otherwise leave this on App.": "",
 	"or": "",
 	"Organize your users": "",
 	"Other": "",

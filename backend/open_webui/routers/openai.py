@@ -44,6 +44,7 @@ from open_webui.utils.misc import (
 from open_webui.utils.chat_timing import log_timing
 from open_webui.utils.langfuse_tracing import (
     MODEL_CALL_TRACING_APP,
+    MODEL_CALL_TRACING_KEY,
     apply_provider_trace_fields,
     model_call_tracing_style,
     tracing_enabled,
@@ -730,13 +731,13 @@ def base_model_id_for(model_info, model_id: str) -> str:
 
 
 def api_config_for_index(request: Request, idx: int) -> dict:
-    configs = request.app.state.config.OPENAI_API_CONFIGS
-    return configs.get(
-        str(idx),
-        configs.get(
-            request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
-        ),  # Legacy support
-    )
+    configs = request.app.state.config.OPENAI_API_CONFIGS or {}
+    if str(idx) in configs:
+        config = configs.get(str(idx))
+    else:
+        # Legacy support
+        config = configs.get(request.app.state.config.OPENAI_API_BASE_URLS[idx])
+    return config or {}
 
 
 def model_call_tracing_style_for_model(request: Request, model_id: str) -> str:
@@ -762,6 +763,23 @@ def model_call_tracing_style_for_model(request: Request, model_id: str) -> str:
     return model_call_tracing_style(api_config_for_index(request, idx))
 
 
+def provider_trace_style(metadata: Optional[dict], api_config: dict) -> str:
+    """The provider style to send fields for, else "app".
+
+    utils.chat carries the style it decided in the call metadata. A provider
+    style applies only when the connection that serves the call is configured
+    with the same style, so a client-supplied value alone adds nothing.
+    """
+    carried = model_call_tracing_style(
+        metadata if isinstance(metadata, dict) else None, warn_unknown=False
+    )
+    if carried != MODEL_CALL_TRACING_APP and carried == model_call_tracing_style(
+        api_config
+    ):
+        return carried
+    return MODEL_CALL_TRACING_APP
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
@@ -773,7 +791,9 @@ async def generate_chat_completion(
         bypass_filter = True
 
     payload = {**form_data}
+    # The style travels only in metadata, which is never sent upstream.
     metadata = payload.pop("metadata", None)
+    payload.pop(MODEL_CALL_TRACING_KEY, None)
     chat_id = (metadata or {}).get("chat_id") if isinstance(metadata, dict) else None
 
     model_id = form_data.get("model")
@@ -872,10 +892,9 @@ async def generate_chat_completion(
         )
 
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
-    # utils.chat decides the style once and carries it in metadata.
     payload = apply_provider_trace_fields(
         payload,
-        model_call_tracing_style(metadata if isinstance(metadata, dict) else None),
+        provider_trace_style(metadata, api_config),
         user=user,
         metadata=metadata,
     )
