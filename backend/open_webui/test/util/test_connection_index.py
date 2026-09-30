@@ -1,7 +1,9 @@
 """Chat send picks a connection from the base model id, without a model list."""
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
+from open_webui.routers import openai as openai_router
 from open_webui.routers.openai import connection_index_for_model
 
 
@@ -44,3 +46,42 @@ def test_prefix_is_stripped_before_allowlist_match():
         {"0": {"prefix_id": "or", "model_ids": ["openai/gpt-4o"]}},
     )
     assert connection_index_for_model(request, "or.openai/gpt-4o") == 0
+
+
+def test_tracing_style_follows_wrapper_to_base_connection():
+    request = _request(
+        ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+        {
+            "0": {"model_ids": ["openai/gpt-4o"], "model_call_tracing": "openrouter"},
+            "1": {"model_ids": ["gpt-4o"]},
+        },
+    )
+    wrapper = SimpleNamespace(base_model_id="openai/gpt-4o")
+    with patch.object(openai_router, "tracing_enabled", return_value=True), patch.object(
+        openai_router.Models, "get_model_by_id", return_value=wrapper
+    ):
+        assert (
+            openai_router.model_call_tracing_style_for_model(request, "weather-agent")
+            == "openrouter"
+        )
+    with patch.object(openai_router, "tracing_enabled", return_value=True), patch.object(
+        openai_router.Models, "get_model_by_id", return_value=None
+    ):
+        assert openai_router.model_call_tracing_style_for_model(request, "gpt-4o") == "app"
+
+
+def test_tracing_style_skips_model_lookup_when_no_connection_opts_in():
+    request = _request(["https://openrouter.ai/api/v1"], {"0": {"enable": True}})
+    with patch.object(openai_router, "tracing_enabled", return_value=True), patch.object(
+        openai_router.Models, "get_model_by_id"
+    ) as lookup:
+        assert openai_router.model_call_tracing_style_for_model(request, "m") == "app"
+        lookup.assert_not_called()
+
+
+def test_tracing_style_is_app_when_tracing_off():
+    request = _request(
+        ["https://openrouter.ai/api/v1"], {"0": {"model_call_tracing": "openrouter"}}
+    )
+    with patch.object(openai_router, "tracing_enabled", return_value=False):
+        assert openai_router.model_call_tracing_style_for_model(request, "m") == "app"

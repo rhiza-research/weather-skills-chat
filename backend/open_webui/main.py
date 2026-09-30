@@ -397,7 +397,7 @@ from open_webui.utils.middleware import (
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
-    schedule_start_chat_trace,
+    begin_chat_trace,
     shutdown_langfuse,
 )
 from open_webui.env import LANGFUSE_ENABLED
@@ -1277,7 +1277,7 @@ async def chat_completion(
         waiting_heartbeat = WaitingResponseHeartbeat(get_event_emitter(job_metadata))
         try:
             if LANGFUSE_ENABLED:
-                schedule_start_chat_trace(
+                begin_chat_trace(
                     user=user, metadata=job_metadata, form_data=job_form_data
                 )
             clock.mark("langfuse_start")
