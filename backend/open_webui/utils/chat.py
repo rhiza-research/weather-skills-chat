@@ -25,6 +25,7 @@ from open_webui.functions import generate_function_chat_completion
 
 from open_webui.routers.openai import (
     generate_chat_completion as generate_openai_chat_completion,
+    model_call_tracing_style_for_model,
 )
 
 from open_webui.routers.ollama import (
@@ -47,7 +48,11 @@ from open_webui.utils.response import (
     convert_response_ollama_to_openai,
     convert_streaming_response_ollama_to_openai,
 )
-from open_webui.utils.langfuse_tracing import observe_generation
+from open_webui.utils.langfuse_tracing import (
+    MODEL_CALL_TRACING_APP,
+    observe_generation,
+    tracing_enabled,
+)
 from open_webui.utils.usage import (
     bind_usage_to_response,
     enforce_usage_caps,
@@ -173,10 +178,34 @@ async def generate_chat_completion(
     response = await observe_generation(
         form_data,
         _generate_chat_completion(request, form_data, user, bypass_filter),
+        style=_model_call_tracing_style(request, form_data),
     )
     return bind_usage_to_response(
         response, resolve_usage_context(request, form_data, user)
     )
+
+
+def _model_call_tracing_style(request: Request, form_data: dict) -> str:
+    """Who records this call; only OpenAI-connection models can opt out of "app".
+
+    Direct, arena, pipe and Ollama models never reach the OpenAI router, so
+    the app records them.
+    """
+    if not tracing_enabled() or getattr(request.state, "direct", False):
+        return MODEL_CALL_TRACING_APP
+    try:
+        model_id = form_data.get("model")
+        model = request.app.state.MODELS.get(model_id)
+        if (
+            not model
+            or model.get("owned_by") in ("arena", "ollama")
+            or model.get("pipe")
+        ):
+            return MODEL_CALL_TRACING_APP
+        return model_call_tracing_style_for_model(request, model_id)
+    except Exception:
+        log.debug("Resolving model-call tracing style failed", exc_info=True)
+        return MODEL_CALL_TRACING_APP
 
 
 async def _generate_chat_completion(
