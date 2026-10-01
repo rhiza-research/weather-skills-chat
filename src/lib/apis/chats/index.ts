@@ -748,7 +748,8 @@ export const shareChatById = async (token: string, id: string) => {
 		});
 
 	if (error) {
-		throw error;
+		const detail = error.detail ?? error;
+		throw typeof detail === 'string' ? detail : JSON.stringify(detail);
 	}
 
 	return res;

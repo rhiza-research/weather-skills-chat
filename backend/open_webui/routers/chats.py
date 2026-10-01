@@ -735,16 +735,10 @@ async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def share_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
-        if is_personal_org(chat.organization_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot share chats in the personal organization",
-            )
         if chat.share_id:
             shared_chat = Chats.update_shared_chat_by_chat_id(chat.id)
-            return ChatResponse(**shared_chat.model_dump())
-
-        shared_chat = Chats.insert_shared_chat_by_chat_id(chat.id)
+        else:
+            shared_chat = Chats.insert_shared_chat_by_chat_id(chat.id)
         if not shared_chat:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

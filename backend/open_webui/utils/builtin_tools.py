@@ -166,44 +166,6 @@ CREATE_AUTOMATION_SPEC = {
 }
 
 
-async def create_zarr_view(
-    zarr: str,
-    title: str,
-    variable: Optional[str] = None,
-    style: str = "heatmap",
-    colormap: str = "viridis",
-    __user__: dict = {},
-    __metadata__: dict = None,
-) -> str:
-    """Create a zarr view JSON in the current chat sandbox."""
-    from open_webui.utils.artifacts import write_json
-
-    metadata = __metadata__ or {}
-    chat_id = metadata.get("chat_id")
-    if not chat_id or chat_id == "local":
-        return "Cannot create a zarr view in a temporary chat."
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_write_chat(user, chat):
-        return "You do not have write access to this chat."
-    relpath = f"views/{title.replace(' ', '-').lower()}.zarrview.json"
-    write_json(
-        chat_id,
-        relpath,
-        {
-            "type": "zarr_view",
-            "zarr": zarr,
-            "title": title,
-            "variable": variable,
-            "style": style,
-            "colormap": colormap,
-            "index": {},
-            "bbox": None,
-        },
-    )
-    return f"Wrote zarr view `{relpath}` for `{zarr}`."
-
-
 async def secrets_page(name: str, __request__=None, **_ignored) -> str:
     """Return a secrets-page link with the name filled in. Never accept a value."""
     from open_webui.models.secrets import SECRET_NAME_RE
@@ -383,23 +345,6 @@ SECRETS_PAGE_SPEC = {
             }
         },
         "required": ["name"],
-    },
-}
-
-
-CREATE_ZARR_VIEW_SPEC = {
-    "name": "create_zarr_view",
-    "description": "Create a zarr view JSON in the current chat's artifact folder.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "zarr": {"type": "string", "description": "Path to the zarr store in the chat sandbox"},
-            "title": {"type": "string"},
-            "variable": {"type": "string"},
-            "style": {"type": "string", "enum": ["heatmap", "timeseries"]},
-            "colormap": {"type": "string"},
-        },
-        "required": ["zarr", "title"],
     },
 }
 
@@ -1249,13 +1194,6 @@ async def list_available_tools(
     )
     lines.append(
         _tool_summary_line(
-            "create_zarr_view",
-            "Create a zarr view JSON in the chat artifact folder.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
             "copy_intermediate_result",
             "Copy a file/folder into or out of intermediate_results.",
             kind="builtin",
@@ -1746,7 +1684,6 @@ def get_builtin_tools(extra_params: dict) -> dict:
         "secrets_page": _tool(secrets_page, SECRETS_PAGE_SPEC),
         "list_preferences": _tool(list_preferences, LIST_PREFERENCES_SPEC),
         "create_preference": _tool(create_preference, CREATE_PREFERENCE_SPEC),
-        "create_zarr_view": _tool(create_zarr_view, CREATE_ZARR_VIEW_SPEC),
         "copy_intermediate_result": _tool(
             copy_intermediate_result, COPY_INTERMEDIATE_RESULT_SPEC
         ),

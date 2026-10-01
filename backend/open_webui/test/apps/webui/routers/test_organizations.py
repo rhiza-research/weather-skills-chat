@@ -259,7 +259,16 @@ class TestOrganizations(AbstractPostgresTest):
         personal_id = personal_chat.json()["id"]
         with mock_webui_user(id="owner"):
             share = self.fast_api_client.post(f"/api/v1/chats/{personal_id}/share")
-        assert share.status_code == 403
+        assert share.status_code == 200
+        shared = share.json()
+        assert shared["user_id"] == f"shared-{personal_id}"
+        assert shared["visibility"] == "private"
+        assert shared["organization_id"]
+        from open_webui.models.chats import Chats
+
+        original = Chats.get_chat_by_id(personal_id)
+        assert original.share_id == shared["id"]
+        assert original.visibility == "private"
         with mock_webui_user(id="owner"):
             vis = self.fast_api_client.post(
                 f"/api/v1/chats/{personal_id}/visibility",

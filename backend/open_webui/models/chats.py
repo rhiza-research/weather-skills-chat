@@ -343,10 +343,15 @@ class ChatTable:
         with get_db() as db:
             # Get the existing chat to share
             chat = db.get(Chat, chat_id)
+            if chat is None:
+                return None
             # Check if the chat is already shared
             if chat.share_id:
-                return self.get_chat_by_id_and_user_id(chat.share_id, "shared")
-            # Create a new chat with the same data, but with a new ID
+                existing = db.get(Chat, chat.share_id)
+                if existing:
+                    return ChatModel.model_validate(existing)
+            # Snapshot keeps the source organization so the row is valid, but stays
+            # private so it does not appear in anyone's chat list.
             shared_chat = ChatModel(
                 **{
                     "id": str(uuid.uuid4()),
@@ -355,6 +360,8 @@ class ChatTable:
                     "chat": chat.chat,
                     "created_at": chat.created_at,
                     "updated_at": int(time.time()),
+                    "organization_id": chat.organization_id,
+                    "visibility": "private",
                 }
             )
             shared_result = Chat(**shared_chat.model_dump())
