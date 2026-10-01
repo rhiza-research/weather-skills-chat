@@ -174,6 +174,11 @@ async def generate_chat_completion(
     user: Any,
     bypass_filter: bool = False,
 ):
+    if _is_arena_model(request, form_data):
+        # The arena calls this function again for the model it selects, and
+        # that call enforces the usage caps and records the generation and
+        # the usage.
+        return await _generate_chat_completion(request, form_data, user, bypass_filter)
     inject_include_usage(form_data)
     enforce_usage_caps(request, form_data, user)
     style = _model_call_tracing_style(request, form_data)
@@ -188,24 +193,37 @@ async def generate_chat_completion(
     )
 
 
+def _catalog_model(request: Request, form_data: dict) -> Optional[dict]:
+    """The call's model from request.app.state.MODELS; None for direct models."""
+    if getattr(request.state, "direct", False):
+        return None
+    return request.app.state.MODELS.get(form_data.get("model"))
+
+
+def _is_arena_model(request: Request, form_data: dict) -> bool:
+    try:
+        model = _catalog_model(request, form_data)
+        return bool(model) and model.get("owned_by") == "arena"
+    except Exception:
+        log.debug("Resolving the arena model failed", exc_info=True)
+        return False
+
+
 def _model_call_tracing_style(request: Request, form_data: dict) -> str:
     """Who records this call; only OpenAI-connection models can opt out of "app".
 
-    Direct, arena, pipe and Ollama models never reach the OpenAI router, so
-    the app records them.
+    Direct, pipe and Ollama models never reach the OpenAI router, so the app
+    records them. Arena calls never reach this function: generate_chat_completion
+    sends them past recording (see _is_arena_model) and records the selected
+    model's call instead.
     """
-    if not tracing_enabled() or getattr(request.state, "direct", False):
+    if not tracing_enabled():
         return MODEL_CALL_TRACING_APP
     try:
-        model_id = form_data.get("model")
-        model = request.app.state.MODELS.get(model_id)
-        if (
-            not model
-            or model.get("owned_by") in ("arena", "ollama")
-            or model.get("pipe")
-        ):
+        model = _catalog_model(request, form_data)
+        if not model or model.get("owned_by") == "ollama" or model.get("pipe"):
             return MODEL_CALL_TRACING_APP
-        return model_call_tracing_style_for_model(request, model_id)
+        return model_call_tracing_style_for_model(request, form_data.get("model"))
     except Exception:
         log.debug("Resolving model-call tracing style failed", exc_info=True)
         return MODEL_CALL_TRACING_APP
