@@ -522,6 +522,65 @@ class BeginChatTraceNeverRaisesTest(unittest.TestCase):
         self._assert_no_trace(result, before)
         client.start_observation.assert_not_called()
 
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    @patch.object(lf, "get_client")
+    @patch("langfuse.propagate_attributes", create=True)
+    def test_no_root_span_exits_entered_cm(
+        self, mock_propagate, mock_get_client, _enabled
+    ):
+        client = MagicMock()
+        client.start_observation.return_value = None
+        mock_get_client.return_value = client
+        cm = MagicMock()
+        mock_propagate.return_value = cm
+        before = self._threads()
+        result = self._begin()
+        self._assert_no_trace(result, before)
+        cm.__enter__.assert_called_once()
+        cm.__exit__.assert_called_once_with(None, None, None)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    @patch.object(lf, "get_client")
+    @patch("langfuse.propagate_attributes", create=True)
+    def test_thread_failure_ends_root_span_and_exits_cm(
+        self, mock_propagate, mock_get_client, _enabled
+    ):
+        client = MagicMock()
+        trace = MagicMock(trace_id="a" * 32, id="b" * 16)
+        client.start_observation.return_value = trace
+        mock_get_client.return_value = client
+        cm = MagicMock()
+        mock_propagate.return_value = cm
+        before = self._threads()
+        with patch.object(lf.threading, "Thread", side_effect=RuntimeError("boom")):
+            result = self._begin()
+        self._assert_no_trace(result, before)
+        client.start_observation.assert_called_once()
+        trace.end.assert_called_once()
+        cm.__exit__.assert_called_once_with(None, None, None)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    @patch.object(lf, "get_client")
+    @patch("langfuse.propagate_attributes", create=True)
+    def test_cm_enter_failure_still_traces_without_propagation(
+        self, mock_propagate, mock_get_client, _enabled
+    ):
+        client = MagicMock()
+        trace = MagicMock(trace_id="a" * 32, id="b" * 16)
+        client.start_observation.return_value = trace
+        mock_get_client.return_value = client
+        cm = MagicMock()
+        cm.__enter__.side_effect = RuntimeError("boom")
+        mock_propagate.return_value = cm
+        result = self._begin()
+        self.assertIs(result, trace)
+        client.start_observation.assert_called_once()
+        self.assertIsNone(lf._propagate_cm_var.get())
+        lf.end_chat_trace()
+        trace.end.assert_called_once()
+        self.assertIsNone(lf.current_trace())
+        cm.__exit__.assert_not_called()
+
 
 class EndChatTraceInputTimeoutTest(unittest.TestCase):
     def setUp(self):
