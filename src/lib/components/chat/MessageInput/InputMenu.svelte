@@ -5,7 +5,7 @@
 
 	import { config, user, tools as _tools, mobile } from '$lib/stores';
 
-	import { getTools } from '$lib/apis/tools';
+	import { getToolSummary } from '$lib/apis/tools';
 	import {
 		dedupeToolsForSelection,
 		isSkillDefaultEnabled,
@@ -58,7 +58,7 @@
 
 	const init = async () => {
 		if ($_tools === null) {
-			await _tools.set(await getTools(localStorage.token));
+			await _tools.set(await getToolSummary(localStorage.token));
 		}
 
 		const allTools = $_tools ?? [];

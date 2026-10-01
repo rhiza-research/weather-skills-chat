@@ -1,5 +1,4 @@
 <script>
-	import { io } from 'socket.io-client';
 	import { spring } from 'svelte/motion';
 	import { parseApiError } from '$lib/apis/response';
 
@@ -8,6 +7,7 @@
 	});
 
 	import { onMount, tick, setContext } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		config,
 		user,
@@ -16,8 +16,6 @@
 		WEBUI_NAME,
 		mobile,
 		socket,
-		activeUserIds,
-		USAGE_POOL,
 		chatId,
 		chats,
 		currentChatPage,
@@ -27,13 +25,14 @@
 		isApp,
 		appInfo,
 		artifactsRefresh,
-		toolServers
+		toolServers,
+		preferencesReady
 	} from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { Toaster, toast } from 'svelte-sonner';
 
-	import { executeToolServer, getBackendConfig } from '$lib/apis';
+	import { executeToolServer, getAppConfig, getUserConfig, mergeConfig } from '$lib/apis';
 	import { getArtifactArchive, uploadArtifactArchive } from '$lib/apis/artifacts';
 	import { getSessionUser } from '$lib/apis/auths';
 	import { installOrganizationFetch } from '$lib/apis/organizations';
@@ -43,8 +42,6 @@
 	import '../tailwind.css';
 	import '../app.css';
 
-	import 'tippy.js/dist/tippy.css';
-
 	import { WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
 	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
 	import { bestMatchingLanguage } from '$lib/utils';
@@ -52,6 +49,7 @@
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
+	import { connectSocket } from '$lib/utils/socket';
 
 	setContext('i18n', i18n);
 
@@ -60,53 +58,6 @@
 	let loaded = false;
 
 	const BREAKPOINT = 768;
-
-	const setupSocket = async (enableWebsocket) => {
-		const _socket = io(`${WEBUI_BASE_URL}` || undefined, {
-			reconnection: true,
-			reconnectionDelay: 1000,
-			reconnectionDelayMax: 5000,
-			randomizationFactor: 0.5,
-			path: '/ws/socket.io',
-			transports: enableWebsocket ? ['websocket'] : ['polling', 'websocket'],
-			auth: { token: localStorage.token }
-		});
-
-		await socket.set(_socket);
-
-		_socket.on('connect_error', (err) => {
-			console.log('connect_error', err);
-		});
-
-		_socket.on('connect', () => {
-			console.log('connected', _socket.id);
-		});
-
-		_socket.on('reconnect_attempt', (attempt) => {
-			console.log('reconnect_attempt', attempt);
-		});
-
-		_socket.on('reconnect_failed', () => {
-			console.log('reconnect_failed');
-		});
-
-		_socket.on('disconnect', (reason, details) => {
-			console.log(`Socket ${_socket.id} disconnected due to ${reason}`);
-			if (details) {
-				console.log('Additional details:', details);
-			}
-		});
-
-		_socket.on('user-list', (data) => {
-			console.log('user-list', data);
-			activeUserIds.set(data.user_ids);
-		});
-
-		_socket.on('usage', (data) => {
-			console.log('usage', data);
-			USAGE_POOL.set(data['models']);
-		});
-	};
 
 	const serializePythonResult = (stdout, stderr, result, extra = {}) =>
 		JSON.parse(
@@ -446,54 +397,6 @@
 		}
 	};
 
-	const channelEventHandler = async (event) => {
-		if (event.data?.type === 'typing') {
-			return;
-		}
-
-		// check url path
-		const channel = $page.url.pathname.includes(`/channels/${event.channel_id}`);
-
-		let isFocused = document.visibilityState !== 'visible';
-		if (window.electronAPI) {
-			const res = await window.electronAPI.send({
-				type: 'window:isFocused'
-			});
-			if (res) {
-				isFocused = res.isFocused;
-			}
-		}
-
-		if ((!channel || isFocused) && event?.user?.id !== $user?.id) {
-			await tick();
-			const type = event?.data?.type ?? null;
-			const data = event?.data?.data ?? null;
-
-			if (type === 'message') {
-				if ($isLastActiveTab) {
-					if ($settings?.notificationEnabled ?? false) {
-						new Notification(`${data?.user?.name} (#${event?.channel?.name}) | Weather Skills`, {
-							body: data?.content,
-							icon: data?.user?.profile_image_url ?? `${WEBUI_BASE_URL}/static/favicon.png`
-						});
-					}
-				}
-
-				toast.custom(NotificationToast, {
-					componentProps: {
-						onClick: () => {
-							goto(`/channels/${event.channel_id}`);
-						},
-						content: data?.content,
-						title: event?.channel?.name
-					},
-					duration: 15000,
-					unstyled: true
-				});
-			}
-		}
-	};
-
 	onMount(async () => {
 		if (typeof window !== 'undefined' && window.applyTheme) {
 			window.applyTheme();
@@ -552,82 +455,87 @@
 		};
 		window.addEventListener('resize', onResize);
 
-		user.subscribe((value) => {
-			if (value) {
-				$socket?.off('chat-events', chatEventHandler);
-				$socket?.off('channel-events', channelEventHandler);
-
-				$socket?.on('chat-events', chatEventHandler);
-				$socket?.on('channel-events', channelEventHandler);
-			} else {
-				$socket?.off('chat-events', chatEventHandler);
-				$socket?.off('channel-events', channelEventHandler);
+		const bindRealtime = () => {
+			const liveSocket = get(socket);
+			if (!liveSocket) return;
+			liveSocket.off('chat-events', chatEventHandler);
+			if (get(user)) {
+				liveSocket.on('chat-events', chatEventHandler);
 			}
-		});
-
-		let backendConfig = null;
-		try {
-			backendConfig = await getBackendConfig();
-			console.log('Backend config:', backendConfig);
-		} catch (error) {
-			console.error('Error loading backend config:', error);
-		}
-		// Initialize i18n even if we didn't get a backend config,
-		// so `/error` can show something that's not `undefined`.
+		};
+		user.subscribe(() => bindRealtime());
+		socket.subscribe(() => bindRealtime());
 
 		initI18n(localStorage?.locale);
-		if (!localStorage.locale) {
+
+		const token = localStorage.token;
+		const encodedUrl = encodeURIComponent(
+			`${window.location.pathname}${window.location.search}`
+		);
+		const applyAppConfig = async (appConfig) => {
+			if (!appConfig) return;
+			config.update((current) => mergeConfig(current, appConfig));
+			await WEBUI_NAME.set(appConfig.name);
+			if (localStorage.locale) return;
 			const languages = await getLanguages();
 			const browserLanguages = navigator.languages
 				? navigator.languages
 				: [navigator.language || navigator.userLanguage];
-			const lang = backendConfig.default_locale
-				? backendConfig.default_locale
+			const lang = appConfig.default_locale
+				? appConfig.default_locale
 				: bestMatchingLanguage(languages, browserLanguages, 'en-US');
 			changeLanguage(lang);
-		}
+		};
+		const appConfigPromise = getAppConfig()
+			.then((appConfig) => applyAppConfig(appConfig).then(() => appConfig))
+			.catch((error) => {
+				console.error('Error loading app config:', error);
+				return null;
+			});
 
-		if (backendConfig) {
-			// Save Backend Status to Store
-			await config.set(backendConfig);
-			await WEBUI_NAME.set(backendConfig.name);
-
-			if ($config) {
-				await setupSocket($config.features?.enable_websocket ?? true);
-
-				const currentUrl = `${window.location.pathname}${window.location.search}`;
-				const encodedUrl = encodeURIComponent(currentUrl);
-
-				if (localStorage.token) {
-					// Get Session User Info
-					const sessionUser = await getSessionUser(localStorage.token).catch((error) => {
-						toast.error(`${error}`);
-						return null;
-					});
-
-					if (sessionUser) {
-						// Save Session User to Store
-						$socket.emit('user-join', { auth: { token: sessionUser.token } });
-
-						await user.set(sessionUser);
-						await config.set(await getBackendConfig());
-					} else {
-						// Redirect Invalid Session User to /auth Page
+		if (token) {
+			preferencesReady.set(false);
+			const socketPromise = connectSocket();
+			getUserConfig(token)
+				.then((userConfig) => {
+					if (userConfig) config.update((current) => mergeConfig(current, userConfig));
+				})
+				.catch((error) => {
+					console.error(error);
+				});
+			getSessionUser(token)
+				.catch((error) => {
+					toast.error(`${error}`);
+					return null;
+				})
+				.then(async (sessionUser) => {
+					if (!sessionUser) {
 						localStorage.removeItem('token');
 						await goto(`/auth?redirect=${encodedUrl}`);
+						return;
 					}
-				} else {
-					// Don't redirect if we're already on the auth page
-					// Needed because we pass in tokens from OAuth logins via URL fragments
-					const path = $page.url.pathname;
-					if (path !== '/auth' && !path.startsWith('/auth/')) {
-						await goto(`/auth?redirect=${encodedUrl}`);
+					await user.set(sessionUser);
+					try {
+						const liveSocket = await socketPromise;
+						liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
+					} catch (error) {
+						console.error(error);
 					}
+				});
+			appConfigPromise.then((appConfig) => {
+				if (!appConfig) goto('/error');
+			});
+			loaded = true;
+		} else {
+			const appConfig = await appConfigPromise;
+			if (!appConfig) {
+				await goto('/error');
+			} else {
+				const path = $page.url.pathname;
+				if (path !== '/auth' && !path.startsWith('/auth/')) {
+					await goto(`/auth?redirect=${encodedUrl}`);
 				}
 			}
-		} else {
-			// Redirect to /error when Backend Not Detected
-			await goto(`/error`);
 		}
 
 		await tick();
@@ -670,7 +578,6 @@
 
 <svelte:head>
 	<title>{$WEBUI_NAME}</title>
-	<link crossorigin="anonymous" rel="icon" href="{WEBUI_BASE_URL}/static/favicon.png" />
 
 	<!-- rosepine themes have been disabled as it's not up to date with our latest version. -->
 	<!-- feel free to make a PR to fix if anyone wants to see it return -->

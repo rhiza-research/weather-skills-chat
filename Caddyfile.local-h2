@@ -1,0 +1,20 @@
+# Local HTTP/2 front door for the app container.
+#   docker run -d --name weather-skills-h2 --restart unless-stopped \
+#     -p 3443:443 \
+#     -v "$PWD/Caddyfile.local-h2:/etc/caddy/Caddyfile:ro" \
+#     caddy:2-alpine
+#
+# Brotli is served by the app when a .br sibling exists.
+# Gzip here is the fallback for clients that do not accept br.
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://localhost {
+	tls internal
+	encode gzip
+	reverse_proxy host.docker.internal:3000
+}

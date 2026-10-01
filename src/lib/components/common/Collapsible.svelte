@@ -22,6 +22,7 @@
 	};
 
 	async function loadLocale(locales) {
+		if (!Array.isArray(locales)) return;
 		for (const locale of locales) {
 			try {
 				dayjs.locale(locale);
@@ -32,8 +33,8 @@
 		}
 	}
 
-	// Assuming $i18n.languages is an array of language codes
-	$: loadLocale($i18n.languages);
+	// i18next.languages is unset until init finishes. Iterating it early rejects.
+	$: loadLocale($i18n?.languages);
 
 	const dispatch = createEventDispatcher();
 

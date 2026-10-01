@@ -47,6 +47,7 @@ from starlette.responses import Response, StreamingResponse
 
 
 from open_webui.utils import logger
+from open_webui.utils.precompressed_static import ImageCachedStaticFiles, PrecompressedStaticFiles
 from open_webui.utils.pyodide_assets import (
     PyodidePackageStaticFiles,
     should_spa_fallback,
@@ -67,7 +68,6 @@ from open_webui.routers import (
     pipelines,
     tasks,
     auths,
-    channels,
     chats,
     folders,
     configs,
@@ -413,7 +413,6 @@ from open_webui.utils.usage import check_usage_caps
 from open_webui.utils.auth import (
     get_license_data,
     get_http_authorization_cred,
-    decode_token,
     get_admin_user,
     get_verified_user,
 )
@@ -439,7 +438,7 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 
-class SPAStaticFiles(StaticFiles):
+class SPAStaticFiles(PrecompressedStaticFiles):
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
@@ -1061,12 +1060,12 @@ app.include_router(invitations.router, prefix="/api/v1", tags=["invitations"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 
 
-app.include_router(channels.router, prefix="/api/v1/channels", tags=["channels"])
 app.include_router(chats.router, prefix="/api/v1/chats", tags=["chats"])
 
 app.include_router(models.router, prefix="/api/v1/models", tags=["models"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
+app.include_router(tools.summary_router, prefix="/api/v1", tags=["tools"])
 app.include_router(tools.router, prefix="/api/v1/tools", tags=["tools"])
 
 app.include_router(memories.router, prefix="/api/v1/memories", tags=["memories"])
@@ -1495,28 +1494,9 @@ async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified
 ##################################
 
 
-@app.get("/api/config")
-async def get_app_config(request: Request):
-    user = None
-    if "token" in request.cookies:
-        token = request.cookies.get("token")
-        try:
-            data = decode_token(token)
-        except Exception as e:
-            log.debug(e)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-            )
-        if data is not None and "id" in data:
-            user = Users.get_user_by_id(data["id"])
-
-    user_count = Users.get_num_users()
-    onboarding = False
-
-    if user is None:
-        onboarding = user_count == 0
-
+@app.get("/api/app_config")
+async def get_app_config():
+    onboarding = Users.get_num_users() == 0
     return {
         **({"onboarding": True} if onboarding else {}),
         "status": True,
@@ -1539,66 +1519,57 @@ async def get_app_config(request: Request):
             "enable_signup": app.state.config.ENABLE_SIGNUP,
             "enable_login_form": app.state.config.ENABLE_LOGIN_FORM,
             "enable_websocket": ENABLE_WEBSOCKET_SUPPORT,
-            **(
-                {
-                    "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
-                    "enable_channels": app.state.config.ENABLE_CHANNELS,
-                    "enable_web_search": app.state.config.ENABLE_WEB_SEARCH,
-                    "enable_code_execution": app.state.config.ENABLE_CODE_EXECUTION,
-                    "enable_code_interpreter": app.state.config.ENABLE_CODE_INTERPRETER,
-                    "enable_image_generation": app.state.config.ENABLE_IMAGE_GENERATION,
-                    "enable_autocomplete_generation": app.state.config.ENABLE_AUTOCOMPLETE_GENERATION,
-                    "enable_community_sharing": app.state.config.ENABLE_COMMUNITY_SHARING,
-                    "enable_message_rating": app.state.config.ENABLE_MESSAGE_RATING,
-                    "enable_user_webhooks": app.state.config.ENABLE_USER_WEBHOOKS,
-                    "enable_admin_export": ENABLE_ADMIN_EXPORT,
-                    "enable_admin_chat_access": ENABLE_ADMIN_CHAT_ACCESS,
-                    "enable_google_drive_integration": app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION,
-                    "enable_onedrive_integration": app.state.config.ENABLE_ONEDRIVE_INTEGRATION,
-                }
-                if user is not None
-                else {}
-            ),
         },
+    }
+
+
+@app.get("/api/v1/user_config")
+async def get_user_config(user=Depends(get_verified_user)):
+    return {
+        "features": {
+            "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
+            "enable_web_search": app.state.config.ENABLE_WEB_SEARCH,
+            "enable_code_execution": app.state.config.ENABLE_CODE_EXECUTION,
+            "enable_code_interpreter": app.state.config.ENABLE_CODE_INTERPRETER,
+            "enable_image_generation": app.state.config.ENABLE_IMAGE_GENERATION,
+            "enable_autocomplete_generation": app.state.config.ENABLE_AUTOCOMPLETE_GENERATION,
+            "enable_community_sharing": app.state.config.ENABLE_COMMUNITY_SHARING,
+            "enable_message_rating": app.state.config.ENABLE_MESSAGE_RATING,
+            "enable_user_webhooks": app.state.config.ENABLE_USER_WEBHOOKS,
+            "enable_admin_export": ENABLE_ADMIN_EXPORT,
+            "enable_admin_chat_access": ENABLE_ADMIN_CHAT_ACCESS,
+            "enable_google_drive_integration": app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION,
+            "enable_onedrive_integration": app.state.config.ENABLE_ONEDRIVE_INTEGRATION,
+        },
+        "default_models": app.state.config.DEFAULT_MODELS,
+        "default_prompt_suggestions": app.state.config.DEFAULT_PROMPT_SUGGESTIONS,
+        "user_count": Users.get_num_users(),
+        "code": {
+            "engine": app.state.config.CODE_EXECUTION_ENGINE,
+        },
+        "audio": {
+            "tts": {
+                "engine": app.state.config.TTS_ENGINE,
+                "voice": app.state.config.TTS_VOICE,
+                "split_on": app.state.config.TTS_SPLIT_ON,
+            },
+            "stt": {
+                "engine": app.state.config.STT_ENGINE,
+            },
+        },
+        "file": {
+            "max_size": app.state.config.FILE_MAX_SIZE,
+            "max_count": app.state.config.FILE_MAX_COUNT,
+        },
+        "permissions": {**app.state.config.USER_PERMISSIONS},
+        "google_drive": {
+            "client_id": GOOGLE_DRIVE_CLIENT_ID.value,
+            "api_key": GOOGLE_DRIVE_API_KEY.value,
+        },
+        "onedrive": {"client_id": ONEDRIVE_CLIENT_ID.value},
+        "license_metadata": app.state.LICENSE_METADATA,
         **(
-            {
-                "default_models": app.state.config.DEFAULT_MODELS,
-                "default_prompt_suggestions": app.state.config.DEFAULT_PROMPT_SUGGESTIONS,
-                "user_count": user_count,
-                "code": {
-                    "engine": app.state.config.CODE_EXECUTION_ENGINE,
-                },
-                "audio": {
-                    "tts": {
-                        "engine": app.state.config.TTS_ENGINE,
-                        "voice": app.state.config.TTS_VOICE,
-                        "split_on": app.state.config.TTS_SPLIT_ON,
-                    },
-                    "stt": {
-                        "engine": app.state.config.STT_ENGINE,
-                    },
-                },
-                "file": {
-                    "max_size": app.state.config.FILE_MAX_SIZE,
-                    "max_count": app.state.config.FILE_MAX_COUNT,
-                },
-                "permissions": {**app.state.config.USER_PERMISSIONS},
-                "google_drive": {
-                    "client_id": GOOGLE_DRIVE_CLIENT_ID.value,
-                    "api_key": GOOGLE_DRIVE_API_KEY.value,
-                },
-                "onedrive": {"client_id": ONEDRIVE_CLIENT_ID.value},
-                "license_metadata": app.state.LICENSE_METADATA,
-                **(
-                    {
-                        "active_entries": app.state.USER_COUNT,
-                    }
-                    if user.role == "admin"
-                    else {}
-                ),
-            }
-            if user is not None
-            else {}
+            {"active_entries": app.state.USER_COUNT} if user.role == "admin" else {}
         ),
     }
 
@@ -1726,7 +1697,7 @@ async def healthcheck_with_db():
     return {"status": True}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", ImageCachedStaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
 
 

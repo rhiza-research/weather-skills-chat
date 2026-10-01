@@ -4,6 +4,7 @@ from typing import Optional
 import time
 
 from open_webui.models.tools import (
+    ToolChatResponse,
     ToolForm,
     ToolModel,
     ToolResponse,
@@ -60,6 +61,38 @@ def _can_read(user, tool) -> bool:
     )
 
 
+def _chat_tool(tool) -> dict:
+    meta = getattr(tool, "meta", None)
+    raw_manifest = {}
+    description = None
+    if isinstance(meta, dict):
+        description = meta.get("description")
+        raw_manifest = meta.get("manifest") or {}
+    elif meta is not None:
+        description = getattr(meta, "description", None)
+        raw_manifest = getattr(meta, "manifest", None) or {}
+    if hasattr(raw_manifest, "model_dump"):
+        raw_manifest = raw_manifest.model_dump()
+    if not isinstance(raw_manifest, dict):
+        raw_manifest = {}
+    version = raw_manifest.get("version")
+    return {
+        "id": tool.id,
+        "name": tool.name,
+        "meta": {
+            "description": description,
+            "manifest": {
+                "kind": raw_manifest.get("kind"),
+                "skill_name": raw_manifest.get("skill_name"),
+                "version": None if version is None else str(version),
+                "git_ref": raw_manifest.get("git_ref"),
+                "git_url": raw_manifest.get("git_url"),
+                "enabled": raw_manifest.get("enabled"),
+            },
+        },
+    }
+
+
 def _can_read_tool(user, tool, organization_id: str) -> bool:
     """Skill tools follow org enablement. Other tools follow access control."""
     if _is_skill_tool(tool):
@@ -81,13 +114,7 @@ def _can_write(user, tool) -> bool:
 ############################
 
 
-@router.get("/", response_model=list[ToolUserResponse])
-async def get_tools(
-    request: Request,
-    user=Depends(get_verified_user),
-    organization_id: str = Depends(get_active_organization_id),
-):
-
+async def _visible_tools(request: Request, user, organization_id: str):
     if not request.app.state.TOOL_SERVERS:
         # If the tool servers are not set, we need to set them
         # This is done only once when the server starts
@@ -127,7 +154,7 @@ async def get_tools(
         record["id"] for record in accessible_skill_records(user, organization_id)
     }
 
-    tools = [
+    return [
         _stamp_skill_enabled(tool, True)
         for tool in tools
         if (
@@ -137,7 +164,27 @@ async def get_tools(
         )
     ]
 
-    return tools
+
+@router.get("/", response_model=list[ToolUserResponse])
+async def get_tools(
+    request: Request,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    return await _visible_tools(request, user, organization_id)
+
+
+summary_router = APIRouter()
+
+
+@summary_router.get("/tool_summary", response_model=list[ToolChatResponse])
+async def get_tool_summary(
+    request: Request,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    tools = await _visible_tools(request, user, organization_id)
+    return [_chat_tool(tool) for tool in tools]
 
 
 ############################

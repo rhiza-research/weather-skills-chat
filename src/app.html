@@ -129,7 +129,7 @@
 					left: 50%;
 					transform: translateX(-50%);
 				"
-				src="/static/splash.png"
+				alt=""
 			/>
 
 			<div
@@ -146,12 +146,16 @@
 					align-items: center;
 				"
 			>
-				<img
-					id="logo-her"
-					style="width: auto; height: 13rem"
-					src="/static/splash.png"
-					class="animate-pulse-fast"
-				/>
+				<img id="logo-her" style="width: auto; height: 13rem" alt="" class="animate-pulse-fast" />
+				<script>
+					// One splash image. The hidden theme variant must not download a second copy.
+					(function () {
+						var target = document.documentElement.classList.contains('her')
+							? document.getElementById('logo-her')
+							: document.getElementById('logo');
+						if (target) target.src = '/static/splash.png';
+					})();
+				</script>
 
 				<div style="position: relative; width: 24rem; margin-top: 0.5rem">
 					<div

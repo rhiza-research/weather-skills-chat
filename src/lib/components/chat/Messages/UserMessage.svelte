@@ -5,7 +5,8 @@
 
 	import { models, settings } from '$lib/stores';
 	import { user as _user } from '$lib/stores';
-	import { copyToClipboard as _copyToClipboard, formatDate } from '$lib/utils';
+	import { copyToClipboard as _copyToClipboard } from '$lib/utils';
+	import { formatDate } from '$lib/utils/formatDate';
 
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';

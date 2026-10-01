@@ -5,11 +5,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
-	import { getBackendConfig } from '$lib/apis';
+	import { getUserConfig, mergeConfig } from '$lib/apis';
 	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
 
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
+	import { WEBUI_NAME, config, user } from '$lib/stores';
+	import { connectSocket } from '$lib/utils/socket';
 
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
 
@@ -43,9 +44,11 @@
 				localStorage.token = sessionUser.token;
 			}
 
-			$socket.emit('user-join', { auth: { token: sessionUser.token } });
+			const liveSocket = await connectSocket();
+			liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
 			await user.set(sessionUser);
-			await config.set(await getBackendConfig());
+			const userConfig = await getUserConfig(localStorage.token);
+			if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 
 			const redirectPath = querystringValue('redirect') || '/';
 			goto(redirectPath);
@@ -208,7 +211,6 @@
 				<div class=" self-center">
 					<img
 						id="logo"
-						crossorigin="anonymous"
 						src="{WEBUI_BASE_URL}/static/splash.png"
 						class=" w-6 rounded-full"
 						alt="logo"

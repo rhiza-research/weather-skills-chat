@@ -1,12 +1,10 @@
 import { get } from 'svelte/store';
 import { getModels } from '$lib/apis';
-import { getTools } from '$lib/apis/tools';
+import { getToolSummary } from '$lib/apis/tools';
 import {
 	activeOrganizationId,
-	config,
 	models,
 	organizations,
-	settings,
 	tools,
 	user
 } from '$lib/stores';
@@ -42,18 +40,14 @@ export const applyContextUserRole = () => {
 	}
 };
 
+/** Models and tools for the active org. Does not read settings or config. */
+export const loadOrganizationCatalog = (token: string) =>
+	Promise.all([getModels(token), getToolSummary(token)]);
+
 /** Reload catalogs that depend on the active org and effective role. */
 export const reloadOrganizationCatalog = async (token: string) => {
 	applyContextUserRole();
-	const cfg = get(config);
-	const ui = get(settings);
-	const [nextModels, nextTools] = await Promise.all([
-		getModels(
-			token,
-			cfg?.features?.enable_direct_connections && (ui?.directConnections ?? null)
-		),
-		getTools(token)
-	]);
+	const [nextModels, nextTools] = await loadOrganizationCatalog(token);
 	await models.set(nextModels);
 	await tools.set(nextTools);
 };

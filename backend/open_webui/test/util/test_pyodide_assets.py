@@ -21,6 +21,7 @@ class SpaFallbackTest(unittest.TestCase):
     def test_missing_wheels_do_not_fall_back(self):
         self.assertFalse(should_spa_fallback("pyodide/xarray-2024.11.0-py3-none-any.whl"))
         self.assertFalse(should_spa_fallback("app.js"))
+        self.assertFalse(should_spa_fallback("app.js.br"))
         self.assertFalse(should_spa_fallback("pyodide/pyodide.asm.wasm"))
 
 

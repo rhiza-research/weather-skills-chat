@@ -2,8 +2,7 @@
 	import type { Banner } from '$lib/types';
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import DOMPurify from 'dompurify';
-	import { marked } from 'marked';
+	let html = '';
 
 	const dispatch = createEventDispatcher();
 
@@ -17,6 +16,14 @@
 		timestamp: Math.floor(Date.now() / 1000)
 	};
 	export let className = 'mx-4';
+
+	$: if (banner?.content) {
+		const content = banner.content;
+		Promise.all([import('dompurify'), import('marked')]).then(([{ default: DOMPurify }, { marked }]) => {
+			if (banner.content !== content) return;
+			html = DOMPurify.sanitize(marked.parse(content) as string);
+		});
+	}
 
 	export let dismissed = false;
 
@@ -84,7 +91,7 @@
 				</div>
 
 				<div class="flex-1 text-xs text-gray-700 dark:text-white">
-					{@html marked.parse(DOMPurify.sanitize(banner.content))}
+					{@html html}
 				</div>
 			</div>
 

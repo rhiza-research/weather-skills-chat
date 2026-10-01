@@ -9,6 +9,7 @@
 		getArtifactContentUrl,
 		getChatArtifacts,
 		getZarrRenderUrl,
+		takePrefetchedChatArtifacts,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
 	import XMark from '../icons/XMark.svelte';
@@ -119,7 +120,8 @@
 		}
 		loadingFiles = true;
 		try {
-			files = await getChatArtifacts(localStorage.token, $chatId);
+			const prefetched = takePrefetchedChatArtifacts($chatId);
+			files = await (prefetched ?? getChatArtifacts(localStorage.token, $chatId));
 		} catch (e) {
 			files = [];
 			console.error(e);

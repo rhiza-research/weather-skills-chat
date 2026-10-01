@@ -8,7 +8,7 @@
 		getUserValvesSpecById as getToolUserValvesSpecById,
 		getUserValvesById as getToolUserValvesById,
 		updateUserValvesById as updateToolUserValvesById,
-		getTools
+		getToolSummary
 	} from '$lib/apis/tools';
 	import {
 		getUserValvesSpecById as getFunctionUserValvesSpecById,
@@ -129,7 +129,7 @@
 			functions.set(await getFunctions(localStorage.token));
 		}
 		if ($tools === null) {
-			tools.set(await getTools(localStorage.token));
+			tools.set(await getToolSummary(localStorage.token));
 		}
 
 		loading = false;

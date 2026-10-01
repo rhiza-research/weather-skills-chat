@@ -33,6 +33,7 @@ SPA_NO_FALLBACK_SUFFIXES = (
     ".zip",
     ".tar",
     ".gz",
+    ".br",
     ".tgz",
     ".data",
     ".so",

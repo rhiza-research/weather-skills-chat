@@ -3,7 +3,7 @@ import time
 from typing import Optional
 
 from open_webui.internal.db import Base, JSONField, get_db
-from open_webui.models.users import Users, UserResponse
+from open_webui.models.users import Users
 from open_webui.env import SRC_LOG_LEVELS
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Column, String, Text, JSON
@@ -76,8 +76,17 @@ class ToolModel(BaseModel):
 ####################
 
 
+class ToolOwnerResponse(BaseModel):
+    """Owner shown on a tool row. No avatar: the picture is large and unused here."""
+
+    id: str
+    name: str
+    email: str
+    role: str
+
+
 class ToolUserModel(ToolModel):
-    user: Optional[UserResponse] = None
+    user: Optional[ToolOwnerResponse] = None
 
 
 class ToolCatalogModel(BaseModel):
@@ -105,7 +114,29 @@ class ToolResponse(BaseModel):
 
 
 class ToolUserResponse(ToolResponse):
-    user: Optional[UserResponse] = None
+    user: Optional[ToolOwnerResponse] = None
+
+
+class ToolChatManifest(BaseModel):
+    kind: Optional[str] = None
+    skill_name: Optional[str] = None
+    version: Optional[str] = None
+    git_ref: Optional[str] = None
+    git_url: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class ToolChatMeta(BaseModel):
+    description: Optional[str] = None
+    manifest: ToolChatManifest = ToolChatManifest()
+
+
+class ToolChatResponse(BaseModel):
+    """Fields the chat window needs to choose tools and send their ids."""
+
+    id: str
+    name: str
+    meta: ToolChatMeta = ToolChatMeta()
 
 
 class ToolForm(BaseModel):
@@ -232,7 +263,16 @@ class ToolsTable:
                         "access_control": tool.access_control,
                         "updated_at": tool.updated_at,
                         "created_at": tool.created_at,
-                        "user": user.model_dump() if user else None,
+                        "user": (
+                            {
+                                "id": user.id,
+                                "name": user.name,
+                                "email": user.email,
+                                "role": user.role,
+                            }
+                            if user
+                            else None
+                        ),
                     }
                 )
             )

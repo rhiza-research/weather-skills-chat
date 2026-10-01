@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 
 	import { config } from '$lib/stores';
-	import { getBackendConfig } from '$lib/apis';
+	import { getUserConfig, mergeConfig } from '$lib/apis';
 	import Database from './Settings/Database.svelte';
 
 	import General from './Settings/General.svelte';
@@ -369,7 +369,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 
 					await tick();
-					await config.set(await getBackendConfig());
+					const userConfig = await getUserConfig(localStorage.token);
+					if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 				}}
 			/>
 		{:else if selectedTab === 'connections'}
@@ -388,7 +389,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 
 					await tick();
-					await config.set(await getBackendConfig());
+					const userConfig = await getUserConfig(localStorage.token);
+					if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 				}}
 			/>
 		{:else if selectedTab === 'web'}
@@ -397,7 +399,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 
 					await tick();
-					await config.set(await getBackendConfig());
+					const userConfig = await getUserConfig(localStorage.token);
+					if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 				}}
 			/>
 		{:else if selectedTab === 'code-execution'}
@@ -406,7 +409,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 
 					await tick();
-					await config.set(await getBackendConfig());
+					const userConfig = await getUserConfig(localStorage.token);
+					if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 				}}
 			/>
 		{:else if selectedTab === 'interface'}

@@ -26,9 +26,11 @@
 	};
 
 	$: if (selectedModels.length > 0 && $models.length > 0) {
-		selectedModels = selectedModels.map((model) =>
-			$models.map((m) => m.id).includes(model) ? model : ''
-		);
+		const known = new Set($models.map((model) => model.id));
+		const next = selectedModels.map((model) => (known.has(model) ? model : ''));
+		if (next.some((model, index) => model !== selectedModels[index])) {
+			selectedModels = next;
+		}
 	}
 </script>
 

@@ -1,17 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-import sha256 from 'js-sha256';
-
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import isToday from 'dayjs/plugin/isToday';
-import isYesterday from 'dayjs/plugin/isYesterday';
-import localizedFormat from 'dayjs/plugin/localizedFormat';
-
-dayjs.extend(relativeTime);
-dayjs.extend(isToday);
-dayjs.extend(isYesterday);
-dayjs.extend(localizedFormat);
-
 import { WEBUI_BASE_URL } from '$lib/constants';
 import { TTS_RESPONSE_SPLIT } from '$lib/types';
 
@@ -183,52 +169,6 @@ export const splitStream = (splitOn) => {
 	});
 };
 
-export const convertMessagesToHistory = (messages) => {
-	const history = {
-		messages: {},
-		currentId: null
-	};
-
-	let parentMessageId = null;
-	let messageId = null;
-
-	for (const message of messages) {
-		messageId = uuidv4();
-
-		if (parentMessageId !== null) {
-			history.messages[parentMessageId].childrenIds = [
-				...history.messages[parentMessageId].childrenIds,
-				messageId
-			];
-		}
-
-		history.messages[messageId] = {
-			...message,
-			id: messageId,
-			parentId: parentMessageId,
-			childrenIds: []
-		};
-
-		parentMessageId = messageId;
-	}
-
-	history.currentId = messageId;
-	return history;
-};
-
-export const getGravatarURL = (email) => {
-	// Trim leading and trailing whitespace from
-	// an email address and force all characters
-	// to lower case
-	const address = String(email).trim().toLowerCase();
-
-	// Create a SHA256 hash of the final string
-	const hash = sha256(address);
-
-	// Grab the actual image URL
-	return `https://www.gravatar.com/avatar/${hash}`;
-};
-
 export const canvasPixelTest = () => {
 	// Test a 1x1 pixel to potentially identify browser/plugin fingerprint blocking or spoofing
 	// Inspiration: https://github.com/kkapsner/CanvasBlocker/blob/master/test/detectionTest.js
@@ -364,19 +304,6 @@ export const generateInitialsImage = (name) => {
 	ctx.fillText(initials.toUpperCase(), canvas.width / 2, canvas.height / 2);
 
 	return canvas.toDataURL();
-};
-
-export const formatDate = (inputDate) => {
-	const date = dayjs(inputDate);
-	const now = dayjs();
-
-	if (date.isToday()) {
-		return `Today at ${date.format('LT')}`;
-	} else if (date.isYesterday()) {
-		return `Yesterday at ${date.format('LT')}`;
-	} else {
-		return `${date.format('L')} at ${date.format('LT')}`;
-	}
 };
 
 export const copyToClipboard = async (text, formatted = false) => {

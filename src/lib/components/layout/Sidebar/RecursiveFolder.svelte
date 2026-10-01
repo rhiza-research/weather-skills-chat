@@ -4,7 +4,6 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	import DOMPurify from 'dompurify';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
@@ -332,6 +331,18 @@
 
 		saveAs(blob, `folder-${folders[folderId].name}-export-${Date.now()}.json`);
 	};
+
+	let deleteWarning = '';
+	$: if (showDeleteConfirm && folders[folderId]) {
+		const name = folders[folderId].name;
+		import('dompurify').then(({ default: DOMPurify }) => {
+			deleteWarning = DOMPurify.sanitize(
+				$i18n.t('This will delete <strong>{{NAME}}</strong> and <strong>all its contents</strong>.', {
+					NAME: name
+				})
+			);
+		});
+	}
 </script>
 
 <DeleteConfirmDialog
@@ -347,11 +358,7 @@
 			<span class="font-semibold">{folders[folderId].name}</span>.
 			{$i18n.t('Chats inside it will move back to the team list.')}
 		{:else}
-			{@html DOMPurify.sanitize(
-				$i18n.t('This will delete <strong>{{NAME}}</strong> and <strong>all its contents</strong>.', {
-					NAME: folders[folderId].name
-				})
-			)}
+			{@html deleteWarning}
 		{/if}
 	</div>
 </DeleteConfirmDialog>

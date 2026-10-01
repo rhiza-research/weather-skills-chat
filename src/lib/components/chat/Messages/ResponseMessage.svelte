@@ -24,11 +24,11 @@
 		getMessageContentParts,
 		sanitizeResponseContent,
 		createMessagesList,
-		formatDate,
 		removeDetails,
 		removeAllDetails
 	} from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { formatDate } from '$lib/utils/formatDate';
 
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';

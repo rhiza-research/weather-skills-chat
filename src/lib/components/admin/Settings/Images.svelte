@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount, getContext } from 'svelte';
 	import { config as backendConfig, user } from '$lib/stores';
 
-	import { getBackendConfig } from '$lib/apis';
+	import { getUserConfig, mergeConfig } from '$lib/apis';
 	import {
 		getImageGenerationModels,
 		getImageGenerationConfig,
@@ -120,7 +120,8 @@
 		}
 
 		if (config.enabled) {
-			backendConfig.set(await getBackendConfig());
+			const userConfig = await getUserConfig(localStorage.token);
+			if (userConfig) backendConfig.update((current) => mergeConfig(current, userConfig));
 			getModels();
 		}
 	};

@@ -1,14 +1,8 @@
 @reference "./tailwind.css";
 
 @font-face {
-	font-family: 'Inter';
-	src: url('/assets/fonts/Inter-Variable.ttf');
-	font-display: swap;
-}
-
-@font-face {
 	font-family: 'Archivo';
-	src: url('/assets/fonts/Archivo-Variable.ttf');
+	src: url('/assets/fonts/Archivo-Variable.woff2') format('woff2');
 	font-display: swap;
 }
 

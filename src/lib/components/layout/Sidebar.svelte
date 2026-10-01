@@ -17,13 +17,10 @@
 		scrollPaginationEnabled,
 		currentChatPage,
 		temporaryChatEnabled,
-		channels,
-		socket,
-		config,
 		isApp,
-		teams,
 		organizations,
-		activeOrganizationId
+		activeOrganizationId,
+		switchingOrganization
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -42,7 +39,6 @@
 		updateChatFolderIdById,
 		importChat
 	} from '$lib/apis/chats';
-	import { getOrganizations } from '$lib/apis/organizations';
 	import { reloadOrganizationCatalog } from '$lib/utils/organizationContext';
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
@@ -58,9 +54,6 @@
 	import Plus from '../icons/Plus.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
-	import { getChannels, createNewChannel } from '$lib/apis/channels';
-	import ChannelModal from './Sidebar/ChannelModal.svelte';
-	import ChannelItem from './Sidebar/ChannelItem.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
 
@@ -72,8 +65,6 @@
 	let selectedChatId = null;
 	let showDropdown = false;
 	let showPinnedChat = true;
-
-	let showCreateChannel = false;
 
 	// Pagination variables
 	let chatListLoading = false;
@@ -204,21 +195,6 @@
 		}
 	};
 
-	const initChannels = async () => {
-		await channels.set(await getChannels(localStorage.token));
-	};
-
-	const loadOrganizations = async () => {
-		const memberships = await getOrganizations(localStorage.token).catch(() => []);
-		organizations.set(memberships ?? []);
-		teams.set(memberships ?? []);
-		if (!$activeOrganizationId && $user?.id) {
-			const stored = localStorage.getItem('activeOrganizationId');
-			const valid = (memberships ?? []).some((org) => org.id === stored);
-			activeOrganizationId.set(valid ? stored : $user.id);
-		}
-	};
-
 	$: if ($activeOrganizationId) {
 		if (typeof localStorage !== 'undefined') {
 			localStorage.setItem('activeOrganizationId', $activeOrganizationId);
@@ -270,23 +246,38 @@
 	$: teamFolders = foldersWithVisibility(folders, 'organization');
 
 	const switchOrganization = async (orgId) => {
-		if (orgId === $activeOrganizationId) {
+		if (!orgId || orgId === $activeOrganizationId || $switchingOrganization) {
 			return;
 		}
+		const previousId = $activeOrganizationId;
+		switchingOrganization.set(true);
 		activeOrganizationId.set(orgId);
-		await reloadOrganizationCatalog(localStorage.token);
-		selectedChatId = null;
-		chatId.set('');
-		await initChatList();
-		await goto('/');
-		await tick();
-		document.getElementById('new-chat-button')?.click();
+		try {
+			await reloadOrganizationCatalog(localStorage.token);
+			selectedChatId = null;
+			chatId.set('');
+			search = '';
+			await initChatList();
+			await goto('/');
+			await tick();
+			document.getElementById('new-chat-button')?.click();
+		} catch (error) {
+			activeOrganizationId.set(previousId);
+			try {
+				await reloadOrganizationCatalog(localStorage.token);
+				await initChatList();
+			} catch (revertError) {
+				console.error(revertError);
+			}
+			toast.error(`${error}`);
+		} finally {
+			switchingOrganization.set(false);
+		}
 	};
 
 	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
 	const softRefreshChatList = async () => {
 		try {
-			await loadOrganizations();
 			if (search) {
 				return;
 			}
@@ -334,22 +325,22 @@
 	};
 
 	const initChatList = async () => {
-		// Reset pagination variables
-		tags.set(await getAllTags(localStorage.token));
-		pinnedChats.set(await getPinnedChatList(localStorage.token));
-		initFolders();
-		loadOrganizations();
-
 		currentChatPage.set(1);
 		allChatsLoaded = false;
+		const token = localStorage.token;
+		const page = 1;
 
-		if (search) {
-			await chats.set(await getChatListBySearchText(localStorage.token, search, $currentChatPage));
-		} else {
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		}
+		const [tagList, pinned, chatPage] = await Promise.all([
+			getAllTags(token),
+			getPinnedChatList(token),
+			search ? getChatListBySearchText(token, search, page) : getChatList(token, page)
+		]);
 
-		// Enable pagination
+		tags.set(tagList);
+		pinnedChats.set(pinned);
+		await initFolders();
+		await chats.set(chatPage);
+
 		scrollPaginationEnabled.set(true);
 	};
 
@@ -564,7 +555,6 @@
 			}
 		});
 
-		await initChannels();
 		await initChatList();
 		startChatListPoll();
 
@@ -604,25 +594,6 @@
 	bind:show={$showArchivedChats}
 	on:change={async () => {
 		await initChatList();
-	}}
-/>
-
-<ChannelModal
-	bind:show={showCreateChannel}
-	onSubmit={async ({ name, access_control }) => {
-		const res = await createNewChannel(localStorage.token, {
-			name: name,
-			access_control: access_control
-		}).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-
-		if (res) {
-			$socket.emit('join-channels', { auth: { token: $user?.token } });
-			await initChannels();
-			showCreateChannel = false;
-		}
 	}}
 />
 
@@ -843,33 +814,6 @@
 				? 'opacity-20'
 				: ''}"
 		>
-			{#if $config?.features?.enable_channels && ($user?.role === 'admin' || $channels.length > 0) && !search}
-				<Folder
-					className="px-2 mt-0.5"
-					name={$i18n.t('Channels')}
-					dragAndDrop={false}
-					onAdd={async () => {
-						if ($user?.role === 'admin') {
-							await tick();
-
-							setTimeout(() => {
-								showCreateChannel = true;
-							}, 0);
-						}
-					}}
-					onAddLabel={$i18n.t('Create Channel')}
-				>
-					{#each $channels as channel}
-						<ChannelItem
-							{channel}
-							onUpdate={async () => {
-								await initChannels();
-							}}
-						/>
-					{/each}
-				</Folder>
-			{/if}
-
 			<Folder
 				collapsible={!search}
 				className="px-2 mt-0.5"

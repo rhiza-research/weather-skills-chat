@@ -6,7 +6,8 @@
 	import dayjs from 'dayjs';
 
 	import { settings, chatId, WEBUI_NAME, models, config } from '$lib/stores';
-	import { convertMessagesToHistory, createMessagesList } from '$lib/utils';
+	import { createMessagesList } from '$lib/utils';
+	import { convertMessagesToHistory } from '$lib/utils/history';
 
 	import { getChatByShareId, cloneSharedChatById } from '$lib/apis/chats';
 

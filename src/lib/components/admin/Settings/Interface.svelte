@@ -2,7 +2,7 @@
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
 
-	import { getBackendConfig, getTaskConfig, updateTaskConfig } from '$lib/apis';
+	import { getUserConfig, mergeConfig, getTaskConfig, updateTaskConfig } from '$lib/apis';
 	import { setDefaultPromptSuggestions } from '$lib/apis/configs';
 	import { config, models, settings, user } from '$lib/stores';
 	import { createEventDispatcher, onMount, getContext } from 'svelte';
@@ -45,7 +45,8 @@
 		promptSuggestions = await setDefaultPromptSuggestions(localStorage.token, promptSuggestions);
 		await updateBanners();
 
-		await config.set(await getBackendConfig());
+		const userConfig = await getUserConfig(localStorage.token);
+		if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 	};
 
 	onMount(async () => {

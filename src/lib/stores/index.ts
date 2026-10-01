@@ -4,8 +4,6 @@ import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { Socket } from 'socket.io-client';
 
-import emojiShortCodes from '$lib/emoji-shortcodes.json';
-
 // Backend
 export const WEBUI_NAME = writable(APP_NAME);
 export const config: Writable<Config | undefined> = writable(undefined);
@@ -27,32 +25,21 @@ export const USAGE_POOL: Writable<null | string[]> = writable(null);
 
 export const theme = writable('system');
 
-export const shortCodesToEmojis = writable(
-	Object.entries(emojiShortCodes).reduce((acc, [key, value]) => {
-		if (typeof value === 'string') {
-			acc[value] = key;
-		} else {
-			for (const v of value) {
-				acc[v] = key;
-			}
-		}
-
-		return acc;
-	}, {})
-);
-
 export const TTSWorker = writable(null);
 
 export const chatId = writable('');
 export const chatTitle = writable('');
 
-export const channels = writable([]);
 export const chats = writable(null);
 export const pinnedChats = writable([]);
 export const tags = writable([]);
 export const teams = writable([]);
 export const organizations = writable([]);
 export const activeOrganizationId = writable(null);
+/** Full-screen hold while the active organization catalog and chat list reload. */
+export const switchingOrganization = writable(false);
+/** Settings and organization membership have been loaded for this session. */
+export const preferencesReady = writable(false);
 
 export const models: Writable<Model[]> = writable([]);
 

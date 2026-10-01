@@ -38,10 +38,10 @@
 		tools,
 		toolServers,
 		activeOrganizationId,
-		organizations
+		organizations,
+		preferencesReady
 	} from '$lib/stores';
 	import {
-		convertMessagesToHistory,
 		copyToClipboard,
 		getMessageContentParts,
 		createMessagesList,
@@ -51,6 +51,7 @@
 		removeDetails,
 		getPromptVariables
 	} from '$lib/utils';
+	import { convertMessagesToHistory } from '$lib/utils/history';
 	import {
 		GENERATION_HEARTBEAT_ACTION,
 		GENERATION_LOST_MESSAGE,
@@ -85,14 +86,17 @@
 		stopTask,
 		getTaskIdsByChatId
 	} from '$lib/apis';
-	import { getTools } from '$lib/apis/tools';
+	import { getToolSummary } from '$lib/apis/tools';
 	import { uploadFile } from '$lib/apis/files';
-	import { copyFileIntoChatArtifacts, fileFromDataUrl } from '$lib/apis/artifacts';
+	import {
+		copyFileIntoChatArtifacts,
+		fileFromDataUrl,
+		prefetchChatArtifacts
+	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
-	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatControls from './ChatControls.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
@@ -105,6 +109,19 @@
 
 	let loading = false;
 	let loadingChatId = null; // guards against re-entrant chat loads
+	let messagesComponent = null;
+	let messagesLoad = null;
+
+	$: if (
+		($settings?.landingPageMode === 'chat' ||
+			createMessagesList(history, history.currentId).length > 0) &&
+		!messagesComponent &&
+		!messagesLoad
+	) {
+		messagesLoad = import('./Messages.svelte').then((module) => {
+			messagesComponent = module.default;
+		});
+	}
 
 	const eventTarget = new EventTarget();
 	let controlPane;
@@ -372,17 +389,20 @@
 		console.log('saveSessionSelectedModels', selectedModels, sessionStorage.selectedModels);
 	};
 
-	$: if (selectedModels) {
-		setToolIds();
-	}
+	let toolsLoad = null;
 
-	$: if (atSelectedModel || selectedModels) {
+	$: if (atSelectedModel || selectedModels.some((id) => id)) {
 		setToolIds();
 	}
 
 	const setToolIds = async () => {
 		if (!$tools) {
-			tools.set(await getTools(localStorage.token));
+			if (!toolsLoad) {
+				toolsLoad = getToolSummary(localStorage.token).finally(() => {
+					toolsLoad = null;
+				});
+			}
+			tools.set(await toolsLoad);
 		}
 
 		if (selectedModels.length !== 1 && !atSelectedModel) {
@@ -903,6 +923,41 @@
 	// Web functions
 	//////////////////////////
 
+	const applyStartupModel = () => {
+		if ($chatId) return;
+		if (selectedModels.some((id) => id && $models.some((model) => model.id === id))) return;
+		const orgId = get(activeOrganizationId) || $user?.id;
+		const orgDefaultModels = orgId
+			? ($organizations.find((org) => org.id === orgId)?.default_models || '')
+					.split(',')
+					.map((id) => id.trim())
+					.filter(Boolean)
+			: [];
+		let next = [];
+		if (orgDefaultModels.length) {
+			next = orgDefaultModels;
+		} else if ($settings?.models) {
+			next = $settings.models;
+		} else if ($config?.default_models) {
+			next = $config.default_models.split(',');
+		}
+		next = next.filter((id) => $models.some((model) => model.id === id));
+		if (!next.length && $models[0]) {
+			next = [$models[0].id];
+		}
+		if (next.length) {
+			selectedModels = next;
+		}
+	};
+
+	$: if (
+		$preferencesReady &&
+		$models.length > 0 &&
+		!selectedModels.some((id) => id && $models.some((model) => model.id === id))
+	) {
+		applyStartupModel();
+	}
+
 	const initNewChat = async () => {
 		if ($page.url.searchParams.get('models')) {
 			selectedModels = $page.url.searchParams.get('models')?.split(',');
@@ -955,12 +1010,12 @@
 			}
 		}
 
-		selectedModels = selectedModels.filter((modelId) => $models.map((m) => m.id).includes(modelId));
-		if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {
-			if ($models.length > 0) {
+		if ($models.length > 0) {
+			selectedModels = selectedModels.filter((modelId) =>
+				$models.some((model) => model.id === modelId)
+			);
+			if (selectedModels.length === 0 || (selectedModels.length === 1 && selectedModels[0] === '')) {
 				selectedModels = [$models[0].id];
-			} else {
-				selectedModels = [''];
 			}
 		}
 
@@ -1027,16 +1082,13 @@
 			}
 		}
 
-		selectedModels = selectedModels.map((modelId) =>
-			$models.map((m) => m.id).includes(modelId) ? modelId : ''
-		);
-
-		const userSettings = await getUserSettings(localStorage.token);
-
-		if (userSettings) {
-			settings.set(userSettings.ui);
-		} else {
-			settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
+		if ($models.length > 0) {
+			selectedModels = selectedModels.map((modelId) =>
+				$models.some((model) => model.id === modelId) ? modelId : ''
+			);
+			if (!selectedModels.some((modelId) => modelId)) {
+				applyStartupModel();
+			}
 		}
 
 		const chatInput = document.getElementById('chat-input');
@@ -1047,83 +1099,102 @@
 		stopGenerationWatchdogs();
 		taskIds = null;
 		chatId.set(id);
-		chat = await getChatById(localStorage.token, id).catch(async (error) => {
-			await goto('/');
+
+		const token = localStorage.token;
+		// Chat, tags, settings, tasks, and the artifact list need only the id.
+		const chatPromise = getChatById(token, id).catch(async () => {
+			if (loadingChatId === id) {
+				await goto('/');
+			}
 			return null;
 		});
+		const tagsPromise = getTagsById(token, id).catch(() => []);
+		const settingsPromise = getUserSettings(token);
+		const tasksPromise = getTaskIdsByChatId(token, id).catch(() => null);
+		prefetchChatArtifacts(token, id);
 
-		if (chat) {
-			chatOwnerName = '';
-			if (chat.user_id && chat.user_id !== $user?.id) {
-				const owner = await getUserById(localStorage.token, chat.user_id).catch(() => null);
-				chatOwnerName = owner?.name ?? '';
-			} else {
-				chatOwnerName = $user?.name ?? '';
-			}
-			tags = await getTagsById(localStorage.token, id).catch(async (error) => {
-				return [];
-			});
-
-			const chatContent = chat.chat;
-
-			if (chatContent) {
-				console.log(chatContent);
-
-				selectedModels =
-					(chatContent?.models ?? undefined) !== undefined
-						? chatContent.models
-						: [chatContent.models ?? ''];
-				history =
-					(chatContent?.history ?? undefined) !== undefined
-						? chatContent.history
-						: convertMessagesToHistory(chatContent.messages);
-
-				chatTitle.set(chatContent.title);
-
-				const userSettings = await getUserSettings(localStorage.token);
-
-				if (userSettings) {
-					await settings.set(userSettings.ui);
-				} else {
-					await settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
-				}
-
-				params = {};
-				chatFiles = chatContent?.files ?? [];
-
-				autoScroll = true;
-				await tick();
-
-				const taskRes = await getTaskIdsByChatId(localStorage.token, id).catch((error) => {
-					return null;
-				});
-
-				taskIds = taskRes?.task_ids?.length ? taskRes.task_ids : null;
-				const hasLiveTask = !!(taskIds && taskIds.length);
-
-				const orphanCount = finalizeOrphanAssistantMessages(
-					history.messages,
-					hasLiveTask,
-					GENERATION_LOST_MESSAGE
-				);
-				history = history;
-
-				if (hasLiveTask && history.currentId) {
-					const current = history.messages[history.currentId];
-					if (current?.role === 'assistant' && current.done !== true) {
-						startGenerationWatchdogs(current.id);
-					}
-				} else if (orphanCount > 0) {
-					toast.error(GENERATION_LOST_MESSAGE);
-				}
-
-				await tick();
-
-				return true;
-			} else {
-				return null;
-			}
+		const loadedChat = await chatPromise;
+		if (loadingChatId !== id || !loadedChat) {
+			return null;
 		}
+
+		const currentUser = get(user);
+		const listed = (get(chats) ?? []).find((item) => item?.id === id);
+		const ownerPromise: Promise<string> =
+			loadedChat.user_id && loadedChat.user_id !== currentUser?.id
+				? listed?.owner_name
+					? Promise.resolve(listed.owner_name)
+					: getUserById(token, loadedChat.user_id)
+							.then((owner) => owner?.name ?? '')
+							.catch(() => '')
+				: Promise.resolve(currentUser?.name ?? '');
+
+		const [loadedTags, userSettings, taskRes, ownerName] = await Promise.all([
+			tagsPromise,
+			settingsPromise,
+			tasksPromise,
+			ownerPromise
+		]);
+		if (loadingChatId !== id) {
+			return null;
+		}
+
+		chat = loadedChat;
+		chatOwnerName = ownerName;
+		tags = loadedTags ?? [];
+
+		const chatContent = loadedChat.chat;
+		if (!chatContent) {
+			return null;
+		}
+
+		console.log(chatContent);
+
+		selectedModels =
+			(chatContent?.models ?? undefined) !== undefined
+				? chatContent.models
+				: [chatContent.models ?? ''];
+		history =
+			(chatContent?.history ?? undefined) !== undefined
+				? chatContent.history
+				: convertMessagesToHistory(chatContent.messages);
+
+		chatTitle.set(chatContent.title);
+
+		if (userSettings) {
+			await settings.set(userSettings.ui);
+		} else {
+			await settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
+		}
+
+		params = {};
+		chatFiles = chatContent?.files ?? [];
+
+		autoScroll = true;
+		await tick();
+
+		taskIds = taskRes?.task_ids?.length ? taskRes.task_ids : null;
+		const hasLiveTask = !!(taskIds && taskIds.length);
+
+		const orphanCount = finalizeOrphanAssistantMessages(
+			history.messages,
+			hasLiveTask,
+			GENERATION_LOST_MESSAGE
+		);
+		history = history;
+
+		if (hasLiveTask && history.currentId) {
+			const current = history.messages[history.currentId];
+			if (current?.role === 'assistant' && current.done !== true) {
+				startGenerationWatchdogs(current.id);
+			}
+		} else if (orphanCount > 0) {
+			toast.error(GENERATION_LOST_MESSAGE);
+		}
+
+		await tick();
+
+		return true;
 	};
 
 	const scrollToBottom = async () => {
@@ -2382,23 +2453,26 @@
 							}}
 						>
 							<div class=" h-full w-full flex flex-col">
-								<Messages
-									chatId={$chatId}
-									bind:history
-									bind:autoScroll
-									bind:prompt
-									{selectedModels}
-									{atSelectedModel}
-									{sendPrompt}
-									{showMessage}
-									{submitMessage}
-									{continueResponse}
-									{regenerateResponse}
-									{mergeResponses}
-									{chatActionHandler}
-									{addMessages}
-									bottomPadding={files.length > 0}
-								/>
+								{#if messagesComponent}
+									<svelte:component
+										this={messagesComponent}
+										chatId={$chatId}
+										bind:history
+										bind:autoScroll
+										bind:prompt
+										{selectedModels}
+										{atSelectedModel}
+										{sendPrompt}
+										{showMessage}
+										{submitMessage}
+										{continueResponse}
+										{regenerateResponse}
+										{mergeResponses}
+										{chatActionHandler}
+										{addMessages}
+										bottomPadding={files.length > 0}
+									/>
+								{/if}
 							</div>
 						</div>
 

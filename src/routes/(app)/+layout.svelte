@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount, tick, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext } from 'svelte';
+	import { get } from 'svelte/store';
 	import { openDB, deleteDB } from 'idb';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
@@ -12,7 +13,10 @@
 	import { getBanners } from '$lib/apis/configs';
 	import { getUserSettings } from '$lib/apis/users';
 	import { getOrganizations } from '$lib/apis/organizations';
-	import { reloadOrganizationCatalog } from '$lib/utils/organizationContext';
+	import {
+		applyContextUserRole,
+		loadOrganizationCatalog
+	} from '$lib/utils/organizationContext';
 
 	import {
 		config,
@@ -29,14 +33,15 @@
 		temporaryChatEnabled,
 		toolServers,
 		organizations,
-		activeOrganizationId
+		activeOrganizationId,
+		switchingOrganization,
+		preferencesReady
 	} from '$lib/stores';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
 	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
 	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
-	import { get } from 'svelte/store';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
@@ -44,58 +49,115 @@
 	let loaded = false;
 	let DB = null;
 	let localDBChats = [];
+	let stopRoleSync = () => {};
+
+	onDestroy(() => stopRoleSync());
 
 	onMount(async () => {
-		if ($user === undefined || $user === null) {
+		if (!localStorage.token) {
 			await goto('/auth');
-		} else if (['user', 'admin'].includes($user?.role)) {
-			try {
-				// Check if IndexedDB exists
-				DB = await openDB('Chats', 1);
+			return;
+		}
 
-				if (DB) {
-					const chats = await DB.getAllFromIndex('chats', 'timestamp');
-					localDBChats = chats.map((item, idx) => chats[chats.length - 1 - idx]);
+		stopRoleSync = user.subscribe((session) => {
+			if (!session) return;
+			const memberships = get(organizations) ?? [];
+			if (!memberships.length) return;
+			const current = get(activeOrganizationId);
+			if (!memberships.some((org) => org.id === current)) {
+				activeOrganizationId.set(session.id);
+			}
+			if (session?.permissions?.chat?.temporary_enforced) {
+				temporaryChatEnabled.set(true);
+			}
+			applyContextUserRole();
+		});
 
-					if (localDBChats.length === 0) {
-						await deleteDB('Chats');
+		const token = localStorage.token;
+		let settingsLoaded = false;
+		let orgsLoaded = false;
+		let catalogReady = false;
+		const revealChat = () => {
+			if (catalogReady && settingsLoaded && orgsLoaded) loaded = true;
+		};
+		const markPreferences = () => {
+			if (settingsLoaded && orgsLoaded) preferencesReady.set(true);
+			revealChat();
+		};
+
+		openDB('Chats', 1)
+			.then(async (database) => {
+				DB = database;
+				if (!DB) return;
+				const storedChats = await DB.getAllFromIndex('chats', 'timestamp');
+				localDBChats = storedChats.map((item, idx) => storedChats[storedChats.length - 1 - idx]);
+				if (localDBChats.length === 0) {
+					await deleteDB('Chats');
+				}
+			})
+			.catch(() => {
+				// IndexedDB Not Found
+			});
+
+		loadOrganizationCatalog(token)
+			.then(async ([nextModels, nextTools]) => {
+				await models.set(nextModels);
+				await tools.set(nextTools);
+			})
+			.catch((error) => {
+				console.error(error);
+				models.set([]);
+				tools.set([]);
+			})
+			.finally(() => {
+				catalogReady = true;
+				revealChat();
+			});
+
+		getUserSettings(token)
+			.catch((error) => {
+				console.error(error);
+				return null;
+			})
+			.then(async (userSettings) => {
+				let ui = userSettings?.ui;
+				if (!ui) {
+					ui = {} as Parameters<(typeof settings)['set']>[0];
+					try {
+						ui = JSON.parse(localStorage.getItem('settings') ?? '{}');
+					} catch (e: unknown) {
+						console.error('Failed to parse settings from localStorage', e);
 					}
 				}
 
-				console.log(DB);
-			} catch (error) {
-				// IndexedDB Not Found
-			}
-
-			const userSettings = await getUserSettings(localStorage.token).catch((error) => {
-				console.error(error);
-				return null;
+				settings.set(ui);
+				settingsLoaded = true;
+				markPreferences();
+				const servers = await getToolServersData($i18n, ui?.toolServers ?? []);
+				toolServers.set(servers);
 			});
 
-			if (userSettings) {
-				settings.set(userSettings.ui);
-			} else {
-				let localStorageSettings = {} as Parameters<(typeof settings)['set']>[0];
+		getBanners(token)
+			.then((bannerList) => {
+				banners.set(bannerList);
+			})
+			.catch((error) => {
+				console.error(error);
+			});
 
-				try {
-					localStorageSettings = JSON.parse(localStorage.getItem('settings') ?? '{}');
-				} catch (e: unknown) {
-					console.error('Failed to parse settings from localStorage', e);
-				}
-
-				settings.set(localStorageSettings);
-			}
-
-			banners.set(await getBanners(localStorage.token));
-			toolServers.set(await getToolServersData($i18n, $settings?.toolServers ?? []));
-			const memberships = await getOrganizations(localStorage.token).catch(() => []);
-			organizations.set(memberships);
-			const stored =
-				(typeof localStorage !== 'undefined' && localStorage.getItem('activeOrganizationId')) ||
-				$user?.id;
-			const valid = (memberships ?? []).some((org) => org.id === stored);
-			activeOrganizationId.set(valid ? stored : $user?.id);
-			await reloadOrganizationCatalog(localStorage.token);
+		getOrganizations(token)
+			.catch(() => [])
+			.then((memberships) => {
+				const list = memberships ?? [];
+				organizations.set(list);
+				const stored = localStorage.getItem('activeOrganizationId') || get(user)?.id;
+				const valid = list.some((org) => org.id === stored);
+				if (valid) activeOrganizationId.set(stored);
+				else if (get(user)?.id) activeOrganizationId.set(get(user).id);
+				applyContextUserRole();
+				orgsLoaded = true;
+				markPreferences();
+			});
 
 			document.addEventListener('keydown', async function (event) {
 				const isCtrlPressed = event.ctrlKey || event.metaKey; // metaKey is for Cmd key on Mac
@@ -182,20 +244,16 @@
 				}
 			});
 
-			if ($user?.permissions?.chat?.temporary ?? true) {
-				if ($page.url.searchParams.get('temporary-chat') === 'true') {
-					temporaryChatEnabled.set(true);
-				}
-
-				if ($user?.permissions?.chat?.temporary_enforced) {
-					temporaryChatEnabled.set(true);
-				}
+		const session = get(user);
+		if (session?.permissions?.chat?.temporary ?? true) {
+			if ($page.url.searchParams.get('temporary-chat') === 'true') {
+				temporaryChatEnabled.set(true);
 			}
 
-			await tick();
+			if (session?.permissions?.chat?.temporary_enforced) {
+				temporaryChatEnabled.set(true);
+			}
 		}
-
-		loaded = true;
 	});
 </script>
 
@@ -206,7 +264,7 @@
 	<div
 		class=" text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900 h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
 	>
-		{#if !['user', 'admin'].includes($user?.role)}
+		{#if $user && !['user', 'admin'].includes($user.role)}
 			<AccountPending />
 		{:else if localDBChats.length > 0}
 			<div class="fixed w-full h-full flex z-50">
@@ -272,6 +330,23 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if $switchingOrganization}
+		<div
+			class="fixed inset-0 z-[200] flex items-center justify-center bg-white dark:bg-black"
+			role="status"
+			aria-live="polite"
+			aria-busy="true"
+		>
+			<img
+				src="/static/splash.png"
+				alt="Weather Skills"
+				class="h-24 w-auto dark:invert"
+				draggable="false"
+			/>
+			<span class="sr-only">{$i18n.t('Switching organization')}</span>
+		</div>
+	{/if}
 </div>
 
 <style>

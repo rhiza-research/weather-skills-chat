@@ -7,7 +7,9 @@ let CLIENT_ID = '';
 async function getCredentials() {
 	if (CLIENT_ID) return;
 
-	const response = await fetch('/api/config');
+	const response = await fetch('/api/v1/user_config', {
+		headers: { Authorization: `Bearer ${localStorage.token}` }
+	});
 	if (!response.ok) {
 		throw new Error('Failed to fetch OneDrive credentials');
 	}

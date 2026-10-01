@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
-	import { Confetti } from 'svelte-confetti';
+	import { getContext } from 'svelte';
 
 	import { WEBUI_NAME, config, settings } from '$lib/stores';
 
@@ -15,11 +14,19 @@
 	export let show = false;
 
 	let changelog = null;
+	let Confetti = null;
 
-	onMount(async () => {
-		const res = await getChangelog();
-		changelog = res;
-	});
+	$: if (show && !changelog) {
+		getChangelog().then((res) => {
+			changelog = res;
+		});
+	}
+
+	$: if (show && !Confetti) {
+		import('svelte-confetti').then((module) => {
+			Confetti = module.Confetti;
+		});
+	}
 </script>
 
 <Modal bind:show size="lg">
@@ -28,7 +35,9 @@
 			<div class="text-xl font-semibold">
 				{$i18n.t('What’s New in')}
 				{$WEBUI_NAME}
-				<Confetti x={[-1, -0.25]} y={[0, 0.5]} />
+				{#if Confetti}
+					<svelte:component this={Confetti} x={[-1, -0.25]} y={[0, 0.5]} />
+				{/if}
 			</div>
 			<button
 				class="self-center"

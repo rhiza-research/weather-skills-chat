@@ -3,7 +3,7 @@
 	import { createEventDispatcher, onMount, getContext } from 'svelte';
 	const dispatch = createEventDispatcher();
 
-	import { getBackendConfig } from '$lib/apis';
+	import { getUserConfig, mergeConfig } from '$lib/apis';
 	import {
 		getAudioConfig,
 		updateAudioConfig,
@@ -120,7 +120,8 @@
 
 		if (res) {
 			saveHandler();
-			config.set(await getBackendConfig());
+			const userConfig = await getUserConfig(localStorage.token);
+			if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 		}
 	};
 
