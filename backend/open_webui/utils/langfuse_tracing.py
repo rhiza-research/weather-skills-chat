@@ -48,6 +48,13 @@ _trace_metadata_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
 _input_thread_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
     "langfuse_input_thread", default=None
 )
+# A dict shared by every context copied after the trace starts. The first
+# end_chat_trace in any of them marks it ended, so a later end in another
+# copy (a tool loop task and the context that awaited it) does not end or
+# update the root span again.
+_trace_state_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "langfuse_trace_state", default=None
+)
 
 
 def tracing_enabled() -> bool:
@@ -233,6 +240,7 @@ def _activate_chat_trace(trace: Any, cm: Any, trace_metadata: Optional[dict]) ->
     if trace is not None:
         _trace_var.set(trace)
         _trace_metadata_var.set(trace_metadata)
+        _trace_state_var.set({"ended": False})
 
 
 def start_chat_trace(
@@ -305,7 +313,31 @@ def begin_chat_trace(
     return trace
 
 
+def _clear_trace_context() -> None:
+    _trace_var.set(None)
+    _trace_metadata_var.set(None)
+    _trace_state_var.set(None)
+    _input_thread_var.set(None)
+    _generation_stack_var.set(None)
+
+
+def chat_trace_ended() -> bool:
+    """Whether some context copy has already ended this context's root span."""
+    state = _trace_state_var.get()
+    return bool(state and state.get("ended"))
+
+
 def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
+    state = _trace_state_var.get()
+    if state is not None and state.get("ended"):
+        # Another context copy already ended the root span and exited the
+        # propagation cm. Exiting it again here would detach it in a context
+        # that did not enter it, so only the slot is cleared.
+        _clear_trace_context()
+        _propagate_cm_var.set(None)
+        return
+    if state is not None:
+        state["ended"] = True
     # An ended span drops updates, so the input must land first.
     input_thread = _input_thread_var.get()
     if input_thread is not None:
@@ -330,10 +362,7 @@ def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
     except Exception:
         log.debug("Langfuse end_chat_trace failed", exc_info=True)
     finally:
-        _trace_var.set(None)
-        _trace_metadata_var.set(None)
-        _input_thread_var.set(None)
-        _generation_stack_var.set(None)
+        _clear_trace_context()
         _exit_propagate_attributes()
         client = get_client()
         if client:
