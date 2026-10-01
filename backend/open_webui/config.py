@@ -2088,6 +2088,22 @@ ENABLE_WEB_SEARCH = PersistentConfig(
     os.getenv("ENABLE_WEB_SEARCH", "False").lower() == "true",
 )
 
+DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION = (
+    "The web search tool will return pages that are relevant to each query provided. "
+    "Use the web search tool to augment the weather-skills data analysis. It should "
+    "be used for searching for specific information which can aid the analysis as "
+    "opposed to general information about a phenomena. Weather skills should not be "
+    "used as a generic research assistant to search the internet. Once you have "
+    "gathered information, you should state explicitly which information was "
+    "gathered, where it was gathered from, and how it will be used in the analysis."
+)
+
+WEB_SEARCH_TOOL_DESCRIPTION = PersistentConfig(
+    "WEB_SEARCH_TOOL_DESCRIPTION",
+    "rag.web.search.tool_description",
+    os.getenv("WEB_SEARCH_TOOL_DESCRIPTION", DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION),
+)
+
 WEB_SEARCH_ENGINE = PersistentConfig(
     "WEB_SEARCH_ENGINE",
     "rag.web.search.engine",

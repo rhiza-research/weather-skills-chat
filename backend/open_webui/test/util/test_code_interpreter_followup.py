@@ -74,6 +74,158 @@ class BuiltinExecuteCodeToolTest(unittest.TestCase):
         self.assertIn("outputs", params)
 
 
+class WebSearchBuiltinToolTest(unittest.TestCase):
+    def test_off_unless_chat_enables_it(self):
+        from types import SimpleNamespace
+
+        from open_webui.config import DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION
+        from open_webui.utils.builtin_tools import get_builtin_tools
+
+        off = get_builtin_tools({"__metadata__": {"features": {}}})
+        self.assertNotIn("web_search", off)
+
+        disabled = SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    config=SimpleNamespace(
+                        ENABLE_WEB_SEARCH=False,
+                        WEB_SEARCH_TOOL_DESCRIPTION="",
+                    )
+                )
+            )
+        )
+        hidden = get_builtin_tools(
+            {
+                "__metadata__": {"features": {"web_search": True}},
+                "__request__": disabled,
+            }
+        )
+        self.assertNotIn("web_search", hidden)
+
+        enabled = SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    config=SimpleNamespace(
+                        ENABLE_WEB_SEARCH=True,
+                        WEB_SEARCH_TOOL_DESCRIPTION="  Custom search guidance.  ",
+                    )
+                )
+            )
+        )
+        tools = get_builtin_tools(
+            {
+                "__metadata__": {"features": {"web_search": True}},
+                "__request__": enabled,
+            }
+        )
+        spec = tools["web_search"]["spec"]
+        self.assertEqual(spec["name"], "web_search")
+        self.assertEqual(spec["description"], "Custom search guidance.")
+        self.assertIn("queries", spec["parameters"]["properties"])
+
+        defaulted = SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    config=SimpleNamespace(
+                        ENABLE_WEB_SEARCH=True,
+                        WEB_SEARCH_TOOL_DESCRIPTION="   ",
+                    )
+                )
+            )
+        )
+        tools = get_builtin_tools(
+            {
+                "__metadata__": {"features": {"web_search": True}},
+                "__request__": defaulted,
+            }
+        )
+        self.assertEqual(
+            tools["web_search"]["spec"]["description"],
+            DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION,
+        )
+
+    def test_queries_follow_concurrency_and_result_count(self):
+        import asyncio
+        import json
+        import threading
+        import time
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from open_webui.utils import builtin_tools
+
+        state = {"current": 0, "peak": 0}
+        lock = threading.Lock()
+        loaded = []
+
+        class Hit:
+            def __init__(self, link):
+                self.link = link
+                self.title = link
+                self.snippet = "snippet"
+
+        class Doc:
+            def __init__(self, url):
+                self.page_content = "page"
+                self.metadata = {"source": url, "title": url}
+
+        class Loader:
+            def __init__(self, urls, **_kwargs):
+                self.urls = list(urls)
+
+            async def aload(self):
+                loaded.append(self.urls)
+                return [Doc(url) for url in self.urls]
+
+        def fake_search(_request, engine, query):
+            self.assertEqual(engine, "brave")
+            with lock:
+                state["current"] += 1
+                state["peak"] = max(state["peak"], state["current"])
+            time.sleep(0.05)
+            with lock:
+                state["current"] -= 1
+            return [Hit(f"https://example.com/{query}/{i}") for i in range(5)]
+
+        request = SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    config=SimpleNamespace(
+                        WEB_SEARCH_ENGINE="brave",
+                        WEB_SEARCH_RESULT_COUNT=2,
+                        WEB_SEARCH_CONCURRENT_REQUESTS=2,
+                        ENABLE_WEB_LOADER_SSL_VERIFICATION=True,
+                        WEB_SEARCH_TRUST_ENV=False,
+                    )
+                )
+            )
+        )
+
+        with (
+            patch(
+                "open_webui.routers.retrieval.search_web",
+                side_effect=fake_search,
+            ),
+            patch(
+                "open_webui.retrieval.web.utils.get_web_loader",
+                side_effect=Loader,
+            ),
+        ):
+            raw = asyncio.run(
+                builtin_tools.web_search(
+                    ["a", "b", "c", "d"],
+                    __request__=request,
+                )
+            )
+
+        payload = json.loads(raw)
+        self.assertEqual([item["query"] for item in payload["results"]], ["a", "b", "c", "d"])
+        self.assertEqual(state["peak"], 2)
+        self.assertTrue(loaded)
+        self.assertTrue(all(len(urls) == 2 for urls in loaded))
+        self.assertTrue(all(len(item["pages"]) == 2 for item in payload["results"]))
+
+
 class AsPathListTest(unittest.TestCase):
     def test_coerces_string_and_list(self):
         from open_webui.utils.builtin_tools import _as_path_list

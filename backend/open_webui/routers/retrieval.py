@@ -386,6 +386,7 @@ async def get_rag_config(request: Request, user=Depends(get_admin_user)):
         # Web search settings
         "web": {
             "ENABLE_WEB_SEARCH": request.app.state.config.ENABLE_WEB_SEARCH,
+            "WEB_SEARCH_TOOL_DESCRIPTION": request.app.state.config.WEB_SEARCH_TOOL_DESCRIPTION,
             "WEB_SEARCH_ENGINE": request.app.state.config.WEB_SEARCH_ENGINE,
             "WEB_SEARCH_TRUST_ENV": request.app.state.config.WEB_SEARCH_TRUST_ENV,
             "WEB_SEARCH_RESULT_COUNT": request.app.state.config.WEB_SEARCH_RESULT_COUNT,
@@ -431,6 +432,7 @@ async def get_rag_config(request: Request, user=Depends(get_admin_user)):
 
 class WebConfig(BaseModel):
     ENABLE_WEB_SEARCH: Optional[bool] = None
+    WEB_SEARCH_TOOL_DESCRIPTION: Optional[str] = None
     WEB_SEARCH_ENGINE: Optional[str] = None
     WEB_SEARCH_TRUST_ENV: Optional[bool] = None
     WEB_SEARCH_RESULT_COUNT: Optional[int] = None
@@ -638,6 +640,10 @@ async def update_rag_config(
     if form_data.web is not None:
         # Web search settings
         request.app.state.config.ENABLE_WEB_SEARCH = form_data.web.ENABLE_WEB_SEARCH
+        if form_data.web.WEB_SEARCH_TOOL_DESCRIPTION is not None:
+            request.app.state.config.WEB_SEARCH_TOOL_DESCRIPTION = (
+                form_data.web.WEB_SEARCH_TOOL_DESCRIPTION
+            )
         request.app.state.config.WEB_SEARCH_ENGINE = form_data.web.WEB_SEARCH_ENGINE
         request.app.state.config.WEB_SEARCH_TRUST_ENV = (
             form_data.web.WEB_SEARCH_TRUST_ENV
@@ -746,6 +752,7 @@ async def update_rag_config(
         # Web search settings
         "web": {
             "ENABLE_WEB_SEARCH": request.app.state.config.ENABLE_WEB_SEARCH,
+            "WEB_SEARCH_TOOL_DESCRIPTION": request.app.state.config.WEB_SEARCH_TOOL_DESCRIPTION,
             "WEB_SEARCH_ENGINE": request.app.state.config.WEB_SEARCH_ENGINE,
             "WEB_SEARCH_TRUST_ENV": request.app.state.config.WEB_SEARCH_TRUST_ENV,
             "WEB_SEARCH_RESULT_COUNT": request.app.state.config.WEB_SEARCH_RESULT_COUNT,

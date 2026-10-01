@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getRAGConfig, updateRAGConfig } from '$lib/apis/retrieval';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import Textarea from '$lib/components/common/Textarea.svelte';
 
 	import { models } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
@@ -101,6 +102,25 @@
 						<div class="flex items-center relative">
 							<Switch bind:state={webConfig.ENABLE_WEB_SEARCH} />
 						</div>
+					</div>
+
+					<div class="mb-2.5">
+						<div class=" mb-1 text-xs font-medium">
+							{$i18n.t('Web Search Tool Description')}
+						</div>
+						<Tooltip
+							content={$i18n.t(
+								'Shown to the model when web search is enabled in a chat. Leave empty to use the default.'
+							)}
+							placement="top-start"
+						>
+							<Textarea
+								bind:value={webConfig.WEB_SEARCH_TOOL_DESCRIPTION}
+								placeholder={$i18n.t(
+									'Shown to the model when web search is enabled in a chat. Leave empty to use the default.'
+								)}
+							/>
+						</Tooltip>
 					</div>
 
 					<div class="  mb-2.5 flex w-full justify-between">

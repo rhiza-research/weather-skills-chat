@@ -26,6 +26,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EMAIL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 EMAIL_ATTACHMENTS_MAX_TOTAL_BYTES = 25 * 1024 * 1024
 EMAIL_ATTACHMENTS_MAX_COUNT = 10
+WEB_SEARCH_PAGE_CHAR_LIMIT = 8000
 
 
 async def create_automation(
@@ -1665,6 +1666,233 @@ EXECUTE_CODE_SPEC = {
 }
 
 
+def _request_config(request):
+    app = getattr(request, "app", None)
+    state = getattr(app, "state", None)
+    return getattr(state, "config", None)
+
+
+def web_search_tool_description(request) -> str:
+    from open_webui.config import DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION
+
+    config = _request_config(request)
+    configured = ""
+    if config is not None:
+        configured = getattr(config, "WEB_SEARCH_TOOL_DESCRIPTION", "") or ""
+    configured = str(configured).strip()
+    return configured or DEFAULT_WEB_SEARCH_TOOL_DESCRIPTION
+
+
+def web_search_tool_spec(description: str) -> dict:
+    return {
+        "name": "web_search",
+        "description": description,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "queries": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Specific search queries. Each query returns up to the "
+                        "configured number of pages."
+                    ),
+                }
+            },
+            "required": ["queries"],
+        },
+    }
+
+
+def _as_query_list(queries) -> list[str]:
+    if isinstance(queries, str):
+        text = queries.strip()
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                queries = parsed
+            else:
+                queries = [text]
+        else:
+            queries = [text] if text else []
+    if not isinstance(queries, (list, tuple)):
+        raise ValueError("queries must be a list of strings")
+    out = []
+    for item in queries:
+        text = str(item or "").strip()
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
+def _config_positive_int(config, name: str, default: int) -> int:
+    try:
+        value = int(getattr(config, name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def _clip_page_content(content: str) -> tuple[str, bool]:
+    if len(content) <= WEB_SEARCH_PAGE_CHAR_LIMIT:
+        return content, False
+    return content[:WEB_SEARCH_PAGE_CHAR_LIMIT], True
+
+
+async def web_search(
+    queries,
+    __request__=None,
+    __event_emitter__=None,
+    **_ignored,
+) -> str:
+    """Search the web for each query and return the relevant pages."""
+    if __request__ is None:
+        return json.dumps({"error": "Request context not available"})
+
+    try:
+        query_list = _as_query_list(queries)
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+    if not query_list:
+        return json.dumps({"error": "Provide at least one search query."})
+
+    config = _request_config(__request__)
+    engine = getattr(config, "WEB_SEARCH_ENGINE", "") if config is not None else ""
+    if not engine:
+        return json.dumps({"error": "Web search engine is not configured."})
+
+    from starlette.concurrency import run_in_threadpool
+
+    from open_webui.retrieval.web.utils import get_web_loader
+    from open_webui.routers.retrieval import search_web
+
+    async def emit(data: dict):
+        if __event_emitter__ is None:
+            return
+        await __event_emitter__({"type": "status", "data": data})
+
+    result_count = _config_positive_int(config, "WEB_SEARCH_RESULT_COUNT", 3)
+    concurrency = _config_positive_int(config, "WEB_SEARCH_CONCURRENT_REQUESTS", 10)
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def run_one(query: str) -> dict:
+        async with semaphore:
+            await asyncio.sleep(0)
+            await emit(
+                {
+                    "action": "web_search",
+                    "description": 'Searching "{{searchQuery}}"',
+                    "query": query,
+                    "done": False,
+                }
+            )
+            try:
+                web_results = await run_in_threadpool(
+                    search_web, __request__, engine, query
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.exception("web_search failed for %s", query)
+                return {"query": query, "error": str(e), "pages": []}
+
+            hits = [result for result in web_results if result.link][:result_count]
+            by_link = {result.link: result for result in hits}
+            page_urls = list(by_link)
+            pages = []
+            if page_urls:
+                try:
+                    loader = get_web_loader(
+                        page_urls,
+                        verify_ssl=getattr(
+                            config, "ENABLE_WEB_LOADER_SSL_VERIFICATION", True
+                        ),
+                        requests_per_second=concurrency,
+                        trust_env=getattr(config, "WEB_SEARCH_TRUST_ENV", False),
+                    )
+                    docs = await loader.aload()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    log.exception("web_search page load failed for %s", query)
+                    return {
+                        "query": query,
+                        "error": str(e),
+                        "pages": [
+                            {
+                                "title": result.title or "",
+                                "url": result.link,
+                                "snippet": result.snippet or "",
+                                "content": "",
+                            }
+                            for result in hits
+                        ],
+                    }
+
+                for doc in docs:
+                    if len(pages) >= result_count:
+                        break
+                    metadata = doc.metadata or {}
+                    url = metadata.get("source") or ""
+                    hit = by_link.get(url)
+                    content, truncated = _clip_page_content(doc.page_content or "")
+                    page = {
+                        "title": metadata.get("title")
+                        or (hit.title if hit else "")
+                        or "",
+                        "url": url,
+                        "snippet": (hit.snippet if hit else "") or "",
+                        "content": content,
+                    }
+                    if truncated:
+                        page["truncated"] = True
+                    pages.append(page)
+
+            return {"query": query, "pages": pages}
+
+    try:
+        results = list(await asyncio.gather(*(run_one(query) for query in query_list)))
+    except asyncio.CancelledError:
+        await emit(
+            {
+                "action": "web_search",
+                "description": "Cancelled",
+                "done": True,
+            }
+        )
+        raise
+
+    urls = [
+        page["url"]
+        for result in results
+        for page in result.get("pages") or []
+        if page.get("url")
+    ]
+    if urls:
+        await emit(
+            {
+                "action": "web_search",
+                "description": "Searched {{count}} sites",
+                "urls": urls,
+                "done": True,
+            }
+        )
+    else:
+        await emit(
+            {
+                "action": "web_search",
+                "description": "No search results found",
+                "done": True,
+                "error": True,
+            }
+        )
+
+    return json.dumps({"results": results}, ensure_ascii=False)
+
+
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
@@ -1698,4 +1926,17 @@ def get_builtin_tools(extra_params: dict) -> dict:
     features = (extra_params.get("__metadata__") or {}).get("features") or {}
     if isinstance(features, dict) and features.get("code_interpreter"):
         tools["execute_code"] = _tool(execute_code, EXECUTE_CODE_SPEC)
+    if isinstance(features, dict) and features.get("web_search"):
+        request = extra_params.get("__request__")
+        config = _request_config(request)
+        admin_enabled = (
+            True
+            if config is None
+            else bool(getattr(config, "ENABLE_WEB_SEARCH", False))
+        )
+        if admin_enabled:
+            tools["web_search"] = _tool(
+                web_search,
+                web_search_tool_spec(web_search_tool_description(request)),
+            )
     return tools
