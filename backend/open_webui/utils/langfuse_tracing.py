@@ -188,21 +188,47 @@ def _create_chat_trace(
         tags=tags,
         metadata=trace_metadata,
     )
-    trace = _safe_call(
-        client.start_observation,
-        name="weather-skills-chat",
-        as_type="span",
-        input=trace_input,
-        metadata=trace_metadata,
-    )
-    if trace is None:
-        return None, None, None
-    return trace, cm, trace_metadata
+    # The SDK copies propagated attributes onto a span when the span starts,
+    # so the context must be entered before the root span is created.
+    if cm is not None:
+        try:
+            cm.__enter__()
+        except Exception:
+            log.debug("Langfuse propagate_attributes enter failed", exc_info=True)
+            cm = None
+    try:
+        trace = _safe_call(
+            client.start_observation,
+            name="weather-skills-chat",
+            as_type="span",
+            input=trace_input,
+            metadata=trace_metadata,
+        )
+        if trace is None:
+            _exit_entered_propagation(cm)
+            return None, None, None
+        return trace, cm, trace_metadata
+    except Exception:
+        _exit_entered_propagation(cm)
+        raise
+
+
+def _exit_entered_propagation(cm: Any) -> None:
+    """Exit a cm the caller holds, before it is stored in _propagate_cm_var.
+
+    _exit_propagate_attributes exits the stored cm and clears the slot.
+    """
+    if cm is None:
+        return
+    try:
+        cm.__exit__(None, None, None)
+    except Exception:
+        log.debug("Langfuse propagate_attributes exit failed", exc_info=True)
 
 
 def _activate_chat_trace(trace: Any, cm: Any, trace_metadata: Optional[dict]) -> None:
+    """Track a trace from _create_chat_trace, whose cm is already entered."""
     if cm is not None:
-        _safe_call(cm.__enter__)
         _propagate_cm_var.set(cm)
     if trace is not None:
         _trace_var.set(trace)
@@ -239,6 +265,8 @@ def begin_chat_trace(
 
     Never raises: on any failure the chat runs without a trace.
     """
+    trace = None
+    cm = None
     try:
         if not tracing_enabled():
             return None
@@ -264,6 +292,9 @@ def begin_chat_trace(
         )
     except Exception:
         log.debug("Langfuse begin_chat_trace failed", exc_info=True)
+        if trace is not None:
+            _safe_call(trace.end)
+        _exit_entered_propagation(cm)
         return None
     _activate_chat_trace(trace, cm, trace_metadata)
     try:
