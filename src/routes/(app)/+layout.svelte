@@ -37,6 +37,7 @@
 		switchingOrganization,
 		preferencesReady
 	} from '$lib/stores';
+	import { dropOrganization, preloadRecent } from '$lib/chat/cache';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
@@ -47,6 +48,19 @@
 	const i18n = getContext('i18n');
 
 	let loaded = false;
+	let preloadedOrganization = '';
+
+	const syncRecentCache = (organizationId: string) => {
+		if (!organizationId || organizationId === preloadedOrganization) return;
+		if (preloadedOrganization) dropOrganization(preloadedOrganization);
+		preloadedOrganization = organizationId;
+		preloadRecent(localStorage.token, organizationId);
+	};
+
+	// Prime the recent-chat cache once the app shell has a user, on any route.
+	// Reconnects re-pull that window from the socket handler. Low priority,
+	// and it does not block the open chat.
+	$: if (loaded && $user) syncRecentCache($activeOrganizationId || $user.id);
 	let DB = null;
 	let localDBChats = [];
 	let stopRoleSync = () => {};

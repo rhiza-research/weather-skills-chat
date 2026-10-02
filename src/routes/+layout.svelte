@@ -18,7 +18,7 @@
 		socket,
 		chatId,
 		chats,
-		currentChatPage,
+		pinnedChats,
 		tags,
 		temporaryChatEnabled,
 		isLastActiveTab,
@@ -45,7 +45,14 @@
 	import { WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
 	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
 	import { bestMatchingLanguage } from '$lib/utils';
-	import { getAllTags, getChatList } from '$lib/apis/chats';
+	import { getAllTags } from '$lib/apis/chats';
+	import { getTimeRange } from '$lib/utils';
+	import {
+		dropChat,
+		onChatUpdated,
+		rememberArtifacts,
+		setOpenChat
+	} from '$lib/chat/cache';
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
@@ -236,6 +243,37 @@
 		return payload;
 	};
 
+	const applyChatListRow = (row) => {
+		if (!row?.id) return;
+		if (row.removed || row.archived) {
+			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			return;
+		}
+		const next = { ...row, time_range: getTimeRange(row.updated_at) };
+		if (row.pinned) {
+			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			pinnedChats.update((list) => {
+				const items = [...(list ?? [])];
+				const index = items.findIndex((item) => item.id === row.id);
+				if (index === -1) items.unshift(next);
+				else items[index] = { ...items[index], ...next };
+				return items;
+			});
+			return;
+		}
+		pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+		chats.update((list) => {
+			const items = [...(list ?? [])];
+			const index = items.findIndex((item) => item.id === row.id);
+			if (index === -1) items.unshift(next);
+			else items[index] = { ...items[index], ...next };
+			return items;
+		});
+	};
+
+	$: setOpenChat($chatId || '');
+
 	const chatEventHandler = async (event, cb) => {
 		const chat = $page.url.pathname.includes(`/c/${event.chat_id}`);
 
@@ -253,9 +291,15 @@
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
 
-		if (type === 'chat:list' || type === 'chat:title') {
-			currentChatPage.set(1);
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		if (type === 'chat:title') {
+			const title = typeof data === 'string' ? data : data?.title;
+			if (title && event.chat_id) {
+				chats.update((list) =>
+					(list ?? []).map((item) =>
+						item.id === event.chat_id ? { ...item, title } : item
+					)
+				);
+			}
 		}
 
 		// Session-targeted RPC (Pyodide, tool servers, direct completion) must always
@@ -455,12 +499,35 @@
 		};
 		window.addEventListener('resize', onResize);
 
+		const onChatList = (row) => applyChatListRow(row);
+		const onChatUpdatedEvent = (row) => {
+			if (!row?.id) return;
+			onChatUpdated(row.id, Number(row.revision ?? 0), localStorage.token);
+		};
+		const onChatArtifacts = (row) => {
+			if (!row?.id || !Array.isArray(row.files)) return;
+			rememberArtifacts(row.id, row.files);
+		};
+		const onChatEvict = (row) => {
+			if (!row?.id) return;
+			dropChat(row.id);
+			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+		};
 		const bindRealtime = () => {
 			const liveSocket = get(socket);
 			if (!liveSocket) return;
 			liveSocket.off('chat-events', chatEventHandler);
+			liveSocket.off('chat:list', onChatList);
+			liveSocket.off('chat:updated', onChatUpdatedEvent);
+			liveSocket.off('chat:artifacts', onChatArtifacts);
+			liveSocket.off('chat:evict', onChatEvict);
 			if (get(user)) {
 				liveSocket.on('chat-events', chatEventHandler);
+				liveSocket.on('chat:list', onChatList);
+				liveSocket.on('chat:updated', onChatUpdatedEvent);
+				liveSocket.on('chat:artifacts', onChatArtifacts);
+				liveSocket.on('chat:evict', onChatEvict);
+				setOpenChat(get(chatId));
 			}
 		};
 		user.subscribe(() => bindRealtime());

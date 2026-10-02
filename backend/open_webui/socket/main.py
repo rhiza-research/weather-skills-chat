@@ -236,14 +236,27 @@ async def disconnect(sid):
             del USER_POOL[user_id]
 
         await sio.emit("user-list", {"user_ids": list(USER_POOL.keys())})
+        try:
+            from open_webui.utils.chat_realtime import clear_watch
+
+            clear_watch(sid)
+        except Exception:
+            log.debug("clear watch failed", exc_info=True)
     else:
         pass
         # print(f"Unknown session ID {sid} disconnected")
 
 
+from open_webui.utils.chat_realtime import register as register_chat_watch
+
+register_chat_watch()
+
+
 def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         user_id = request_info["user_id"]
+
+        from open_webui.utils.chat_realtime import active_session_ids
 
         session_ids = list(
             set(
@@ -253,10 +266,13 @@ def get_event_emitter(request_info, update_db=True):
                     if request_info.get("session_id")
                     else []
                 )
+                + active_session_ids(request_info.get("chat_id"))
             )
         )
 
         for session_id in session_ids:
+            if not session_id:
+                continue
             await sio.emit(
                 "chat-events",
                 {
@@ -270,13 +286,26 @@ def get_event_emitter(request_info, update_db=True):
         if update_db:
             if "type" in event_data and event_data["type"] == "status":
                 status_data = event_data.get("data", {}) or {}
+                action = status_data.get("action")
                 # Liveness pings only — do not grow statusHistory in the DB.
-                if status_data.get("action") != "generation_heartbeat":
-                    Chats.add_message_status_to_chat_by_id_and_message_id(
-                        request_info["chat_id"],
-                        request_info["message_id"],
+                # Other statuses are emitted immediately above and flushed
+                # to the database on a short interval, not once per tick.
+                if action != "generation_heartbeat":
+                    from open_webui.utils.chat_realtime import schedule_status
+
+                    schedule_status(
+                        request_info.get("chat_id"),
+                        request_info.get("message_id"),
                         status_data,
                     )
+                if (
+                    status_data.get("done")
+                    and action not in ("generation_heartbeat", "waiting_response")
+                    and request_info.get("chat_id")
+                ):
+                    from open_webui.utils.chat_realtime import schedule_artifacts
+
+                    schedule_artifacts(request_info["chat_id"])
 
             if "type" in event_data and event_data["type"] == "message":
                 message = Chats.get_message_by_id_and_message_id(
@@ -294,6 +323,7 @@ def get_event_emitter(request_info, update_db=True):
                         {
                             "content": content,
                         },
+                        bump_revision=False,
                     )
 
             if "type" in event_data and event_data["type"] == "replace":
@@ -305,6 +335,7 @@ def get_event_emitter(request_info, update_db=True):
                     {
                         "content": content,
                     },
+                    bump_revision=False,
                 )
 
             # Headless/automation runs have no browser owning the stream;
@@ -327,6 +358,7 @@ def get_event_emitter(request_info, update_db=True):
                         request_info["chat_id"],
                         request_info["message_id"],
                         patch,
+                        bump_revision=bool(data.get("done")),
                     )
 
     return __event_emitter__

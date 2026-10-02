@@ -445,4 +445,11 @@ async def run_skill(
         result["chat_venv"] = str(chat_venv_root)
     if used_secrets:
         result["env_secrets"] = list(used_secrets.keys())
+    if use_chat_sandbox:
+        try:
+            from open_webui.utils.chat_realtime import schedule_artifacts
+
+            schedule_artifacts(str(chat_id))
+        except Exception:
+            log.debug("artifact notify after skill failed", exc_info=True)
     return _redact_skill_result(result, used_secrets)

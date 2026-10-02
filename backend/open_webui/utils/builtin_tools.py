@@ -380,6 +380,10 @@ async def copy_intermediate_result(
     except Exception as e:
         return f"Copy failed: {e}"
 
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(str(chat_id))
+
     arrow = "→"
     action = (
         "into intermediate_results"

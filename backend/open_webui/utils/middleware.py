@@ -1450,6 +1450,7 @@ async def process_chat_response(
                     {
                         "selectedModelId": response["selected_model_id"],
                     },
+                    bump_revision=False,
                 )
 
             choices = response.get("choices", [])
@@ -1478,12 +1479,15 @@ async def process_chat_response(
                         }
                     )
 
-                    # Save message in the database
+                    from open_webui.utils.chat_realtime import flush_statuses
+
+                    await flush_statuses(metadata["chat_id"], metadata["message_id"])
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata["chat_id"],
                         metadata["message_id"],
                         {
                             "content": content,
+                            "done": True,
                         },
                     )
 
@@ -1552,6 +1556,7 @@ async def process_chat_response(
             {
                 "model": model_id,
             },
+            bump_revision=False,
         )
 
         def split_content_and_whitespace(content):
@@ -2086,13 +2091,13 @@ async def process_chat_response(
                         }
                     )
 
-                    # Save message in the database
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata["chat_id"],
                         metadata["message_id"],
                         {
                             **event,
                         },
+                        bump_revision=False,
                     )
 
                 async def stream_body_handler(response):
@@ -2158,6 +2163,7 @@ async def process_chat_response(
                                             {
                                                 "selectedModelId": model_id,
                                             },
+                                            bump_revision=False,
                                         )
                                     else:
                                         choices = data.get("choices", [])
@@ -2354,7 +2360,6 @@ async def process_chat_response(
                                                 )
 
                                             if ENABLE_REALTIME_CHAT_SAVE:
-                                                # Save message in the database
                                                 Chats.upsert_message_to_chat_by_id_and_message_id(
                                                     metadata["chat_id"],
                                                     metadata["message_id"],
@@ -2363,6 +2368,7 @@ async def process_chat_response(
                                                             content_blocks
                                                         ),
                                                     },
+                                                    bump_revision=False,
                                                 )
                                             else:
                                                 data = {
@@ -2938,19 +2944,56 @@ async def process_chat_response(
                         )
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])
+                final_content = serialize_content_blocks(content_blocks)
+                try:
+                    from open_webui.utils.chat import chat_completed as apply_outlet
+
+                    message_map = Chats.get_messages_by_chat_id(metadata["chat_id"]) or {}
+                    outlet_messages = get_message_list(
+                        message_map, metadata["message_id"]
+                    ) or []
+                    if outlet_messages:
+                        outlet_messages[-1] = {
+                            **outlet_messages[-1],
+                            "content": final_content,
+                            "done": True,
+                        }
+                    outlet = await apply_outlet(
+                        request,
+                        {
+                            "model": form_data.get("model"),
+                            "messages": outlet_messages,
+                            "chat_id": metadata["chat_id"],
+                            "session_id": metadata.get("session_id"),
+                            "id": metadata["message_id"],
+                        },
+                        user,
+                    )
+                    if isinstance(outlet, dict):
+                        for outlet_message in outlet.get("messages") or []:
+                            if (
+                                outlet_message.get("id") == metadata["message_id"]
+                                and outlet_message.get("content") is not None
+                            ):
+                                final_content = outlet_message["content"]
+                except Exception:
+                    log.debug("outlet filter failed", exc_info=True)
+
                 data = {
                     "done": True,
-                    "content": serialize_content_blocks(content_blocks),
+                    "content": final_content,
                     "title": title,
                 }
 
                 if not ENABLE_REALTIME_CHAT_SAVE:
-                    # Save message in the database
+                    from open_webui.utils.chat_realtime import flush_statuses
+
+                    await flush_statuses(metadata["chat_id"], metadata["message_id"])
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata["chat_id"],
                         metadata["message_id"],
                         {
-                            "content": serialize_content_blocks(content_blocks),
+                            "content": final_content,
                             "done": True,
                         },
                     )
@@ -2997,6 +3040,9 @@ async def process_chat_response(
                 await event_emitter({"type": "task-cancelled"})
                 end_chat_trace(error="cancelled")
 
+                from open_webui.utils.chat_realtime import flush_statuses
+
+                await flush_statuses(metadata["chat_id"], metadata["message_id"])
                 Chats.upsert_message_to_chat_by_id_and_message_id(
                     metadata["chat_id"],
                     metadata["message_id"],
@@ -3041,6 +3087,9 @@ async def process_chat_response(
                 except Exception:
                     log.debug("Failed to emit generation error event", exc_info=True)
                 try:
+                    from open_webui.utils.chat_realtime import flush_statuses
+
+                    await flush_statuses(metadata["chat_id"], metadata["message_id"])
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         metadata["chat_id"],
                         metadata["message_id"],

@@ -27,6 +27,13 @@ export async function parseApiError(
 				if (typeof data.detail === 'string' || Array.isArray(data.detail)) {
 					return { ...data, status };
 				}
+				if (data.detail && typeof data.detail === 'object' && !Array.isArray(data.detail)) {
+					const message =
+						typeof data.detail.message === 'string'
+							? data.detail.message
+							: JSON.stringify(data.detail);
+					return { ...data, detail: message, status };
+				}
 				if (data.error != null) {
 					return { ...data, status };
 				}

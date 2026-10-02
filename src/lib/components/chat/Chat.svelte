@@ -28,7 +28,6 @@
 		socket,
 		showControls,
 		showCallOverlay,
-		currentChatPage,
 		temporaryChatEnabled,
 		mobile,
 		showOverview,
@@ -49,8 +48,10 @@
 		splitStream,
 		sleep,
 		removeDetails,
-		getPromptVariables
+		getPromptVariables,
+		getTimeRange
 	} from '$lib/utils';
+	import { chatScrollFor, rememberChatScroll } from '$lib/chat/scroll';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 	import {
 		GENERATION_HEARTBEAT_ACTION,
@@ -69,17 +70,30 @@
 		deleteTagById,
 		deleteTagsById,
 		getAllTags,
+		applyChatHistoryPatch,
 		getChatById,
-		getChatList,
-		getTagsById,
-		updateChatById
+		getTagsById
 	} from '$lib/apis/chats';
+	import {
+		beginLive,
+		documentForOpen,
+		isLive,
+		endLive,
+		liveMessageIdFor,
+		cachedArtifacts,
+		onDocument,
+		putChat,
+		refetchChat,
+		rememberLocal,
+		revisionOf,
+		setViewingLeaf,
+		viewingLeafFor
+	} from '$lib/chat/cache';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getAndUpdateUserLocation, getUserById, getUserSettings } from '$lib/apis/users';
 	import {
-		chatCompleted,
 		generateQueries,
 		chatAction,
 		generateMoACompletion,
@@ -130,6 +144,11 @@
 	let autoScroll = true;
 	let processing = '';
 	let messagesContainerElement: HTMLDivElement;
+	let pinningScroll = false;
+	/** Chat id whose transcript is actually on screen. Scroll saves go here, not to a chat that is still loading. */
+	let scrollChatId = '';
+	/** Re-apply a saved position while the transcript is still growing, until the user scrolls. */
+	let settleScroll = false;
 
 	let navbarElement;
 
@@ -164,6 +183,9 @@
 		messages: {},
 		currentId: null
 	};
+	$: if (chat?.id && chat.id === $chatId && history?.messages && !$temporaryChatEnabled) {
+		rememberLocal(chat.id, history, chat);
+	}
 
 	let taskIds = null;
 	let stopRequested = false;
@@ -176,6 +198,7 @@
 	let generationWatchMessageId: string | null = null;
 	let generationSilenceTimer: ReturnType<typeof setInterval> | null = null;
 	let taskLivenessTimer: ReturnType<typeof setInterval> | null = null;
+	let settlingLostGeneration = false;
 
 	const bumpGenerationActivity = (messageId?: string | null) => {
 		if (messageId && generationWatchMessageId && messageId !== generationWatchMessageId) {
@@ -196,6 +219,17 @@
 		generationWatchMessageId = null;
 	};
 
+	const adoptFinishedServerMessage = (messageId: string, document) => {
+		const stored = document?.chat?.history?.messages?.[messageId];
+		if (stored?.done !== true) return false;
+		endLive(messageId);
+		applyChatDocument(document);
+		history = history;
+		taskIds = null;
+		stopGenerationWatchdogs();
+		return true;
+	};
+
 	const failInFlightMessage = async (
 		messageId: string,
 		reason: string = GENERATION_LOST_MESSAGE
@@ -206,22 +240,59 @@
 			taskIds = null;
 			return;
 		}
+		if (settlingLostGeneration) return;
+		settlingLostGeneration = true;
 
-		message.error = { content: reason };
-		message.done = true;
-		message.content = clearSpinningToolCalls(message.content ?? '');
-		if (message.statusHistory?.length) {
-			message.statusHistory = message.statusHistory.map((status) =>
-				status?.done === false ? { ...status, done: true, hidden: true } : status
-			);
-		}
-		history.messages[messageId] = message;
-		history = history;
-		taskIds = null;
-		stopGenerationWatchdogs();
-		toast.error(reason);
-		if ($chatId) {
-			await saveChatHandler($chatId, history);
+		try {
+			// The task row disappears as soon as the turn commits. A poll can
+			// observe that before the completion event marks the local message
+			// done, then try to save an error with a revision the turn already
+			// moved. Read the stored message first and keep that copy.
+			if ($chatId && $chatId !== 'local' && !$temporaryChatEnabled) {
+				const document = await getChatById(localStorage.token, $chatId).catch(() => null);
+				const latest = history.messages[messageId];
+				if (!latest || latest.done === true) {
+					stopGenerationWatchdogs();
+					taskIds = null;
+					return;
+				}
+				if (adoptFinishedServerMessage(messageId, document)) return;
+			}
+
+			const current = history.messages[messageId];
+			if (!current || current.role !== 'assistant' || current.done === true) {
+				stopGenerationWatchdogs();
+				taskIds = null;
+				return;
+			}
+
+			current.error = { content: reason };
+			current.done = true;
+			current.content = clearSpinningToolCalls(current.content ?? '');
+			if (current.statusHistory?.length) {
+				current.statusHistory = current.statusHistory.map((status) =>
+					status?.done === false ? { ...status, done: true, hidden: true } : status
+				);
+			}
+			history.messages[messageId] = current;
+			history = history;
+			taskIds = null;
+			stopGenerationWatchdogs();
+
+			let keptServerCopy = false;
+			if ($chatId && $chatId !== 'local' && !$temporaryChatEnabled) {
+				await applyChatHistoryPatch(localStorage.token, $chatId, {
+					upsert: { [messageId]: history.messages[messageId] },
+					expected_revision: revisionOf($chatId)
+				}).catch(async (error) => {
+					if (error?.status !== 409) return;
+					const document = await getChatById(localStorage.token, $chatId).catch(() => null);
+					keptServerCopy = adoptFinishedServerMessage(messageId, document);
+				});
+			}
+			if (!keptServerCopy) toast.error(reason);
+		} finally {
+			settlingLostGeneration = false;
 		}
 	};
 
@@ -230,7 +301,7 @@
 		generationWatchMessageId = messageId;
 		lastServerActivityAt = Date.now();
 
-		generationSilenceTimer = setInterval(() => {
+		generationSilenceTimer = setInterval(async () => {
 			if (!generationWatchMessageId) return;
 			const message = history.messages[generationWatchMessageId];
 			if (!message || message.done === true) {
@@ -238,21 +309,37 @@
 				return;
 			}
 			if (Date.now() - lastServerActivityAt >= GENERATION_SILENCE_TIMEOUT_MS) {
-				failInFlightMessage(generationWatchMessageId, GENERATION_LOST_MESSAGE);
+				const watchedId = generationWatchMessageId;
+				const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch(() => null);
+				if ((taskRes?.task_ids ?? []).length) {
+					bumpGenerationActivity(watchedId);
+					return;
+				}
+				const stillWatching = history.messages[watchedId];
+				if (!stillWatching || stillWatching.done === true) {
+					stopGenerationWatchdogs();
+					return;
+				}
+				failInFlightMessage(watchedId, GENERATION_LOST_MESSAGE);
 			}
 		}, 5_000);
 
 		taskLivenessTimer = setInterval(async () => {
 			if (!generationWatchMessageId || !taskIds?.length || !$chatId) return;
-			const message = history.messages[generationWatchMessageId];
+			const watchedId = generationWatchMessageId;
+			const message = history.messages[watchedId];
 			if (!message || message.done === true) {
 				stopGenerationWatchdogs();
 				return;
 			}
 			const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch(() => null);
 			const liveIds = taskRes?.task_ids ?? [];
+			if (history.messages[watchedId]?.done === true) {
+				stopGenerationWatchdogs();
+				return;
+			}
 			if (!liveIds.length) {
-				failInFlightMessage(generationWatchMessageId, GENERATION_LOST_MESSAGE);
+				failInFlightMessage(watchedId, GENERATION_LOST_MESSAGE);
 			}
 		}, TASK_LIVENESS_POLL_MS);
 	};
@@ -263,18 +350,28 @@
 	let files = [];
 	let params = {};
 
-	const openArtifactsPanel = async () => {
+	const openArtifactsPanel = async (forChatId: string | null = null) => {
+		const stillHere = () => !forChatId || get(chatId) === forChatId;
+		if (!stillHere()) return;
 		const stored = parseInt(localStorage.chatControlsSize);
 		if (!stored || stored < 20 || stored > 45) {
 			localStorage.chatControlsSize = '30';
 		}
 		await showOverview.set(false);
 		await showCallOverlay.set(false);
+		if (!stillHere()) return;
 		await showArtifacts.set(true);
 		await showControls.set(true);
+		if (!stillHere()) {
+			showArtifacts.set(false);
+			showControls.set(false);
+			return;
+		}
 		await tick();
+		if (!stillHere()) return;
 		controlPaneComponent?.openPane?.();
 		await tick();
+		if (!stillHere()) return;
 		controlPaneComponent?.openPane?.();
 	};
 
@@ -346,7 +443,8 @@
 
 			loading = false;
 			await tick();
-			await openArtifactsPanel();
+			if (loadingChatId !== id || get(chatId) !== id) return;
+			await openArtifactsPanel(id);
 
 			if (localStorage.getItem(`chat-input-${id}`)) {
 				try {
@@ -360,7 +458,6 @@
 				} catch (e) {}
 			}
 
-			window.setTimeout(() => scrollToBottom(), 0);
 			document.getElementById('chat-input')?.focus();
 		} catch (e) {
 			console.error(e);
@@ -448,7 +545,7 @@
 		}
 
 		await tick();
-		saveChatHandler(_chatId, history);
+		if (_chatId) setViewingLeaf(_chatId, history.currentId);
 	};
 
 	const chatEventHandler = async (event, cb) => {
@@ -466,6 +563,28 @@
 		if (event.chat_id === $chatId) {
 			await tick();
 			let message = history.messages[event.message_id];
+
+			if (!message && event.message_id) {
+				// Another tab started a turn this one has not seen yet.
+				const chatIdForEvent = event.chat_id;
+				refetchChat(localStorage.token, chatIdForEvent).then((document) => {
+					if (!document || get(chatId) !== chatIdForEvent) return;
+					if (isLive(chatIdForEvent)) {
+						const remoteMessages = document?.chat?.history?.messages || {};
+						const keep = liveMessageIdFor(chatIdForEvent);
+						for (const [messageId, remote] of Object.entries(remoteMessages)) {
+							if (messageId === keep) continue;
+							history.messages[messageId] = remote;
+						}
+						history = history;
+						return;
+					}
+					applyChatDocument(document);
+					history = history;
+					if (autoScroll) pinScrollToEnd();
+				});
+				return;
+			}
 
 			if (message) {
 				const type = event?.data?.type ?? null;
@@ -525,9 +644,17 @@
 					message.files = data.files;
 					bumpArtifactsSoon();
 				} else if (type === 'chat:title') {
-					chatTitle.set(data);
-					currentChatPage.set(1);
-					await chats.set(await getChatList(localStorage.token, $currentChatPage));
+					const title = typeof data === 'string' ? data : data?.title;
+					if (title) {
+						chatTitle.set(title);
+					}
+					if (title && event.chat_id) {
+						chats.update((list) =>
+							(list ?? []).map((item) =>
+								item.id === event.chat_id ? { ...item, title } : item
+							)
+						);
+					}
 				} else if (type === 'chat:tags') {
 					chat = await getChatById(localStorage.token, $chatId);
 					allTags.set(await getAllTags(localStorage.token));
@@ -653,8 +780,27 @@
 		}
 	};
 
+	let stopDocumentWatch = () => {};
+
 	onMount(async () => {
 		console.log('mounted');
+		stopDocumentWatch = onDocument((id, document) => {
+			if (!document || id !== get(chatId)) return;
+			if (isLive(id)) {
+				const remoteMessages = document?.chat?.history?.messages;
+				if (!remoteMessages) return;
+				const keep = liveMessageIdFor(id);
+				for (const [messageId, message] of Object.entries(remoteMessages)) {
+					if (messageId === keep) continue;
+					history.messages[messageId] = message;
+				}
+				history = history;
+				return;
+			}
+			applyChatDocument(document);
+			history = history;
+			if (autoScroll) pinScrollToEnd();
+		});
 		window.addEventListener('message', onMessageHandler);
 		$socket?.on('chat-events', chatEventHandler);
 
@@ -720,6 +866,8 @@
 	});
 
 	onDestroy(() => {
+		if (scrollChatId) saveChatScroll(scrollChatId);
+		stopDocumentWatch();
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		stopGenerationWatchdogs();
@@ -1019,19 +1167,21 @@
 			}
 		}
 
-		await showControls.set(false);
 		await showCallOverlay.set(false);
 		await showOverview.set(false);
-		await showArtifacts.set(false);
 
 		if ($page.url.pathname.includes('/c/')) {
 			window.history.replaceState(history.state, '', `/`);
 		}
 
+		if (scrollChatId) saveChatScroll(scrollChatId);
+		scrollChatId = '';
 		autoScroll = true;
 
 		await chatId.set('');
 		await chatTitle.set('');
+		await showArtifacts.set(false);
+		await showControls.set(false);
 
 		history = {
 			messages: {},
@@ -1095,28 +1245,80 @@
 		setTimeout(() => chatInput?.focus(), 0);
 	};
 
+	const applyChatDocument = (loadedChat) => {
+		chat = loadedChat;
+		putChat(loadedChat, null, true);
+		const chatContent = loadedChat.chat;
+		if (!chatContent) return false;
+		selectedModels =
+			(chatContent?.models ?? undefined) !== undefined
+				? chatContent.models
+				: [chatContent.models ?? ''];
+		history =
+			(chatContent?.history ?? undefined) !== undefined
+				? chatContent.history
+				: convertMessagesToHistory(chatContent.messages);
+		chatTitle.set(chatContent.title);
+		params = {};
+		chatFiles = chatContent?.files ?? [];
+		const incomingId = history.currentId;
+		const leaf = viewingLeafFor(loadedChat.id);
+		if (leaf && leaf !== incomingId && history?.messages?.[leaf]) {
+			if (!incomingId || !messageDescendsFrom(history, incomingId, leaf)) {
+				history.currentId = leaf;
+			} else {
+				setViewingLeaf(loadedChat.id, incomingId);
+			}
+		}
+		rememberLocal(loadedChat.id, history, loadedChat);
+		return true;
+	};
+
+	const messageDescendsFrom = (tree, messageId: string, ancestorId: string) => {
+		let cursor = tree?.messages?.[messageId];
+		const seen = new Set<string>();
+		while (cursor && !seen.has(cursor.id)) {
+			if (cursor.id === ancestorId) return true;
+			seen.add(cursor.id);
+			cursor = cursor.parentId ? tree.messages[cursor.parentId] : null;
+		}
+		return false;
+	};
+
 	const loadChat = async (id: string) => {
+		if (scrollChatId && scrollChatId !== id) saveChatScroll(scrollChatId);
+		scrollChatId = '';
+		autoScroll = false;
+		settleScroll = true;
 		stopGenerationWatchdogs();
 		taskIds = null;
 		chatId.set(id);
 
 		const token = localStorage.token;
-		// Chat, tags, settings, tasks, and the artifact list need only the id.
-		const chatPromise = getChatById(token, id).catch(async () => {
+		const tagsPromise = getTagsById(token, id).catch(() => []);
+		const settingsPromise = getUserSettings(token);
+		const tasksPromise = getTaskIdsByChatId(token, id).catch(() => null);
+		if (!Array.isArray(cachedArtifacts(id))) prefetchChatArtifacts(token, id);
+
+		let loadedChat = null;
+		try {
+			loadedChat = (await documentForOpen(token, id)).document;
+		} catch (error) {
 			if (loadingChatId === id) {
 				await goto('/');
 			}
 			return null;
-		});
-		const tagsPromise = getTagsById(token, id).catch(() => []);
-		const settingsPromise = getUserSettings(token);
-		const tasksPromise = getTaskIdsByChatId(token, id).catch(() => null);
-		prefetchChatArtifacts(token, id);
-
-		const loadedChat = await chatPromise;
+		}
 		if (loadingChatId !== id || !loadedChat) {
+			if (loadingChatId === id && !loadedChat) await goto('/');
 			return null;
 		}
+		if (!applyChatDocument(loadedChat)) return null;
+		loading = false;
+		if (messagesLoad) await messagesLoad;
+		await tick();
+		scrollChatId = id;
+		placeChatScroll(id);
 
 		const currentUser = get(user);
 		const listed = (get(chats) ?? []).find((item) => item?.id === id);
@@ -1139,27 +1341,8 @@
 			return null;
 		}
 
-		chat = loadedChat;
 		chatOwnerName = ownerName;
 		tags = loadedTags ?? [];
-
-		const chatContent = loadedChat.chat;
-		if (!chatContent) {
-			return null;
-		}
-
-		console.log(chatContent);
-
-		selectedModels =
-			(chatContent?.models ?? undefined) !== undefined
-				? chatContent.models
-				: [chatContent.models ?? ''];
-		history =
-			(chatContent?.history ?? undefined) !== undefined
-				? chatContent.history
-				: convertMessagesToHistory(chatContent.messages);
-
-		chatTitle.set(chatContent.title);
 
 		if (userSettings) {
 			await settings.set(userSettings.ui);
@@ -1167,11 +1350,8 @@
 			await settings.set(JSON.parse(localStorage.getItem('settings') ?? '{}'));
 		}
 
-		params = {};
-		chatFiles = chatContent?.files ?? [];
-
-		autoScroll = true;
 		await tick();
+		if (settleScroll && get(chatId) === id) placeChatScroll(id);
 
 		taskIds = taskRes?.task_ids?.length ? taskRes.task_ids : null;
 		const hasLiveTask = !!(taskIds && taskIds.length);
@@ -1193,74 +1373,114 @@
 		}
 
 		await tick();
+		if (settleScroll && get(chatId) === id) placeChatScroll(id);
 
 		return true;
 	};
 
-	const scrollToBottom = async () => {
-		await tick();
-		if (messagesContainerElement) {
-			messagesContainerElement.scrollTop = messagesContainerElement.scrollHeight;
-		}
-	};
-	const chatCompletedHandler = async (chatId, modelId, responseMessageId, messages) => {
-		const res = await chatCompleted(localStorage.token, {
-			model: modelId,
-			messages: messages.map((m) => ({
-				id: m.id,
-				role: m.role,
-				content: m.content,
-				info: m.info ? m.info : undefined,
-				timestamp: m.timestamp,
-				...(m.usage ? { usage: m.usage } : {}),
-				...(m.sources ? { sources: m.sources } : {})
-			})),
-			model_item: $models.find((m) => m.id === modelId),
-			chat_id: chatId,
-			session_id: $socket?.id,
-			id: responseMessageId
-		}).catch((error) => {
-			toast.error(`${error}`);
-			messages.at(-1).error = { content: error };
-
-			return null;
+	const saveChatScroll = (id: string) => {
+		const element = messagesContainerElement;
+		if (!id || !element) return;
+		const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
+		const saved = chatScrollFor(id);
+		rememberChatScroll(id, {
+			top: element.scrollTop,
+			atBottom,
+			messagesCount: saved?.messagesCount ?? 20
 		});
+	};
 
-		if (res !== null && res.messages) {
-			// Update chat history with the new messages
-			for (const message of res.messages) {
-				if (message?.id) {
-					// Add null check for message and message.id
-					history.messages[message.id] = {
-						...history.messages[message.id],
-						...(history.messages[message.id].content !== message.content
-							? { originalContent: history.messages[message.id].content }
-							: {}),
-						...message
-					};
+	const placeChatScroll = (id: string) => {
+		const element = messagesContainerElement;
+		if (!element || get(chatId) !== id) return;
+		const saved = chatScrollFor(id);
+		const atBottom = !saved || saved.atBottom;
+		autoScroll = atBottom;
+		pinningScroll = true;
+		element.scrollTop = atBottom ? element.scrollHeight : Math.max(0, saved.top);
+		requestAnimationFrame(() => {
+			pinningScroll = false;
+		});
+	};
+
+	const pinScrollToEnd = () => {
+		const element = messagesContainerElement;
+		if (!element || !autoScroll) return;
+		pinningScroll = true;
+		element.scrollTop = element.scrollHeight;
+		const id = scrollChatId;
+		if (id) {
+			const saved = chatScrollFor(id);
+			rememberChatScroll(id, {
+				top: element.scrollTop,
+				atBottom: true,
+				messagesCount: saved?.messagesCount ?? 20
+			});
+		}
+		requestAnimationFrame(() => {
+			pinningScroll = false;
+		});
+	};
+
+	// Message markdown, images, and the artifact pane change the transcript
+	// height after the first paint. Keep the tail in view until the user
+	// scrolls up.
+	const stickToEnd = (node: HTMLElement) => {
+		let frame = 0;
+		const schedule = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				if (autoScroll) {
+					pinScrollToEnd();
+					return;
 				}
-			}
-		}
-
-		await tick();
-
-		if ($chatId == chatId) {
-			if (!$temporaryChatEnabled) {
-				chat = await updateChatById(localStorage.token, chatId, {
-					models: selectedModels,
-					messages: messages,
-					history: history,
-					params: params,
-					files: chatFiles
+				if (!settleScroll || !scrollChatId) return;
+				const saved = chatScrollFor(scrollChatId);
+				if (!saved || saved.atBottom) return;
+				pinningScroll = true;
+				node.scrollTop = saved.top;
+				requestAnimationFrame(() => {
+					pinningScroll = false;
 				});
-
-				currentChatPage.set(1);
-				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+			});
+		};
+		const content = node.firstElementChild;
+		const observer = new ResizeObserver(() => schedule());
+		if (content) observer.observe(content);
+		observer.observe(node);
+		schedule();
+		return {
+			destroy() {
+				cancelAnimationFrame(frame);
+				observer.disconnect();
 			}
-		}
+		};
+	};
 
+	const scrollToBottom = async () => {
+		autoScroll = true;
+		await tick();
+		const element = messagesContainerElement;
+		if (!element) return;
+		pinningScroll = true;
+		element.scrollTop = element.scrollHeight;
+		if (scrollChatId) {
+			const saved = chatScrollFor(scrollChatId);
+			rememberChatScroll(scrollChatId, {
+				top: element.scrollTop,
+				atBottom: true,
+				messagesCount: saved?.messagesCount ?? 20
+			});
+		}
+		requestAnimationFrame(() => {
+			pinningScroll = false;
+		});
+	};
+	const chatCompletedHandler = async (_chatId, _modelId, responseMessageId, _messages) => {
 		taskIds = null;
 		stopGenerationWatchdogs();
+		endLive(responseMessageId);
+		if ($chatId === _chatId) rememberLocal(_chatId, history, chat);
 	};
 
 	const chatActionHandler = async (chatId, actionId, modelId, responseMessageId, event = null) => {
@@ -1300,19 +1520,17 @@
 			}
 		}
 
-		if ($chatId == chatId) {
-			if (!$temporaryChatEnabled) {
-				chat = await updateChatById(localStorage.token, chatId, {
-					models: selectedModels,
-					messages: messages,
-					history: history,
-					params: params,
-					files: chatFiles
-				});
-
-				currentChatPage.set(1);
-				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		if ($chatId == chatId && !$temporaryChatEnabled && res?.messages?.length) {
+			const upsert = {};
+			for (const message of res.messages) {
+				if (message?.id && history.messages[message.id]) {
+					upsert[message.id] = history.messages[message.id];
+				}
 			}
+			applyChatHistoryPatch(localStorage.token, chatId, {
+				upsert,
+				expected_revision: revisionOf(chatId)
+			}).catch(() => {});
 		}
 	};
 
@@ -1381,7 +1599,11 @@
 			if (messages.length === 0) {
 				await initChatHandler(history);
 			} else {
-				await saveChatHandler($chatId, history);
+				await saveChatHandler($chatId, history, [
+					userMessageId,
+					responseMessageId,
+					parentMessage?.id
+				]);
 			}
 		}
 	};
@@ -1391,6 +1613,7 @@
 
 		let parentMessage = history.messages[parentId];
 		let currentParentId = parentMessage ? parentMessage.id : null;
+		const createdIds = parentMessage?.id ? [parentMessage.id] : [];
 		for (const message of messages) {
 			let messageId = uuidv4();
 
@@ -1409,6 +1632,7 @@
 				}
 
 				history.messages[messageId] = userMessage;
+				createdIds.push(messageId);
 				parentMessage = userMessage;
 				currentParentId = messageId;
 			} else {
@@ -1430,6 +1654,7 @@
 				}
 
 				history.messages[messageId] = responseMessage;
+				createdIds.push(messageId);
 				parentMessage = responseMessage;
 				currentParentId = messageId;
 			}
@@ -1445,7 +1670,7 @@
 		if (messages.length === 0) {
 			await initChatHandler(history);
 		} else {
-			await saveChatHandler($chatId, history);
+			await saveChatHandler($chatId, history, createdIds);
 		}
 	};
 
@@ -1790,22 +2015,6 @@
 		await tick();
 
 		_history = JSON.parse(JSON.stringify(history));
-		// Save chat after all messages have been created
-		try {
-			await saveChatHandler(_chatId, _history);
-		} catch (error) {
-			const reason = formatGenerationRequestError(error);
-			toast.error(reason);
-			for (const responseMessageId of Object.values(responseMessageIds)) {
-				const responseMessage = history.messages[responseMessageId];
-				if (!responseMessage) continue;
-				responseMessage.error = { content: reason };
-				responseMessage.done = true;
-				history.messages[responseMessageId] = responseMessage;
-			}
-			history = history;
-			return;
-		}
 
 		const userMessage = _history.messages[parentId];
 		await copyPendingArtifacts(_chatId, userMessage?.files || []);
@@ -1865,9 +2074,6 @@
 				}
 			})
 		);
-
-		currentChatPage.set(1);
-		chats.set(await getChatList(localStorage.token, $currentChatPage));
 	};
 
 	const sendPromptSocket = async (_history, model, responseMessageId, _chatId) => {
@@ -1898,6 +2104,10 @@
 		await tick();
 
 		const stream = model?.info?.params?.stream_response ?? true;
+		const persistedTurn = Boolean(_chatId && _chatId !== 'local' && !$temporaryChatEnabled);
+		if (persistedTurn) beginLive(_chatId, responseMessageId);
+		const transcript = createMessagesList(_history, responseMessageId);
+		const firstTurn = transcript.filter((message) => message.role === 'user').length <= 1;
 
 		let messages = [
 			// Keep UI <details type="tool_calls"> intact. The backend expands them
@@ -1954,7 +2164,27 @@
 			{
 				stream: stream,
 				model: model.id,
-				messages: messages,
+				...(persistedTurn
+					? {
+							turn: {
+								parent_id: userMessage?.parentId ?? null,
+								expected_revision: revisionOf(_chatId),
+								user_message: userMessage,
+								assistant_message: {
+									id: responseMessageId,
+									parentId: userMessage?.id ?? null,
+									childrenIds: [],
+									role: 'assistant',
+									content: '',
+									done: false,
+									model: model.id,
+									modelName: model.name ?? model.id,
+									modelIdx: responseMessage?.modelIdx ?? 0,
+									timestamp: responseMessage?.timestamp
+								}
+							}
+						}
+					: { messages }),
 
 				files: (files?.length ?? 0) > 0 ? files : undefined,
 				tool_ids: selectedToolIds.length > 0 ? selectedToolIds : undefined,
@@ -2001,11 +2231,6 @@
 								($chatTitle || '').trim() === '' ||
 								$chatTitle === 'New Chat' ||
 								$chatTitle === $i18n.t('New Chat');
-							const firstTurn =
-								messages.length == 1 ||
-								(messages.length == 2 &&
-									messages.at(0)?.role === 'system' &&
-									messages.at(1)?.role === 'user');
 							const background_tasks = {
 								...(untitled && ($settings?.title?.auto ?? true)
 									? { title_generation: true }
@@ -2028,6 +2253,7 @@
 			},
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
+			endLive(responseMessageId);
 			const reason = formatGenerationRequestError(error);
 			toast.error(reason);
 
@@ -2169,15 +2395,13 @@
 
 		await tick();
 
+		if (responseMessage?.id) endLive(responseMessage.id);
 		for (const taskId of idsToStop) {
 			stopTask(localStorage.token, taskId).catch((error) => {
 				toast.error(`${error}`);
 			});
 		}
 
-		if ($chatId && responseMessage?.role === 'assistant') {
-			saveChatHandler($chatId, history).catch(() => {});
-		}
 	};
 
 	const submitMessage = async (parentId, prompt) => {
@@ -2294,7 +2518,7 @@
 					}
 				}
 
-				await saveChatHandler(_chatId, history);
+				await saveChatHandler(_chatId, history, [messageId]);
 			} else {
 				console.error(res);
 			}
@@ -2323,13 +2547,31 @@
 			);
 
 			_chatId = chat.id;
+			putChat(chat, null, true);
 			await chatId.set(_chatId);
 
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
-			currentChatPage.set(1);
+			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
+			chats.update((list) => {
+				const row = {
+					id: chat.id,
+					title: chat.title ?? chat.chat?.title,
+					updated_at: createdAt,
+					created_at: chat.created_at ?? createdAt,
+					folder_id: chat.folder_id ?? null,
+					visibility: chat.visibility,
+					user_id: chat.user_id,
+					pinned: !!chat.pinned,
+					time_range: getTimeRange(createdAt)
+				};
+				const items = [...(list ?? [])];
+				const index = items.findIndex((item) => item.id === row.id);
+				if (index === -1) items.unshift(row);
+				else items[index] = { ...items[index], ...row };
+				return items;
+			});
 
 			window.history.replaceState(history.state, '', `/c/${_chatId}`);
-			await openArtifactsPanel();
+			await openArtifactsPanel(_chatId);
 		} else {
 			_chatId = 'local';
 			await chatId.set('local');
@@ -2339,33 +2581,34 @@
 		return _chatId;
 	};
 
-	const saveChatHandler = async (_chatId, history) => {
-		if ($chatId == _chatId) {
-			if (!$temporaryChatEnabled) {
-				try {
-					chat = await updateChatById(localStorage.token, _chatId, {
-						models: selectedModels,
-						history: history,
-						messages: createMessagesList(history, history.currentId),
-						params: params,
-						files: chatFiles
-					});
-					currentChatPage.set(1);
-					await chats.set(await getChatList(localStorage.token, $currentChatPage));
-				} catch (error) {
-					console.error(error);
-					const detail =
-						error?.detail ??
-						error?.error?.message ??
-						error?.message ??
-						(typeof error === 'string' ? error : null);
-					toast.error(
-						detail
-							? `${$i18n.t('Failed to save chat')}: ${detail}`
-							: $i18n.t('Failed to save chat')
-					);
+	const saveChatHandler = async (_chatId, history, messageIds = []) => {
+		if ($temporaryChatEnabled || $chatId !== _chatId || !messageIds?.length) return;
+		const upsert = {};
+		for (const id of messageIds) {
+			if (id && history.messages?.[id]) upsert[id] = history.messages[id];
+		}
+		if (!Object.keys(upsert).length) return;
+		try {
+			const saved = await applyChatHistoryPatch(localStorage.token, _chatId, {
+				upsert,
+				expected_revision: revisionOf(_chatId)
+			});
+			if (saved) {
+				chat = saved;
+				putChat(saved, null, true);
+			}
+		} catch (error) {
+			console.error(error);
+			if (error?.status === 409) {
+				const document = await getChatById(localStorage.token, _chatId).catch(() => null);
+				if (document && $chatId === _chatId) {
+					applyChatDocument(document);
 				}
 			}
+			const detail = typeof error?.detail === 'string' ? error.detail : '';
+			toast.error(
+				detail ? `${$i18n.t('Failed to save chat')}: ${detail}` : $i18n.t('Failed to save chat')
+			);
 		}
 	};
 </script>
@@ -2446,13 +2689,23 @@
 							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10 scrollbar-hidden"
 							id="messages-container"
 							bind:this={messagesContainerElement}
-							on:scroll={(e) => {
-								autoScroll =
-									messagesContainerElement.scrollHeight - messagesContainerElement.scrollTop <=
-									messagesContainerElement.clientHeight + 5;
+							use:stickToEnd
+							on:scroll={() => {
+								if (pinningScroll || !messagesContainerElement || !scrollChatId) return;
+								const element = messagesContainerElement;
+								const atBottom =
+									element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
+								autoScroll = atBottom;
+								settleScroll = false;
+								const saved = chatScrollFor(scrollChatId);
+								rememberChatScroll(scrollChatId, {
+									top: element.scrollTop,
+									atBottom,
+									messagesCount: saved?.messagesCount ?? 20
+								});
 							}}
 						>
-							<div class=" h-full w-full flex flex-col">
+							<div class=" min-h-full w-full flex flex-col">
 								{#if messagesComponent}
 									<svelte:component
 										this={messagesComponent}
@@ -2619,7 +2872,7 @@
 			<button
 				type="button"
 				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750"
-				on:click={openArtifactsPanel}
+				on:click={() => openArtifactsPanel()}
 				aria-label="Open artifacts"
 			>
 				<DocumentChartBar className="size-4" />
