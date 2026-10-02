@@ -127,6 +127,9 @@ async def upload_artifact_archive(
         written = extract_sandbox_archive(chat_id, data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(chat_id)
     return {"ok": True, "written": written}
 
 
@@ -143,6 +146,9 @@ async def upload_artifact(
         write_bytes(chat_id, path, data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(chat_id)
     return list_artifacts(chat_id)
 
 
@@ -208,6 +214,9 @@ async def create_zarr_view(
         write_json(chat_id, relpath, payload)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(chat_id)
     return {"path": relpath, **payload}
 
 

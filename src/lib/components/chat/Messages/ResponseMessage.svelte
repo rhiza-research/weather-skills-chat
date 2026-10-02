@@ -754,7 +754,7 @@
 												message.id
 											].content.replace(raw, raw.replace(oldContent, newContent));
 
-											updateChat();
+											updateChat(message.id);
 										}}
 										on:select={(e) => {
 											const { type, content } = e.detail;

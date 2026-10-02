@@ -20,6 +20,9 @@ export const MODEL_DOWNLOAD_POOL = writable({});
 export const mobile = writable(false);
 
 export const socket: Writable<null | Socket> = writable(null);
+export const socketConnected = writable(false);
+/** Artifact file lists pushed over the socket, keyed by chat id. */
+export const chatArtifactLists = writable<Record<string, any[]>>({});
 export const activeUserIds: Writable<null | string[]> = writable(null);
 export const USAGE_POOL: Writable<null | string[]> = writable(null);
 

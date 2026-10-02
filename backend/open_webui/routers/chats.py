@@ -256,6 +256,47 @@ async def search_user_chats(
 
 
 ############################
+# Recent chats for the in-memory cache
+############################
+
+
+@router.get("/recent")
+async def get_recent_chats(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    from open_webui.utils.artifacts import list_artifacts
+
+    chats = Chats.get_recent_workspace_chats(
+        user.id,
+        organization_id,
+        include_shared=not is_personal_org(organization_id),
+    )
+    rows = []
+    for chat in chats:
+        if not can_read_chat(user, chat):
+            continue
+        try:
+            artifacts = list_artifacts(chat.id)
+        except Exception:
+            log.debug("recent artifacts failed", exc_info=True)
+            artifacts = []
+        rows.append(
+            {
+                "chat": ChatResponse(**chat.model_dump()).model_dump(),
+                "artifacts": artifacts,
+            }
+        )
+    return rows
+
+
+class HistoryPatchForm(BaseModel):
+    upsert: dict = {}
+    delete: list[str] = []
+    expected_revision: Optional[int] = None
+
+
+############################
 # GetChatsByFolderId
 ############################
 
@@ -456,6 +497,40 @@ async def update_chat_by_id(
     return ChatResponse(**chat.model_dump())
 
 
+@router.post("/{id}/history")
+async def patch_chat_history(
+    id: str, form_data: HistoryPatchForm, user=Depends(get_verified_user)
+):
+    chat = _require_writable_chat(id, user)
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    updated, state = Chats.apply_history_patch(
+        id,
+        form_data.upsert or {},
+        form_data.delete or [],
+        form_data.expected_revision,
+    )
+    if state == "conflict":
+        from open_webui.utils.chat_realtime import chat_revision, schedule_chat_committed
+
+        schedule_chat_committed(id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Chat was updated",
+                "revision": chat_revision(updated) if updated else 0,
+            },
+        )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
+        )
+    return ChatResponse(**updated.model_dump())
+
+
 ############################
 # UpdateChatMessageById
 ############################
@@ -591,6 +666,9 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
     except Exception:
         log.exception("Failed to delete chat artifacts")
 
+    from open_webui.utils.chat_realtime import publish_chat_removed
+
+    await publish_chat_removed(chat)
     if user.role == "admin":
         return Chats.delete_chat_by_id(id)
     return Chats.delete_chat_by_id_and_user_id(id, user.id)

@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { rememberArtifacts } from '$lib/chat/cache';
 
 export const getChatArtifacts = async (token: string, chatId: string) => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts`, {
@@ -14,7 +15,10 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 let artifactListInflight: { chatId: string; promise: Promise<unknown> } | null = null;
 
 export const prefetchChatArtifacts = (token: string, chatId: string) => {
-	const promise = getChatArtifacts(token, chatId);
+	const promise = getChatArtifacts(token, chatId).then((files) => {
+		if (Array.isArray(files)) rememberArtifacts(chatId, files);
+		return files;
+	});
 	artifactListInflight = { chatId, promise };
 	promise.catch(() => {
 		if (artifactListInflight?.promise === promise) {

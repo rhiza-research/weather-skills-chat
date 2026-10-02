@@ -151,6 +151,7 @@ class ChatTable:
                     "visibility": visibility,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
+                    "meta": {"revision": 1},
                 }
             )
 
@@ -177,7 +178,10 @@ class ChatTable:
                 juicefs_sandbox_s=f"{juice_s:.3f}" if juice_s is not None else None,
                 chat_json_bytes=len(json.dumps(form_data.chat or {}, default=str)),
             )
-            return ChatModel.model_validate(result) if result else None
+            created = ChatModel.model_validate(result) if result else None
+            if created:
+                self._schedule_visible_commit(created.id)
+            return created
 
     def import_chat(
         self, user_id: str, form_data: ChatImportForm
@@ -221,7 +225,22 @@ class ChatTable:
                     pass
             return ChatModel.model_validate(result) if result else None
 
-    def update_chat_by_id(self, id: str, chat: dict) -> Optional[ChatModel]:
+    def _schedule_visible_commit(self, chat_id: str) -> None:
+        try:
+            from open_webui.utils.chat_realtime import schedule_chat_committed
+
+            schedule_chat_committed(chat_id)
+        except Exception:
+            log.debug("schedule chat commit failed", exc_info=True)
+
+    def _touch_visible(self, chat_item) -> None:
+        from open_webui.utils.chat_realtime import touch_revision
+
+        touch_revision(chat_item)
+
+    def update_chat_by_id(
+        self, id: str, chat: dict, *, bump_revision: bool = True
+    ) -> Optional[ChatModel]:
         from open_webui.utils.chat_timing import log_timing
 
         t0 = time.perf_counter()
@@ -230,7 +249,8 @@ class ChatTable:
                 chat_item = db.get(Chat, id)
                 chat_item.chat = chat
                 chat_item.title = chat["title"] if "title" in chat else "New Chat"
-                chat_item.updated_at = int(time.time())
+                if bump_revision:
+                    self._touch_visible(chat_item)
                 db.commit()
                 db.refresh(chat_item)
 
@@ -241,6 +261,8 @@ class ChatTable:
                 chat_id=id,
                 chat_json_bytes=len(json.dumps(chat or {}, default=str)),
             )
+            if bump_revision and result:
+                self._schedule_visible_commit(id)
             return result
         except Exception:
             return None
@@ -299,45 +321,247 @@ class ChatTable:
         return chat.chat.get("history", {}).get("messages", {}).get(message_id, {})
 
     def upsert_message_to_chat_by_id_and_message_id(
-        self, id: str, message_id: str, message: dict
+        self,
+        id: str,
+        message_id: str,
+        message: dict,
+        *,
+        bump_revision: bool = True,
     ) -> Optional[ChatModel]:
         chat = self.get_chat_by_id(id)
         if chat is None:
             return None
 
-        chat = chat.chat
+        # Copy so a later writer cannot be overwritten by this snapshot.
+        chat = json.loads(json.dumps(chat.chat or {}))
         history = chat.get("history", {})
+        messages = history.get("messages", {})
 
-        if message_id in history.get("messages", {}):
-            history["messages"][message_id] = {
-                **history["messages"][message_id],
+        if message_id in messages:
+            messages[message_id] = {
+                **messages[message_id],
                 **message,
             }
         else:
-            history["messages"][message_id] = message
+            messages[message_id] = message
 
+        history["messages"] = messages
         history["currentId"] = message_id
-
         chat["history"] = history
-        return self.update_chat_by_id(id, chat)
+        return self.update_chat_by_id(id, chat, bump_revision=bump_revision)
+
+    def append_message_statuses(
+        self, id: str, message_id: str, statuses: list
+    ) -> Optional[ChatModel]:
+        """Re-read the row and append statuses without bumping the watcher revision."""
+        if not statuses:
+            return self.get_chat_by_id(id)
+        chat = self.get_chat_by_id(id)
+        if chat is None:
+            return None
+
+        chat = json.loads(json.dumps(chat.chat or {}))
+        history = chat.get("history", {})
+        messages = history.get("messages", {})
+        if message_id in messages:
+            status_history = list(messages[message_id].get("statusHistory") or [])
+            status_history.extend(statuses)
+            messages[message_id]["statusHistory"] = status_history
+        history["messages"] = messages
+        chat["history"] = history
+        return self.update_chat_by_id(id, chat, bump_revision=False)
 
     def add_message_status_to_chat_by_id_and_message_id(
         self, id: str, message_id: str, status: dict
     ) -> Optional[ChatModel]:
-        chat = self.get_chat_by_id(id)
-        if chat is None:
-            return None
+        return self.append_message_statuses(id, message_id, [status] if status else [])
 
-        chat = chat.chat
-        history = chat.get("history", {})
+    def append_turn(
+        self,
+        id: str,
+        user_message: dict,
+        assistant_message: dict,
+        expected_revision: Optional[int],
+    ) -> tuple[Optional[ChatModel], str]:
+        """Insert the client-minted user and assistant messages if they are new.
 
-        if message_id in history.get("messages", {}):
-            status_history = history["messages"][message_id].get("statusHistory", [])
-            status_history.append(status)
-            history["messages"][message_id]["statusHistory"] = status_history
+        Returns ``(chat, "ok" | "conflict" | "missing")``. A conflict leaves the
+        row unchanged.
+        """
+        from open_webui.utils.chat_realtime import chat_revision
 
-        chat["history"] = history
-        return self.update_chat_by_id(id, chat)
+        try:
+            with get_db() as db:
+                chat_item = db.get(Chat, id)
+                if chat_item is None:
+                    return None, "missing"
+                current = chat_revision(chat_item)
+                if expected_revision is not None and int(expected_revision) != current:
+                    return ChatModel.model_validate(chat_item), "conflict"
+
+                chat = json.loads(json.dumps(chat_item.chat or {}))
+                history = chat.get("history") or {}
+                messages = history.get("messages") or {}
+                user_id = user_message.get("id")
+                assistant_id = assistant_message.get("id")
+                parent_id = user_message.get("parentId")
+                changed = False
+
+                if user_id and user_id not in messages:
+                    stored_user = dict(user_message)
+                    children = list(stored_user.get("childrenIds") or [])
+                    if assistant_id and assistant_id not in children:
+                        children.append(assistant_id)
+                    stored_user["childrenIds"] = children
+                    stored_user.setdefault("role", "user")
+                    messages[user_id] = stored_user
+                    changed = True
+                    if parent_id and parent_id in messages:
+                        parent = dict(messages[parent_id])
+                        parent_children = list(parent.get("childrenIds") or [])
+                        if user_id not in parent_children:
+                            parent_children.append(user_id)
+                            parent["childrenIds"] = parent_children
+                            messages[parent_id] = parent
+                elif user_id and user_id in messages:
+                    stored_user = dict(messages[user_id])
+                    incoming_content = user_message.get("content")
+                    if incoming_content and incoming_content != stored_user.get("content"):
+                        stored_user["content"] = incoming_content
+                        changed = True
+                    if user_message.get("files"):
+                        stored_user["files"] = user_message.get("files")
+                        changed = True
+                    if assistant_id:
+                        children = list(stored_user.get("childrenIds") or [])
+                        if assistant_id not in children:
+                            children.append(assistant_id)
+                            stored_user["childrenIds"] = children
+                            changed = True
+                    messages[user_id] = stored_user
+
+                if assistant_id and assistant_id not in messages:
+                    stored_assistant = dict(assistant_message)
+                    stored_assistant.setdefault("role", "assistant")
+                    stored_assistant.setdefault("content", "")
+                    stored_assistant.setdefault("childrenIds", [])
+                    stored_assistant["parentId"] = user_id
+                    messages[assistant_id] = stored_assistant
+                    changed = True
+
+                if assistant_id and history.get("currentId") != assistant_id:
+                    history["currentId"] = assistant_id
+                    changed = True
+                if not changed:
+                    return ChatModel.model_validate(chat_item), "ok"
+                history["messages"] = messages
+                chat["history"] = history
+                chat_item.chat = chat
+                if changed:
+                    self._touch_visible(chat_item)
+                db.commit()
+                db.refresh(chat_item)
+                result = ChatModel.model_validate(chat_item)
+            if changed:
+                self._schedule_visible_commit(id)
+            return result, "ok"
+        except Exception:
+            log.exception("append_turn failed")
+            return None, "missing"
+
+    def apply_history_patch(
+        self,
+        id: str,
+        upsert: dict,
+        delete_ids: list,
+        expected_revision: Optional[int],
+    ) -> tuple[Optional[ChatModel], str]:
+        """Merge a few messages into the stored tree. Does not move currentId."""
+        from open_webui.utils.chat_realtime import chat_revision
+
+        try:
+            with get_db() as db:
+                chat_item = db.get(Chat, id)
+                if chat_item is None:
+                    return None, "missing"
+                current = chat_revision(chat_item)
+                if expected_revision is not None and int(expected_revision) != current:
+                    return ChatModel.model_validate(chat_item), "conflict"
+
+                chat = json.loads(json.dumps(chat_item.chat or {}))
+                history = chat.get("history") or {}
+                messages = history.get("messages") or {}
+                for message_id in delete_ids or []:
+                    messages.pop(message_id, None)
+                current_id = history.get("currentId")
+                if current_id in (delete_ids or []):
+                    history["currentId"] = None
+                for message_id, message in (upsert or {}).items():
+                    if not isinstance(message, dict):
+                        continue
+                    if message_id in messages and isinstance(messages[message_id], dict):
+                        messages[message_id] = {**messages[message_id], **message}
+                    else:
+                        messages[message_id] = message
+                history["messages"] = messages
+                chat["history"] = history
+                chat_item.chat = chat
+                self._touch_visible(chat_item)
+                db.commit()
+                db.refresh(chat_item)
+                result = ChatModel.model_validate(chat_item)
+            self._schedule_visible_commit(id)
+            return result, "ok"
+        except Exception:
+            log.exception("apply_history_patch failed")
+            return None, "missing"
+
+    def get_recent_workspace_chats(
+        self,
+        user_id: str,
+        organization_id: str,
+        *,
+        days: int = 7,
+        limit: int = 5,
+        include_shared: bool = True,
+    ) -> list[ChatModel]:
+        cutoff = int(time.time()) - days * 24 * 60 * 60
+        with get_db() as db:
+            own = (
+                db.query(Chat)
+                .filter(
+                    Chat.user_id == user_id,
+                    Chat.organization_id == organization_id,
+                    Chat.archived == False,  # noqa: E712
+                    Chat.updated_at >= cutoff,
+                )
+                .order_by(Chat.updated_at.desc())
+                .limit(limit)
+                .all()
+            )
+            shared = []
+            if include_shared:
+                shared = (
+                    db.query(Chat)
+                    .filter(
+                        Chat.organization_id == organization_id,
+                        Chat.visibility == "organization",
+                        Chat.user_id != user_id,
+                        Chat.archived == False,  # noqa: E712
+                        Chat.updated_at >= cutoff,
+                    )
+                    .order_by(Chat.updated_at.desc())
+                    .limit(limit)
+                    .all()
+                )
+            seen = set()
+            rows = []
+            for chat in [*own, *shared]:
+                if chat.id in seen:
+                    continue
+                seen.add(chat.id)
+                rows.append(ChatModel.model_validate(chat))
+            return rows
 
     def insert_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
         with get_db() as db:
@@ -428,10 +652,12 @@ class ChatTable:
             with get_db() as db:
                 chat = db.get(Chat, id)
                 chat.pinned = not chat.pinned
-                chat.updated_at = int(time.time())
+                self._touch_visible(chat)
                 db.commit()
                 db.refresh(chat)
-                return ChatModel.model_validate(chat)
+                result = ChatModel.model_validate(chat)
+            self._schedule_visible_commit(id)
+            return result
         except Exception:
             return None
 
@@ -440,10 +666,12 @@ class ChatTable:
             with get_db() as db:
                 chat = db.get(Chat, id)
                 chat.archived = not chat.archived
-                chat.updated_at = int(time.time())
+                self._touch_visible(chat)
                 db.commit()
                 db.refresh(chat)
-                return ChatModel.model_validate(chat)
+                result = ChatModel.model_validate(chat)
+            self._schedule_visible_commit(id)
+            return result
         except Exception:
             return None
 
@@ -594,10 +822,12 @@ class ChatTable:
                 # A private folder and a team folder are different lists. Leave
                 # the chat unfiled so it shows up in the section it now belongs to.
                 chat.folder_id = None
-                chat.updated_at = int(time.time())
+                self._touch_visible(chat)
                 db.commit()
                 db.refresh(chat)
-                return ChatModel.model_validate(chat)
+                result = ChatModel.model_validate(chat)
+            self._schedule_visible_commit(id)
+            return result
         except Exception:
             return None
 
@@ -892,11 +1122,13 @@ class ChatTable:
             with get_db() as db:
                 chat = db.get(Chat, id)
                 chat.folder_id = folder_id
-                chat.updated_at = int(time.time())
                 chat.pinned = False
+                self._touch_visible(chat)
                 db.commit()
                 db.refresh(chat)
-                return ChatModel.model_validate(chat)
+                result = ChatModel.model_validate(chat)
+            self._schedule_visible_commit(id)
+            return result
         except Exception:
             return None
 

@@ -1248,6 +1248,26 @@ async def chat_completion(
         request.state.metadata = metadata
         form_data["metadata"] = metadata
 
+        turn = form_data.pop("turn", None)
+        if turn and metadata.get("chat_id") and metadata["chat_id"] != "local":
+            from open_webui.utils.chat_turns import (
+                ChatRevisionConflict,
+                prepare_completion_messages,
+            )
+
+            try:
+                form_data["messages"] = prepare_completion_messages(
+                    metadata["chat_id"], turn, user
+                )
+            except ChatRevisionConflict as conflict:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": "Chat was updated",
+                        "revision": conflict.revision,
+                    },
+                ) from conflict
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1348,6 +1368,11 @@ async def chat_completion(
                     log.debug("Failed to emit cancel events", exc_info=True)
             if job_metadata.get("chat_id") and job_metadata.get("message_id"):
                 try:
+                    from open_webui.utils.chat_realtime import flush_statuses
+
+                    await flush_statuses(
+                        job_metadata["chat_id"], job_metadata["message_id"]
+                    )
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         job_metadata["chat_id"],
                         job_metadata["message_id"],
@@ -1397,6 +1422,11 @@ async def chat_completion(
                     log.debug("Failed to emit chat error event", exc_info=True)
             if job_metadata.get("chat_id") and job_metadata.get("message_id"):
                 try:
+                    from open_webui.utils.chat_realtime import flush_statuses
+
+                    await flush_statuses(
+                        job_metadata["chat_id"], job_metadata["message_id"]
+                    )
                     Chats.upsert_message_to_chat_by_id_and_message_id(
                         job_metadata["chat_id"],
                         job_metadata["message_id"],

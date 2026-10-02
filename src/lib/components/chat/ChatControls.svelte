@@ -120,20 +120,6 @@
 		mediaQuery?.removeEventListener('change', handleMediaQuery);
 	});
 
-	const clearPanelFlags = () => {
-		showControls.set(false);
-		showOverview.set(false);
-		showArtifacts.set(false);
-		if ($showCallOverlay) {
-			showCallOverlay.set(false);
-		}
-	};
-
-	// When chat id is cleared, hide the panel.
-	$: if (!chatId) {
-		clearPanelFlags();
-	}
-
 	let OverviewHost = null;
 	$: if ($showOverview && !OverviewHost) {
 		import('./OverviewHost.svelte').then((module) => {

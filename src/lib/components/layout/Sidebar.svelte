@@ -20,7 +20,8 @@
 		isApp,
 		organizations,
 		activeOrganizationId,
-		switchingOrganization
+		switchingOrganization,
+		socket
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -308,22 +309,6 @@
 		}
 	};
 
-	let chatListPollId = null;
-
-	const startChatListPoll = () => {
-		if (chatListPollId != null) return;
-		chatListPollId = setInterval(() => {
-			softRefreshChatList();
-		}, 15000);
-	};
-
-	const stopChatListPoll = () => {
-		if (chatListPollId != null) {
-			clearInterval(chatListPollId);
-			chatListPollId = null;
-		}
-	};
-
 	const initChatList = async () => {
 		currentChatPage.set(1);
 		allChatsLoaded = false;
@@ -492,7 +477,7 @@
 	};
 
 	const onFocus = () => {
-		softRefreshChatList();
+		if (!$socket?.connected) softRefreshChatList();
 	};
 
 	const onBlur = () => {
@@ -500,7 +485,7 @@
 	};
 
 	const onVisibilityChange = () => {
-		if (document.visibilityState === 'visible') {
+		if (document.visibilityState === 'visible' && !$socket?.connected) {
 			softRefreshChatList();
 		}
 	};
@@ -556,7 +541,6 @@
 		});
 
 		await initChatList();
-		startChatListPoll();
 
 		window.addEventListener('touchstart', onTouchStart);
 		window.addEventListener('touchend', onTouchEnd);
@@ -573,8 +557,6 @@
 	});
 
 	onDestroy(() => {
-		stopChatListPoll();
-
 		window.removeEventListener('touchstart', onTouchStart);
 		window.removeEventListener('touchend', onTouchEnd);
 
