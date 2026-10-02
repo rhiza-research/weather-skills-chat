@@ -1,0 +1,21 @@
+services:
+  ollama:
+    volumes:
+      - ollama:/root/.ollama
+    container_name: ollama
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    image: ollama/ollama:${OLLAMA_DOCKER_TAG-latest}
+
+  open-webui:
+    depends_on:
+      - ollama
+    environment:
+      # Points the application at the ollama service in this file.
+      - 'OLLAMA_BASE_URL=http://ollama:11434'
+      # The application default is off, and this file exists to bring the stack up using Ollama.
+      - 'ENABLE_OLLAMA_API=true'
+
+volumes:
+  ollama: {}
