@@ -548,6 +548,10 @@ LANGFUSE_HOST = (
     or os.environ.get("LANGFUSE_HOST")
     or "https://cloud.langfuse.com"
 ).strip()
+# The Langfuse SDK reads the same variable; "default" is its fallback.
+LANGFUSE_TRACING_ENVIRONMENT = (
+    os.environ.get("LANGFUSE_TRACING_ENVIRONMENT") or ""
+).strip() or "default"
 _langfuse_flag = os.environ.get("LANGFUSE_ENABLED") or os.environ.get(
     "LANGFUSE_TRACING_ENABLED"
 )
