@@ -8,14 +8,12 @@ The docstring of `_metadata_redirect_routes` explains which paths redirect.
 """
 
 import unittest
-from contextlib import contextmanager
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 
-from open_webui.config import WEBUI_URL
 from open_webui.mcp import (
     MCP_PATH,
     PROTECTED_RESOURCE_PREFIX,
@@ -24,32 +22,24 @@ from open_webui.mcp import (
     _metadata_redirect_routes,
     build_endpoint,
 )
-from open_webui.test.util.mcp_host import host_application
-from open_webui.test.util.mcp_stub_auth import stub_auth
+from open_webui.mcp_oauth.provider import CONSENT_PATH
+from open_webui.test.util.mcp_host import (
+    SERVICE_URL,
+    host_application,
+    service_configured,
+)
 
-SERVICE_URL = "https://chat.example"
 WELL_KNOWN_PREFIX = "/.well-known/"
 DOCUMENT_PATH = f"{PROTECTED_RESOURCE_PREFIX}{MCP_PATH}"
+AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server"
 HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
-
-
-@contextmanager
-def configured():
-    """Set WEBUI_URL and build the endpoint with the stub provider, then restore WEBUI_URL."""
-    previous = WEBUI_URL.value
-    WEBUI_URL.value = SERVICE_URL
-    try:
-        with stub_auth():
-            yield
-    finally:
-        WEBUI_URL.value = previous
 
 
 def built_endpoint(case):
     """The built endpoint. Fails the test if none was built."""
-    with configured():
+    with service_configured():
         endpoint = build_endpoint(HOST_APP)
-    case.assertIsNotNone(endpoint, "no endpoint was built from a configured provider")
+    case.assertIsNotNone(endpoint, "no endpoint was built for a configured service URL")
     return endpoint
 
 
@@ -95,6 +85,49 @@ class RootRoutesTest(unittest.TestCase):
 
     def test_the_mount_path_is_the_canonical_path(self):
         self.assertEqual(self.endpoint.mount_path, MCP_PATH)
+
+    def test_the_authorization_server_routes_are_at_the_root(self):
+        # Clients reach these at the service's origin, not under the mount.
+        for path in (
+            AUTHORIZATION_SERVER_PATH,
+            "/authorize",
+            "/token",
+            "/register",
+            "/revoke",
+            CONSENT_PATH,
+        ):
+            self.assertIn(path, self.paths)
+
+
+class AuthorizationServerRoutesTest(unittest.TestCase):
+    """The authorization server's routes answer through the host instead of the interface."""
+
+    def setUp(self):
+        self.endpoint = built_endpoint(self)
+
+    def test_the_metadata_document_is_served(self):
+        with host_application(self.endpoint) as client:
+            response = client.get(AUTHORIZATION_SERVER_PATH)
+        self.assertEqual(response.status_code, 200)
+        metadata = response.json()
+        self.assertEqual(metadata["issuer"], self.endpoint.provider.issuer)
+        self.assertEqual(metadata["token_endpoint"], f"{SERVICE_URL}/token")
+
+    def test_the_openid_discovery_alias_serves_the_same_metadata(self):
+        with host_application(self.endpoint) as client:
+            response = client.get("/.well-known/openid-configuration")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/json", response.headers["content-type"])
+        metadata = response.json()
+        self.assertEqual(metadata["issuer"], self.endpoint.provider.issuer)
+        self.assertIs(metadata["authorization_response_iss_parameter_supported"], True)
+
+    def test_the_token_endpoint_answers_with_an_oauth_error(self):
+        # The interface stand-in would answer with HTML and status 200.
+        with host_application(self.endpoint) as client:
+            response = client.post("/token", data={})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"], "invalid_client")
 
 
 class InterfaceStandInTest(unittest.TestCase):

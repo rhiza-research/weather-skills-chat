@@ -6,20 +6,17 @@ because agents usually send none.
 
 import unittest
 from types import SimpleNamespace
-from contextlib import contextmanager
 
 from starlette.testclient import TestClient
 
-from open_webui.config import WEBUI_URL
 from open_webui.mcp import build_endpoint
 from open_webui.mcp.auth import (
     MCP_PATH,
     canonical_resource_identifier,
     service_origin,
 )
-from open_webui.test.util.mcp_stub_auth import stub_auth
+from open_webui.test.util.mcp_host import SERVICE_URL, service_configured
 
-SERVICE_URL = "https://chat.example"
 HOSTILE_ORIGIN = "https://attacker.example"
 HOST_APP = SimpleNamespace(state=SimpleNamespace(TOOLS={}))
 
@@ -35,33 +32,21 @@ INITIALIZE_REQUEST = {
 }
 
 
-@contextmanager
-def configured():
-    """Set WEBUI_URL and build the endpoint with the stub provider, then restore WEBUI_URL."""
-    previous = WEBUI_URL.value
-    WEBUI_URL.value = SERVICE_URL
-    try:
-        with stub_auth():
-            yield
-    finally:
-        WEBUI_URL.value = previous
-
-
 class ServiceOriginTest(unittest.TestCase):
     def test_origin_is_the_identifier_without_its_path(self):
         # An Origin header has no path, so it is compared to the identifier without its path.
-        with configured():
+        with service_configured():
             self.assertEqual(service_origin(), SERVICE_URL)
             self.assertEqual(canonical_resource_identifier(), f"{SERVICE_URL}{MCP_PATH}")
 
     def test_the_origin_carries_no_path(self):
-        with configured():
+        with service_configured():
             self.assertNotIn(MCP_PATH, service_origin())
 
 
 class OriginGuardTest(unittest.TestCase):
     def setUp(self):
-        with configured():
+        with service_configured():
             self.app = build_endpoint(HOST_APP).asgi_app
 
     def _post(self, headers):
