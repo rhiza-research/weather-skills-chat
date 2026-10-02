@@ -21,6 +21,13 @@ services:
       - OPENAI_API_KEY
       - WEBUI_SECRET_KEY
       - SKILL_SANDLOCK
+      - LANGFUSE_PUBLIC_KEY
+      - LANGFUSE_SECRET_KEY
+      - LANGFUSE_HOST
+      - LANGFUSE_BASE_URL
+      - LANGFUSE_TRACING_ENVIRONMENT
+      - LANGFUSE_ENABLED
+      - LANGFUSE_TRACING_ENABLED
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped
