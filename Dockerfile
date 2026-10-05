@@ -32,7 +32,15 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY . .
+# Only the files npm run build reads, so a change elsewhere does not rerun the build. The base
+# stage takes CHANGELOG.md from this stage.
+COPY svelte.config.js vite.config.ts tsconfig.json postcss.config.js tailwind.config.js CHANGELOG.md .gitignore ./
+COPY scripts/prepare-pyodide.js scripts/precompress.mjs ./scripts/
+COPY src ./src
+COPY static ./static
+# Tailwind scans the repository, and generates rules for class names it finds in swagger-ui's files,
+# so they are copied at the same path to keep the built CSS the same.
+COPY backend/open_webui/static/swagger-ui ./backend/open_webui/static/swagger-ui
 ENV APP_BUILD_HASH=${BUILD_HASH}
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
