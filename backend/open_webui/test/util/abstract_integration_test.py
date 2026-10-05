@@ -1,13 +1,8 @@
 import logging
-import os
 import time
 
-import docker
-import pytest
-from docker import DockerClient
-from pytest_docker.plugin import get_docker_ip
 from fastapi.testclient import TestClient
-from sqlalchemy import text, create_engine
+from sqlalchemy import text
 
 
 log = logging.getLogger(__name__)
@@ -67,65 +62,12 @@ class AbstractIntegrationTest:
 
 
 class AbstractPostgresTest(AbstractIntegrationTest):
-    DOCKER_CONTAINER_NAME = "postgres-test-container-will-get-deleted"
-    docker_client: DockerClient
-
-    @classmethod
-    def _create_db_url(cls, env_vars_postgres: dict) -> str:
-        host = get_docker_ip()
-        user = env_vars_postgres["POSTGRES_USER"]
-        pw = env_vars_postgres["POSTGRES_PASSWORD"]
-        port = 8081
-        db = env_vars_postgres["POSTGRES_DB"]
-        return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
-
+    # The app runs on the database in DATABASE_URL, which conftest.py points at a
+    # temporary sqlite file.
     @classmethod
     def setup_class(cls):
         super().setup_class()
-        try:
-            env_vars_postgres = {
-                "POSTGRES_USER": "user",
-                "POSTGRES_PASSWORD": "example",
-                "POSTGRES_DB": "openwebui",
-            }
-            cls.docker_client = docker.from_env()
-            cls.docker_client.containers.run(
-                "postgres:16.2",
-                detach=True,
-                environment=env_vars_postgres,
-                name=cls.DOCKER_CONTAINER_NAME,
-                ports={5432: ("0.0.0.0", 8081)},
-                command="postgres -c log_statement=all",
-            )
-            time.sleep(0.5)
-
-            database_url = cls._create_db_url(env_vars_postgres)
-            os.environ["DATABASE_URL"] = database_url
-            retries = 10
-            db = None
-            while retries > 0:
-                try:
-                    from open_webui.config import OPEN_WEBUI_DIR
-
-                    db = create_engine(database_url, pool_pre_ping=True)
-                    db = db.connect()
-                    log.info("postgres is ready!")
-                    break
-                except Exception as e:
-                    log.warning(e)
-                    time.sleep(3)
-                    retries -= 1
-
-            if db:
-                # import must be after setting env!
-                cls.fast_api_client = get_fast_api_client()
-                db.close()
-            else:
-                raise Exception("Could not connect to Postgres")
-        except Exception as ex:
-            log.error(ex)
-            cls.teardown_class()
-            pytest.fail(f"Could not setup test environment: {ex}")
+        cls.fast_api_client = get_fast_api_client()
 
     def _check_db_connection(self):
         from open_webui.internal.db import Session
@@ -145,11 +87,6 @@ class AbstractPostgresTest(AbstractIntegrationTest):
     def setup_method(self):
         super().setup_method()
         self._check_db_connection()
-
-    @classmethod
-    def teardown_class(cls) -> None:
-        super().teardown_class()
-        cls.docker_client.containers.get(cls.DOCKER_CONTAINER_NAME).remove(force=True)
 
     def teardown_method(self):
         from open_webui.internal.db import Session
