@@ -275,7 +275,9 @@ class ChatTable:
         chat = chat.chat
         chat["title"] = title
 
-        return self.update_chat_by_id(id, chat)
+        # Title is sidebar metadata. It must not move the transcript revision
+        # the next turn sends, or a follow-up races this write.
+        return self.update_chat_by_id(id, chat, bump_revision=False)
 
     def update_chat_tags_by_id(
         self, id: str, tags: list[str], user
@@ -562,6 +564,71 @@ class ChatTable:
                 seen.add(chat.id)
                 rows.append(ChatModel.model_validate(chat))
             return rows
+
+    def get_recent_workspace_chat_refs(
+        self,
+        user_id: str,
+        organization_id: str,
+        *,
+        days: int = 7,
+        limit: int = 5,
+        include_shared: bool = True,
+    ) -> list[dict]:
+        """Ids and revisions for the recent window, without the transcript JSON."""
+        from sqlalchemy.orm import defer
+
+        from open_webui.utils.chat_realtime import chat_revision
+
+        cutoff = int(time.time()) - days * 24 * 60 * 60
+
+        def listed(db):
+            return db.query(Chat).options(defer(Chat.chat))
+
+        with get_db() as db:
+            own = (
+                listed(db)
+                .filter(
+                    Chat.user_id == user_id,
+                    Chat.organization_id == organization_id,
+                    Chat.archived == False,  # noqa: E712
+                    Chat.updated_at >= cutoff,
+                )
+                .order_by(Chat.updated_at.desc())
+                .limit(limit)
+                .all()
+            )
+            shared = []
+            if include_shared:
+                shared = (
+                    listed(db)
+                    .filter(
+                        Chat.organization_id == organization_id,
+                        Chat.visibility == "organization",
+                        Chat.user_id != user_id,
+                        Chat.archived == False,  # noqa: E712
+                        Chat.updated_at >= cutoff,
+                    )
+                    .order_by(Chat.updated_at.desc())
+                    .limit(limit)
+                    .all()
+                )
+            seen = set()
+            refs = []
+            for chat in [*own, *shared]:
+                if chat.id in seen:
+                    continue
+                seen.add(chat.id)
+                refs.append(
+                    {
+                        "id": chat.id,
+                        "updated_at": chat.updated_at,
+                        "revision": chat_revision(chat),
+                        "user_id": chat.user_id,
+                        "organization_id": chat.organization_id,
+                        "visibility": chat.visibility or "private",
+                    }
+                )
+            return refs
 
     def insert_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
         with get_db() as db:

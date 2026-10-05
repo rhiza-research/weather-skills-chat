@@ -124,6 +124,17 @@ GENERATION_HEARTBEAT_INTERVAL_S = float(
 )
 
 
+def completion_revision(chat_id: str | None) -> int:
+    """Revision after the turn's transcript write. The client adopts this
+    from the same completion event that unlocks the next send."""
+    if not chat_id:
+        return 0
+    from open_webui.utils.chat_realtime import chat_revision
+
+    chat = Chats.get_chat_by_id(chat_id)
+    return chat_revision(chat) if chat else 0
+
+
 def tool_call_files_for_display(
     tool_name: str, tool_result_files: Optional[list]
 ) -> Optional[list]:
@@ -1468,17 +1479,6 @@ async def process_chat_response(
 
                     title = Chats.get_chat_title_by_id(metadata["chat_id"])
 
-                    await event_emitter(
-                        {
-                            "type": "chat:completion",
-                            "data": {
-                                "done": True,
-                                "content": content,
-                                "title": title,
-                            },
-                        }
-                    )
-
                     from open_webui.utils.chat_realtime import flush_statuses
 
                     await flush_statuses(metadata["chat_id"], metadata["message_id"])
@@ -1489,6 +1489,18 @@ async def process_chat_response(
                             "content": content,
                             "done": True,
                         },
+                    )
+
+                    await event_emitter(
+                        {
+                            "type": "chat:completion",
+                            "data": {
+                                "done": True,
+                                "content": content,
+                                "title": title,
+                                "revision": completion_revision(metadata["chat_id"]),
+                            },
+                        }
                     )
 
                     # Send a webhook notification if the user is not active
@@ -2979,12 +2991,6 @@ async def process_chat_response(
                 except Exception:
                     log.debug("outlet filter failed", exc_info=True)
 
-                data = {
-                    "done": True,
-                    "content": final_content,
-                    "title": title,
-                }
-
                 if not ENABLE_REALTIME_CHAT_SAVE:
                     from open_webui.utils.chat_realtime import flush_statuses
 
@@ -2997,6 +3003,13 @@ async def process_chat_response(
                             "done": True,
                         },
                     )
+
+                data = {
+                    "done": True,
+                    "content": final_content,
+                    "title": title,
+                    "revision": completion_revision(metadata["chat_id"]),
+                }
 
                 # Send a webhook notification if the user is not active
                 if get_active_status_by_user_id(user.id) is None:
@@ -3028,18 +3041,6 @@ async def process_chat_response(
                 complete_open_tool_calls("Cancelled by user.")
 
                 cancelled_content = serialize_content_blocks(content_blocks)
-                await event_emitter(
-                    {
-                        "type": "chat:completion",
-                        "data": {
-                            "content": cancelled_content,
-                            "done": True,
-                        },
-                    }
-                )
-                await event_emitter({"type": "task-cancelled"})
-                end_chat_trace(error="cancelled")
-
                 from open_webui.utils.chat_realtime import flush_statuses
 
                 await flush_statuses(metadata["chat_id"], metadata["message_id"])
@@ -3051,6 +3052,18 @@ async def process_chat_response(
                         "done": True,
                     },
                 )
+                await event_emitter(
+                    {
+                        "type": "chat:completion",
+                        "data": {
+                            "content": cancelled_content,
+                            "done": True,
+                            "revision": completion_revision(metadata["chat_id"]),
+                        },
+                    }
+                )
+                await event_emitter({"type": "task-cancelled"})
+                end_chat_trace(error="cancelled")
                 try:
                     await emit_chat_title_if_needed(
                         request, form_data, user, metadata, tasks=tasks
@@ -3074,19 +3087,6 @@ async def process_chat_response(
                     )
                 }
                 try:
-                    await event_emitter(
-                        {
-                            "type": "chat:completion",
-                            "data": {
-                                "content": failed_content,
-                                "done": True,
-                                "error": error_payload,
-                            },
-                        }
-                    )
-                except Exception:
-                    log.debug("Failed to emit generation error event", exc_info=True)
-                try:
                     from open_webui.utils.chat_realtime import flush_statuses
 
                     await flush_statuses(metadata["chat_id"], metadata["message_id"])
@@ -3101,6 +3101,20 @@ async def process_chat_response(
                     )
                 except Exception:
                     log.debug("Failed to persist generation error", exc_info=True)
+                try:
+                    await event_emitter(
+                        {
+                            "type": "chat:completion",
+                            "data": {
+                                "content": failed_content,
+                                "done": True,
+                                "error": error_payload,
+                                "revision": completion_revision(metadata["chat_id"]),
+                            },
+                        }
+                    )
+                except Exception:
+                    log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
                 await generation_heartbeat.stop(clear=True)

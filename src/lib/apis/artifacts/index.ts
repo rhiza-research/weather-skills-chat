@@ -1,6 +1,5 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
-import { rememberArtifacts } from '$lib/chat/cache';
 
 export const getChatArtifacts = async (token: string, chatId: string) => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts`, {
@@ -8,31 +7,6 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 	});
 	if (!res.ok) throw await parseApiError(res);
 	return res.json();
-};
-
-// Joins the artifact-list request started when a chat load begins. Not a cache:
-// the panel consumes it once, and later polls fetch again.
-let artifactListInflight: { chatId: string; promise: Promise<unknown> } | null = null;
-
-export const prefetchChatArtifacts = (token: string, chatId: string) => {
-	const promise = getChatArtifacts(token, chatId).then((files) => {
-		if (Array.isArray(files)) rememberArtifacts(chatId, files);
-		return files;
-	});
-	artifactListInflight = { chatId, promise };
-	promise.catch(() => {
-		if (artifactListInflight?.promise === promise) {
-			artifactListInflight = null;
-		}
-	});
-	return promise;
-};
-
-export const takePrefetchedChatArtifacts = (chatId: string) => {
-	if (artifactListInflight?.chatId !== chatId) return null;
-	const promise = artifactListInflight.promise;
-	artifactListInflight = null;
-	return promise;
 };
 
 export const getArtifactContentUrl = (chatId: string, path: string) =>

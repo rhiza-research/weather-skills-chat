@@ -47,7 +47,6 @@ async function openSocket(): Promise<Socket> {
 			cache.syncWatch(liveSocket);
 			if (!localStorage.token) return;
 			if (reconnect) await cache.refreshRecent(localStorage.token);
-			await cache.refetchWatched(localStorage.token);
 			cache.syncWatch(liveSocket);
 		});
 	});

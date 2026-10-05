@@ -9,18 +9,14 @@
 		settings,
 		showArtifacts,
 		showControls,
-		artifactsRefresh,
-		socketConnected,
 		chatArtifactLists
 	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
-		getChatArtifacts,
 		getZarrRenderUrl,
-		takePrefetchedChatArtifacts,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
-	import { rememberArtifacts } from '$lib/chat/cache';
+	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
 	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
@@ -123,10 +119,8 @@
 		loadingFiles = true;
 		try {
 			const id = $chatId;
-			const prefetched = takePrefetchedChatArtifacts(id);
-			const listed = await (prefetched ?? getChatArtifacts(localStorage.token, id));
+			const listed = await refreshArtifacts(localStorage.token, id);
 			files = Array.isArray(listed) ? listed : [];
-			if (Array.isArray(listed)) rememberArtifacts(id, listed);
 		} catch (e) {
 			files = [];
 			console.error(e);
@@ -166,14 +160,14 @@
 	};
 
 	// A cached file list paints with the transcript. Fetch only when this chat
-	// has no list yet, or the socket is down and the saved list may be stale.
+	// has no list yet. Later changes arrive on chat:artifacts, or from an upload.
 	$: {
 		if ($showArtifacts && $chatId && $chatId !== 'local') {
 			const listed = $chatArtifactLists[$chatId];
 			const hasList = Array.isArray(listed);
 			if (hasList) files = listed;
-			if (!hasList || !$socketConnected) {
-				const key = `${$chatId}:${$socketConnected}:${$artifactsRefresh}:${hasList}`;
+			if (!hasList) {
+				const key = `${$chatId}:${hasList}`;
 				if (loadedArtifactKey !== key) {
 					loadedArtifactKey = key;
 					loadFiles();

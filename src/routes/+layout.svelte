@@ -48,12 +48,14 @@
 	import { getAllTags } from '$lib/apis/chats';
 	import { getTimeRange } from '$lib/utils';
 	import {
+		applyCachedStreamEvent,
 		dropChat,
 		onChatUpdated,
 		rememberArtifacts,
 		setOpenChat
 	} from '$lib/chat/cache';
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
+	import { requestChatTail } from '$lib/chat/scroll';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
 	import { connectSocket } from '$lib/utils/socket';
@@ -290,6 +292,7 @@
 		await tick();
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
+		applyCachedStreamEvent(event, localStorage.token);
 
 		if (type === 'chat:title') {
 			const title = typeof data === 'string' ? data : data?.title;
@@ -424,6 +427,7 @@
 					toast.custom(NotificationToast, {
 						componentProps: {
 							onClick: () => {
+								requestChatTail(event.chat_id);
 								goto(`/c/${event.chat_id}`);
 							},
 							content: content,

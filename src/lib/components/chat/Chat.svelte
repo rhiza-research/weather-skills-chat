@@ -51,16 +51,16 @@
 		getPromptVariables,
 		getTimeRange
 	} from '$lib/utils';
-	import { chatScrollFor, rememberChatScroll } from '$lib/chat/scroll';
+	import { chatScrollFor, onChatTailRequest, rememberChatScroll } from '$lib/chat/scroll';
+	import { playNotificationSound } from '$lib/utils/notificationSound';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 	import {
 		GENERATION_HEARTBEAT_ACTION,
 		GENERATION_LOST_MESSAGE,
 		clearSpinningToolCalls,
-		finalizeOrphanAssistantMessages,
 		formatGenerationRequestError
 	} from '$lib/utils/generationLiveness';
-	import { accumulateUsage, isUsageLimitMessage } from '$lib/utils/usage';
+	import { isUsageLimitMessage } from '$lib/utils/usage';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
 	import {
@@ -80,12 +80,14 @@
 		isLive,
 		endLive,
 		liveMessageIdFor,
-		cachedArtifacts,
+		isTranscriptEvent,
 		onDocument,
+		onOpenTranscript,
+		onTurnLost,
 		putChat,
-		refetchChat,
-		rememberLocal,
+		holdHistory,
 		revisionOf,
+		settleLoadedTurn,
 		setViewingLeaf,
 		viewingLeafFor
 	} from '$lib/chat/cache';
@@ -104,8 +106,7 @@
 	import { uploadFile } from '$lib/apis/files';
 	import {
 		copyFileIntoChatArtifacts,
-		fileFromDataUrl,
-		prefetchChatArtifacts
+		fileFromDataUrl
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 
@@ -142,9 +143,12 @@
 	let controlPaneComponent;
 
 	let autoScroll = true;
+	let newMessagesBelow = false;
+	let heardBelowId = '';
 	let processing = '';
 	let messagesContainerElement: HTMLDivElement;
 	let pinningScroll = false;
+	let scrollStopTimer = 0;
 	/** Chat id whose transcript is actually on screen. Scroll saves go here, not to a chat that is still loading. */
 	let scrollChatId = '';
 	/** Re-apply a saved position while the transcript is still growing, until the user scrolls. */
@@ -183,166 +187,9 @@
 		messages: {},
 		currentId: null
 	};
-	$: if (chat?.id && chat.id === $chatId && history?.messages && !$temporaryChatEnabled) {
-		rememberLocal(chat.id, history, chat);
-	}
 
 	let taskIds = null;
 	let stopRequested = false;
-
-	// Dead-generation detection: server emits generation_heartbeat ~every 5s.
-	const GENERATION_SILENCE_TIMEOUT_MS = 30_000;
-	const TASK_LIVENESS_POLL_MS = 8_000;
-
-	let lastServerActivityAt = 0;
-	let generationWatchMessageId: string | null = null;
-	let generationSilenceTimer: ReturnType<typeof setInterval> | null = null;
-	let taskLivenessTimer: ReturnType<typeof setInterval> | null = null;
-	let settlingLostGeneration = false;
-
-	const bumpGenerationActivity = (messageId?: string | null) => {
-		if (messageId && generationWatchMessageId && messageId !== generationWatchMessageId) {
-			return;
-		}
-		lastServerActivityAt = Date.now();
-	};
-
-	const stopGenerationWatchdogs = () => {
-		if (generationSilenceTimer) {
-			clearInterval(generationSilenceTimer);
-			generationSilenceTimer = null;
-		}
-		if (taskLivenessTimer) {
-			clearInterval(taskLivenessTimer);
-			taskLivenessTimer = null;
-		}
-		generationWatchMessageId = null;
-	};
-
-	const adoptFinishedServerMessage = (messageId: string, document) => {
-		const stored = document?.chat?.history?.messages?.[messageId];
-		if (stored?.done !== true) return false;
-		endLive(messageId);
-		applyChatDocument(document);
-		history = history;
-		taskIds = null;
-		stopGenerationWatchdogs();
-		return true;
-	};
-
-	const failInFlightMessage = async (
-		messageId: string,
-		reason: string = GENERATION_LOST_MESSAGE
-	) => {
-		const message = history.messages[messageId];
-		if (!message || message.role !== 'assistant' || message.done === true) {
-			stopGenerationWatchdogs();
-			taskIds = null;
-			return;
-		}
-		if (settlingLostGeneration) return;
-		settlingLostGeneration = true;
-
-		try {
-			// The task row disappears as soon as the turn commits. A poll can
-			// observe that before the completion event marks the local message
-			// done, then try to save an error with a revision the turn already
-			// moved. Read the stored message first and keep that copy.
-			if ($chatId && $chatId !== 'local' && !$temporaryChatEnabled) {
-				const document = await getChatById(localStorage.token, $chatId).catch(() => null);
-				const latest = history.messages[messageId];
-				if (!latest || latest.done === true) {
-					stopGenerationWatchdogs();
-					taskIds = null;
-					return;
-				}
-				if (adoptFinishedServerMessage(messageId, document)) return;
-			}
-
-			const current = history.messages[messageId];
-			if (!current || current.role !== 'assistant' || current.done === true) {
-				stopGenerationWatchdogs();
-				taskIds = null;
-				return;
-			}
-
-			current.error = { content: reason };
-			current.done = true;
-			current.content = clearSpinningToolCalls(current.content ?? '');
-			if (current.statusHistory?.length) {
-				current.statusHistory = current.statusHistory.map((status) =>
-					status?.done === false ? { ...status, done: true, hidden: true } : status
-				);
-			}
-			history.messages[messageId] = current;
-			history = history;
-			taskIds = null;
-			stopGenerationWatchdogs();
-
-			let keptServerCopy = false;
-			if ($chatId && $chatId !== 'local' && !$temporaryChatEnabled) {
-				await applyChatHistoryPatch(localStorage.token, $chatId, {
-					upsert: { [messageId]: history.messages[messageId] },
-					expected_revision: revisionOf($chatId)
-				}).catch(async (error) => {
-					if (error?.status !== 409) return;
-					const document = await getChatById(localStorage.token, $chatId).catch(() => null);
-					keptServerCopy = adoptFinishedServerMessage(messageId, document);
-				});
-			}
-			if (!keptServerCopy) toast.error(reason);
-		} finally {
-			settlingLostGeneration = false;
-		}
-	};
-
-	const startGenerationWatchdogs = (messageId: string) => {
-		stopGenerationWatchdogs();
-		generationWatchMessageId = messageId;
-		lastServerActivityAt = Date.now();
-
-		generationSilenceTimer = setInterval(async () => {
-			if (!generationWatchMessageId) return;
-			const message = history.messages[generationWatchMessageId];
-			if (!message || message.done === true) {
-				stopGenerationWatchdogs();
-				return;
-			}
-			if (Date.now() - lastServerActivityAt >= GENERATION_SILENCE_TIMEOUT_MS) {
-				const watchedId = generationWatchMessageId;
-				const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch(() => null);
-				if ((taskRes?.task_ids ?? []).length) {
-					bumpGenerationActivity(watchedId);
-					return;
-				}
-				const stillWatching = history.messages[watchedId];
-				if (!stillWatching || stillWatching.done === true) {
-					stopGenerationWatchdogs();
-					return;
-				}
-				failInFlightMessage(watchedId, GENERATION_LOST_MESSAGE);
-			}
-		}, 5_000);
-
-		taskLivenessTimer = setInterval(async () => {
-			if (!generationWatchMessageId || !taskIds?.length || !$chatId) return;
-			const watchedId = generationWatchMessageId;
-			const message = history.messages[watchedId];
-			if (!message || message.done === true) {
-				stopGenerationWatchdogs();
-				return;
-			}
-			const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch(() => null);
-			const liveIds = taskRes?.task_ids ?? [];
-			if (history.messages[watchedId]?.done === true) {
-				stopGenerationWatchdogs();
-				return;
-			}
-			if (!liveIds.length) {
-				failInFlightMessage(watchedId, GENERATION_LOST_MESSAGE);
-			}
-		}, TASK_LIVENESS_POLL_MS);
-	};
 
 	// Chat Input
 	let prompt = '';
@@ -350,8 +197,14 @@
 	let files = [];
 	let params = {};
 
+	let artifactPanelGeneration = 0;
+	let chatAlive = true;
+	let stopControlsWatch: Unsubscriber = () => {};
+
 	const openArtifactsPanel = async (forChatId: string | null = null) => {
-		const stillHere = () => !forChatId || get(chatId) === forChatId;
+		const generation = artifactPanelGeneration;
+		const stillHere = () =>
+			generation === artifactPanelGeneration && (!forChatId || get(chatId) === forChatId);
 		if (!stillHere()) return;
 		const stored = parseInt(localStorage.chatControlsSize);
 		if (!stored || stored < 20 || stored > 45) {
@@ -420,6 +273,15 @@
 		}
 		loadingChatId = id;
 		loading = true;
+		stopRequested = false;
+		chatId.set(id);
+		// Set before the first paint so the artifacts pane mounts with its
+		// contents. openArtifactsPanel also resizes it once the pane exists.
+		showOverview.set(false);
+		showCallOverlay.set(false);
+		showArtifacts.set(true);
+		showControls.set(true);
+		void openArtifactsPanel(id);
 
 		prompt = '';
 		files = [];
@@ -443,8 +305,7 @@
 
 			loading = false;
 			await tick();
-			if (loadingChatId !== id || get(chatId) !== id) return;
-			await openArtifactsPanel(id);
+			if (chatAlive && get(chatId) === id) void openArtifactsPanel(id);
 
 			if (localStorage.getItem(`chat-input-${id}`)) {
 				try {
@@ -548,6 +409,22 @@
 		if (_chatId) setViewingLeaf(_chatId, history.currentId);
 	};
 
+	const mergeRemotePreservingLive = (remoteMessages, liveChat: string) => {
+		if (!remoteMessages) return;
+		const keep = liveMessageIdFor(liveChat);
+		for (const [messageId, remote] of Object.entries(remoteMessages)) {
+			if (messageId !== keep) {
+				history.messages[messageId] = remote;
+				continue;
+			}
+			const local = history.messages[messageId];
+			// The server copy is the finished turn. Keeping an empty local
+			// message here drops the reply and the liveness poll then calls it
+			// a lost connection.
+			if (!local || remote?.done === true) history.messages[messageId] = remote;
+		}
+	};
+
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -560,184 +437,71 @@
 			return;
 		}
 
-		if (event.chat_id === $chatId) {
-			await tick();
-			let message = history.messages[event.message_id];
+		if (event.chat_id !== $chatId) return;
+		// Transcript text is written once, in the cache. Painting happens in
+		// onOpenTranscript so this handler cannot append the same tokens again.
+		if (isTranscriptEvent(type)) return;
 
-			if (!message && event.message_id) {
-				// Another tab started a turn this one has not seen yet.
-				const chatIdForEvent = event.chat_id;
-				refetchChat(localStorage.token, chatIdForEvent).then((document) => {
-					if (!document || get(chatId) !== chatIdForEvent) return;
-					if (isLive(chatIdForEvent)) {
-						const remoteMessages = document?.chat?.history?.messages || {};
-						const keep = liveMessageIdFor(chatIdForEvent);
-						for (const [messageId, remote] of Object.entries(remoteMessages)) {
-							if (messageId === keep) continue;
-							history.messages[messageId] = remote;
-						}
-						history = history;
-						return;
-					}
-					applyChatDocument(document);
-					history = history;
-					if (autoScroll) pinScrollToEnd();
-				});
-				return;
+		await tick();
+		const data = event?.data?.data ?? null;
+
+		if (type === 'chat:title') {
+			const title = typeof data === 'string' ? data : data?.title;
+			if (title) chatTitle.set(title);
+			if (title && event.chat_id) {
+				chats.update((list) =>
+					(list ?? []).map((item) => (item.id === event.chat_id ? { ...item, title } : item))
+				);
 			}
+		} else if (type === 'chat:tags') {
+			chat = await getChatById(localStorage.token, $chatId);
+			allTags.set(await getAllTags(localStorage.token));
+		} else if (type === 'notification') {
+			const toastType = data?.type ?? 'info';
+			const toastContent = data?.content ?? '';
 
-			if (message) {
-				const type = event?.data?.type ?? null;
-				const data = event?.data?.data ?? null;
+			if (toastType === 'success') {
+				toast.success(toastContent);
+			} else if (toastType === 'error') {
+				toast.error(toastContent);
+			} else if (toastType === 'warning') {
+				toast.warning(toastContent);
+			} else {
+				toast.info(toastContent);
+			}
+		} else if (type === 'confirmation') {
+			eventCallback = cb;
 
-				const bumpArtifactsSoon = () => {
-					if (!$showArtifacts) return;
-					if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
-					artifactsBumpTimer = setTimeout(() => {
-						artifactsRefresh.update((n) => n + 1);
-						artifactsBumpTimer = null;
-					}, 300);
-				};
+			eventConfirmationInput = false;
+			showEventConfirmation = true;
 
-				if (type === 'status') {
-					// Stop already finalized this message — ignore late search/status events.
-					if (message.done === true || stopRequested) {
-						return;
-					}
-					bumpGenerationActivity(event.message_id);
-					// Liveness-only pings — do not replace visible status UI.
-					if (data?.action === GENERATION_HEARTBEAT_ACTION) {
-						history.messages[message.id] = message;
-						return;
-					}
-					if (message?.statusHistory) {
-						message.statusHistory.push(data);
-					} else {
-						message.statusHistory = [data];
-					}
-					if (data?.done) bumpArtifactsSoon();
-				} else if (type === 'chat:completion') {
-					if ((message.done === true || stopRequested) && !data?.error) {
-						return;
-					}
-					bumpGenerationActivity(event.message_id);
-					chatCompletionEventHandler(data, message, event.chat_id);
-					bumpArtifactsSoon();
-				} else if (type === 'chat:message:delta' || type === 'message') {
-					if (message.done === true || stopRequested) {
-						return;
-					}
-					bumpGenerationActivity(event.message_id);
-					message.content += data.content;
-				} else if (type === 'chat:message' || type === 'replace') {
-					if (message.done === true || stopRequested) {
-						return;
-					}
-					bumpGenerationActivity(event.message_id);
-					message.content = data.content;
-					bumpArtifactsSoon();
-				} else if (type === 'chat:message:files' || type === 'files') {
-					if (message.done === true || stopRequested) {
-						return;
-					}
-					bumpGenerationActivity(event.message_id);
-					message.files = data.files;
-					bumpArtifactsSoon();
-				} else if (type === 'chat:title') {
-					const title = typeof data === 'string' ? data : data?.title;
-					if (title) {
-						chatTitle.set(title);
-					}
-					if (title && event.chat_id) {
-						chats.update((list) =>
-							(list ?? []).map((item) =>
-								item.id === event.chat_id ? { ...item, title } : item
-							)
-						);
-					}
-				} else if (type === 'chat:tags') {
-					chat = await getChatById(localStorage.token, $chatId);
-					allTags.set(await getAllTags(localStorage.token));
-				} else if (type === 'source' || type === 'citation') {
-					bumpGenerationActivity(event.message_id);
-					if (data?.type === 'code_execution') {
-						// Code execution; update existing code execution by ID, or add new one.
-						if (!message?.code_executions) {
-							message.code_executions = [];
-						}
+			eventConfirmationTitle = data.title;
+			eventConfirmationMessage = data.message;
+		} else if (type === 'execute') {
+			eventCallback = cb;
 
-						const existingCodeExecutionIndex = message.code_executions.findIndex(
-							(execution) => execution.id === data.id
-						);
+			try {
+				const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
+				const result = await asyncFunction();
 
-						if (existingCodeExecutionIndex !== -1) {
-							message.code_executions[existingCodeExecutionIndex] = data;
-						} else {
-							message.code_executions.push(data);
-						}
-
-						message.code_executions = message.code_executions;
-					} else {
-						// Regular source.
-						if (message?.sources) {
-							message.sources.push(data);
-						} else {
-							message.sources = [data];
-						}
-					}
-				} else if (type === 'notification') {
-					bumpGenerationActivity(event.message_id);
-					const toastType = data?.type ?? 'info';
-					const toastContent = data?.content ?? '';
-
-					if (toastType === 'success') {
-						toast.success(toastContent);
-					} else if (toastType === 'error') {
-						toast.error(toastContent);
-					} else if (toastType === 'warning') {
-						toast.warning(toastContent);
-					} else {
-						toast.info(toastContent);
-					}
-				} else if (type === 'confirmation') {
-					bumpGenerationActivity(event.message_id);
-					eventCallback = cb;
-
-					eventConfirmationInput = false;
-					showEventConfirmation = true;
-
-					eventConfirmationTitle = data.title;
-					eventConfirmationMessage = data.message;
-				} else if (type === 'execute') {
-					eventCallback = cb;
-
-					try {
-						// Use Function constructor to evaluate code in a safer way
-						const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
-						const result = await asyncFunction(); // Await the result of the async function
-
-						if (cb) {
-							cb(result);
-						}
-					} catch (error) {
-						console.error('Error executing code:', error);
-					}
-				} else if (type === 'input') {
-					eventCallback = cb;
-
-					eventConfirmationInput = true;
-					showEventConfirmation = true;
-
-					eventConfirmationTitle = data.title;
-					eventConfirmationMessage = data.message;
-					eventConfirmationInputPlaceholder = data.placeholder;
-					eventConfirmationInputValue = data?.value ?? '';
-				} else {
-					console.log('Unknown message type', data);
+				if (cb) {
+					cb(result);
 				}
-
-				history.messages[event.message_id] = message;
+			} catch (error) {
+				console.error('Error executing code:', error);
 			}
+		} else if (type === 'input') {
+			eventCallback = cb;
+
+			eventConfirmationInput = true;
+			showEventConfirmation = true;
+
+			eventConfirmationTitle = data.title;
+			eventConfirmationMessage = data.message;
+			eventConfirmationInputPlaceholder = data.placeholder;
+			eventConfirmationInputValue = data?.value ?? '';
+		} else {
+			console.log('Unknown message type', data);
 		}
 	};
 
@@ -781,33 +545,52 @@
 	};
 
 	let stopDocumentWatch = () => {};
+	let stopLostWatch = () => {};
+	let stopPaint = () => {};
+	let stopTailRequest = () => {};
 
 	onMount(async () => {
 		console.log('mounted');
+		stopLostWatch = onTurnLost((id) => {
+			if (id === get(chatId)) toast.error(GENERATION_LOST_MESSAGE);
+		});
 		stopDocumentWatch = onDocument((id, document) => {
 			if (!document || id !== get(chatId)) return;
+			const heldTop = autoScroll ? null : messagesContainerElement?.scrollTop ?? 0;
+			if (!autoScroll) noteNewMessagesBelow(document?.chat?.history?.currentId || '');
+			if (document?.chat?.history && document.chat.history === history) {
+				history = history;
+				if (heldTop != null) restoreReadingPosition(heldTop);
+				else if (autoScroll) pinScrollToEnd();
+				return;
+			}
 			if (isLive(id)) {
 				const remoteMessages = document?.chat?.history?.messages;
 				if (!remoteMessages) return;
-				const keep = liveMessageIdFor(id);
-				for (const [messageId, message] of Object.entries(remoteMessages)) {
-					if (messageId === keep) continue;
-					history.messages[messageId] = message;
-				}
+				mergeRemotePreservingLive(remoteMessages, id);
 				history = history;
+				if (heldTop != null) restoreReadingPosition(heldTop);
 				return;
 			}
 			applyChatDocument(document);
 			history = history;
-			if (autoScroll) pinScrollToEnd();
+			if (heldTop != null) restoreReadingPosition(heldTop);
+			else if (autoScroll) pinScrollToEnd();
 		});
+		stopPaint = onOpenTranscript((event) => paintTranscript(event));
 		window.addEventListener('message', onMessageHandler);
 		$socket?.on('chat-events', chatEventHandler);
+		stopTailRequest = onChatTailRequest((id) => {
+			if (id !== get(chatId)) return;
+			heardBelowId = '';
+			scrollToBottom();
+		});
 
 		if (!$chatId) {
 			chatIdUnsubscriber = chatId.subscribe(async (value) => {
 				if (!value) {
 					await tick(); // Wait for DOM updates
+					if (!chatAlive || get(chatId) || leftNewChatScreen()) return;
 					await initNewChat();
 				}
 			});
@@ -836,15 +619,22 @@
 			}
 		}
 
-		showControls.subscribe(async (value) => {
+		// The store calls this immediately with the current value. That first
+		// "closed" notice is async, so it can land after a later open and
+		// wipe the artifacts flag while leaving the pane expanded.
+		stopControlsWatch = showControls.subscribe(async (value) => {
 			await tick();
+			if (!chatAlive || get(showControls) !== value) return;
+			const panelShown =
+				get(showArtifacts) || get(showOverview) || get(showCallOverlay);
 			if (controlPane && controlPaneComponent && !$mobile) {
 				try {
-					if (value) {
+					if (value && panelShown) {
 						controlPaneComponent.openPane();
 						await tick();
+						if (!chatAlive || !get(showControls)) return;
 						controlPaneComponent.openPane();
-					} else {
+					} else if (!value) {
 						controlPane.collapse();
 					}
 				} catch (e) {
@@ -852,7 +642,8 @@
 				}
 			}
 
-			if (!value) {
+			if (!value && !get(showControls)) {
+				if (!chatAlive || leftNewChatScreen()) return;
 				showCallOverlay.set(false);
 				showOverview.set(false);
 				showArtifacts.set(false);
@@ -866,12 +657,17 @@
 	});
 
 	onDestroy(() => {
+		chatAlive = false;
 		if (scrollChatId) saveChatScroll(scrollChatId);
 		stopDocumentWatch();
+		stopLostWatch();
+		stopPaint();
+		stopTailRequest();
+		stopControlsWatch();
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
-		stopGenerationWatchdogs();
 		window.removeEventListener('message', onMessageHandler);
+		window.clearTimeout(scrollStopTimer);
 		$socket?.off('chat-events', chatEventHandler);
 	});
 
@@ -1106,7 +902,13 @@
 		applyStartupModel();
 	}
 
+	// The new-chat screen and a chat page are different component instances
+	// that share the panel stores. Once navigation has left "/", this instance
+	// must not clear the chat id or close the panel the next page just opened.
+	const leftNewChatScreen = () => !chatIdProp && get(page).url.pathname.includes('/c/');
+
 	const initNewChat = async () => {
+		if (!chatAlive || leftNewChatScreen()) return;
 		if ($page.url.searchParams.get('models')) {
 			selectedModels = $page.url.searchParams.get('models')?.split(',');
 		} else if ($page.url.searchParams.get('model')) {
@@ -1169,6 +971,7 @@
 
 		await showCallOverlay.set(false);
 		await showOverview.set(false);
+		if (!chatAlive || leftNewChatScreen()) return;
 
 		if ($page.url.pathname.includes('/c/')) {
 			window.history.replaceState(history.state, '', `/`);
@@ -1177,11 +980,18 @@
 		if (scrollChatId) saveChatScroll(scrollChatId);
 		scrollChatId = '';
 		autoScroll = true;
+		newMessagesBelow = false;
+		heardBelowId = '';
 
+		if (!chatAlive || leftNewChatScreen()) return;
 		await chatId.set('');
+		if (!chatAlive || leftNewChatScreen()) return;
 		await chatTitle.set('');
+		if (!chatAlive || leftNewChatScreen()) return;
+		artifactPanelGeneration += 1;
 		await showArtifacts.set(false);
 		await showControls.set(false);
+		if (!chatAlive || leftNewChatScreen()) return;
 
 		history = {
 			messages: {},
@@ -1246,31 +1056,30 @@
 	};
 
 	const applyChatDocument = (loadedChat) => {
-		chat = loadedChat;
-		putChat(loadedChat, null, true);
-		const chatContent = loadedChat.chat;
+		const stored = putChat(loadedChat, null, true)?.document ?? loadedChat;
+		chat = stored;
+		const chatContent = stored.chat;
 		if (!chatContent) return false;
 		selectedModels =
 			(chatContent?.models ?? undefined) !== undefined
 				? chatContent.models
 				: [chatContent.models ?? ''];
-		history =
-			(chatContent?.history ?? undefined) !== undefined
-				? chatContent.history
-				: convertMessagesToHistory(chatContent.messages);
+		if (!chatContent.history) {
+			chatContent.history = convertMessagesToHistory(chatContent.messages);
+		}
+		history = chatContent.history;
 		chatTitle.set(chatContent.title);
 		params = {};
 		chatFiles = chatContent?.files ?? [];
 		const incomingId = history.currentId;
-		const leaf = viewingLeafFor(loadedChat.id);
+		const leaf = viewingLeafFor(stored.id);
 		if (leaf && leaf !== incomingId && history?.messages?.[leaf]) {
 			if (!incomingId || !messageDescendsFrom(history, incomingId, leaf)) {
 				history.currentId = leaf;
 			} else {
-				setViewingLeaf(loadedChat.id, incomingId);
+				setViewingLeaf(stored.id, incomingId);
 			}
 		}
-		rememberLocal(loadedChat.id, history, loadedChat);
 		return true;
 	};
 
@@ -1289,16 +1098,17 @@
 		if (scrollChatId && scrollChatId !== id) saveChatScroll(scrollChatId);
 		scrollChatId = '';
 		autoScroll = false;
+		newMessagesBelow = false;
+		heardBelowId = '';
 		settleScroll = true;
-		stopGenerationWatchdogs();
 		taskIds = null;
+		stopRequested = false;
 		chatId.set(id);
 
 		const token = localStorage.token;
 		const tagsPromise = getTagsById(token, id).catch(() => []);
 		const settingsPromise = getUserSettings(token);
 		const tasksPromise = getTaskIdsByChatId(token, id).catch(() => null);
-		if (!Array.isArray(cachedArtifacts(id))) prefetchChatArtifacts(token, id);
 
 		let loadedChat = null;
 		try {
@@ -1355,22 +1165,8 @@
 
 		taskIds = taskRes?.task_ids?.length ? taskRes.task_ids : null;
 		const hasLiveTask = !!(taskIds && taskIds.length);
-
-		const orphanCount = finalizeOrphanAssistantMessages(
-			history.messages,
-			hasLiveTask,
-			GENERATION_LOST_MESSAGE
-		);
+		await settleLoadedTurn(id, token, hasLiveTask);
 		history = history;
-
-		if (hasLiveTask && history.currentId) {
-			const current = history.messages[history.currentId];
-			if (current?.role === 'assistant' && current.done !== true) {
-				startGenerationWatchdogs(current.id);
-			}
-		} else if (orphanCount > 0) {
-			toast.error(GENERATION_LOST_MESSAGE);
-		}
 
 		await tick();
 		if (settleScroll && get(chatId) === id) placeChatScroll(id);
@@ -1378,16 +1174,83 @@
 		return true;
 	};
 
-	const saveChatScroll = (id: string) => {
-		const element = messagesContainerElement;
-		if (!id || !element) return;
+	const messageNode = (id: string) => {
+		const node = document.getElementById(`message-${id}`);
+		return node instanceof HTMLElement ? node : null;
+	};
+
+	/** Lowest message still on screen. */
+	const bottomMessageId = (container: HTMLElement) => {
+		const viewTop = container.getBoundingClientRect().top;
+		const viewBottom = container.getBoundingClientRect().bottom;
+		let found = '';
+		for (const node of container.querySelectorAll<HTMLElement>('[id^="message-"]')) {
+			const id = node.id.slice('message-'.length);
+			if (id.startsWith('edit-') || id.startsWith('index-input-') || id.startsWith('feedback-')) {
+				continue;
+			}
+			const rect = node.getBoundingClientRect();
+			if (rect.bottom <= viewTop) continue;
+			if (rect.top >= viewBottom) break;
+			found = id;
+		}
+		return found;
+	};
+
+	/** Put that message's bottom edge at the bottom of the screen. */
+	const showSavedMessage = (container: HTMLElement, messageId?: string) => {
+		const node = messageId ? messageNode(messageId) : null;
+		if (!node) return false;
+		const delta = node.getBoundingClientRect().bottom - container.getBoundingClientRect().bottom;
+		if (Math.abs(delta) < 2) return true;
+		pinningScroll = true;
+		container.scrollTop += delta;
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				pinningScroll = false;
+			});
+		});
+		return true;
+	};
+
+	const holdScrollPin = () => {
+		pinningScroll = true;
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				pinningScroll = false;
+			});
+		});
+	};
+
+	const captureScroll = (id: string, element: HTMLElement) => {
 		const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
 		const saved = chatScrollFor(id);
 		rememberChatScroll(id, {
 			top: element.scrollTop,
 			atBottom,
-			messagesCount: saved?.messagesCount ?? 20
+			messagesCount: saved?.messagesCount ?? 20,
+			unseen: !atBottom && (newMessagesBelow || !!saved?.unseen),
+			messageId: atBottom ? undefined : bottomMessageId(element)
 		});
+	};
+
+	const saveChatScroll = (id: string) => {
+		window.clearTimeout(scrollStopTimer);
+		const element = messagesContainerElement;
+		if (!id || !element) return;
+		captureScroll(id, element);
+	};
+
+	const placeSavedScroll = (element: HTMLElement) => {
+		if (!scrollChatId) return;
+		const saved = chatScrollFor(scrollChatId);
+		const atBottom = !saved || saved.atBottom;
+		if (settleScroll) autoScroll = atBottom;
+		if (atBottom && autoScroll) {
+			pinScrollToEnd();
+			return;
+		}
+		if (saved?.messageId) showSavedMessage(element, saved.messageId);
 	};
 
 	const placeChatScroll = (id: string) => {
@@ -1396,52 +1259,51 @@
 		const saved = chatScrollFor(id);
 		const atBottom = !saved || saved.atBottom;
 		autoScroll = atBottom;
-		pinningScroll = true;
-		element.scrollTop = atBottom ? element.scrollHeight : Math.max(0, saved.top);
-		requestAnimationFrame(() => {
-			pinningScroll = false;
-		});
+		if (!atBottom && saved?.unseen) {
+			newMessagesBelow = true;
+			if (history?.currentId) heardBelowId = history.currentId;
+		}
+		placeSavedScroll(element);
+	};
+
+	const restoreReadingPosition = (top: number) => {
+		const element = messagesContainerElement;
+		if (!element || autoScroll) return;
+		const apply = () => {
+			if (!messagesContainerElement || autoScroll) return;
+			holdScrollPin();
+			messagesContainerElement.scrollTop = top;
+		};
+		void tick().then(apply);
 	};
 
 	const pinScrollToEnd = () => {
 		const element = messagesContainerElement;
 		if (!element || !autoScroll) return;
-		pinningScroll = true;
-		element.scrollTop = element.scrollHeight;
 		const id = scrollChatId;
+		const saved = id ? chatScrollFor(id) : null;
+		if (settleScroll && saved && !saved.atBottom) return;
+		holdScrollPin();
+		element.scrollTop = element.scrollHeight;
 		if (id) {
-			const saved = chatScrollFor(id);
+			const previous = chatScrollFor(id);
 			rememberChatScroll(id, {
 				top: element.scrollTop,
 				atBottom: true,
-				messagesCount: saved?.messagesCount ?? 20
+				messagesCount: previous?.messagesCount ?? 20,
+				unseen: false
 			});
 		}
-		requestAnimationFrame(() => {
-			pinningScroll = false;
-		});
 	};
 
-	// Message markdown, images, and the artifact pane change the transcript
-	// height after the first paint. Keep the tail in view until the user
-	// scrolls up.
+	// Keep the tail in view while a reply is streaming and this chat is
+	// scrolled to the end. A saved message is restored once, when the chat opens.
 	const stickToEnd = (node: HTMLElement) => {
 		let frame = 0;
 		const schedule = () => {
 			cancelAnimationFrame(frame);
 			frame = requestAnimationFrame(() => {
-				if (autoScroll) {
-					pinScrollToEnd();
-					return;
-				}
-				if (!settleScroll || !scrollChatId) return;
-				const saved = chatScrollFor(scrollChatId);
-				if (!saved || saved.atBottom) return;
-				pinningScroll = true;
-				node.scrollTop = saved.top;
-				requestAnimationFrame(() => {
-					pinningScroll = false;
-				});
+				if (autoScroll && !newMessagesBelow && !pinningScroll) pinScrollToEnd();
 			});
 		};
 		const content = node.firstElementChild;
@@ -1457,30 +1319,39 @@
 		};
 	};
 
+	const noteNewMessagesBelow = (messageId = '') => {
+		if (autoScroll) return;
+		newMessagesBelow = true;
+		if (scrollChatId) {
+			const saved = chatScrollFor(scrollChatId);
+			if (saved) rememberChatScroll(scrollChatId, { ...saved, unseen: true });
+		}
+		if (!messageId || messageId === heardBelowId) return;
+		heardBelowId = messageId;
+		playNotificationSound();
+	};
+
 	const scrollToBottom = async () => {
 		autoScroll = true;
+		newMessagesBelow = false;
 		await tick();
 		const element = messagesContainerElement;
 		if (!element) return;
-		pinningScroll = true;
+		holdScrollPin();
 		element.scrollTop = element.scrollHeight;
 		if (scrollChatId) {
 			const saved = chatScrollFor(scrollChatId);
 			rememberChatScroll(scrollChatId, {
 				top: element.scrollTop,
 				atBottom: true,
-				messagesCount: saved?.messagesCount ?? 20
+				messagesCount: saved?.messagesCount ?? 20,
+				unseen: false
 			});
 		}
-		requestAnimationFrame(() => {
-			pinningScroll = false;
-		});
 	};
 	const chatCompletedHandler = async (_chatId, _modelId, responseMessageId, _messages) => {
 		taskIds = null;
-		stopGenerationWatchdogs();
 		endLive(responseMessageId);
-		if ($chatId === _chatId) rememberLocal(_chatId, history, chat);
 	};
 
 	const chatActionHandler = async (chatId, actionId, modelId, responseMessageId, event = null) => {
@@ -1674,108 +1545,49 @@
 		}
 	};
 
-	const chatCompletionEventHandler = async (data, message, chatId) => {
-		const { id, done, choices, content, sources, selected_model_id, error, usage } = data;
+	const speakLatestSentence = (message) => {
+		if (navigator.vibrate && ($settings?.hapticFeedback ?? false)) {
+			navigator.vibrate(5);
+		}
+		const messageContentParts = getMessageContentParts(
+			message.content,
+			$config?.audio?.tts?.split_on ?? 'punctuation'
+		);
+		messageContentParts.pop();
+		if (
+			messageContentParts.length > 0 &&
+			messageContentParts[messageContentParts.length - 1] !== message.lastSentence
+		) {
+			message.lastSentence = messageContentParts[messageContentParts.length - 1];
+			eventTarget.dispatchEvent(
+				new CustomEvent('chat', {
+					detail: {
+						id: message.id,
+						content: messageContentParts[messageContentParts.length - 1]
+					}
+				})
+			);
+		}
+	};
+
+	const paintCompletion = async (data, message, chatId) => {
+		const { done, choices, content, error } = data;
 
 		if (error) {
-			await handleOpenAIError(error, message);
+			const text =
+				typeof error === 'string'
+					? error
+					: typeof error?.content === 'string'
+						? error.content
+						: typeof error?.message === 'string'
+							? error.message
+							: '';
+			if (text) toast.error(text);
 		}
 
-		if (sources) {
-			message.sources = sources;
-		}
-
-		if (choices) {
-			if (choices[0]?.message?.content) {
-				// Non-stream response
-				message.content += choices[0]?.message?.content;
-			} else {
-				// Stream response
-				let value = choices[0]?.delta?.content ?? '';
-				if (message.content == '' && value == '\n') {
-					console.log('Empty response');
-				} else {
-					message.content += value;
-
-					if (navigator.vibrate && ($settings?.hapticFeedback ?? false)) {
-						navigator.vibrate(5);
-					}
-
-					// Emit chat event for TTS
-					const messageContentParts = getMessageContentParts(
-						message.content,
-						$config?.audio?.tts?.split_on ?? 'punctuation'
-					);
-					messageContentParts.pop();
-
-					// dispatch only last sentence and make sure it hasn't been dispatched before
-					if (
-						messageContentParts.length > 0 &&
-						messageContentParts[messageContentParts.length - 1] !== message.lastSentence
-					) {
-						message.lastSentence = messageContentParts[messageContentParts.length - 1];
-						eventTarget.dispatchEvent(
-							new CustomEvent('chat', {
-								detail: {
-									id: message.id,
-									content: messageContentParts[messageContentParts.length - 1]
-								}
-							})
-						);
-					}
-				}
-			}
-		}
-
-		if (content) {
-			// REALTIME_CHAT_SAVE is disabled
-			message.content = content;
-
-			if (navigator.vibrate && ($settings?.hapticFeedback ?? false)) {
-				navigator.vibrate(5);
-			}
-
-			// Emit chat event for TTS
-			const messageContentParts = getMessageContentParts(
-				message.content,
-				$config?.audio?.tts?.split_on ?? 'punctuation'
-			);
-			messageContentParts.pop();
-
-			// dispatch only last sentence and make sure it hasn't been dispatched before
-			if (
-				messageContentParts.length > 0 &&
-				messageContentParts[messageContentParts.length - 1] !== message.lastSentence
-			) {
-				message.lastSentence = messageContentParts[messageContentParts.length - 1];
-				eventTarget.dispatchEvent(
-					new CustomEvent('chat', {
-						detail: {
-							id: message.id,
-							content: messageContentParts[messageContentParts.length - 1]
-						}
-					})
-				);
-			}
-		}
-
-		if (selected_model_id) {
-			message.selectedModelId = selected_model_id;
-			message.arena = true;
-		}
-
-		if (usage) {
-			// Sum token/cost fields across tool-loop turns until stop (done).
-			message.usage = accumulateUsage(message.usage, usage);
-		}
-
-		history.messages[message.id] = message;
+		if (choices || content) speakLatestSentence(message);
 
 		if (done) {
-			message.done = true;
-			if (generationWatchMessageId === message.id) {
-				stopGenerationWatchdogs();
-			}
 			taskIds = null;
 
 			if ($settings.responseAutoCopy) {
@@ -1787,11 +1599,11 @@
 				document.getElementById(`speak-button-${message.id}`)?.click();
 			}
 
-			// Emit chat event for TTS
-			let lastMessageContentPart =
-				getMessageContentParts(message.content, $config?.audio?.tts?.split_on ?? 'punctuation')?.at(
-					-1
-				) ?? '';
+			const lastMessageContentPart =
+				getMessageContentParts(
+					message.content,
+					$config?.audio?.tts?.split_on ?? 'punctuation'
+				)?.at(-1) ?? '';
 			if (lastMessageContentPart) {
 				eventTarget.dispatchEvent(
 					new CustomEvent('chat', {
@@ -1808,7 +1620,6 @@
 				})
 			);
 
-			history.messages[message.id] = message;
 			await chatCompletedHandler(
 				chatId,
 				message.model,
@@ -1817,10 +1628,50 @@
 			);
 		}
 
-		console.log(data);
 		if (autoScroll) {
 			scrollToBottom();
+		} else if (choices || content || done) {
+			noteNewMessagesBelow(message?.id || '');
 		}
+	};
+
+	const bumpArtifactsSoon = () => {
+		if (!$showArtifacts) return;
+		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
+		artifactsBumpTimer = setTimeout(() => {
+			artifactsRefresh.update((n) => n + 1);
+			artifactsBumpTimer = null;
+		}, 300);
+	};
+
+	const paintTranscript = (event) => {
+		if (event?.chat_id !== get(chatId)) return;
+		const type = event?.data?.type ?? null;
+		const data = event?.data?.data ?? null;
+		const message = event?.message_id ? history.messages?.[event.message_id] : null;
+		history = history;
+		if (!message) return;
+		if (type === 'status') {
+			if (data?.action === GENERATION_HEARTBEAT_ACTION) return;
+			if (data?.done) bumpArtifactsSoon();
+			if (autoScroll) scrollToBottom();
+			return;
+		}
+		if (type === 'chat:completion') {
+			paintCompletion(data, message, event.chat_id);
+			bumpArtifactsSoon();
+			return;
+		}
+		if (
+			type === 'chat:message' ||
+			type === 'replace' ||
+			type === 'chat:message:files' ||
+			type === 'files'
+		) {
+			bumpArtifactsSoon();
+		}
+		if (autoScroll) scrollToBottom();
+		else noteNewMessagesBelow(message.id);
 	};
 
 	//////////////////////////
@@ -2030,7 +1881,7 @@
 				userMessage.content = `${userMessage.content || ''}${note}`;
 			}
 		}
-		if (userMessage && history.messages[parentId]) {
+		if (userMessage && get(chatId) === _chatId && history.messages[parentId]) {
 			history.messages[parentId] = {
 				...history.messages[parentId],
 				files: userMessage.files,
@@ -2077,6 +1928,10 @@
 	};
 
 	const sendPromptSocket = async (_history, model, responseMessageId, _chatId) => {
+		if (_chatId && _chatId !== 'local') {
+			const bound = holdHistory(_chatId, history);
+			if (bound) history = bound;
+		}
 		const responseMessage = _history.messages[responseMessageId];
 		const userMessage = _history.messages[responseMessage.parentId];
 
@@ -2253,40 +2108,45 @@
 			},
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
-			endLive(responseMessageId);
 			const reason = formatGenerationRequestError(error);
-			toast.error(reason);
-
-			responseMessage.error = {
-				content: reason
-			};
+			responseMessage.error = { content: reason };
 			responseMessage.done = true;
-
-			history.messages[responseMessageId] = responseMessage;
-			history.currentId = responseMessageId;
+			endLive(responseMessageId);
+			toast.error(reason);
+			if (get(chatId) === _chatId) {
+				history.messages[responseMessageId] = responseMessage;
+				history.currentId = responseMessageId;
+			}
 			return null;
 		});
 
+		if (res?.error) {
+			await handleOpenAIError(res.error, responseMessage);
+			return;
+		}
+		if (get(chatId) !== _chatId) return;
+
 		if (res) {
-			if (res.error) {
-				await handleOpenAIError(res.error, responseMessage);
-			} else if (res.task_id) {
+			if (res.task_id) {
 				if (stopRequested) {
 					// User hit Stop before task_id arrived — cancel immediately.
 					await stopTask(localStorage.token, res.task_id).catch(() => null);
 					taskIds = null;
 				} else if (taskIds) {
 					taskIds.push(res.task_id);
-					startGenerationWatchdogs(responseMessageId);
 				} else {
 					taskIds = [res.task_id];
-					startGenerationWatchdogs(responseMessageId);
 				}
 			}
 		}
 
 		await tick();
-		scrollToBottom();
+		if (get(chatId) !== _chatId) return;
+		if (autoScroll) {
+			scrollToBottom();
+		} else {
+			newMessagesBelow = true;
+		}
 	};
 
 	const handleOpenAIError = async (error, responseMessage) => {
@@ -2329,7 +2189,7 @@
 				: $i18n.t(`Uh-oh! There was an issue with the response.`) + '\n' + errorMessage
 		};
 		responseMessage.done = true;
-		stopGenerationWatchdogs();
+		endLive(responseMessage.id);
 		taskIds = null;
 
 		if (responseMessage.statusHistory) {
@@ -2338,7 +2198,9 @@
 			);
 		}
 
-		history.messages[responseMessage.id] = responseMessage;
+		if (history?.messages?.[responseMessage.id]) {
+			history.messages[responseMessage.id] = responseMessage;
+		}
 	};
 
 	const markAssistantResponsesDone = (parentId: string | null | undefined) => {
@@ -2370,7 +2232,8 @@
 		stopRequested = true;
 		const idsToStop = taskIds ? [...taskIds] : [];
 		taskIds = null;
-		stopGenerationWatchdogs();
+		const stoppingId = history.currentId;
+		if (stoppingId) endLive(stoppingId);
 
 		const responseMessage = history.messages[history.currentId];
 		if (responseMessage?.role === 'assistant' && responseMessage.done !== true) {
@@ -2531,6 +2394,7 @@
 		let _chatId = $chatId;
 
 		if (!$temporaryChatEnabled) {
+			void openArtifactsPanel();
 			chat = await createNewChat(
 				localStorage.token,
 				{
@@ -2571,7 +2435,6 @@
 			});
 
 			window.history.replaceState(history.state, '', `/c/${_chatId}`);
-			await openArtifactsPanel(_chatId);
 		} else {
 			_chatId = 'local';
 			await chatId.set('local');
@@ -2648,22 +2511,28 @@
 		: ' '} w-full max-w-full flex flex-col relative"
 	id="chat-container"
 >
-	{#if !loading}
-		{#if $settings?.backgroundImageUrl ?? null}
-			<div
-				class="absolute {$showSidebar
-					? 'md:max-w-[calc(100%-260px)] md:translate-x-[260px]'
-					: ''} top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
-				style="background-image: url({$settings.backgroundImageUrl})  "
-			/>
+	{#if !loading && ($settings?.backgroundImageUrl ?? null)}
+		<div
+			class="absolute {$showSidebar
+				? 'md:max-w-[calc(100%-260px)] md:translate-x-[260px]'
+				: ''} top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
+			style="background-image: url({$settings.backgroundImageUrl})  "
+		/>
 
-			<div
-				class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-			/>
-		{/if}
+		<div
+			class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
+		/>
+	{/if}
 
-		<PaneGroup direction="horizontal" class="w-full h-full">
-			<Pane defaultSize={50} class="h-full flex relative max-w-full flex-col">
+	<PaneGroup direction="horizontal" class="w-full h-full">
+		<Pane defaultSize={50} class="h-full flex relative max-w-full flex-col">
+			{#if loading}
+				<div class="flex items-center justify-center h-full w-full">
+					<div class="m-auto">
+						<Spinner />
+					</div>
+				</div>
+			{:else}
 				<Navbar
 					bind:this={navbarElement}
 					chat={{
@@ -2696,13 +2565,14 @@
 								const atBottom =
 									element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
 								autoScroll = atBottom;
+								if (atBottom) newMessagesBelow = false;
 								settleScroll = false;
-								const saved = chatScrollFor(scrollChatId);
-								rememberChatScroll(scrollChatId, {
-									top: element.scrollTop,
-									atBottom,
-									messagesCount: saved?.messagesCount ?? 20
-								});
+								const id = scrollChatId;
+								window.clearTimeout(scrollStopTimer);
+								scrollStopTimer = window.setTimeout(() => {
+									if (pinningScroll || scrollChatId !== id || !messagesContainerElement) return;
+									captureScroll(id, messagesContainerElement);
+								}, 150);
 							}}
 						>
 							<div class=" min-h-full w-full flex flex-col">
@@ -2766,6 +2636,7 @@
 								bind:files
 								bind:prompt
 								bind:autoScroll
+								bind:newMessagesBelow
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
@@ -2852,6 +2723,7 @@
 						</div>
 					{/if}
 				</div>
+			{/if}
 			</Pane>
 
 			<ChatControls
@@ -2868,7 +2740,7 @@
 			/>
 		</PaneGroup>
 
-		{#if $chatId && $chatId !== 'local' && !($showControls && $showArtifacts)}
+		{#if !loading && $chatId && $chatId !== 'local' && !($showControls && $showArtifacts)}
 			<button
 				type="button"
 				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750"
@@ -2884,11 +2756,4 @@
 				</span>
 			</button>
 		{/if}
-	{:else if loading}
-		<div class=" flex items-center justify-center h-full w-full">
-			<div class="m-auto">
-				<Spinner />
-			</div>
-		</div>
-	{/if}
 </div>

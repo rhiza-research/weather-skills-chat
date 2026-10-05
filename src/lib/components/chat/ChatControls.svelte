@@ -29,6 +29,10 @@
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
 	const MAX_SIZE = 45;
+	// Initial layout reports size 0 and fires onCollapse. That is not the user
+	// closing the pane, and treating it as one clears the artifacts flag after
+	// the pane has already been stretched open.
+	let userResizing = false;
 
 	$: panelOpen = $showCallOverlay || $showOverview || $showArtifacts;
 
@@ -41,7 +45,7 @@
 	};
 
 	export const openPane = () => {
-		if (!pane) return;
+		if (!pane || !($showControls && panelOpen)) return;
 		try {
 			const size = readStoredSize();
 			pane.resize(Math.max(minSize, Math.min(MAX_SIZE, size)));
@@ -105,8 +109,10 @@
 			resizeObserver.observe(container);
 		}
 
-		if (largeScreen && $showControls) {
-			tick().then(() => openPane());
+		if (largeScreen && $showControls && panelOpen) {
+			tick().then(() => {
+				if ($showControls && panelOpen) openPane();
+			});
 		}
 
 		return () => {
@@ -119,6 +125,17 @@
 		// the pane during chat load was wiping state and fighting openArtifactsPanel.
 		mediaQuery?.removeEventListener('change', handleMediaQuery);
 	});
+
+	// A closed panel must not stay stretched open. isExpanded() is true before
+	// the pane is registered, and that swallowed collapse left a wide empty shell.
+	$: if (largeScreen && pane && !($showControls && panelOpen)) {
+		try {
+			const size = pane.getSize?.();
+			if (typeof size === 'number' && size > 0) pane.collapse();
+		} catch (e) {
+			// Pane may already be gone.
+		}
+	}
 
 	let OverviewHost = null;
 	$: if ($showOverview && !OverviewHost) {
@@ -179,7 +196,12 @@
 		{/if}
 	{:else}
 		{#if $showControls && panelOpen}
-			<PaneResizer class="relative flex w-2 items-center justify-center bg-background group">
+			<PaneResizer
+				class="relative flex w-2 items-center justify-center bg-background group"
+				onDraggingChange={(dragging) => {
+					userResizing = dragging;
+				}}
+			>
 				<div class="z-10 flex h-7 w-5 items-center justify-center rounded-xs">
 					<EllipsisVertical className="size-4 invisible group-hover:visible" />
 				</div>
@@ -192,15 +214,27 @@
 			minSize={minSize}
 			maxSize={MAX_SIZE}
 			onResize={(size) => {
-				if ($showControls && pane?.isExpanded?.()) {
+				if ($showControls && panelOpen) {
 					if (size >= minSize && size <= MAX_SIZE) {
 						localStorage.chatControlsSize = size;
 					}
+					return;
+				}
+				if (size > 0) {
+					queueMicrotask(() => {
+						if ($showControls && ($showArtifacts || $showOverview || $showCallOverlay)) return;
+						try {
+							if ((pane?.getSize?.() ?? 0) > 0) pane.collapse();
+						} catch (e) {
+							// Pane may already be gone.
+						}
+					});
 				}
 			}}
 			onCollapse={() => {
-				// User dragged the pane closed — sync UI only.
-				// Preference is written by the navbar/close button.
+				// Library also calls this when the pane first lays out at size 0.
+				// Only a drag the user started should close the artifacts panel.
+				if (!userResizing) return;
 				showControls.set(false);
 				showArtifacts.set(false);
 			}}

@@ -171,6 +171,13 @@ def active_session_ids(chat_id: str | None) -> list[str]:
     return list(ACTIVE_INDEX.get(chat_id) or [])
 
 
+def watcher_session_ids(chat_id: str | None) -> list[str]:
+    """Sessions caching this chat, including the one that has it on screen."""
+    if not chat_id:
+        return []
+    return list(WATCH_INDEX.get(chat_id) or [])
+
+
 def _access_row(chat_id: str):
     chat = Chats.get_chat_by_id(chat_id)
     if chat is None:

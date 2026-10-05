@@ -256,7 +256,7 @@ def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         user_id = request_info["user_id"]
 
-        from open_webui.utils.chat_realtime import active_session_ids
+        from open_webui.utils.chat_realtime import active_session_ids, watcher_session_ids
 
         session_ids = list(
             set(
@@ -267,6 +267,7 @@ def get_event_emitter(request_info, update_db=True):
                     else []
                 )
                 + active_session_ids(request_info.get("chat_id"))
+                + watcher_session_ids(request_info.get("chat_id"))
             )
         )
 

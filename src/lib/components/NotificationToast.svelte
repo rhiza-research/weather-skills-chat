@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { settings, playingNotificationSound, isLastActiveTab } from '$lib/stores';
+	import { settings, isLastActiveTab } from '$lib/stores';
+	import { playNotificationSound } from '$lib/utils/notificationSound';
 
 	import { createEventDispatcher, getContext, onMount } from 'svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -23,16 +24,8 @@
 			return;
 		}
 
-		if ($settings?.notificationSound ?? true) {
-			if (!$playingNotificationSound && $isLastActiveTab) {
-				playingNotificationSound.set(true);
-
-				const audio = new Audio(`/audio/notification.mp3`);
-				audio.play().finally(() => {
-					// Ensure the global state is reset after the sound finishes
-					playingNotificationSound.set(false);
-				});
-			}
+		if (($settings?.notificationSound ?? true) && $isLastActiveTab) {
+			playNotificationSound();
 		}
 	});
 </script>

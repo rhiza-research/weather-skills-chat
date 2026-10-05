@@ -265,26 +265,27 @@ async def get_recent_chats(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    from open_webui.utils.artifacts import list_artifacts
+    from types import SimpleNamespace
 
-    chats = Chats.get_recent_workspace_chats(
+    refs = Chats.get_recent_workspace_chat_refs(
         user.id,
         organization_id,
         include_shared=not is_personal_org(organization_id),
     )
     rows = []
-    for chat in chats:
-        if not can_read_chat(user, chat):
+    for ref in refs:
+        probe = SimpleNamespace(
+            user_id=ref["user_id"],
+            organization_id=ref["organization_id"],
+            visibility=ref["visibility"],
+        )
+        if not can_read_chat(user, probe):
             continue
-        try:
-            artifacts = list_artifacts(chat.id)
-        except Exception:
-            log.debug("recent artifacts failed", exc_info=True)
-            artifacts = []
         rows.append(
             {
-                "chat": ChatResponse(**chat.model_dump()).model_dump(),
-                "artifacts": artifacts,
+                "id": ref["id"],
+                "updated_at": ref["updated_at"],
+                "revision": ref["revision"],
             }
         )
     return rows
