@@ -36,6 +36,16 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 
 Many settings can be changed by an admin while the app runs, and the app stores the new value. When a setting's variable is present in the server's environment, the environment always wins, even when its value is empty, and changes made in the app are ignored. When the variable is absent, the app uses the stored value, unless `ENABLE_PERSISTENT_CONFIG` is false, in which case it uses the built-in default. `ENABLE_PERSISTENT_CONFIG` is true by default.
 
+## Model providers
+
+The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `ENABLE_OLLAMA_API` | `false` | Connects the app to Ollama servers. When it is off, the app does not look for an Ollama server. |
+
+The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` by default. In a chart deployment the chart therefore decides whether the Ollama API is on, and turning it on or off in the admin settings has no effect.
+
 ## First admin
 
 When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` are set, it creates one account and makes it the owner of the platform organization. That account is the first platform admin, described on [[Organizations]]. Signup settings are not changed.
