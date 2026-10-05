@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import unittest
 from pathlib import Path
@@ -72,9 +73,10 @@ class LandlockBackendTest(unittest.TestCase):
                 "print((dst / 'x').read_text())\n",
                 encoding="utf-8",
             )
+            libdir = sysconfig.get_config_var("LIBDIR")
             cmd = launcher_command(
                 writable=default_writable_paths(tmp, "/tmp"),
-                readable=default_readable_paths(),
+                readable=default_readable_paths(extra=[libdir] if libdir else None),
                 cwd=tmp,
                 argv=["python3", str(script)],
                 backend="landlock_only",
