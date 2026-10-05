@@ -32,6 +32,8 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `sandbox.skillSandlock` is off by default, which turns off the skill confinement described on [[Skill Packs]].
 - `skillVenvs.enabled` gives each pod its own volume for skill environments, and `skillVenvs.maxBytes` sets how much of it skills may use. See [[Skill Packs]].
 - `langfuse.enabled` turns [[Tracing]] on or off.
+- `webui.url` sets `WEBUI_URL`, described below.
+- `redis.url` sets `REDIS_URL` for the [[MCP Endpoint]]. The chart does not install Redis.
 
 ## How settings are read
 
@@ -62,7 +64,7 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 | Env var | Default | Effect |
 |-|-|-|
 | `WEBUI_NAME` | `Weather Skills` | App name |
-| `WEBUI_URL` | `http://localhost:3000` | The app's public address, used in links in emails and in what the model sends users |
+| `WEBUI_URL` | `http://localhost:3000` | The app's public address, used in links in emails and in what the model sends users, and as the address of the [[MCP Endpoint]] |
 | `WEBUI_FAVICON_URL` | `<WEBUI_URL>/static/favicon.png` | Browser tab icon |
 | `WEBUI_HELP_EMAIL` | `help@weather-skills.org` | Support address shown to users when something fails |
 | `WEBUI_IMAGE_TAG` | empty | Release label shown in the app; when empty, the app version is shown. The Helm chart sets it to the image tag. |
