@@ -66,7 +66,9 @@ docker rm -f weather-skills-chat weather-skills-h2
 
 The app needs a model provider: an OpenAI-compatible provider set with `OPENAI_API_BASE_URL` and `OPENAI_API_KEY`, or Ollama with `--ollama`. With neither, the app keeps its default OpenAI connection to `https://api.openai.com/v1` with no key, which an admin replaces in the admin settings.
 
-`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, the built-in email variables, and `REDIS_URL` when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
+MCP clients sign in over plain `http` only to `localhost`. When Docker runs on another machine, forward the app's port from the machine the browser and the MCP client run on, and set `WEBUI_URL` to that `localhost` address.
+
+`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, `MCP_OAUTH_ALLOWED_REDIRECT_URIS`, the built-in email variables, and `REDIS_URL` when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
 
 | Env var | Default | Effect |
 |-|-|-|

@@ -10,6 +10,14 @@ Settings > MCP in the app shows the endpoint's address, with a button to copy it
 - claude.ai: add a custom connector with the endpoint's address.
 - Other MCP clients: give the client the endpoint's address.
 
+## Signing in
+
+A client must sign in to an account before it can list or run anything. When a client connects, it opens a browser at the app. The user signs in to the app if they are not signed in already, and a page names the client and the account and asks the user to approve or deny the client. Once approved, the client acts as that account. It renews its sign-in without asking the user again, until the sign-in expires after a period without use or is revoked.
+
+Accounts waiting for approval cannot approve a client or use the endpoint. The account's role is checked on every call, so an account that loses its access in the app also loses it on the endpoint.
+
+After approval, the browser returns to the client. Only `http` addresses on the local machine are always allowed, which covers a client such as Claude Code running on the user's machine. Any other return address must be listed in `MCP_OAUTH_ALLOWED_REDIRECT_URIS`. claude.ai returns to its own address, so it can connect only when that address is listed.
+
 ## Organizations
 
 Each call runs in one organization: the user's personal organization, unless the client sends an organization header naming another organization the user is a member of. Settings > MCP shows that header for the organization active in the app, and the Claude Code command includes it. A call that names an organization the user is not a member of, or an inactive one, is refused.
@@ -36,8 +44,13 @@ The user can open the session chat in the app and rename it, but cannot change i
 
 ## Settings
 
-The endpoint's address is the app's public address, `WEBUI_URL` on [[Deployment]], followed by `/mcp/`. The app does not start when `WEBUI_URL` is empty.
+The endpoint's address is the app's public address, `WEBUI_URL` on [[Deployment]], followed by `/mcp/`. The values `WEBUI_URL` may take are listed there. The endpoint reads it when the app starts, so a change made in the admin settings applies to the endpoint after a restart.
 
 | Env var | Default | Effect |
 |-|-|-|
 | `REDIS_URL` | empty | Redis server that one-time links are kept in. When it is empty, one-time links are refused. Open WebUI also keeps its settings in this Redis when it is set. |
+| `MCP_OAUTH_ALLOWED_REDIRECT_URIS` | empty | Comma-separated return addresses, besides local `http` addresses, that the browser may go back to after a user approves a client. Each entry is an exact address, or a prefix ending in `*`. A prefix entry matches an address whose scheme, host, and port equal the entry's exactly and whose path starts with the rest of the entry. Empty allows only local `http` addresses. |
+
+## Removing old sign-in records
+
+The app keeps a record of each client that registered and of each approval. The command `python -m open_webui.mcp_oauth.retention`, run from `/app/backend` inside an app container or pod so that it uses the app's environment and database, deletes the records that can no longer be used. It also removes a registered client that has no sign-in in use 30 days after the client registered. Nothing runs the command automatically, so schedule it.
