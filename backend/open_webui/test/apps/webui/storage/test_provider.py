@@ -28,20 +28,29 @@ def test_imports():
     provider.Storage
 
 
-def test_get_storage_provider():
+def _allow_azure_without_account(monkeypatch):
+    monkeypatch.setattr(
+        provider, "AZURE_STORAGE_ENDPOINT", "https://example.blob.core.windows.net"
+    )
+    monkeypatch.setattr(provider, "AZURE_STORAGE_KEY", "test-key")
+    monkeypatch.setattr(provider, "BlobServiceClient", MagicMock())
+
+
+def test_get_storage_provider(monkeypatch):
     Storage = provider.get_storage_provider("local")
     assert isinstance(Storage, provider.LocalStorageProvider)
     Storage = provider.get_storage_provider("s3")
     assert isinstance(Storage, provider.S3StorageProvider)
     Storage = provider.get_storage_provider("gcs")
     assert isinstance(Storage, provider.GCSStorageProvider)
+    _allow_azure_without_account(monkeypatch)
     Storage = provider.get_storage_provider("azure")
     assert isinstance(Storage, provider.AzureStorageProvider)
     with pytest.raises(RuntimeError):
         provider.get_storage_provider("invalid")
 
 
-def test_class_instantiation():
+def test_class_instantiation(monkeypatch):
     with pytest.raises(TypeError):
         provider.StorageProvider()
     with pytest.raises(TypeError):
@@ -53,6 +62,7 @@ def test_class_instantiation():
     provider.LocalStorageProvider()
     provider.S3StorageProvider()
     provider.GCSStorageProvider()
+    _allow_azure_without_account(monkeypatch)
     provider.AzureStorageProvider()
 
 

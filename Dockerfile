@@ -26,6 +26,9 @@ ARG BUILD_HASH
 
 WORKDIR /app
 
+# The test runner is a devDependency. The image does not need its browsers.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

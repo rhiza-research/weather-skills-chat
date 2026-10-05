@@ -261,7 +261,7 @@ def query_landlock_abi() -> int:
     """Return host Landlock ABI version, or -1 when unavailable."""
     try:
         return _get_landlock().query_abi()
-    except LandlockError:
+    except (LandlockError, OSError):
         return -1
 
 
