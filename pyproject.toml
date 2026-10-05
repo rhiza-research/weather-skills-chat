@@ -62,6 +62,8 @@ dependencies = [
     "elasticsearch==8.17.1",
 
     "transformers",
+    # Listed directly so tool.uv.sources applies to it.
+    "torch",
     "sentence-transformers==3.3.1",
     "accelerate",
     "colbert-ai==0.2.21",
@@ -161,6 +163,21 @@ dev = [
     "moto[s3]>=5.0.26",
     "gcp-storage-emulator>=2024.8.3",
 ]
+
+[tool.uv]
+# gcp-storage-emulator's fs imports pkg_resources, removed in setuptools 82.
+constraint-dependencies = ["setuptools<82"]
+
+# CPU torch keeps the CUDA packages (nvidia-*, triton) out of the lock.
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
