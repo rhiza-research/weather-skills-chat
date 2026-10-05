@@ -13,11 +13,19 @@ from sqlalchemy import text, create_engine
 log = logging.getLogger(__name__)
 
 
-def get_fast_api_client():
-    from main import app
+_fast_api_client = None
 
-    with TestClient(app) as c:
-        return c
+
+def get_fast_api_client():
+    global _fast_api_client
+    if _fast_api_client is None:
+        from main import app
+
+        # Stay entered for the whole run. Leaving the context closes the event
+        # loop, and the next test class cannot open another client.
+        _fast_api_client = TestClient(app)
+        _fast_api_client.__enter__()
+    return _fast_api_client
 
 
 class AbstractIntegrationTest:
@@ -36,7 +44,12 @@ class AbstractIntegrationTest:
                 [f"{key}={value}" for key, value in query_params.items()]
             )
             query_parts = f"?{query_parts}"
-        return "/".join(parts + path_parts) + query_parts
+        url = "/".join(parts + path_parts)
+        # Collection routes are registered with a trailing slash. Without it
+        # the request falls through to the frontend and comes back as HTML.
+        if (path == "" or path.endswith("/")) and not url.endswith("/"):
+            url += "/"
+        return url + query_parts
 
     @classmethod
     def setup_class(cls):
@@ -144,9 +157,14 @@ class AbstractPostgresTest(AbstractIntegrationTest):
         # rollback everything not yet committed
         Session.commit()
 
-        # truncate all tables
+        # Clear rows. DELETE works on the sqlite engine these tests actually
+        # use and on postgres.
+        bind = Session.get_bind()
+        if bind.dialect.name == "sqlite":
+            Session.execute(text("PRAGMA foreign_keys=OFF"))
         tables = [
             "auth",
+            "invitation",
             "chat",
             "chatidtag",
             "document",
@@ -158,5 +176,5 @@ class AbstractPostgresTest(AbstractIntegrationTest):
             '"user"',
         ]
         for table in tables:
-            Session.execute(text(f"TRUNCATE TABLE {table}"))
+            Session.execute(text(f"DELETE FROM {table}"))
         Session.commit()

@@ -56,13 +56,29 @@ class TestUsers(AbstractPostgresTest):
         _assert_user(data, "1")
         _assert_user(data, "2")
 
-        # update role
+        # Promoting an existing user to admin is rejected.
         with mock_webui_user(id="3"):
             response = self.fast_api_client.post(
                 self.create_url("/update/role"), json={"id": "2", "role": "admin"}
             )
+        assert response.status_code == 400
+
+        # The role endpoint still activates a pending account as a user.
+        self.users.insert_new_user(
+            id="4",
+            name="user 4",
+            email="user4@openwebui.com",
+            profile_image_url="/user4.png",
+            role="pending",
+        )
+        with mock_webui_user(id="3"):
+            response = self.fast_api_client.post(
+                self.create_url("/update/role"), json={"id": "4", "role": "user"}
+            )
         assert response.status_code == 200
-        _assert_user([response.json()], "2", role="admin")
+        assert response.json()["id"] == "4"
+        assert response.json()["role"] == "user"
+        self.users.delete_user_by_id("4")
 
         # Get all users
         with mock_webui_user(id="3"):
@@ -71,7 +87,7 @@ class TestUsers(AbstractPostgresTest):
         assert len(response.json()) == 2
         data = response.json()
         _assert_user(data, "1")
-        _assert_user(data, "2", role="admin")
+        _assert_user(data, "2")
 
         # Get (empty) user settings
         with mock_webui_user(id="2"):
@@ -123,7 +139,11 @@ class TestUsers(AbstractPostgresTest):
         with mock_webui_user(id="1"):
             response = self.fast_api_client.get(self.create_url("/2"))
         assert response.status_code == 200
-        assert response.json() == {"name": "user 2", "profile_image_url": "/user2.png"}
+        assert response.json() == {
+            "name": "user 2",
+            "profile_image_url": "/user2.png",
+            "active": False,
+        }
 
         # Update user by id
         with mock_webui_user(id="1"):
@@ -147,7 +167,7 @@ class TestUsers(AbstractPostgresTest):
         _assert_user(
             data,
             "2",
-            role="admin",
+            role="user",
             name="user 2 updated",
             email="user2-updated@openwebui.com",
             profile_image_url="/user2-updated.png",

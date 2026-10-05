@@ -40,6 +40,7 @@ dependencies = [
 
 
     "RestrictedPython==8.0",
+    "sandlock>=0.8.6",
 
     "loguru==0.7.2",
     "asgiref==3.8.1",
@@ -102,7 +103,7 @@ dependencies = [
     "authlib==1.4.1",
 
     "black==25.1.0",
-    "langfuse==2.44.0",
+    "langfuse==4.14.4",
     "youtube-transcript-api==1.0.3",
     "pytube==15.0.0",
 
@@ -114,14 +115,10 @@ dependencies = [
     "google-auth-httplib2",
     "google-auth-oauthlib",
 
-    "docker~=7.1.0",
-    "pytest~=8.3.2",
-    "pytest-docker~=3.1.1",
-
     "googleapis-common-protos==1.63.2",
     "google-cloud-storage==2.19.0",
 
-    "azure-identity==1.20.0",
+    "azure-identity==1.21.0",
     "azure-storage-blob==12.24.1",
 
     "ldap3==2.9.1",
@@ -130,10 +127,17 @@ dependencies = [
 
     "tencentcloud-sdk-python==3.0.1336",
 
-    "gcp-storage-emulator>=2024.8.3",
-
-    "moto[s3]>=5.0.26",
-
+    "opentelemetry-api==1.44.0",
+    "opentelemetry-sdk==1.44.0",
+    "opentelemetry-exporter-otlp==1.44.0",
+    "opentelemetry-instrumentation==0.65b0",
+    "opentelemetry-instrumentation-fastapi==0.65b0",
+    "opentelemetry-instrumentation-sqlalchemy==0.65b0",
+    "opentelemetry-instrumentation-redis==0.65b0",
+    "opentelemetry-instrumentation-requests==0.65b0",
+    "opentelemetry-instrumentation-logging==0.65b0",
+    "opentelemetry-instrumentation-httpx==0.65b0",
+    "opentelemetry-instrumentation-aiohttp-client==0.65b0",
 ]
 readme = "README.md"
 requires-python = ">= 3.11, < 3.13.0a1"
@@ -151,13 +155,21 @@ classifiers = [
 [project.scripts]
 open-webui = "open_webui:app"
 
+[dependency-groups]
+dev = [
+    "docker~=7.1.0",
+    "pytest~=8.3.2",
+    "pytest-docker~=3.1.1",
+    "moto[s3]>=5.0.26",
+    "gcp-storage-emulator>=2024.8.3",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
-dev-dependencies = []
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -175,13 +187,15 @@ exclude = [
     ".gitignore",
     ".webui_secret_key",
     "dev.sh",
-    "requirements.txt",
     "start.sh",
     "start_windows.bat",
     "webui.db",
     "chroma.sqlite3",
 ]
 force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md", build = "open_webui/frontend" }
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file

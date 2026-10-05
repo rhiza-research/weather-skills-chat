@@ -26,6 +26,9 @@ ARG BUILD_HASH
 
 WORKDIR /app
 
+# The test runner is a devDependency. The image does not need its browsers.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -141,27 +144,31 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
-# install python dependencies
-COPY --chown=$UID:$GID ./backend/requirements.txt ./requirements.txt
+# Prod dependencies come from uv.lock. The dev group is omitted.
+# Torch is installed separately so the CUDA and CPU images can use different indexes.
+COPY --chown=$UID:$GID pyproject.toml uv.lock /app/
+ENV VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH" \
+    UV_PROJECT=/app \
+    UV_PYTHON_DOWNLOADS=never
 
 RUN mkdir -p /app/backend/cache /app/backend/data && \
     pip3 install --no-cache-dir uv && \
+    uv venv --python /usr/local/bin/python3 "$VIRTUAL_ENV" && \
+    uv sync --frozen --no-dev --no-install-project \
+      --no-install-package torch \
+      --no-install-package torchvision \
+      --no-install-package torchaudio && \
     if [ "$USE_CUDA" = "true" ]; then \
-    # If you use CUDA the whisper and embedding model will be downloaded on first use
-    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/$USE_CUDA_DOCKER_VER --no-cache-dir && \
-    uv pip install --system -r requirements.txt --no-cache-dir && \
-    python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
-    python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])" && \
-    python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['TIKTOKEN_ENCODING_NAME'])"; \
+    uv pip install --python "$VIRTUAL_ENV/bin/python" torch torchvision torchaudio --index-url https://download.pytorch.org/whl/$USE_CUDA_DOCKER_VER --no-cache-dir; \
     else \
-    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir && \
-    uv pip install --system -r requirements.txt --no-cache-dir && \
+    uv pip install --python "$VIRTUAL_ENV/bin/python" torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir; \
+    fi && \
     python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])" && \
-    python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['TIKTOKEN_ENCODING_NAME'])"; \
-    fi; \
+    python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['TIKTOKEN_ENCODING_NAME'])" && \
     mkdir -p /app/backend/cache /app/backend/data && \
-    chown -R $UID:$GID /app/backend/cache /app/backend/data/
+    chown -R $UID:$GID /app/.venv /app/backend/cache /app/backend/data
 
 
 

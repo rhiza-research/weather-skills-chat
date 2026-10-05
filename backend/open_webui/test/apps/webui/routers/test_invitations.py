@@ -41,7 +41,7 @@ class TestInvitations(AbstractPostgresTest):
         from open_webui.internal.db import Session
         from sqlalchemy import text
 
-        Session.execute(text("TRUNCATE TABLE invitation"))
+        Session.execute(text("DELETE FROM invitation"))
         Session.commit()
 
     def _smtp(self):
@@ -321,6 +321,7 @@ class TestInvitations(AbstractPostgresTest):
             sent["description"] = description
 
         with patch("open_webui.utils.invite_email.deliver_signup_alert", fake_alert):
+            self.fast_api_client.app.state.config.ENABLE_SIGNUP = True
             response = self.fast_api_client.post(
                 "/api/v1/auths/signup",
                 json={

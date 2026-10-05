@@ -64,6 +64,10 @@ class SyncPackToolsTransactionTest(unittest.TestCase):
             pack_row.commit_sha = pack.commit_sha
             pack_row.local_path = pack.local_path
             pack_row.meta = {}
+            pack_row.organization_id = None
+            pack_row.visibility = "private"
+            pack_row.enabled_by_default = True
+            pack_row.is_active = True
             pack_row.access_control = None
             pack_row.created_at = 0
             pack_row.updated_at = 0

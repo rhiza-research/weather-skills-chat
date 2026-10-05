@@ -28,20 +28,29 @@ def test_imports():
     provider.Storage
 
 
-def test_get_storage_provider():
+def _allow_azure_without_account(monkeypatch):
+    monkeypatch.setattr(
+        provider, "AZURE_STORAGE_ENDPOINT", "https://example.blob.core.windows.net"
+    )
+    monkeypatch.setattr(provider, "AZURE_STORAGE_KEY", "test-key")
+    monkeypatch.setattr(provider, "BlobServiceClient", MagicMock())
+
+
+def test_get_storage_provider(monkeypatch):
     Storage = provider.get_storage_provider("local")
     assert isinstance(Storage, provider.LocalStorageProvider)
     Storage = provider.get_storage_provider("s3")
     assert isinstance(Storage, provider.S3StorageProvider)
     Storage = provider.get_storage_provider("gcs")
     assert isinstance(Storage, provider.GCSStorageProvider)
+    _allow_azure_without_account(monkeypatch)
     Storage = provider.get_storage_provider("azure")
     assert isinstance(Storage, provider.AzureStorageProvider)
     with pytest.raises(RuntimeError):
         provider.get_storage_provider("invalid")
 
 
-def test_class_instantiation():
+def test_class_instantiation(monkeypatch):
     with pytest.raises(TypeError):
         provider.StorageProvider()
     with pytest.raises(TypeError):
@@ -53,6 +62,7 @@ def test_class_instantiation():
     provider.LocalStorageProvider()
     provider.S3StorageProvider()
     provider.GCSStorageProvider()
+    _allow_azure_without_account(monkeypatch)
     provider.AzureStorageProvider()
 
 
@@ -197,6 +207,52 @@ class TestS3StorageProvider:
         storage = provider.S3StorageProvider()
         assert storage.s3_client is not None
         assert storage.bucket_name == provider.S3_BUCKET_NAME
+
+
+def _ensure_gcs_application_credentials():
+    """GCSStorageProvider() builds a client as soon as this module is imported.
+
+    A developer machine often already has application-default credentials.
+    CI does not. A throwaway key lets the client construct; the emulator
+    fixture replaces that client before any storage request.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    try:
+        google.auth.default()
+        return
+    except DefaultCredentialsError:
+        pass
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    info = {
+        "type": "service_account",
+        "project_id": "test-project",
+        "private_key_id": "test",
+        "private_key": pem,
+        "client_email": "test@test-project.iam.gserviceaccount.com",
+        "client_id": "0",
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }
+    path = Path(tempfile.gettempdir()) / "weather-skills-chat-pytest-gcs.json"
+    path.write_text(json.dumps(info))
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(path)
+
+
+_ensure_gcs_application_credentials()
 
 
 class TestGCSStorageProvider:
