@@ -13,7 +13,6 @@ import logging
 import os
 import shutil
 import sys
-import sysconfig
 from pathlib import Path
 from typing import Literal, Optional, Sequence
 
@@ -267,16 +266,11 @@ def default_readable_paths(extra: Optional[Sequence[str | Path]] = None) -> list
     for p in extra or ():
         if p and Path(p).exists():
             paths.append(str(Path(p).resolve()))
-    # Ensure uv/python dirname is covered even if installed outside /usr.
-    # A venv interpreter is a symlink onto a shared libpython that lives
-    # outside /usr (uv, or the GitHub Actions Python toolchain).
+    # Ensure uv/python dirname is covered even if installed outside /usr
     for binary in ("uv", "python3", "python"):
         resolved = shutil.which(binary)
         if resolved:
             paths.append(str(Path(resolved).resolve().parent))
-    libdir = sysconfig.get_config_var("LIBDIR")
-    if libdir and Path(libdir).is_dir():
-        paths.append(str(Path(libdir).resolve()))
     return _dedupe_paths(paths)
 
 

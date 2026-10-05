@@ -53,10 +53,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Install system Python
+        run: sudo apt-get update && sudo apt-get install -y python3.11
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -65,7 +63,9 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install backend
-        run: uv sync --frozen --no-install-project
+        env:
+          UV_PYTHON_DOWNLOADS: never
+        run: uv sync --frozen --no-install-project --python /usr/bin/python3.11
 
       - name: Run pytest
         id: pytest
