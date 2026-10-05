@@ -195,3 +195,20 @@ ENV WEBUI_BUILD_VERSION=${BUILD_HASH}
 ENV DOCKER=true
 
 CMD [ "bash", "start.sh"]
+
+######## Backend tests ########
+# The test service of the suite compose profile builds this target. It adds the dev dependency
+# group from uv.lock to the application image. --inexact keeps the torch build installed above, and
+# --no-cache keeps the download cache out of the image.
+FROM base AS test
+
+RUN uv sync --frozen --no-install-project --inexact --only-group dev --no-cache
+
+# The import paths CI gives pytest. Test modules import test.util and main.
+ENV PYTHONPATH=/app/backend:/app/backend/open_webui
+
+HEALTHCHECK NONE
+
+######## Application image ########
+# The last stage is the default target, so a build without --target produces the application image.
+FROM base AS app
