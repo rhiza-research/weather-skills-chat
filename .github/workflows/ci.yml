@@ -1,10 +1,8 @@
 name: CI
 
 on:
+  # Pull requests into any branch, so stacked pull requests get CI.
   pull_request:
-    branches:
-      - dev
-      - main
 
 concurrency:
   group: ci-${{ github.event.pull_request.number }}
