@@ -209,6 +209,52 @@ class TestS3StorageProvider:
         assert storage.bucket_name == provider.S3_BUCKET_NAME
 
 
+def _ensure_gcs_application_credentials():
+    """GCSStorageProvider() builds a client as soon as this module is imported.
+
+    A developer machine often already has application-default credentials.
+    CI does not. A throwaway key lets the client construct; the emulator
+    fixture replaces that client before any storage request.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    try:
+        google.auth.default()
+        return
+    except DefaultCredentialsError:
+        pass
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    info = {
+        "type": "service_account",
+        "project_id": "test-project",
+        "private_key_id": "test",
+        "private_key": pem,
+        "client_email": "test@test-project.iam.gserviceaccount.com",
+        "client_id": "0",
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }
+    path = Path(tempfile.gettempdir()) / "weather-skills-chat-pytest-gcs.json"
+    path.write_text(json.dumps(info))
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(path)
+
+
+_ensure_gcs_application_credentials()
+
+
 class TestGCSStorageProvider:
     Storage = provider.GCSStorageProvider()
     Storage.bucket_name = "my-bucket"
