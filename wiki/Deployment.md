@@ -34,6 +34,7 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `langfuse.enabled` turns [[Tracing]] on or off.
 - `webui.url` sets `WEBUI_URL`, described below.
 - `redis.url` sets `REDIS_URL` for the [[MCP Endpoint]]. The chart does not install Redis.
+- `mcp.oauthAllowedRedirectUris` sets `MCP_OAUTH_ALLOWED_REDIRECT_URIS`, described on [[MCP Endpoint]].
 
 ## How settings are read
 
@@ -68,6 +69,8 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 | `WEBUI_FAVICON_URL` | `<WEBUI_URL>/static/favicon.png` | Browser tab icon |
 | `WEBUI_HELP_EMAIL` | `help@weather-skills.org` | Support address shown to users when something fails |
 | `WEBUI_IMAGE_TAG` | empty | Release label shown in the app; when empty, the app version is shown. The Helm chart sets it to the image tag. |
+
+`WEBUI_URL` must be an `https` address, or an `http` address on the local machine. With any other value the app does not start.
 
 ## Formatting instruction
 
