@@ -3,7 +3,7 @@
 	import { createEventDispatcher, getContext } from 'svelte';
 
 	import { updateOrganizationMemberLimit } from '$lib/apis/organizations';
-	import { formatUsd } from '$lib/utils/usage';
+	import { formatCreditAmount, formatUsd } from '$lib/utils/usage';
 	import Modal from '$lib/components/common/Modal.svelte';
 
 	const i18n = getContext('i18n');
@@ -13,6 +13,7 @@
 	export let orgId = '';
 	export let member = null;
 	export let orgLimit = null;
+	export let credits = false;
 
 	let unlimited = false;
 	let limitUsd = 300;
@@ -107,7 +108,9 @@
 					</label>
 					{#if !unlimited}
 						<div class="flex items-center gap-1.5 mt-2">
-							<span class="text-sm text-gray-500">$</span>
+							{#if !credits}
+								<span class="text-sm text-gray-500">$</span>
+							{/if}
 							<input
 								class="w-full text-sm bg-transparent outline-hidden"
 								type="number"
@@ -116,12 +119,17 @@
 								bind:value={limitUsd}
 								placeholder="300"
 							/>
+							{#if credits}
+								<span class="text-sm text-gray-500 shrink-0">{$i18n.t('credits')}</span>
+							{/if}
 						</div>
 					{/if}
 					{#if orgLimit != null}
 						<div class="text-xs text-gray-500 mt-2">
 							{$i18n.t('Cannot exceed the organization monthly usage limit of {{limit}}.', {
-								limit: formatUsd(orgLimit)
+								limit: credits
+									? `${formatCreditAmount(orgLimit)} ${$i18n.t('credits')}`
+									: formatUsd(orgLimit)
 							})}
 						</div>
 					{/if}

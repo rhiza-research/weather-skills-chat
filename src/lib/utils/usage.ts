@@ -58,6 +58,12 @@ export const formatUsd = (n: number | null | undefined, fallback = '—'): strin
 	return `$${Number(n).toFixed(2)}`;
 };
 
+/** Same numeric value as USD, labeled for people who should not see a currency. */
+export const formatCreditAmount = (n: number | null | undefined, fallback = '—'): string => {
+	if (n == null || Number.isNaN(Number(n))) return fallback;
+	return Number(n).toFixed(2);
+};
+
 export const formatTokenCount = (n: number | null | undefined): string => {
 	if (n == null || Number.isNaN(Number(n))) return '—';
 	const value = Number(n);

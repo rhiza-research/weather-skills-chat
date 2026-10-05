@@ -25,7 +25,7 @@
 	import { createOrganization } from '$lib/apis/organizations';
 	import { getMyUsage } from '$lib/apis/usage';
 	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
-	import { formatUsd, usageBarPercent } from '$lib/utils/usage';
+	import { formatCreditAmount, usageBarPercent } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
@@ -236,8 +236,8 @@
 						{/if}
 					</div>
 					<div class="text-xs font-medium tabular-nums">
-						{formatUsd(usage.cost_usd, '$0.00')}{#if usage.effective_limit_usd != null}
-							/ {formatUsd(usage.effective_limit_usd)}{/if}
+						{formatCreditAmount(usage.cost_usd, '0.00')}{#if usage.effective_limit_usd != null}
+							/ {formatCreditAmount(usage.effective_limit_usd)}{/if}{' '}{$i18n.t('credits')}
 					</div>
 					{#if usage.effective_limit_usd != null}
 						<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
