@@ -73,10 +73,13 @@ class LandlockBackendTest(unittest.TestCase):
                 "print((dst / 'x').read_text())\n",
                 encoding="utf-8",
             )
+            extra = [sys.prefix]
             libdir = sysconfig.get_config_var("LIBDIR")
+            if libdir:
+                extra.append(libdir)
             cmd = launcher_command(
                 writable=default_writable_paths(tmp, "/tmp"),
-                readable=default_readable_paths(extra=[libdir] if libdir else None),
+                readable=default_readable_paths(extra=extra),
                 cwd=tmp,
                 argv=["python3", str(script)],
                 backend="landlock_only",
