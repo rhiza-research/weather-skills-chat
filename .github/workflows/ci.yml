@@ -127,11 +127,20 @@ jobs:
         run: docker logout ghcr.io
 
       # Fails when Landlock is unavailable in the container or the skill does not run under it.
-      - name: Run a skill under the Landlock sandbox
+      - name: Run a skill under the default Landlock sandbox backend
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE/scripts/ci_skill_sandbox_check.py:/app/backend/ci_skill_sandbox_check.py:ro" \
             -e WEBUI_SECRET_KEY=ci-sandbox-check-secret \
+            weather-skills-chat:e2e \
+            python ci_skill_sandbox_check.py
+
+      - name: Run a skill under the landlock_only sandbox backend
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/scripts/ci_skill_sandbox_check.py:/app/backend/ci_skill_sandbox_check.py:ro" \
+            -e WEBUI_SECRET_KEY=ci-sandbox-check-secret \
+            -e SKILL_LANDLOCK_BACKEND=landlock_only \
             weather-skills-chat:e2e \
             python ci_skill_sandbox_check.py
 
