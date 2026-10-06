@@ -92,6 +92,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -116,8 +118,13 @@ jobs:
             USE_CUDA=false
             USE_OLLAMA=false
             BUILD_HASH=${{ github.sha }}
-          cache-from: ${{ env.USE_REGISTRY_CACHE == 'true' && 'type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-ci' || '' }}
-          cache-to: ${{ env.USE_REGISTRY_CACHE == 'true' && 'type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-ci,mode=max' || '' }}
+          cache-from: ${{ env.USE_REGISTRY_CACHE == 'true' && format('type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-ci-{0}', github.event.pull_request.number) || '' }}
+          cache-to: ${{ env.USE_REGISTRY_CACHE == 'true' && format('type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-ci-{0},mode=max', github.event.pull_request.number) || '' }}
+
+      # The login action logs out only at job end; the steps below run PR code.
+      - name: Log out of GHCR
+        if: always() && env.USE_REGISTRY_CACHE == 'true'
+        run: docker logout ghcr.io
 
       - name: Start app
         run: |
