@@ -18,7 +18,7 @@ EXPECTED_LINE = "ci-sandbox-check skill ran"
 
 SKILL_SCRIPT = (
     "# /// script\n"
-    '# requires-python = ">=3.11"\n'
+    '# requires-python = ">=3.12,<3.13"\n'
     "# dependencies = []\n"
     "# ///\n"
     f"print({EXPECTED_LINE!r})\n"
