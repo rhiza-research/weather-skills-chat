@@ -79,7 +79,8 @@ jobs:
 
   e2e:
     name: Playwright smoke tests
-    runs-on: ubuntu-latest
+    # ubuntu-22.04 ships kernel 6.8, the series staging and prod run.
+    runs-on: ubuntu-22.04
     # Job-level permissions replace the workflow-level set.
     permissions:
       contents: read
