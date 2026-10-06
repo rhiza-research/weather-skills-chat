@@ -130,17 +130,31 @@ jobs:
       # Fails when Landlock is unavailable in the container or the skill does not run under it.
       - name: Run a skill under the default Landlock sandbox backend
         run: |
+          # The volumes and path variables match staging's Helm values.
           docker run --rm \
             -v "$GITHUB_WORKSPACE/scripts/ci_skill_sandbox_check.py:/app/backend/ci_skill_sandbox_check.py:ro" \
+            -v /var/skill-venvs \
+            -v /mnt/gcs-data \
             -e WEBUI_SECRET_KEY=ci-sandbox-check-secret \
+            -e SKILL_VENV_ROOT=/var/skill-venvs \
+            -e SKILLS_DIR=/mnt/gcs-data/skills \
+            -e ARTIFACTS_DIR=/mnt/gcs-data/artifacts \
+            -e USER_CACHES_DIR=/mnt/gcs-data/user_caches \
             weather-skills-chat:e2e \
             python ci_skill_sandbox_check.py
 
       - name: Run a skill under the landlock_only sandbox backend
         run: |
+          # The volumes and path variables match staging's Helm values.
           docker run --rm \
             -v "$GITHUB_WORKSPACE/scripts/ci_skill_sandbox_check.py:/app/backend/ci_skill_sandbox_check.py:ro" \
+            -v /var/skill-venvs \
+            -v /mnt/gcs-data \
             -e WEBUI_SECRET_KEY=ci-sandbox-check-secret \
+            -e SKILL_VENV_ROOT=/var/skill-venvs \
+            -e SKILLS_DIR=/mnt/gcs-data/skills \
+            -e ARTIFACTS_DIR=/mnt/gcs-data/artifacts \
+            -e USER_CACHES_DIR=/mnt/gcs-data/user_caches \
             -e SKILL_LANDLOCK_BACKEND=landlock_only \
             weather-skills-chat:e2e \
             python ci_skill_sandbox_check.py
