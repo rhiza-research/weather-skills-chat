@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Run a minimal skill through run_skill with the Landlock sandbox, inside the app image.
 
-Exits non-zero unless the skill ran sandboxed and printed its line. Run from /app/backend so
+Exits non-zero unless the skill ran sandboxed and printed its line, and, when
+SKILL_LANDLOCK_BACKEND names a backend, ran under that backend. Run from /app/backend so
 open_webui imports.
 """
 
 import asyncio
+import os
 import sys
 
 from open_webui.env import SKILLS_DIR
@@ -50,6 +52,9 @@ def main() -> int:
         failures.append("sandlock is not true")
     if not result.get("landlock_backend"):
         failures.append("landlock_backend is not set")
+    requested = os.environ.get("SKILL_LANDLOCK_BACKEND", "").strip().lower()
+    if requested in ("sandlock", "landlock_only") and result.get("landlock_backend") != requested:
+        failures.append(f"landlock_backend is not {requested!r}")
     if EXPECTED_LINE not in (result.get("stdout") or ""):
         failures.append(f"stdout does not contain {EXPECTED_LINE!r}")
     if failures:
