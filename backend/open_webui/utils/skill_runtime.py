@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import signal
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -345,6 +346,8 @@ async def run_skill(
             skill_path,
             user_cache,
             *skill_pack_readable_roots(skill_path, skills_root=SKILLS_DIR),
+            # Skills' uv inspects the app's active virtual environment.
+            Path(sys.prefix),
         ]
         if chat_venv_root is not None:
             readable_extra.append(chat_venv_root)
