@@ -153,6 +153,17 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Chromium so a skill can use chromium-based rendering. fonts-liberation is the
+# smallest font set Chromium will actually paint with. The wrapper points
+# Chromium at TMPDIR instead of /dev/shm.
+COPY scripts/skill-chromium /usr/local/bin/skill-chromium
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends chromium fonts-liberation && \
+    chmod 755 /usr/local/bin/skill-chromium && \
+    rm -rf /var/lib/apt/lists/* && \
+    chromium --version
+ENV BROWSER_PATH=/usr/local/bin/skill-chromium
+
 # Prod dependencies come from uv.lock. The dev group is omitted.
 # Torch is installed separately so the CUDA and CPU images can use different indexes.
 COPY --chown=$UID:$GID pyproject.toml uv.lock /app/

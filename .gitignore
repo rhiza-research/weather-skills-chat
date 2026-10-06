@@ -24,6 +24,7 @@ build/
 .vite/
 test-results/
 e2e/.auth/
+e2e/.data/
 e2e/test-results/
 e2e/playwright-report/
 npm-debug.log*

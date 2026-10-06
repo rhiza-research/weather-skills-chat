@@ -1,0 +1,11 @@
+#!/bin/sh
+# Chromium for skill rendering. Keep scratch files in TMPDIR (writable in the
+# skill sandbox). Do not use /dev/shm: that mount is shared by every process
+# in the container.
+set -eu
+bin="${SKILL_CHROMIUM_BIN:-/usr/bin/chromium}"
+if [ ! -x "$bin" ]; then
+	echo "skill-chromium: not executable: $bin" >&2
+	exit 127
+fi
+exec "$bin" --disable-dev-shm-usage --disable-gpu "$@"

@@ -6,7 +6,7 @@ Weather Skills Chat runs as one container image, usually on Kubernetes with the 
 
 The image is published as `ghcr.io/rhiza-research/weather-skills-chat` for `linux/amd64`. Images are built from the `main` and `dev` branches and from release tags shaped like `vX.Y.Z` or `vX.Y.Z-<suffix>`. Each image is tagged with its branch or release version and with its commit, and builds of `main`, the default branch, are also tagged `latest`.
 
-The image includes Python and the `git` and `uv` tools that [[Skill Packs]] need. The speech, embedding, and tokenizer models are built into the image outside the data directory, so mounting a data volume does not hide them.
+The image includes Python and the `git` and `uv` tools that [[Skill Packs]] need, and Chromium so that a skill can use chromium-based rendering features. The speech, embedding, and tokenizer models are built into the image outside the data directory, so mounting a data volume does not hide them.
 
 | Env var | Default | Effect |
 |-|-|-|
