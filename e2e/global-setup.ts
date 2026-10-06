@@ -8,8 +8,9 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function globalSetup(_config: FullConfig) {
 	const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3000';
+	const apiURL = process.env.PLAYWRIGHT_API_URL || baseURL;
 
-	const api = await request.newContext({ baseURL });
+	const api = await request.newContext({ baseURL: apiURL });
 	const deadline = Date.now() + 120_000;
 	let last = 'app did not become ready';
 

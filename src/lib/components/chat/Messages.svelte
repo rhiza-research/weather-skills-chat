@@ -41,6 +41,7 @@
 	export let addMessages: Function = () => {};
 
 	export let readOnly = false;
+	export let paintKey = 0;
 
 	export let bottomPadding = false;
 	export let autoScroll;
@@ -486,6 +487,7 @@
 							{addMessages}
 							{triggerScroll}
 							{readOnly}
+							{paintKey}
 						/>
 					{/each}
 				</div>

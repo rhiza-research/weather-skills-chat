@@ -5,6 +5,15 @@ export type ChatScroll = {
 	unseen?: boolean;
 	/** Message sitting at the bottom of the screen when scrolling stopped. */
 	messageId?: string;
+	/** That message's top, relative to the top of the message pane. */
+	messageOffset?: number;
+	/** img alt, or a snippet of the text line, at the top of the pane. */
+	anchorKind?: 'img' | 'text';
+	anchorKey?: string;
+	/** Which copy, when the same image or line is repeated. */
+	anchorIndex?: number;
+	/** That line's top, relative to the top of the message pane. */
+	anchorOffset?: number;
 };
 
 const chatScroll = new Map<string, ChatScroll>();

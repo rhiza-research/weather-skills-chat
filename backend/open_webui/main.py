@@ -1267,6 +1267,18 @@ async def chat_completion(
                         "revision": conflict.revision,
                     },
                 ) from conflict
+            from open_webui.utils.chat_realtime import emit_chat_turn
+
+            try:
+                await emit_chat_turn(
+                    user.id,
+                    metadata["chat_id"],
+                    metadata.get("session_id"),
+                    turn.get("user_message"),
+                    turn.get("assistant_message"),
+                )
+            except Exception:
+                log.debug("chat turn emit failed", exc_info=True)
 
     except HTTPException:
         raise

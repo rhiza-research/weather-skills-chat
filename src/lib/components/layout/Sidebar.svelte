@@ -77,17 +77,22 @@
 	/** Which chat time-range sections are expanded in the sidebar. Missing keys default to open. */
 	let openTimeRanges: Record<string, boolean> = {};
 
+	const TIME_RANGE_ORDER = ['Today', 'Yesterday', 'Previous 7 days', 'Previous 30 days'];
+
 	const groupChatsByTimeRange = (chatList: any[] | null | undefined) => {
-		const groups: { time_range: string; chats: any[] }[] = [];
+		const grouped = new Map<string, any[]>();
+		const extra: string[] = [];
 		for (const chat of chatList ?? []) {
-			const last = groups.at(-1);
-			if (!last || last.time_range !== chat.time_range) {
-				groups.push({ time_range: chat.time_range, chats: [chat] });
-			} else {
-				last.chats.push(chat);
+			const range = chat.time_range || 'Today';
+			if (!grouped.has(range)) {
+				grouped.set(range, []);
+				if (!TIME_RANGE_ORDER.includes(range)) extra.push(range);
 			}
+			grouped.get(range)!.push(chat);
 		}
-		return groups;
+		return [...TIME_RANGE_ORDER.filter((range) => grouped.has(range)), ...extra].map(
+			(time_range) => ({ time_range, chats: grouped.get(time_range) ?? [] })
+		);
 	};
 
 	const timeRangeKey = (scope: string, timeRange: string) => `${scope}::${timeRange}`;
@@ -301,6 +306,7 @@
 				...newcomers,
 				...existing.map((c) => (latestById[c.id] ? { ...c, ...latestById[c.id] } : c))
 			];
+			merged.sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
 			if (newcomers.length > 0 || merged.some((c, i) => c !== existing[i])) {
 				await chats.set(merged);
 			}

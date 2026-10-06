@@ -33,6 +33,8 @@ const TURN_SILENCE_MS = 30_000;
 const TURN_CHECK_MS = 5_000;
 
 let openId = '';
+/** Chats this tab has opened. A revision ping can refresh these on the next open. */
+const subscribed = new Set<string>();
 const liveTurns = new Map<string, string>();
 let recentOrganizationId = '';
 
@@ -275,6 +277,7 @@ function evict() {
 		const entry = ordered.shift();
 		if (!entry) break;
 		entries.delete(entry.id);
+		subscribed.delete(entry.id);
 	}
 }
 
@@ -374,11 +377,17 @@ function setRevision(id: string, revision: number) {
 function noteRemoteRevision(id: string, revision: number, token: string) {
 	const entry = entries.get(id);
 	if (!entry || revision <= entry.revision) return;
-	if (isLive(id)) {
+	// chat:updated has no transcript. A chat this tab has opened is already on
+	// the socket, so the ping is ignored and the socket events write the
+	// screen. The revision is kept for the next open. A chat that is only in
+	// the preload cache is not on that socket, and downloads now.
+	if (isLive(id) || subscribed.has(id)) {
 		entry.later = Math.max(entry.later ?? 0, revision);
 		return;
 	}
-	refetchChat(token, id);
+	refetchChat(token, id)?.then((document) => {
+		if (document && id === openId) notify(id, document);
+	});
 }
 
 function catchUp(id: string) {
@@ -392,6 +401,7 @@ function catchUp(id: string) {
 
 export function dropChat(id: string) {
 	entries.delete(id);
+	subscribed.delete(id);
 	viewingLeaf.delete(id);
 	chatArtifactLists.update((current) => {
 		const next = { ...current };
@@ -406,6 +416,7 @@ export function dropOrganization(organizationId: string) {
 	for (const [id, entry] of [...entries.entries()]) {
 		if (entry.organizationId === organizationId) {
 			entries.delete(id);
+			subscribed.delete(id);
 		}
 	}
 	syncWatch();
@@ -413,6 +424,7 @@ export function dropOrganization(organizationId: string) {
 
 export function setOpenChat(id: string) {
 	openId = id && id !== 'local' ? id : '';
+	if (openId) subscribed.add(openId);
 	const entry = openId ? entries.get(openId) : undefined;
 	if (entry) entry.touched = Date.now();
 	syncWatch();
@@ -445,10 +457,21 @@ export function refetchChat(token: string, id: string) {
 }
 
 export async function documentForOpen(token: string, id: string) {
+	const entry = entries.get(id);
+	if (entry?.document) {
+		// The screen paints this copy now. A newer revision downloads behind it.
+		if (entry.later != null && entry.later > entry.revision && !isLive(id)) {
+			entry.later = undefined;
+			void refetchChat(token, id)?.then((document) => {
+				if (document && id === get(chatId)) notify(id, document);
+			});
+		}
+		return { document: entry.document, fromMemory: true };
+	}
 	const pending = inflight.get(id);
 	if (pending) await pending.catch(() => null);
 	if (hasDocument(id)) {
-		return { document: entries.get(id)?.document, fromMemory: true };
+		return { document: entries.get(id)?.document, fromMemory: false };
 	}
 	const document = await loadCachedChat(token, id, false);
 	return { document, fromMemory: false };
@@ -478,6 +501,7 @@ function noteStreamGap(id: string, token: string) {
 const TURN_ACTIVITY_TYPES = new Set([
 	'status',
 	'chat:completion',
+	'chat:turn',
 	'chat:message:delta',
 	'message',
 	'chat:message',
@@ -525,6 +549,52 @@ export function applyCachedStreamEvent(event: any, token: string) {
 	}
 }
 
+function extendsLeaf(messages: Record<string, any>, localId: string, remoteId: string) {
+	if (!remoteId || remoteId === localId) return false;
+	let id = remoteId;
+	const seen = new Set<string>();
+	while (id && !seen.has(id)) {
+		seen.add(id);
+		const parentId = messages[id]?.parentId ?? null;
+		if (parentId === localId) return true;
+		id = parentId;
+	}
+	return false;
+}
+
+function adoptTurn(messages: Record<string, any>, userMessage: any, assistantMessage: any) {
+	const userId = userMessage.id;
+	const assistantId = assistantMessage.id;
+	if (!messages[userId]) {
+		messages[userId] = {
+			...userMessage,
+			role: userMessage.role || 'user',
+			childrenIds: [...(userMessage.childrenIds || [])]
+		};
+	}
+	const user = messages[userId];
+	if (!user.childrenIds) user.childrenIds = [];
+	if (!user.childrenIds.includes(assistantId)) user.childrenIds.push(assistantId);
+	if (!messages[assistantId]) {
+		messages[assistantId] = {
+			...assistantMessage,
+			role: 'assistant',
+			content: assistantMessage.content ?? '',
+			parentId: userId,
+			childrenIds: [...(assistantMessage.childrenIds || [])],
+			done: assistantMessage.done === true
+		};
+	} else if (!messages[assistantId].parentId) {
+		messages[assistantId].parentId = userId;
+	}
+	const parentId = user.parentId;
+	if (parentId && messages[parentId]) {
+		const parent = messages[parentId];
+		if (!parent.childrenIds) parent.childrenIds = [];
+		if (!parent.childrenIds.includes(userId)) parent.childrenIds.push(userId);
+	}
+}
+
 function writeCachedStream(event: any, token: string) {
 	const id = event?.chat_id;
 	const entry = entries.get(id);
@@ -542,14 +612,33 @@ function writeCachedStream(event: any, token: string) {
 	}
 	const messageId = event?.message_id;
 	if (!messageId) return false;
-	const messages = entry.document?.chat?.history?.messages;
+	const history = entry.document?.chat?.history;
+	const messages = history?.messages;
 	if (!messages) {
-		noteStreamGap(id, token);
+		if (!subscribed.has(id)) noteStreamGap(id, token);
 		return false;
+	}
+	if (type === 'chat:turn') {
+		const userMessage = data?.user_message;
+		const assistantMessage = data?.assistant_message;
+		if (!userMessage?.id || !assistantMessage?.id) return false;
+		adoptTurn(messages, userMessage, assistantMessage);
+		const remoteId = assistantMessage.id;
+		if (
+			!isLive(id) &&
+			(!history.currentId || id !== openId || extendsLeaf(messages, history.currentId, remoteId))
+		) {
+			history.currentId = remoteId;
+		}
+		history.messages = { ...messages };
+		markUnseenMessages(id);
+		return true;
 	}
 	const message = messages[messageId];
 	if (!message) {
-		noteStreamGap(id, token);
+		// The socket delivers the new turn itself. A subscribed chat does not
+		// download the document to discover it.
+		if (!subscribed.has(id)) noteStreamGap(id, token);
 		return false;
 	}
 	if (type === 'status') {

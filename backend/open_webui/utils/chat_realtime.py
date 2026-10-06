@@ -240,6 +240,39 @@ async def emit_chat_updated(chat) -> None:
     await _emit_to_user(chat.user_id, "chat:updated", payload)
 
 
+async def emit_chat_turn(
+    user_id: str,
+    chat_id: str,
+    session_id: str | None,
+    user_message: dict | None,
+    assistant_message: dict | None,
+) -> None:
+    """Tell subscribers the new user and assistant messages. No document fetch."""
+    assistant_id = (assistant_message or {}).get("id")
+    if not chat_id or not assistant_id:
+        return
+    from open_webui.socket.main import get_event_emitter
+
+    emitter = get_event_emitter(
+        {
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "message_id": assistant_id,
+            "session_id": session_id,
+        },
+        update_db=False,
+    )
+    await emitter(
+        {
+            "type": "chat:turn",
+            "data": {
+                "user_message": user_message,
+                "assistant_message": assistant_message,
+            },
+        }
+    )
+
+
 async def publish_chat_committed(chat_id: str) -> None:
     chat = Chats.get_chat_by_id(chat_id)
     if chat is None:

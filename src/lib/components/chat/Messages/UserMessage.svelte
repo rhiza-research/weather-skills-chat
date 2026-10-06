@@ -47,7 +47,8 @@
 	let messageEditTextAreaElement: HTMLTextAreaElement;
 
 	let message = JSON.parse(JSON.stringify(history.messages[messageId]));
-	$: if (history.messages) {
+	export let paintKey = 0;
+	$: if (history.messages && paintKey >= 0) {
 		if (JSON.stringify(message) !== JSON.stringify(history.messages[messageId])) {
 			message = JSON.parse(JSON.stringify(history.messages[messageId]));
 		}

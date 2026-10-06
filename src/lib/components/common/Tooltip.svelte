@@ -16,7 +16,7 @@
 	let purify: { sanitize: (dirty: string) => string } | null = null;
 	let tippyLib: ((element: Element, options: Record<string, unknown>) => { setContent: (value: string) => void; destroy: () => void }) | null = null;
 
-	const plainText = (value: string) => value.replace(/<[^>]*>/g, '');
+	const plainText = (value: unknown) => `${value ?? ''}`.replace(/<[^>]*>/g, '');
 
 	async function loadTippy() {
 		if (!tippyLib) {

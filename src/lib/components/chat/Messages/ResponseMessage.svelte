@@ -104,7 +104,7 @@
 	export let messageId;
 
 	let message: MessageType = JSON.parse(JSON.stringify(history.messages[messageId]));
-	$: if (history.messages) {
+	$: if (history.messages && paintKey >= 0) {
 		if (JSON.stringify(message) !== JSON.stringify(history.messages[messageId])) {
 			message = JSON.parse(JSON.stringify(history.messages[messageId]));
 		}
@@ -131,6 +131,7 @@
 
 	export let isLastMessage = true;
 	export let readOnly = false;
+	export let paintKey = 0;
 
 	let showDeleteConfirm = false;
 

@@ -153,6 +153,7 @@
 	let scrollChatId = '';
 	/** Re-apply a saved position while the transcript is still growing, until the user scrolls. */
 	let settleScroll = false;
+	let paintKey = 0;
 
 	let navbarElement;
 
@@ -559,8 +560,14 @@
 			const heldTop = autoScroll ? null : messagesContainerElement?.scrollTop ?? 0;
 			if (!autoScroll) noteNewMessagesBelow(document?.chat?.history?.currentId || '');
 			if (document?.chat?.history && document.chat.history === history) {
-				history = history;
-				if (heldTop != null) restoreReadingPosition(heldTop);
+				// ResponseMessage keeps a clone and only refreshes when the
+				// messages object itself is replaced.
+				const next = { ...history, messages: { ...history.messages } };
+				document.chat.history = next;
+				history = next;
+				paintKey += 1;
+				if (settleScroll) placeChatScroll(id);
+				else if (heldTop != null) restoreReadingPosition(heldTop);
 				else if (autoScroll) pinScrollToEnd();
 				return;
 			}
@@ -569,12 +576,14 @@
 				if (!remoteMessages) return;
 				mergeRemotePreservingLive(remoteMessages, id);
 				history = history;
-				if (heldTop != null) restoreReadingPosition(heldTop);
+				if (settleScroll) placeChatScroll(id);
+				else if (heldTop != null) restoreReadingPosition(heldTop);
 				return;
 			}
 			applyChatDocument(document);
 			history = history;
-			if (heldTop != null) restoreReadingPosition(heldTop);
+			if (settleScroll) placeChatScroll(id);
+			else if (heldTop != null) restoreReadingPosition(heldTop);
 			else if (autoScroll) pinScrollToEnd();
 		});
 		stopPaint = onOpenTranscript((event) => paintTranscript(event));
@@ -668,6 +677,7 @@
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		window.removeEventListener('message', onMessageHandler);
 		window.clearTimeout(scrollStopTimer);
+		cancelAnimationFrame(tailWatch);
 		$socket?.off('chat-events', chatEventHandler);
 	});
 
@@ -1197,40 +1207,143 @@
 		return found;
 	};
 
-	/** Put that message's bottom edge at the bottom of the screen. */
-	const showSavedMessage = (container: HTMLElement, messageId?: string) => {
+	/** Line inside the message whose top is closest to the top of the pane. */
+	const readingAnchor = (container: HTMLElement, message: HTMLElement) => {
+		const line = container.getBoundingClientRect().top;
+		let best: HTMLElement | null = null;
+		let bestDistance = Infinity;
+		for (const node of message.querySelectorAll<HTMLElement>(
+			'p, li, pre, img, blockquote, h1, h2, h3, h4, h5, h6'
+		)) {
+			const distance = Math.abs(node.getBoundingClientRect().top - line);
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				best = node;
+			}
+		}
+		if (!best) return null;
+		const image = best instanceof HTMLImageElement ? best : best.querySelector('img');
+		if (image instanceof HTMLImageElement && image.alt) {
+			const copies = [...message.querySelectorAll('img')].filter((img) => img.alt === image.alt);
+			return {
+				kind: 'img' as const,
+				key: image.alt,
+				index: Math.max(copies.indexOf(image), 0),
+				offset: image.getBoundingClientRect().top - line
+			};
+		}
+		const text = (best.textContent || '').trim().slice(0, 80);
+		if (!text) return null;
+		return { kind: 'text' as const, key: text, index: 0, offset: best.getBoundingClientRect().top - line };
+	};
+
+	const anchorNode = (message: HTMLElement, kind?: string, key?: string, index = 0) => {
+		if (!key) return null;
+		if (kind === 'img') {
+			const copies = [...message.querySelectorAll<HTMLElement>('img')].filter(
+				(img) => img.getAttribute('alt') === key
+			);
+			return copies[index] ?? null;
+		}
+		const walker = document.createTreeWalker(message, NodeFilter.SHOW_TEXT);
+		let current: Node | null;
+		while ((current = walker.nextNode())) {
+			if (!current.textContent?.includes(key)) continue;
+			const parent = current.parentElement;
+			return parent instanceof HTMLElement ? parent : null;
+		}
+		return null;
+	};
+
+	/** Put the saved line back at the same offset inside the pane. */
+	const showSavedMessage = (
+		container: HTMLElement,
+		messageId?: string,
+		messageOffset?: number,
+		anchorKind?: string,
+		anchorKey?: string,
+		anchorOffset?: number,
+		anchorIndex?: number
+	) => {
 		const node = messageId ? messageNode(messageId) : null;
 		if (!node) return false;
-		const delta = node.getBoundingClientRect().bottom - container.getBoundingClientRect().bottom;
+		const anchor = anchorNode(node, anchorKind, anchorKey, anchorIndex ?? 0);
+		const target = anchor ?? node;
+		const top = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+		const saved = anchor && typeof anchorOffset === 'number' ? anchorOffset : messageOffset;
+		const delta =
+			typeof saved === 'number'
+				? top - saved
+				: node.getBoundingClientRect().bottom - container.getBoundingClientRect().bottom;
 		if (Math.abs(delta) < 2) return true;
-		pinningScroll = true;
+		holdScrollPin();
 		container.scrollTop += delta;
-		requestAnimationFrame(() => {
-			requestAnimationFrame(() => {
-				pinningScroll = false;
-			});
-		});
 		return true;
 	};
 
+	let pinCount = 0;
+	let tailWatch = 0;
 	const holdScrollPin = () => {
+		const element = messagesContainerElement;
+		pinCount += 1;
 		pinningScroll = true;
-		requestAnimationFrame(() => {
-			requestAnimationFrame(() => {
-				pinningScroll = false;
-			});
-		});
+		let done = false;
+		const release = () => {
+			if (done) return;
+			done = true;
+			element?.removeEventListener('scroll', release);
+			pinCount = Math.max(0, pinCount - 1);
+			pinningScroll = pinCount > 0;
+		};
+		element?.addEventListener('scroll', release);
+		requestAnimationFrame(() => requestAnimationFrame(release));
+	};
+
+	/** Reader was at the tail, and this scroll is the pane changing size under them. */
+	const tailHeld = (element: HTMLElement, saved: { top: number; atBottom: boolean } | null) => {
+		if (!saved?.atBottom) return false;
+		const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
+		if (atBottom) return false;
+		const heightChanged =
+			Math.abs(element.scrollHeight - element.clientHeight - saved.top) >= 2;
+		const userMovedUp = element.scrollTop < saved.top - 2 && !heightChanged;
+		return !userMovedUp;
 	};
 
 	const captureScroll = (id: string, element: HTMLElement) => {
 		const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
 		const saved = chatScrollFor(id);
+		// A resize (the sidebar, or images gaining height) moves the pane
+		// without the reader scrolling. Keep the tail, or the line they placed.
+		if (tailHeld(element, saved)) {
+			autoScroll = true;
+			pinScrollToEnd();
+			return;
+		}
+		if (
+			saved?.anchorKey &&
+			!saved.atBottom &&
+			!atBottom &&
+			Math.abs(element.scrollTop - saved.top) < 2
+		) {
+			return;
+		}
+		const messageId = atBottom ? undefined : bottomMessageId(element);
+		const node = messageId ? messageNode(messageId) : null;
+		const anchor = node ? readingAnchor(element, node) : null;
 		rememberChatScroll(id, {
 			top: element.scrollTop,
 			atBottom,
 			messagesCount: saved?.messagesCount ?? 20,
 			unseen: !atBottom && (newMessagesBelow || !!saved?.unseen),
-			messageId: atBottom ? undefined : bottomMessageId(element)
+			messageId,
+			messageOffset: node
+				? node.getBoundingClientRect().top - element.getBoundingClientRect().top
+				: undefined,
+			anchorKind: anchor?.kind,
+			anchorKey: anchor?.key,
+			anchorIndex: anchor?.index,
+			anchorOffset: anchor?.offset
 		});
 	};
 
@@ -1250,7 +1363,17 @@
 			pinScrollToEnd();
 			return;
 		}
-		if (saved?.messageId) showSavedMessage(element, saved.messageId);
+		if (saved?.messageId) {
+			showSavedMessage(
+				element,
+				saved.messageId,
+				saved.messageOffset,
+				saved.anchorKind,
+				saved.anchorKey,
+				saved.anchorOffset,
+				saved.anchorIndex
+			);
+		}
 	};
 
 	const placeChatScroll = (id: string) => {
@@ -1264,6 +1387,30 @@
 			if (history?.currentId) heardBelowId = history.currentId;
 		}
 		placeSavedScroll(element);
+		if (autoScroll) watchSettledTail();
+	};
+
+	/** Follow the latest line while images finish laying out, without waiting on chat metadata. */
+	const watchSettledTail = () => {
+		cancelAnimationFrame(tailWatch);
+		let lastHeight = -1;
+		let stable = 0;
+		const step = () => {
+			tailWatch = 0;
+			const element = messagesContainerElement;
+			if (!element || !settleScroll || !autoScroll || !scrollChatId) return;
+			const saved = chatScrollFor(scrollChatId);
+			if (saved && !saved.atBottom) return;
+			const pending = [...element.querySelectorAll('img')].some((img) => !img.complete);
+			if (element.scrollHeight - element.scrollTop - element.clientHeight > 5) {
+				pinScrollToEnd();
+			}
+			if (element.scrollHeight === lastHeight && !pending) stable += 1;
+			else stable = 0;
+			lastHeight = element.scrollHeight;
+			if (stable < 3) tailWatch = requestAnimationFrame(step);
+		};
+		tailWatch = requestAnimationFrame(step);
 	};
 
 	const restoreReadingPosition = (top: number) => {
@@ -1297,13 +1444,19 @@
 	};
 
 	// Keep the tail in view while a reply is streaming and this chat is
-	// scrolled to the end. A saved message is restored once, when the chat opens.
+	// scrolled to the end. A saved offset is reapplied until the reader scrolls,
+	// so a message that grows after open (images) lands on the same line.
 	const stickToEnd = (node: HTMLElement) => {
 		let frame = 0;
 		const schedule = () => {
 			cancelAnimationFrame(frame);
 			frame = requestAnimationFrame(() => {
-				if (autoScroll && !newMessagesBelow && !pinningScroll) pinScrollToEnd();
+				if (pinningScroll) {
+					schedule();
+					return;
+				}
+				if (autoScroll && !newMessagesBelow) pinScrollToEnd();
+				else if (settleScroll) placeSavedScroll(node);
 			});
 		};
 		const content = node.firstElementChild;
@@ -2427,10 +2580,8 @@
 					pinned: !!chat.pinned,
 					time_range: getTimeRange(createdAt)
 				};
-				const items = [...(list ?? [])];
-				const index = items.findIndex((item) => item.id === row.id);
-				if (index === -1) items.unshift(row);
-				else items[index] = { ...items[index], ...row };
+				const items = (list ?? []).filter((item) => item.id !== row.id);
+				items.unshift(row);
 				return items;
 			});
 
@@ -2559,15 +2710,40 @@
 							id="messages-container"
 							bind:this={messagesContainerElement}
 							use:stickToEnd
+							style="overflow-anchor: none"
+							on:load|capture={() => {
+								if (!settleScroll || !messagesContainerElement) return;
+								if (autoScroll) {
+									pinScrollToEnd();
+									return;
+								}
+								placeSavedScroll(messagesContainerElement);
+							}}
 							on:scroll={() => {
 								if (pinningScroll || !messagesContainerElement || !scrollChatId) return;
 								const element = messagesContainerElement;
 								const atBottom =
 									element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
+								const previous = chatScrollFor(scrollChatId);
+								if (tailHeld(element, previous)) {
+									autoScroll = true;
+									window.clearTimeout(scrollStopTimer);
+									pinScrollToEnd();
+									return;
+								}
 								autoScroll = atBottom;
 								if (atBottom) newMessagesBelow = false;
 								settleScroll = false;
 								const id = scrollChatId;
+								// Opening the sidebar resizes the pane and can emit scroll
+								// without the reader moving. Keep the line they chose.
+								if (
+									previous &&
+									!previous.atBottom &&
+									Math.abs(element.scrollTop - previous.top) < 2
+								) {
+									return;
+								}
 								window.clearTimeout(scrollStopTimer);
 								scrollStopTimer = window.setTimeout(() => {
 									if (pinningScroll || scrollChatId !== id || !messagesContainerElement) return;
@@ -2581,6 +2757,7 @@
 										this={messagesComponent}
 										chatId={$chatId}
 										bind:history
+										{paintKey}
 										bind:autoScroll
 										bind:prompt
 										{selectedModels}

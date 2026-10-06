@@ -256,20 +256,16 @@
 		if (row.pinned) {
 			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
 			pinnedChats.update((list) => {
-				const items = [...(list ?? [])];
-				const index = items.findIndex((item) => item.id === row.id);
-				if (index === -1) items.unshift(next);
-				else items[index] = { ...items[index], ...next };
+				const items = (list ?? []).filter((item) => item.id !== row.id);
+				items.unshift(next);
 				return items;
 			});
 			return;
 		}
 		pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
 		chats.update((list) => {
-			const items = [...(list ?? [])];
-			const index = items.findIndex((item) => item.id === row.id);
-			if (index === -1) items.unshift(next);
-			else items[index] = { ...items[index], ...next };
+			const items = (list ?? []).filter((item) => item.id !== row.id);
+			items.unshift(next);
 			return items;
 		});
 	};
