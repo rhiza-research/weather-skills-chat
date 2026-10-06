@@ -157,10 +157,10 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
 # Torch is installed separately so the CUDA and CPU images can use different indexes.
 COPY --chown=$UID:$GID pyproject.toml uv.lock /app/
 ENV VIRTUAL_ENV=/app/.venv \
-    PATH="/app/.venv/bin:$PATH" \
-    UV_PYTHON_DOWNLOADS=never
+    PATH="/app/.venv/bin:$PATH"
 
-RUN mkdir -p /app/backend/cache /app/backend/data && \
+RUN export UV_PYTHON_DOWNLOADS=never && \
+    mkdir -p /app/backend/cache /app/backend/data && \
     pip3 install --no-cache-dir uv && \
     uv venv --python /usr/local/bin/python3 "$VIRTUAL_ENV" && \
     uv sync --frozen --no-dev --no-install-project --project /app \
@@ -214,7 +214,7 @@ CMD [ "bash", "start.sh"]
 FROM base AS test
 
 COPY pyproject.toml uv.lock /app/
-RUN uv sync --frozen --no-install-project --inexact --only-group dev --no-cache --project /app && \
+RUN UV_PYTHON_DOWNLOADS=never uv sync --frozen --no-install-project --inexact --only-group dev --no-cache --project /app && \
     rm /app/pyproject.toml /app/uv.lock
 
 # The import paths CI gives pytest. Test modules import test.util and main.
