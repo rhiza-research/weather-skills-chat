@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import {
 	accumulateUsage,
 	formatTokenCount,
+	formatCreditAmount,
 	formatUsd,
 	isUsageLimitMessage,
 	ORG_USAGE_LIMIT_MESSAGE,
@@ -64,6 +65,8 @@ test('ignores non-token non-cost numbers', () => {
 test('formats usd and tokens', () => {
 	expect(formatUsd(12.4)).toBe('$12.40');
 	expect(formatUsd(null, 'Unlimited')).toBe('Unlimited');
+	expect(formatCreditAmount(12.4)).toBe('12.40');
+	expect(formatCreditAmount(null, 'Unlimited')).toBe('Unlimited');
 	expect(formatTokenCount(1500)).toBe('1.5k');
 	expect(remainingUsd(300, 12.4)).toBe(287.6);
 	expect(remainingUsd(null, 12.4)).toBeNull();

@@ -16,7 +16,14 @@
 		cancelOrganizationInvitation
 	} from '$lib/apis/invitations';
 	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { formatTokenCount, formatUsd, remainingUsd, tokenUsageLabel, tokenUsageTooltip } from '$lib/utils/usage';
+	import {
+		formatCreditAmount,
+		formatTokenCount,
+		formatUsd,
+		remainingUsd,
+		tokenUsageLabel,
+		tokenUsageTooltip
+	} from '$lib/utils/usage';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import Modal from '$lib/components/common/Modal.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
@@ -28,6 +35,10 @@
 
 	export let title = '';
 	export let organizationId = '';
+	export let credits = false;
+
+	const usageAmount = (n, fallback = '—') =>
+		credits ? formatCreditAmount(n, fallback) : formatUsd(n, fallback);
 
 	let org = null;
 	let loading = false;
@@ -320,14 +331,16 @@
 	{#if org}
 		<div class="text-sm px-0.5 pb-4">
 			<div class="font-medium">
-				{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
+				{usageAmount(org.usage?.cost_usd ?? 0, credits ? '0.00' : '$0.00')}
 				{#if org.monthly_limit_usd == null}
+					{#if credits}{' '}{$i18n.t('credits')}{/if}
 					{$i18n.t('this month')}
 				{:else}
-					/ {formatUsd(org.monthly_limit_usd)}
+					/ {usageAmount(org.monthly_limit_usd)}
+					{#if credits}{' '}{$i18n.t('credits')}{/if}
 					<span class="text-gray-500 font-normal">
-						({formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
-						{$i18n.t('remaining')})
+						({usageAmount(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
+						{$i18n.t(credits ? 'remaining credits' : 'remaining')})
 					</span>
 				{/if}
 			</div>
@@ -374,7 +387,9 @@
 					</label>
 					{#if !inviteUnlimited}
 						<div class="flex items-center gap-1.5 mt-2">
-							<span class="text-sm text-gray-500">$</span>
+							{#if !credits}
+								<span class="text-sm text-gray-500">$</span>
+							{/if}
 							<input
 								class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
 								type="number"
@@ -382,12 +397,17 @@
 								step="0.01"
 								bind:value={inviteLimit}
 							/>
+							{#if credits}
+								<span class="text-sm text-gray-500">{$i18n.t('credits')}</span>
+							{/if}
 						</div>
 					{/if}
 					{#if org?.monthly_limit_usd != null}
 						<div class="text-xs text-gray-500 mt-2">
 							{$i18n.t('Cannot exceed the organization monthly usage limit of {{limit}}.', {
-								limit: formatUsd(org.monthly_limit_usd)
+								limit: credits
+									? `${usageAmount(org.monthly_limit_usd)} ${$i18n.t('credits')}`
+									: formatUsd(org.monthly_limit_usd)
 							})}
 						</div>
 					{/if}
@@ -484,17 +504,19 @@
 	<div class="flex items-baseline gap-16 text-sm px-0.5 mb-3">
 		<div>
 			<span class="font-medium">
-				{formatUsd(org.usage?.cost_usd ?? 0, '$0.00')}
+				{usageAmount(org.usage?.cost_usd ?? 0, credits ? '0.00' : '$0.00')}
 				{#if org.monthly_limit_usd == null}
+					{#if credits}{' '}{$i18n.t('credits')}{/if}
 					{$i18n.t('this month')} ({$i18n.t('Unlimited')})
 				{:else}
-					/ {formatUsd(org.monthly_limit_usd)}
+					/ {usageAmount(org.monthly_limit_usd)}
+					{#if credits}{' '}{$i18n.t('credits')}{/if}
 				{/if}
 			</span>
 			{#if org.monthly_limit_usd != null}
 				<span class="text-gray-500">
-					· {formatUsd(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
-					{$i18n.t('remaining')}
+					· {usageAmount(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
+					{$i18n.t(credits ? 'remaining credits' : 'remaining')}
 				</span>
 			{/if}
 		</div>
@@ -546,7 +568,7 @@
 			</div>
 			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
 			<div class="text-right tabular-nums">
-				{formatUsd(row.invite.monthly_limit_usd, $i18n.t('No limit'))}
+				{usageAmount(row.invite.monthly_limit_usd, $i18n.t('No limit'))}{#if credits && row.invite.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
 			<div class="text-gray-300 dark:text-gray-600">—</div>
@@ -602,15 +624,15 @@
 				{/if}
 			</div>
 			<div class="text-right text-sm tabular-nums">
-				{formatUsd(row.member.usage?.cost_usd ?? 0, '$0.00')}
+				{usageAmount(row.member.usage?.cost_usd ?? 0, credits ? '0.00' : '$0.00')}{#if credits}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<div class="text-right tabular-nums">
-				{formatUsd(row.member.monthly_limit_usd, $i18n.t('Unlimited'))}
+				{usageAmount(row.member.monthly_limit_usd, $i18n.t('Unlimited'))}{#if credits && row.member.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<div class="text-right text-sm tabular-nums text-gray-500">
 				{row.member.monthly_limit_usd == null
 					? '—'
-					: formatUsd(remainingUsd(row.member.monthly_limit_usd, row.member.usage?.cost_usd ?? 0))}
+					: usageAmount(remainingUsd(row.member.monthly_limit_usd, row.member.usage?.cost_usd ?? 0))}{#if credits && row.member.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<Tooltip content={tokenUsageTooltip(row.member.usage)} className="min-w-0 block">
 				<div class="text-[11px] text-gray-500 tabular-nums truncate">
@@ -673,6 +695,7 @@
 		orgId={org?.id}
 		member={selectedMember}
 		orgLimit={org?.monthly_limit_usd}
+		{credits}
 		on:save={(e) => {
 			org = e.detail;
 		}}
