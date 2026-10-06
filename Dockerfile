@@ -158,13 +158,12 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
 COPY --chown=$UID:$GID pyproject.toml uv.lock /app/
 ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
-    UV_PROJECT=/app \
     UV_PYTHON_DOWNLOADS=never
 
 RUN mkdir -p /app/backend/cache /app/backend/data && \
     pip3 install --no-cache-dir uv && \
     uv venv --python /usr/local/bin/python3 "$VIRTUAL_ENV" && \
-    uv sync --frozen --no-dev --no-install-project \
+    uv sync --frozen --no-dev --no-install-project --project /app \
       --no-install-package torch \
       --no-install-package torchvision \
       --no-install-package torchaudio && \
@@ -177,7 +176,10 @@ RUN mkdir -p /app/backend/cache /app/backend/data && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])" && \
     python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['TIKTOKEN_ENCODING_NAME'])" && \
     mkdir -p /app/backend/cache /app/backend/data && \
-    chown -R $UID:$GID /app/.venv /app/backend/cache /app/backend/data
+    chown -R $UID:$GID /app/.venv /app/backend/cache /app/backend/data && \
+    # The project files are not kept in the runtime image: skills run under /app, and uv reads
+    # pyproject.toml from parent folders.
+    rm /app/pyproject.toml /app/uv.lock
 
 
 
@@ -211,7 +213,9 @@ CMD [ "bash", "start.sh"]
 # --no-cache keeps the download cache out of the image.
 FROM base AS test
 
-RUN uv sync --frozen --no-install-project --inexact --only-group dev --no-cache
+COPY pyproject.toml uv.lock /app/
+RUN uv sync --frozen --no-install-project --inexact --only-group dev --no-cache --project /app && \
+    rm /app/pyproject.toml /app/uv.lock
 
 # The import paths CI gives pytest. Test modules import test.util and main.
 ENV PYTHONPATH=/app/backend:/app/backend/open_webui
