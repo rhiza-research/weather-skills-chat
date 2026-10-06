@@ -22,7 +22,6 @@ ARG GID=0
 
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
-ARG BUILD_HASH
 
 WORKDIR /app
 
@@ -41,6 +40,8 @@ COPY static ./static
 # Tailwind scans the repository, and generates rules for class names it finds in swagger-ui's files,
 # so they are copied at the same path to keep the built CSS the same.
 COPY backend/open_webui/static/swagger-ui ./backend/open_webui/static/swagger-ui
+# Declared here so a new hash does not rerun npm ci.
+ARG BUILD_HASH
 ENV APP_BUILD_HASH=${BUILD_HASH}
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
