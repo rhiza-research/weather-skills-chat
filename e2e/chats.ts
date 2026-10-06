@@ -175,7 +175,6 @@ const sqlitePath = () => {
 };
 
 function sqliteRun(sql: string, args: Array<string | number> = []) {
-	const db = sqlitePath();
 	const script = `
 import sqlite3, sys, json
 conn = sqlite3.connect(sys.argv[1])
@@ -185,11 +184,17 @@ n = conn.execute(sql, args).rowcount
 conn.commit()
 print(n)
 `;
-	const ran = spawnSync(
-		'python3',
-		['-c', script, db, sql, JSON.stringify(args)],
-		{ encoding: 'utf8' }
-	);
+	const container = process.env.E2E_SQLITE_CONTAINER;
+	const db = container
+		? process.env.E2E_SQLITE || '/app/backend/data/webui.db'
+		: sqlitePath();
+	const ran = container
+		? spawnSync(
+				'docker',
+				['exec', container, 'python', '-c', script, db, sql, JSON.stringify(args)],
+				{ encoding: 'utf8' }
+			)
+		: spawnSync('python3', ['-c', script, db, sql, JSON.stringify(args)], { encoding: 'utf8' });
 	if (ran.status !== 0) {
 		throw new Error(`sqlite failed: ${ran.stderr || ran.stdout}`);
 	}

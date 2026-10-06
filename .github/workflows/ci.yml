@@ -190,6 +190,7 @@ jobs:
           E2E_ADMIN_EMAIL: admin@example.com
           E2E_ADMIN_PASSWORD: password
           E2E_ADMIN_NAME: Admin
+          E2E_SQLITE_CONTAINER: weather-skills-chat-e2e
         run: npx playwright test --config e2e/playwright.config.ts
 
       - name: Publish Playwright report

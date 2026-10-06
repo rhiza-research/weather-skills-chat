@@ -95,14 +95,32 @@ async function distanceFromBottom(page: Page) {
 	});
 }
 
+/** Open the sidebar if it is closed. Do not toggle it closed; that resizes images. */
+async function ensureSidebar(page: Page) {
+	const newChat = page.locator('#sidebar-new-chat-button');
+	if (await newChat.isVisible()) return;
+	await page.locator('#sidebar-toggle-button').click();
+	await expect(newChat).toBeVisible();
+}
+
 /** Leave the chat and come back without reloading the page, so the saved position survives. */
 async function leaveAndReturn(page: Page, id: string) {
-	await page.locator('#sidebar-toggle-button').click();
+	await ensureSidebar(page);
 	await page.locator('#sidebar-new-chat-button').click();
 	await expect(page.locator('#chat-input')).toBeVisible();
 	await page.locator(`a[href="/c/${id}"]`).click();
 	await expect(page).toHaveURL(new RegExp(`/c/${id}$`));
 	await expect(page.locator('#messages-container')).toBeVisible();
+}
+
+async function waitForImages(page: Page, selector: string, count: number) {
+	await page.waitForFunction(
+		({ selector, count }) => {
+			const images = [...document.querySelectorAll<HTMLImageElement>(selector)];
+			return images.length >= count && images.every((image) => image.complete && image.naturalHeight > 100);
+		},
+		{ selector, count }
+	);
 }
 
 test('a chat left at the bottom returns to the latest line immediately', async ({ page }) => {
@@ -122,10 +140,8 @@ test('a chat left at the bottom returns to the latest line immediately', async (
 		{ name: 'token', value: token, url: new URL(page.url()).origin }
 	]);
 	await page.goto(`/c/${id}`);
-	await page.waitForFunction(() => {
-		const images = [...document.querySelectorAll<HTMLImageElement>('img[alt="panel"]')];
-		return images.length >= 18 && images.every((image) => image.complete && image.naturalHeight > 100);
-	});
+	await waitForImages(page, 'img[alt="panel"]', 18);
+	await ensureSidebar(page);
 	await placeImageAt(page, 7, 48);
 	await page.waitForTimeout(250);
 	const savedImage = await imageOffsetAt(page, 7);
@@ -158,10 +174,7 @@ test('a chat left at the bottom returns to the latest line immediately', async (
 
 	try {
 		await leaveAndReturn(page, id);
-		await page.waitForFunction(() => {
-			const images = [...document.querySelectorAll<HTMLImageElement>('img[alt="panel"]')];
-			return images.length >= 18 && images.every((image) => image.complete && image.naturalHeight > 100);
-		});
+		await waitForImages(page, 'img[alt="panel"]', 18);
 		expect(await distanceFromBottom(page)).toBeLessThan(24);
 	} finally {
 		release();
@@ -209,24 +222,20 @@ test('a message full of images returns to the same image', async ({ page }) => {
 	const { id } = await seedChat('image reply', panels);
 
 	await page.goto(`/c/${id}`);
-	await page.waitForFunction(() => {
-		const images = [...document.querySelectorAll<HTMLImageElement>('img[alt^="image "]')];
-		return images.length >= 18 && images.every((image) => image.complete && image.naturalHeight > 100);
-	});
+	await waitForImages(page, 'img[alt^="image "]', 18);
+	await ensureSidebar(page);
 	await placeImage(page, alt, 48);
 	await page.waitForTimeout(250);
 	const before = await imageOffset(page, alt);
 	expect(before).not.toBeNull();
 
 	await leaveAndReturn(page, id);
-	await page.waitForFunction(() => {
-		const image = document.querySelector<HTMLImageElement>('img[alt="image 8"]');
-		return !!image && image.complete && image.naturalHeight > 100;
-	});
-	await page.waitForTimeout(400);
-	const after = await imageOffset(page, alt);
-
-	expect(Math.abs((after ?? 0) - (before ?? 0))).toBeLessThan(24);
+	await waitForImages(page, 'img[alt^="image "]', 18);
+	await expect
+		.poll(async () => Math.abs((await imageOffset(page, alt) ?? 0) - (before ?? 0)), {
+			timeout: 1_000
+		})
+		.toBeLessThan(24);
 });
 
 test('repeated copies of one artifact image return to the same copy', async ({ page }) => {
@@ -248,10 +257,8 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 	]);
 
 	await page.goto(`/c/${id}`);
-	await page.waitForFunction(() => {
-		const images = [...document.querySelectorAll<HTMLImageElement>('img[alt="panel"]')];
-		return images.length >= 18 && images.every((image) => image.complete && image.naturalHeight > 100);
-	});
+	await waitForImages(page, 'img[alt="panel"]', 18);
+	await ensureSidebar(page);
 	await placeImageAt(page, copy, 48);
 	await page.waitForTimeout(250);
 	const before = await imageOffsetAt(page, copy);
@@ -270,16 +277,8 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 		await route.continue();
 	});
 
-	await page.locator('#sidebar-toggle-button').click();
-	await page.locator('#sidebar-new-chat-button').click();
-	await expect(page.locator('#chat-input')).toBeVisible();
-	await page.locator(`a[href="/c/${id}"]`).click();
-	await expect(page).toHaveURL(new RegExp(`/c/${id}$`));
-	await expect(page.locator('#messages-container')).toBeVisible();
-	await page.waitForFunction(() => {
-		const images = [...document.querySelectorAll<HTMLImageElement>('img[alt="panel"]')];
-		return images.length >= 18 && images.every((image) => image.complete && image.naturalHeight > 100);
-	});
+	await leaveAndReturn(page, id);
+	await waitForImages(page, 'img[alt="panel"]', 18);
 	try {
 		await expect
 			.poll(
