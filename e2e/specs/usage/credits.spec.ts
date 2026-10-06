@@ -1,5 +1,4 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { adminAccount } from '../../accounts';
 import { ChatPage } from '../../pages/chat';
 
 const authHeaders = (token: string) => ({
@@ -38,7 +37,7 @@ async function workspaceWithLimit(request: APIRequestContext, token: string) {
 async function openUserMenu(page: Page) {
 	const chat = new ChatPage(page);
 	await chat.openSidebar();
-	await page.getByRole('button', { name: adminAccount.name }).click();
+	await page.locator('#sidebar-user-menu-button').click();
 }
 
 test('a user sees usage in credits, not dollars', async ({ page }) => {
