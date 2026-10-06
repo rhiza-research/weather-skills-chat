@@ -1,6 +1,3 @@
-import { spawnSync } from 'node:child_process';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { request as playwrightRequest } from '@playwright/test';
 import { adminAccount } from './accounts';
 
@@ -168,57 +165,40 @@ export async function sendTurn(token: string, id: string, content: string) {
 	}
 }
 
-const sqlitePath = () => {
-	const url = process.env.DATABASE_URL || '';
-	if (url.startsWith('sqlite:///')) return url.slice('sqlite:///'.length);
-	return path.join(path.dirname(fileURLToPath(import.meta.url)), '.data/webui.db');
-};
-
-function sqliteRun(sql: string, args: Array<string | number> = []) {
-	const script = `
-import sqlite3, sys, json
-conn = sqlite3.connect(sys.argv[1])
-sql = sys.argv[2]
-args = json.loads(sys.argv[3])
-n = conn.execute(sql, args).rowcount
-conn.commit()
-print(n)
-`;
-	const container = process.env.E2E_SQLITE_CONTAINER;
-	const db = container
-		? process.env.E2E_SQLITE || '/app/backend/data/webui.db'
-		: sqlitePath();
-	const ran = container
-		? spawnSync(
-				'docker',
-				['exec', container, 'python', '-c', script, db, sql, JSON.stringify(args)],
-				{ encoding: 'utf8' }
-			)
-		: spawnSync('python3', ['-c', script, db, sql, JSON.stringify(args)], { encoding: 'utf8' });
-	if (ran.status !== 0) {
-		throw new Error(`sqlite failed: ${ran.stderr || ran.stdout}`);
-	}
-	return Number((ran.stdout || '').trim());
-}
+const fixturesOff =
+	'ENABLE_E2E_FIXTURES is not true on the app under test. Set it on the server (CI Docker, local Docker, or uvicorn). Playwright does not need it.';
 
 /** Keep the first-page sidebar list small so aged chats stay visible. */
-export function clearChats() {
-	sqliteRun('DELETE FROM chat');
+export async function clearChats() {
+	const { api, token } = await authed();
+	try {
+		const cleared = await api.post('/api/v1/chats/e2e/clear', {
+			headers: { authorization: `Bearer ${token}` }
+		});
+		if (cleared.status() === 404) throw new Error(fixturesOff);
+		if (!cleared.ok()) {
+			throw new Error(`clear chats failed: ${cleared.status()} ${await cleared.text()}`);
+		}
+	} finally {
+		await api.dispose();
+	}
 }
 
 /** Move a chat onto a past calendar day so the sidebar lists it under an older range. */
 export async function ageChat(token: string, id: string, daysAgo: number) {
-	const unix = Math.floor(Date.now() / 1000) - daysAgo * 24 * 3600;
 	for (let attempt = 0; attempt < 8; attempt++) {
-		const n = sqliteRun('UPDATE chat SET updated_at = ?, created_at = ? WHERE id = ?', [
-			unix,
-			unix,
-			id
-		]);
-		if (n !== 1) throw new Error(`aged ${n} rows for ${id}`);
-		await new Promise((resolve) => setTimeout(resolve, 200));
 		const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
 		try {
+			const aged = await api.post(`/api/v1/chats/${id}/e2e/age`, {
+				headers: { authorization: `Bearer ${token}` },
+				data: { days_ago: daysAgo }
+			});
+			if (aged.status() === 404) throw new Error(fixturesOff);
+			if (!aged.ok()) {
+				throw new Error(`age chat failed: ${aged.status()} ${await aged.text()}`);
+			}
+			const stamped = (await aged.json()) as { updated_at: number };
+			await new Promise((resolve) => setTimeout(resolve, 200));
 			const got = await api.get(`/api/v1/chats/${id}`, {
 				headers: { authorization: `Bearer ${token}` }
 			});
@@ -226,7 +206,7 @@ export async function ageChat(token: string, id: string, daysAgo: number) {
 				throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
 			}
 			const row = (await got.json()) as { updated_at: number };
-			if (Math.abs(row.updated_at - unix) < 2) return;
+			if (Math.abs(row.updated_at - stamped.updated_at) < 2) return;
 		} finally {
 			await api.dispose();
 		}

@@ -267,6 +267,20 @@ class ChatTable:
         except Exception:
             return None
 
+    def set_chat_times(
+        self, id: str, created_at: int, updated_at: int
+    ) -> Optional[ChatModel]:
+        """Stamp timestamps without a visible commit (used by e2e fixtures)."""
+        with get_db() as db:
+            chat_item = db.get(Chat, id)
+            if chat_item is None:
+                return None
+            chat_item.created_at = created_at
+            chat_item.updated_at = updated_at
+            db.commit()
+            db.refresh(chat_item)
+            return ChatModel.model_validate(chat_item)
+
     def update_chat_title_by_id(self, id: str, title: str) -> Optional[ChatModel]:
         chat = self.get_chat_by_id(id)
         if chat is None:

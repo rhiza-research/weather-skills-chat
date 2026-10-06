@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Optional
 
 
@@ -17,7 +18,7 @@ from open_webui.models.users import Users
 
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import SRC_LOG_LEVELS
+from open_webui.env import SRC_LOG_LEVELS, ENABLE_E2E_FIXTURES
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -95,6 +96,40 @@ async def get_session_user_chat_list(
             user.id, organization_id=organization_id
         )
     return _attach_owner_names(chats)
+
+
+class E2EAgeForm(BaseModel):
+    days_ago: int
+
+
+def _require_e2e_fixtures():
+    if not ENABLE_E2E_FIXTURES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+
+@router.post("/e2e/clear", response_model=bool)
+async def e2e_clear_chats(user=Depends(get_verified_user)):
+    _require_e2e_fixtures()
+    return Chats.delete_chats_by_user_id(user.id)
+
+
+@router.post("/{id}/e2e/age", response_model=Optional[ChatResponse])
+async def e2e_age_chat(id: str, form_data: E2EAgeForm, user=Depends(get_verified_user)):
+    _require_e2e_fixtures()
+    _require_writable_chat(id, user)
+    if form_data.days_ago < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
+        )
+    unix = int(time.time()) - form_data.days_ago * 24 * 3600
+    updated = Chats.set_chat_times(id, unix, unix)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    return ChatResponse(**updated.model_dump())
 
 
 ############################

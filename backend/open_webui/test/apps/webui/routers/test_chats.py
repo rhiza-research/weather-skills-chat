@@ -232,3 +232,32 @@ class TestChats(AbstractPostgresTest):
 
         chat = self.chats.get_chat_by_id(chat_id)
         assert chat.share_id is None
+
+    def test_e2e_fixtures_are_hidden_by_default(self):
+        chat_id = self.chats.get_chats()[0].id
+        with mock_webui_user(id="2"):
+            cleared = self.fast_api_client.post(self.create_url("/e2e/clear"))
+            aged = self.fast_api_client.post(
+                self.create_url(f"/{chat_id}/e2e/age"), json={"days_ago": 3}
+            )
+        assert cleared.status_code == 404
+        assert aged.status_code == 404
+        assert len(self.chats.get_chats()) == 1
+
+    def test_e2e_fixtures_clear_and_age(self, monkeypatch):
+        import time
+
+        from open_webui.routers import chats as chats_router
+
+        monkeypatch.setattr(chats_router, "ENABLE_E2E_FIXTURES", True)
+        chat_id = self.chats.get_chats()[0].id
+        with mock_webui_user(id="2"):
+            aged = self.fast_api_client.post(
+                self.create_url(f"/{chat_id}/e2e/age"), json={"days_ago": 3}
+            )
+        assert aged.status_code == 200
+        assert aged.json()["updated_at"] < int(time.time()) - 2 * 24 * 3600
+        with mock_webui_user(id="2"):
+            cleared = self.fast_api_client.post(self.create_url("/e2e/clear"))
+        assert cleared.status_code == 200
+        assert len(self.chats.get_chats()) == 0

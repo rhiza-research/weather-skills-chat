@@ -500,6 +500,9 @@ OFFLINE_MODE = os.environ.get("OFFLINE_MODE", "false").lower() == "true"
 if OFFLINE_MODE:
     os.environ["HF_HUB_OFFLINE"] = "1"
 
+# Playwright fixtures (clear/age chats) when the test app is running.
+ENABLE_E2E_FIXTURES = os.environ.get("ENABLE_E2E_FIXTURES", "false").lower() == "true"
+
 ####################################
 # AUDIT LOGGING
 ####################################

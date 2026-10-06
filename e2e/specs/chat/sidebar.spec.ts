@@ -55,7 +55,7 @@ function expectOneSection(rows: { sections: string[] }, name: string) {
 }
 
 test('chatting with an older chat moves it into Today on every open page', async ({ page }) => {
-	clearChats();
+	await clearChats();
 	const today = await seedChat('listed today', 'today reply');
 	const extraToday = await seedChat('also today', 'another today reply');
 	const moving = await seedChat('moves to today', 'older reply');
