@@ -59,6 +59,7 @@
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
 	import { connectSocket } from '$lib/utils/socket';
+	import { revealApp } from '$lib/utils/splash';
 
 	setContext('i18n', i18n);
 
@@ -570,29 +571,29 @@
 				.catch((error) => {
 					console.error(error);
 				});
-			getSessionUser(token)
-				.catch((error) => {
-					toast.error(`${error}`);
-					return null;
-				})
-				.then(async (sessionUser) => {
-					if (!sessionUser) {
-						localStorage.removeItem('token');
-						await goto(`/auth?redirect=${encodedUrl}`);
-						return;
-					}
-					await user.set(sessionUser);
-					try {
-						const liveSocket = await socketPromise;
+			// Keep the splash up until the session is known. Revealing the app first
+			// paints the last chat (artifacts pane and all) and then dumps a
+			// signed-out visitor onto /auth.
+			const sessionUser = await getSessionUser(token).catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
+			if (!sessionUser) {
+				localStorage.removeItem('token');
+				await goto(`/auth?redirect=${encodedUrl}`);
+			} else {
+				await user.set(sessionUser);
+				socketPromise
+					.then((liveSocket) => {
 						liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
-					} catch (error) {
+					})
+					.catch((error) => {
 						console.error(error);
-					}
-				});
+					});
+			}
 			appConfigPromise.then((appConfig) => {
 				if (!appConfig) goto('/error');
 			});
-			loaded = true;
 		} else {
 			const appConfig = await appConfigPromise;
 			if (!appConfig) {
@@ -607,10 +608,13 @@
 
 		await tick();
 
+		const bootProgress = window.__wscBoot?.finish?.() ?? 0;
+
 		if (
 			document.documentElement.classList.contains('her') &&
 			document.getElementById('progress-bar')
 		) {
+			loadingProgress.set(bootProgress, { hard: true });
 			loadingProgress.subscribe((value) => {
 				const progressBar = document.getElementById('progress-bar');
 
@@ -621,8 +625,6 @@
 
 			await loadingProgress.set(100);
 
-			document.getElementById('splash-screen')?.remove();
-
 			const audio = new Audio(`/audio/greeting.mp3`);
 			const playAudio = () => {
 				audio.play();
@@ -632,9 +634,14 @@
 			document.addEventListener('click', playAudio);
 
 			loaded = true;
+			await tick();
+			revealApp();
 		} else {
-			document.getElementById('splash-screen')?.remove();
 			loaded = true;
+			await tick();
+			// Auth and the app shell lift the splash once they have painted.
+			// A timeout is only a backstop so a failed child cannot trap it.
+			setTimeout(revealApp, 2000);
 		}
 
 		return () => {

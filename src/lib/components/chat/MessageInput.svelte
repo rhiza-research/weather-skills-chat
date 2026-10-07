@@ -2,7 +2,14 @@
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
+	import {
+		onMount,
+		tick,
+		getContext,
+		createEventDispatcher,
+		onDestroy,
+		type ComponentType
+	} from 'svelte';
 	const dispatch = createEventDispatcher();
 
 	import {
@@ -51,7 +58,7 @@
 	import CommandLine from '../icons/CommandLine.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
-	import ToolServersModal from './ToolServersModal.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 	import Wrench from '../icons/Wrench.svelte';
 
 	const i18n = getContext('i18n');
@@ -95,6 +102,12 @@
 	});
 
 	let showTools = false;
+
+	let ToolServersModal: ComponentType | null = null;
+	const loadToolServersModal = () =>
+		import('./ToolServersModal.svelte').then((m) => (ToolServersModal = m.default));
+	$: if (showTools && !ToolServersModal) loadToolServersModal();
+	whenAppIdle(loadToolServersModal);
 
 	let loaded = false;
 	let recording = false;
@@ -378,7 +391,9 @@
 
 <FilesOverlay show={dragged} />
 
-<ToolServersModal bind:show={showTools} {selectedToolIds} />
+{#if ToolServersModal}
+	<svelte:component this={ToolServersModal} bind:show={showTools} {selectedToolIds} />
+{/if}
 
 {#if loaded}
 	<div class="w-full font-primary">

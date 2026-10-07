@@ -1,10 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount, onDestroy, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext, type ComponentType } from 'svelte';
 	import { get } from 'svelte/store';
-	import { openDB, deleteDB } from 'idb';
-	import fileSaver from 'file-saver';
-	const { saveAs } = fileSaver;
 
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -38,16 +35,37 @@
 		preferencesReady
 	} from '$lib/stores';
 	import { dropOrganization, preloadRecent } from '$lib/chat/cache';
+	import { markAppReady, whenAppIdle } from '$lib/utils/idle';
+	import { revealApp } from '$lib/utils/splash';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
-	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
-	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
-	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
+	let SettingsModal: ComponentType | null = null;
+	let ChangelogModal: ComponentType | null = null;
+	let AccountPending: ComponentType | null = null;
+	const loadSettingsModal = () =>
+		import('$lib/components/chat/SettingsModal.svelte').then((m) => (SettingsModal = m.default));
+	const loadChangelogModal = () =>
+		import('$lib/components/ChangelogModal.svelte').then((m) => (ChangelogModal = m.default));
+	$: if ($showSettings && !SettingsModal) loadSettingsModal();
+	$: if ($showChangelog && !ChangelogModal) loadChangelogModal();
+	$: if ($user && !['user', 'admin'].includes($user.role) && !AccountPending) {
+		import('$lib/components/layout/Overlay/AccountPending.svelte').then(
+			(m) => (AccountPending = m.default)
+		);
+	}
+	whenAppIdle(loadSettingsModal);
+	whenAppIdle(loadChangelogModal);
+
 	let loaded = false;
+	$: if (loaded) markAppReady();
+	$: if (loaded) {
+		const path = $page.url.pathname;
+		if (path !== '/' && !path.startsWith('/c/')) revealApp();
+	}
 	let preloadedOrganization = '';
 
 	const syncRecentCache = (organizationId: string) => {
@@ -99,13 +117,15 @@
 			revealChat();
 		};
 
-		openDB('Chats', 1)
+		import('idb')
+			.then(({ openDB }) => openDB('Chats', 1))
 			.then(async (database) => {
 				DB = database;
 				if (!DB) return;
 				const storedChats = await DB.getAllFromIndex('chats', 'timestamp');
 				localDBChats = storedChats.map((item, idx) => storedChats[storedChats.length - 1 - idx]);
 				if (localDBChats.length === 0) {
+					const { deleteDB } = await import('idb');
 					await deleteDB('Chats');
 				}
 			})
@@ -271,15 +291,25 @@
 	});
 </script>
 
-<SettingsModal bind:show={$showSettings} />
-<ChangelogModal bind:show={$showChangelog} />
+{#if SettingsModal}
+	<svelte:component this={SettingsModal} bind:show={$showSettings} />
+{/if}
+{#if ChangelogModal}
+	<svelte:component this={ChangelogModal} bind:show={$showChangelog} />
+{/if}
 
 <div class="app relative">
+	{#if !$user}
+		<!-- Stay blank under the splash (or after a failed session) so the last
+		     chat's artifacts pane cannot paint before sign-in. -->
+	{:else}
 	<div
 		class=" text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900 h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
 	>
 		{#if $user && !['user', 'admin'].includes($user.role)}
-			<AccountPending />
+			{#if AccountPending}
+				<svelte:component this={AccountPending} />
+			{/if}
 		{:else if localDBChats.length > 0}
 			<div class="fixed w-full h-full flex z-50">
 				<div
@@ -309,7 +339,11 @@
 										let blob = new Blob([JSON.stringify(localDBChats)], {
 											type: 'application/json'
 										});
-										saveAs(blob, `chat-export-${Date.now()}.json`);
+										const [{ default: fileSaver }, { deleteDB }] = await Promise.all([
+											import('file-saver'),
+											import('idb')
+										]);
+										fileSaver.saveAs(blob, `chat-export-${Date.now()}.json`);
 
 										const tx = DB.transaction('chats', 'readwrite');
 										await Promise.all([tx.store.clear(), tx.done]);
@@ -360,6 +394,7 @@
 			/>
 			<span class="sr-only">{$i18n.t('Switching organization')}</span>
 		</div>
+	{/if}
 	{/if}
 </div>
 

@@ -2,7 +2,7 @@
 	import { toast } from 'svelte-sonner';
 
 	import { onMount, getContext, tick } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, preloadCode } from '$app/navigation';
 	import { page } from '$app/stores';
 
 	import { getUserConfig, mergeConfig } from '$lib/apis';
@@ -11,6 +11,7 @@
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user } from '$lib/stores';
 	import { connectSocket } from '$lib/utils/socket';
+	import { revealApp } from '$lib/utils/splash';
 
 	import { generateInitialsImage, canvasPixelTest } from '$lib/utils';
 
@@ -43,11 +44,15 @@
 			if (sessionUser.token) {
 				localStorage.token = sessionUser.token;
 			}
+			window.__wscBoot?.prefetchApp?.(localStorage.token);
 
-			const liveSocket = await connectSocket();
+			const socketReady = connectSocket();
+			const userConfigReady = getUserConfig(localStorage.token);
+			userConfigReady.catch(() => {});
+			const liveSocket = await socketReady;
 			liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
 			await user.set(sessionUser);
-			const userConfig = await getUserConfig(localStorage.token);
+			const userConfig = await userConfigReady;
 			if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 
 			const redirectPath = querystringValue('redirect') || '/';
@@ -176,7 +181,14 @@
 		await checkOauthCallback();
 
 		loaded = true;
+		await tick();
+		revealApp();
 		setLogoImage();
+
+		const nextPath = new URL(querystringValue('redirect') || '/', window.location.origin).pathname;
+		Promise.resolve()
+			.then(() => preloadCode(nextPath))
+			.catch(() => {});
 
 		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
 			await signInHandler();

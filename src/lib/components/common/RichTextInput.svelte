@@ -23,7 +23,8 @@
 	import Highlight from '@tiptap/extension-highlight';
 	import Typography from '@tiptap/extension-typography';
 	import StarterKit from '@tiptap/starter-kit';
-	import { lowlight } from '$lib/utils/codeHighlight';
+	import { lazyLowlight, loadLowlight, lowlightLoaded } from '$lib/utils/lazyLowlight';
+	import { whenAppIdle } from '$lib/utils/idle';
 
 	import { PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
 
@@ -165,7 +166,7 @@
 			extensions: [
 				StarterKit,
 				CodeBlockLowlight.configure({
-					lowlight
+					lowlight: lazyLowlight
 				}),
 				Highlight,
 				Typography,
@@ -345,7 +346,34 @@
 		if (messageInput) {
 			selectTemplate();
 		}
+
+		if (!lowlightLoaded()) {
+			const highlightCodeBlocks = () => {
+				editor?.off('update', highlightCodeBlocks);
+				return loadLowlight().then(rehighlightCodeBlocks);
+			};
+			editor.on('update', highlightCodeBlocks);
+			whenAppIdle(highlightCodeBlocks);
+		}
 	});
+
+	// The highlighter recomputes only on edits that span a code block. A same-content replacement
+	// is such an edit; it would move the cursor to the end, so the old selection is restored.
+	const rehighlightCodeBlocks = () => {
+		if (!editor || editor.isDestroyed) return;
+		const { state } = editor.view;
+		let hasCodeBlock = false;
+		state.doc.descendants((node: { type: { name: string } }) => {
+			if (node.type.name === 'codeBlock') hasCodeBlock = true;
+			return !hasCodeBlock;
+		});
+		if (!hasCodeBlock) return;
+		const selection = state.selection.getBookmark();
+		const tr = state.tr.replaceWith(0, state.doc.content.size, state.doc.content);
+		tr.setSelection(selection.resolve(tr.doc));
+		tr.setMeta('addToHistory', false);
+		editor.view.dispatch(tr);
+	};
 
 	onDestroy(() => {
 		if (editor) {

@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
@@ -17,8 +17,21 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 // 	}
 // };
 
+// i18n sets returnEmptyString: false, so an empty value already behaves as a missing one.
+// The source files keep them as the list of strings still to translate.
+const stripEmptyTranslations: Plugin = {
+	name: 'strip-empty-translations',
+	enforce: 'pre',
+	transform(code, id) {
+		if (!/\/src\/lib\/i18n\/locales\/[^/]+\/translation\.json$/.test(id)) return null;
+		const entries = Object.entries(JSON.parse(code)).filter(([, value]) => value !== '');
+		return { code: JSON.stringify(Object.fromEntries(entries)), map: null };
+	}
+};
+
 export default defineConfig({
 	plugins: [
+		stripEmptyTranslations,
 		sveltekit(),
 		viteStaticCopy({
 			targets: [

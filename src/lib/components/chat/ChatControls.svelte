@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { Pane, PaneResizer } from 'paneforge';
 
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick, type ComponentType } from 'svelte';
 	import { showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
-	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
-	import Artifacts from './Artifacts.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 
 	export let history;
 
@@ -143,6 +142,16 @@
 			OverviewHost = module.default;
 		});
 	}
+
+	let CallOverlay: ComponentType | null = null;
+	let Artifacts: ComponentType | null = null;
+	const loadCallOverlay = () =>
+		import('./MessageInput/CallOverlay.svelte').then((module) => (CallOverlay = module.default));
+	const loadArtifacts = () =>
+		import('./Artifacts.svelte').then((module) => (Artifacts = module.default));
+	$: if ($showCallOverlay && !CallOverlay) loadCallOverlay();
+	$: if ($showArtifacts && !Artifacts) loadArtifacts();
+	whenAppIdle(loadArtifacts);
 </script>
 
 	{#if !largeScreen}
@@ -163,7 +172,8 @@
 						<div
 							class=" h-full max-h-[100dvh] bg-white text-gray-700 dark:bg-black dark:text-gray-300 flex justify-center"
 						>
-							<CallOverlay
+							<svelte:component
+								this={CallOverlay}
 								bind:files
 								{submitPrompt}
 								{stopResponse}
@@ -177,7 +187,7 @@
 						</div>
 					{:else if $showArtifacts}
 						<div class="h-full max-h-[100dvh] min-h-0 overflow-hidden">
-							<Artifacts {history} />
+							<svelte:component this={Artifacts} {history} />
 						</div>
 					{:else if $showOverview && OverviewHost}
 						<svelte:component
@@ -250,7 +260,8 @@
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">
-								<CallOverlay
+								<svelte:component
+									this={CallOverlay}
 									bind:files
 									{submitPrompt}
 									{stopResponse}
@@ -264,7 +275,7 @@
 							</div>
 						{:else if $showArtifacts}
 							<div class="h-full max-h-full min-h-0 overflow-hidden">
-								<Artifacts {history} />
+								<svelte:component this={Artifacts} {history} />
 							</div>
 						{:else if $showOverview && OverviewHost}
 							<svelte:component

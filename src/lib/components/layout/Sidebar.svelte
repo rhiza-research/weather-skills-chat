@@ -23,7 +23,7 @@
 		switchingOrganization,
 		socket
 	} from '$lib/stores';
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
+	import { onMount, getContext, tick, onDestroy, type ComponentType } from 'svelte';
 
 	const i18n = getContext('i18n');
 
@@ -44,7 +44,7 @@
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
-	import ArchivedChatsModal from './Sidebar/ArchivedChatsModal.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 	import UserMenu from './Sidebar/UserMenu.svelte';
 	import ChatItem from './Sidebar/ChatItem.svelte';
 	import Spinner from '../common/Spinner.svelte';
@@ -57,6 +57,12 @@
 	import Folders from './Sidebar/Folders.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
+
+	let ArchivedChatsModal: ComponentType | null = null;
+	const loadArchivedChatsModal = () =>
+		import('./Sidebar/ArchivedChatsModal.svelte').then((m) => (ArchivedChatsModal = m.default));
+	$: if ($showArchivedChats && !ArchivedChatsModal) loadArchivedChatsModal();
+	whenAppIdle(loadArchivedChatsModal);
 
 	const BREAKPOINT = 768;
 
@@ -578,12 +584,15 @@
 	});
 </script>
 
-<ArchivedChatsModal
-	bind:show={$showArchivedChats}
-	on:change={async () => {
-		await initChatList();
-	}}
-/>
+{#if ArchivedChatsModal}
+	<svelte:component
+		this={ArchivedChatsModal}
+		bind:show={$showArchivedChats}
+		on:change={async () => {
+			await initChatList();
+		}}
+	/>
+{/if}
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 

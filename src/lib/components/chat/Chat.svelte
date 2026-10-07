@@ -52,7 +52,6 @@
 		getTimeRange
 	} from '$lib/utils';
 	import { chatScrollFor, onChatTailRequest, rememberChatScroll } from '$lib/chat/scroll';
-	import { playNotificationSound } from '$lib/utils/notificationSound';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 	import {
 		GENERATION_HEARTBEAT_ACTION,
@@ -109,6 +108,7 @@
 		fileFromDataUrl
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
+	import { revealApp } from '$lib/utils/splash';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -276,13 +276,8 @@
 		loading = true;
 		stopRequested = false;
 		chatId.set(id);
-		// Set before the first paint so the artifacts pane mounts with its
-		// contents. openArtifactsPanel also resizes it once the pane exists.
 		showOverview.set(false);
 		showCallOverlay.set(false);
-		showArtifacts.set(true);
-		showControls.set(true);
-		void openArtifactsPanel(id);
 
 		prompt = '';
 		files = [];
@@ -300,13 +295,15 @@
 			if (!ok) {
 				loading = false;
 				loadingChatId = null;
+				revealApp();
 				await goto('/');
 				return;
 			}
 
 			loading = false;
 			await tick();
-			if (chatAlive && get(chatId) === id) void openArtifactsPanel(id);
+			if (chatAlive && get(chatId) === id) await openArtifactsPanel(id);
+			revealApp();
 
 			if (localStorage.getItem(`chat-input-${id}`)) {
 				try {
@@ -327,6 +324,7 @@
 				loading = false;
 				loadingChatId = null;
 			}
+			revealApp();
 		}
 	};
 
@@ -558,7 +556,12 @@
 		stopDocumentWatch = onDocument((id, document) => {
 			if (!document || id !== get(chatId)) return;
 			const heldTop = autoScroll ? null : messagesContainerElement?.scrollTop ?? 0;
-			if (!autoScroll) noteNewMessagesBelow(document?.chat?.history?.currentId || '');
+			// Opening a chat fetches it into the cache and notifies here. That is
+			// not a new response — settleScroll is still true — so do not mark
+			// unseen or play a sound.
+			if (!autoScroll && !settleScroll) {
+				noteNewMessagesBelow(document?.chat?.history?.currentId || '');
+			}
 			if (document?.chat?.history && document.chat.history === history) {
 				// ResponseMessage keeps a clone and only refreshes when the
 				// messages object itself is replaced.
@@ -1063,6 +1066,7 @@
 
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
+		revealApp();
 	};
 
 	const applyChatDocument = (loadedChat) => {
@@ -1473,7 +1477,7 @@
 	};
 
 	const noteNewMessagesBelow = (messageId = '') => {
-		if (autoScroll) return;
+		if (autoScroll || settleScroll) return;
 		newMessagesBelow = true;
 		if (scrollChatId) {
 			const saved = chatScrollFor(scrollChatId);
@@ -1481,7 +1485,6 @@
 		}
 		if (!messageId || messageId === heardBelowId) return;
 		heardBelowId = messageId;
-		playNotificationSound();
 	};
 
 	const scrollToBottom = async () => {

@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "npm run pyodide:fetch && vite dev --host",
 		"dev:5050": "npm run pyodide:fetch && vite dev --port 5050",
-		"build": "npm run pyodide:fetch && vite build && node scripts/precompress.mjs",
+		"build": "npm run pyodide:fetch && vite build && node scripts/boot-manifest.mjs && node scripts/precompress.mjs",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

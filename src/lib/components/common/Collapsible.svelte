@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { decode } from 'html-entities';
 	import { v4 as uuidv4 } from 'uuid';
 
 	import { getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import dayjs from '$lib/dayjs';
+	import dayjs, { loadDayjsLocale } from '$lib/dayjs';
 	import duration from 'dayjs/plugin/duration';
 	import relativeTime from 'dayjs/plugin/relativeTime';
+	import { decodeEntities } from '$lib/utils/entities';
 
 	dayjs.extend(duration);
 	dayjs.extend(relativeTime);
@@ -21,20 +21,10 @@
 		return rem ? `${minutes}m ${rem}s` : `${minutes}m`;
 	};
 
-	async function loadLocale(locales) {
-		if (!Array.isArray(locales)) return;
-		for (const locale of locales) {
-			try {
-				dayjs.locale(locale);
-				break; // Stop after successfully loading the first available locale
-			} catch (error) {
-				console.error(`Could not load locale '${locale}':`, error);
-			}
-		}
-	}
-
 	// i18next.languages is unset until init finishes. Iterating it early rejects.
-	$: loadLocale($i18n?.languages);
+	$: loadDayjsLocale($i18n?.languages).catch((error) =>
+		console.error('Could not load dayjs locale:', error)
+	);
 
 	const dispatch = createEventDispatcher();
 
@@ -284,7 +274,7 @@
 		return null;
 	}
 
-	$: toolArgsRaw = attributes?.type === 'tool_calls' ? decode(attributes?.arguments ?? '') : '';
+	$: toolArgsRaw = attributes?.type === 'tool_calls' ? decodeEntities(attributes?.arguments ?? '') : '';
 	$: toolCallLabel =
 		attributes?.type === 'tool_calls'
 			? toolCallDisplay(attributes?.name ?? '', toolArgsRaw)
@@ -300,7 +290,7 @@
 		attributes?.type === 'tool_calls'
 			? extractExecuteCodeSource(attributes?.name ?? '', toolArgsRaw)
 			: null;
-	$: toolResultRaw = attributes?.type === 'tool_calls' ? decode(attributes?.result ?? '') : '';
+	$: toolResultRaw = attributes?.type === 'tool_calls' ? decodeEntities(attributes?.result ?? '') : '';
 	$: toolResult = attributes?.type === 'tool_calls' ? parseToolResult(toolResultRaw) : null;
 	$: toolFailed =
 		toolResult?.kind === 'structured' &&
@@ -309,7 +299,7 @@
 			toolResult.exit_code !== 0) ||
 			toolResult.ok === false);
 	$: toolFiles =
-		attributes?.type === 'tool_calls' ? unwrapJSON(decode(attributes?.files ?? '')) : null;
+		attributes?.type === 'tool_calls' ? unwrapJSON(decodeEntities(attributes?.files ?? '')) : null;
 
 	$: displayImagePath = (() => {
 		if (attributes?.type !== 'tool_calls' || attributes?.name !== 'display_image') {

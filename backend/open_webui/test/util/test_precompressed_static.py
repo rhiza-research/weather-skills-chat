@@ -9,6 +9,8 @@ from starlette.testclient import TestClient
 from open_webui.utils.precompressed_static import (
 	IMMUTABLE_CACHE_CONTROL,
 	STATIC_AUDIO_CACHE_CONTROL,
+	STATIC_FONT_CACHE_CONTROL,
+	HTML_CACHE_CONTROL,
 	STATIC_IMAGE_CACHE_CONTROL,
 	ImageCachedStaticFiles,
 	PrecompressedStaticFiles,
@@ -79,13 +81,19 @@ class PrecompressedStaticFilesTest(unittest.TestCase):
 
 			page = client.get("/index.html")
 			self.assertEqual(page.status_code, 200)
-			self.assertNotIn("cache-control", page.headers)
+			self.assertEqual(page.headers["cache-control"], HTML_CACHE_CONTROL)
 
 			(root / "audio").mkdir()
 			(root / "audio" / "notification.mp3").write_bytes(b"ID3" + b"\x00" * 32)
 			sound = client.get("/audio/notification.mp3")
 			self.assertEqual(sound.status_code, 200)
 			self.assertEqual(sound.headers["cache-control"], STATIC_AUDIO_CACHE_CONTROL)
+
+			(root / "assets" / "fonts").mkdir(parents=True)
+			(root / "assets" / "fonts" / "Archivo-Variable.woff2").write_bytes(b"wOF2" + b"\x00" * 32)
+			font = client.get("/assets/fonts/Archivo-Variable.woff2")
+			self.assertEqual(font.status_code, 200)
+			self.assertEqual(font.headers["cache-control"], STATIC_FONT_CACHE_CONTROL)
 
 		self.assertIsNone(immutable_cache_control("assets/fonts/Archivo-Variable.woff2"))
 		self.assertIsNone(immutable_cache_control("_app/immutable/nodes/app.html"))
