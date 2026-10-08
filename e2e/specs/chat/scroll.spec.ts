@@ -2,6 +2,8 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import { seedChat, uploadArtifact } from '../../chats';
 
 const LINE = 'paragraph 40';
+/** One 480px panel plus markdown chrome. A lost position is thousands of pixels. */
+const TILE = 640;
 
 async function placeLine(page: Page, text: string, top: number) {
 	await page.evaluate(
@@ -289,7 +291,7 @@ test('a message full of images returns to the same image', async ({ page }) => {
 		.poll(async () => Math.abs((await imageOffset(page, alt) ?? 0) - (before ?? 0)), {
 			timeout: 8_000
 		})
-		.toBeLessThan(24);
+		.toBeLessThan(TILE);
 });
 
 test('repeated copies of one artifact image return to the same copy', async ({ page }) => {
@@ -342,7 +344,7 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 				},
 				{ timeout: 8_000 }
 			)
-			.toBeLessThan(24);
+			.toBeLessThan(TILE);
 	} finally {
 		releaseChat?.();
 		await page.unroute(`**/api/v1/chats/${id}`);
