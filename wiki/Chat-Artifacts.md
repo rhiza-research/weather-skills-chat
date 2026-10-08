@@ -1,6 +1,6 @@
 # Chat Artifacts
 
-Every saved chat has its own space for files, called its artifacts. When the model runs a skill from [[Skill Packs]], the skill reads and writes files there: downloaded data, processed datasets, and plots. Users browse these files next to the chat, view them, and download them, and the chat's owner can upload files of their own. Temporary chats have no artifacts.
+Every saved chat has its own space for files, called its artifacts. When the model runs a skill from [[Skill Packs]], the skill reads and writes files there: downloaded data, processed datasets, and plots. Users browse these files next to the chat, view them, and download them, and the chat's owner can upload files of their own. Temporary chats have no artifacts. Skills run from an MCP client write to the files of that user's MCP session chat, described on [[MCP Endpoint]].
 
 Each chat also has an intermediate results folder, where skills leave data for the next step of a pipeline.
 

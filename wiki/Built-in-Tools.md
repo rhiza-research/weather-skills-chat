@@ -1,6 +1,6 @@
 # Built-in Tools
 
-Besides the skills on [[Skill Packs]] and any Workspace tools selected for a chat, the model always has a set of built-in tools. Users do not need to select them.
+Besides the skills on [[Skill Packs]] and any Workspace tools selected for a chat, the model always has a set of built-in tools. Users do not need to select them. MCP clients get a different set, described on [[MCP Endpoint]].
 
 ## Tools the model always has
 
