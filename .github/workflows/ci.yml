@@ -159,6 +159,20 @@ jobs:
             weather-skills-chat:e2e \
             python ci_skill_sandbox_check.py
 
+      - name: Run a Plotly skill under sandlock and landlock_only
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/scripts/ci_skill_plotly_check.py:/app/backend/ci_skill_plotly_check.py:ro" \
+            -v ci-plotly-venvs:/var/skill-venvs \
+            -v /mnt/gcs-data \
+            -e WEBUI_SECRET_KEY=ci-sandbox-check-secret \
+            -e SKILL_VENV_ROOT=/var/skill-venvs \
+            -e SKILLS_DIR=/mnt/gcs-data/skills \
+            -e ARTIFACTS_DIR=/mnt/gcs-data/artifacts \
+            -e USER_CACHES_DIR=/mnt/gcs-data/user_caches \
+            weather-skills-chat:e2e \
+            python ci_skill_plotly_check.py
+
       - name: Start app
         run: |
           docker run -d --name weather-skills-chat-e2e \
