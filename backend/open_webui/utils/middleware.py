@@ -124,6 +124,18 @@ GENERATION_HEARTBEAT_INTERVAL_S = float(
 )
 
 
+def completion_revision(chat_id: str | None) -> int:
+    """Revision after the turn's transcript write. The client adopts this
+    from the same completion event that unlocks the next send."""
+    if not chat_id:
+        return 0
+    try:
+        return Chats.get_chat_revision(chat_id)
+    except Exception:
+        log.warning("Reading chat revision failed chat_id=%s", chat_id, exc_info=True)
+        return 0
+
+
 def tool_call_files_for_display(
     tool_name: str, tool_result_files: Optional[list]
 ) -> Optional[list]:
@@ -608,7 +620,6 @@ async def chat_completion_tools_handler(
         del body["metadata"]["files"]
 
     return body, {"sources": sources}
-
 
 
 async def chat_image_generation_handler(
@@ -1287,7 +1298,7 @@ async def emit_chat_title_if_needed(
                 ),
                 messages[0].get("content", "New Chat"),
             )
-            Chats.update_chat_title_by_id(chat_id, title)
+            await asyncio.to_thread(Chats.update_chat_title_by_id, chat_id, title)
             emitter = get_event_emitter(metadata)
             if emitter:
                 await emitter({"type": "chat:title", "data": title})
@@ -1340,7 +1351,7 @@ async def emit_chat_title_if_needed(
             messages[0].get("content", "New Chat"),
         )
 
-    Chats.update_chat_title_by_id(chat_id, title)
+    await asyncio.to_thread(Chats.update_chat_title_by_id, chat_id, title)
 
     emitter = get_event_emitter(metadata)
     if emitter:
@@ -1404,8 +1415,11 @@ async def process_chat_response(
 
                         try:
                             tags = json.loads(tags_string).get("tags", [])
-                            Chats.update_chat_tags_by_id(
-                                metadata["chat_id"], tags, user
+                            await asyncio.to_thread(
+                                Chats.update_chat_tags_by_id,
+                                metadata["chat_id"],
+                                tags,
+                                user,
                             )
 
                             await event_emitter(
@@ -1435,7 +1449,8 @@ async def process_chat_response(
         if event_emitter:
             if "error" in response:
                 error = response["error"].get("detail", response["error"])
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await asyncio.to_thread(
+                    Chats.upsert_message_to_chat_by_id_and_message_id,
                     metadata["chat_id"],
                     metadata["message_id"],
                     {
@@ -1444,12 +1459,14 @@ async def process_chat_response(
                 )
 
             if "selected_model_id" in response:
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await asyncio.to_thread(
+                    Chats.upsert_message_to_chat_by_id_and_message_id,
                     metadata["chat_id"],
                     metadata["message_id"],
                     {
                         "selectedModelId": response["selected_model_id"],
                     },
+                    bump_revision=False,
                 )
 
             choices = response.get("choices", [])
@@ -1467,6 +1484,17 @@ async def process_chat_response(
 
                     title = Chats.get_chat_title_by_id(metadata["chat_id"])
 
+                    from open_webui.utils.chat_realtime import (
+                        REPLY_SAVE_FAILED_MESSAGE,
+                        save_final_reply,
+                    )
+
+                    saved = await save_final_reply(
+                        metadata["chat_id"],
+                        metadata["message_id"],
+                        {"content": content, "done": True},
+                    )
+
                     await event_emitter(
                         {
                             "type": "chat:completion",
@@ -1474,17 +1502,16 @@ async def process_chat_response(
                                 "done": True,
                                 "content": content,
                                 "title": title,
+                                "revision": completion_revision(metadata["chat_id"]),
+                                **(
+                                    {}
+                                    if saved
+                                    else {
+                                        "error": {"content": REPLY_SAVE_FAILED_MESSAGE}
+                                    }
+                                ),
                             },
                         }
-                    )
-
-                    # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata["chat_id"],
-                        metadata["message_id"],
-                        {
-                            "content": content,
-                        },
                     )
 
                     # Send a webhook notification if the user is not active
@@ -1546,12 +1573,14 @@ async def process_chat_response(
         if waiting_heartbeat is None:
             waiting_heartbeat = WaitingResponseHeartbeat(event_emitter)
 
-        Chats.upsert_message_to_chat_by_id_and_message_id(
+        await asyncio.to_thread(
+            Chats.upsert_message_to_chat_by_id_and_message_id,
             metadata["chat_id"],
             metadata["message_id"],
             {
                 "model": model_id,
             },
+            bump_revision=False,
         )
 
         def split_content_and_whitespace(content):
@@ -2086,13 +2115,14 @@ async def process_chat_response(
                         }
                     )
 
-                    # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await asyncio.to_thread(
+                        Chats.upsert_message_to_chat_by_id_and_message_id,
                         metadata["chat_id"],
                         metadata["message_id"],
                         {
                             **event,
                         },
+                        bump_revision=False,
                     )
 
                 async def stream_body_handler(response):
@@ -2152,12 +2182,14 @@ async def process_chat_response(
 
                                     if "selected_model_id" in data:
                                         model_id = data["selected_model_id"]
-                                        Chats.upsert_message_to_chat_by_id_and_message_id(
+                                        await asyncio.to_thread(
+                                            Chats.upsert_message_to_chat_by_id_and_message_id,
                                             metadata["chat_id"],
                                             metadata["message_id"],
                                             {
                                                 "selectedModelId": model_id,
                                             },
+                                            bump_revision=False,
                                         )
                                     else:
                                         choices = data.get("choices", [])
@@ -2354,8 +2386,8 @@ async def process_chat_response(
                                                 )
 
                                             if ENABLE_REALTIME_CHAT_SAVE:
-                                                # Save message in the database
-                                                Chats.upsert_message_to_chat_by_id_and_message_id(
+                                                await asyncio.to_thread(
+                                                    Chats.upsert_message_to_chat_by_id_and_message_id,
                                                     metadata["chat_id"],
                                                     metadata["message_id"],
                                                     {
@@ -2363,6 +2395,7 @@ async def process_chat_response(
                                                             content_blocks
                                                         ),
                                                     },
+                                                    bump_revision=False,
                                                 )
                                             else:
                                                 data = {
@@ -2938,22 +2971,64 @@ async def process_chat_response(
                         )
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])
-                data = {
-                    "done": True,
-                    "content": serialize_content_blocks(content_blocks),
-                    "title": title,
-                }
+                final_content = serialize_content_blocks(content_blocks)
+                try:
+                    from open_webui.utils.chat import chat_completed as apply_outlet
 
+                    message_map = Chats.get_messages_by_chat_id(metadata["chat_id"]) or {}
+                    outlet_messages = get_message_list(
+                        message_map, metadata["message_id"]
+                    ) or []
+                    if outlet_messages:
+                        outlet_messages[-1] = {
+                            **outlet_messages[-1],
+                            "content": final_content,
+                            "done": True,
+                        }
+                    outlet = await apply_outlet(
+                        request,
+                        {
+                            "model": form_data.get("model"),
+                            "messages": outlet_messages,
+                            "chat_id": metadata["chat_id"],
+                            "session_id": metadata.get("session_id"),
+                            "id": metadata["message_id"],
+                        },
+                        user,
+                    )
+                    if isinstance(outlet, dict):
+                        for outlet_message in outlet.get("messages") or []:
+                            if (
+                                outlet_message.get("id") == metadata["message_id"]
+                                and outlet_message.get("content") is not None
+                            ):
+                                final_content = outlet_message["content"]
+                except Exception:
+                    log.debug("outlet filter failed", exc_info=True)
+
+                from open_webui.utils.chat_realtime import (
+                    REPLY_SAVE_FAILED_MESSAGE,
+                    save_final_reply,
+                )
+
+                saved = True
                 if not ENABLE_REALTIME_CHAT_SAVE:
-                    # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    # A failed save is reported on the reply, not as a failed
+                    # generation: the model finished, the database did not.
+                    saved = await save_final_reply(
                         metadata["chat_id"],
                         metadata["message_id"],
-                        {
-                            "content": serialize_content_blocks(content_blocks),
-                            "done": True,
-                        },
+                        {"content": final_content, "done": True},
                     )
+
+                data = {
+                    "done": True,
+                    "content": final_content,
+                    "title": title,
+                    "revision": completion_revision(metadata["chat_id"]),
+                }
+                if not saved:
+                    data["error"] = {"content": REPLY_SAVE_FAILED_MESSAGE}
 
                 # Send a webhook notification if the user is not active
                 if get_active_status_by_user_id(user.id) is None:
@@ -2985,26 +3060,33 @@ async def process_chat_response(
                 complete_open_tool_calls("Cancelled by user.")
 
                 cancelled_content = serialize_content_blocks(content_blocks)
+                from open_webui.utils.chat_realtime import (
+                    REPLY_SAVE_FAILED_MESSAGE,
+                    save_final_reply,
+                )
+
+                saved = await save_final_reply(
+                    metadata["chat_id"],
+                    metadata["message_id"],
+                    {"content": cancelled_content, "done": True},
+                )
                 await event_emitter(
                     {
                         "type": "chat:completion",
                         "data": {
                             "content": cancelled_content,
                             "done": True,
+                            "revision": completion_revision(metadata["chat_id"]),
+                            **(
+                                {}
+                                if saved
+                                else {"error": {"content": REPLY_SAVE_FAILED_MESSAGE}}
+                            ),
                         },
                     }
                 )
                 await event_emitter({"type": "task-cancelled"})
                 end_chat_trace(error="cancelled")
-
-                Chats.upsert_message_to_chat_by_id_and_message_id(
-                    metadata["chat_id"],
-                    metadata["message_id"],
-                    {
-                        "content": cancelled_content,
-                        "done": True,
-                    },
-                )
                 try:
                     await emit_chat_title_if_needed(
                         request, form_data, user, metadata, tasks=tasks
@@ -3027,6 +3109,13 @@ async def process_chat_response(
                         "tools or artifacts that already completed."
                     )
                 }
+                from open_webui.utils.chat_realtime import save_final_reply
+
+                await save_final_reply(
+                    metadata["chat_id"],
+                    metadata["message_id"],
+                    {"content": failed_content, "done": True, "error": error_payload},
+                )
                 try:
                     await event_emitter(
                         {
@@ -3035,23 +3124,12 @@ async def process_chat_response(
                                 "content": failed_content,
                                 "done": True,
                                 "error": error_payload,
+                                "revision": completion_revision(metadata["chat_id"]),
                             },
                         }
                     )
                 except Exception:
                     log.debug("Failed to emit generation error event", exc_info=True)
-                try:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata["chat_id"],
-                        metadata["message_id"],
-                        {
-                            "content": failed_content,
-                            "done": True,
-                            "error": error_payload,
-                        },
-                    )
-                except Exception:
-                    log.debug("Failed to persist generation error", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
                 await generation_heartbeat.stop(clear=True)

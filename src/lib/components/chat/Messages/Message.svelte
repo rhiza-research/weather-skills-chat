@@ -39,6 +39,7 @@
 	export let addMessages;
 	export let triggerScroll;
 	export let readOnly = false;
+	export let paintKey = 0;
 </script>
 
 <div
@@ -64,6 +65,7 @@
 				{editMessage}
 				{deleteMessage}
 				{readOnly}
+				{paintKey}
 			/>
 		{:else if (history.messages[history.messages[messageId].parentId]?.models?.length ?? 1) === 1}
 			<ResponseMessage
@@ -86,6 +88,7 @@
 				{regenerateResponse}
 				{addMessages}
 				{readOnly}
+				{paintKey}
 			/>
 		{:else}
 			<MultiResponseMessages

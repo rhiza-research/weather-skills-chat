@@ -9,28 +9,6 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 	return res.json();
 };
 
-// Joins the artifact-list request started when a chat load begins. Not a cache:
-// the panel consumes it once, and later polls fetch again.
-let artifactListInflight: { chatId: string; promise: Promise<unknown> } | null = null;
-
-export const prefetchChatArtifacts = (token: string, chatId: string) => {
-	const promise = getChatArtifacts(token, chatId);
-	artifactListInflight = { chatId, promise };
-	promise.catch(() => {
-		if (artifactListInflight?.promise === promise) {
-			artifactListInflight = null;
-		}
-	});
-	return promise;
-};
-
-export const takePrefetchedChatArtifacts = (chatId: string) => {
-	if (artifactListInflight?.chatId !== chatId) return null;
-	const promise = artifactListInflight.promise;
-	artifactListInflight = null;
-	return promise;
-};
-
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 

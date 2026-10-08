@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { Pane, PaneResizer } from 'paneforge';
 
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick, type ComponentType } from 'svelte';
 	import { showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
-	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
-	import Artifacts from './Artifacts.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 
 	export let history;
 
@@ -29,6 +28,10 @@
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
 	const MAX_SIZE = 45;
+	// Initial layout reports size 0 and fires onCollapse. That is not the user
+	// closing the pane, and treating it as one clears the artifacts flag after
+	// the pane has already been stretched open.
+	let userResizing = false;
 
 	$: panelOpen = $showCallOverlay || $showOverview || $showArtifacts;
 
@@ -41,7 +44,7 @@
 	};
 
 	export const openPane = () => {
-		if (!pane) return;
+		if (!pane || !($showControls && panelOpen)) return;
 		try {
 			const size = readStoredSize();
 			pane.resize(Math.max(minSize, Math.min(MAX_SIZE, size)));
@@ -105,8 +108,10 @@
 			resizeObserver.observe(container);
 		}
 
-		if (largeScreen && $showControls) {
-			tick().then(() => openPane());
+		if (largeScreen && $showControls && panelOpen) {
+			tick().then(() => {
+				if ($showControls && panelOpen) openPane();
+			});
 		}
 
 		return () => {
@@ -120,18 +125,15 @@
 		mediaQuery?.removeEventListener('change', handleMediaQuery);
 	});
 
-	const clearPanelFlags = () => {
-		showControls.set(false);
-		showOverview.set(false);
-		showArtifacts.set(false);
-		if ($showCallOverlay) {
-			showCallOverlay.set(false);
+	// A closed panel must not stay stretched open. isExpanded() is true before
+	// the pane is registered, and that swallowed collapse left a wide empty shell.
+	$: if (largeScreen && pane && !($showControls && panelOpen)) {
+		try {
+			const size = pane.getSize?.();
+			if (typeof size === 'number' && size > 0) pane.collapse();
+		} catch (e) {
+			// Pane may already be gone.
 		}
-	};
-
-	// When chat id is cleared, hide the panel.
-	$: if (!chatId) {
-		clearPanelFlags();
 	}
 
 	let OverviewHost = null;
@@ -140,6 +142,16 @@
 			OverviewHost = module.default;
 		});
 	}
+
+	let CallOverlay: ComponentType | null = null;
+	let Artifacts: ComponentType | null = null;
+	const loadCallOverlay = () =>
+		import('./MessageInput/CallOverlay.svelte').then((module) => (CallOverlay = module.default));
+	const loadArtifacts = () =>
+		import('./Artifacts.svelte').then((module) => (Artifacts = module.default));
+	$: if ($showCallOverlay && !CallOverlay) loadCallOverlay();
+	$: if ($showArtifacts && !Artifacts) loadArtifacts();
+	whenAppIdle(loadArtifacts);
 </script>
 
 	{#if !largeScreen}
@@ -160,7 +172,8 @@
 						<div
 							class=" h-full max-h-[100dvh] bg-white text-gray-700 dark:bg-black dark:text-gray-300 flex justify-center"
 						>
-							<CallOverlay
+							<svelte:component
+								this={CallOverlay}
 								bind:files
 								{submitPrompt}
 								{stopResponse}
@@ -174,7 +187,7 @@
 						</div>
 					{:else if $showArtifacts}
 						<div class="h-full max-h-[100dvh] min-h-0 overflow-hidden">
-							<Artifacts {history} />
+							<svelte:component this={Artifacts} {history} />
 						</div>
 					{:else if $showOverview && OverviewHost}
 						<svelte:component
@@ -193,7 +206,12 @@
 		{/if}
 	{:else}
 		{#if $showControls && panelOpen}
-			<PaneResizer class="relative flex w-2 items-center justify-center bg-background group">
+			<PaneResizer
+				class="relative flex w-2 items-center justify-center bg-background group"
+				onDraggingChange={(dragging) => {
+					userResizing = dragging;
+				}}
+			>
 				<div class="z-10 flex h-7 w-5 items-center justify-center rounded-xs">
 					<EllipsisVertical className="size-4 invisible group-hover:visible" />
 				</div>
@@ -206,15 +224,27 @@
 			minSize={minSize}
 			maxSize={MAX_SIZE}
 			onResize={(size) => {
-				if ($showControls && pane?.isExpanded?.()) {
+				if ($showControls && panelOpen) {
 					if (size >= minSize && size <= MAX_SIZE) {
 						localStorage.chatControlsSize = size;
 					}
+					return;
+				}
+				if (size > 0) {
+					queueMicrotask(() => {
+						if ($showControls && ($showArtifacts || $showOverview || $showCallOverlay)) return;
+						try {
+							if ((pane?.getSize?.() ?? 0) > 0) pane.collapse();
+						} catch (e) {
+							// Pane may already be gone.
+						}
+					});
 				}
 			}}
 			onCollapse={() => {
-				// User dragged the pane closed — sync UI only.
-				// Preference is written by the navbar/close button.
+				// Library also calls this when the pane first lays out at size 0.
+				// Only a drag the user started should close the artifacts panel.
+				if (!userResizing) return;
 				showControls.set(false);
 				showArtifacts.set(false);
 			}}
@@ -230,7 +260,8 @@
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">
-								<CallOverlay
+								<svelte:component
+									this={CallOverlay}
 									bind:files
 									{submitPrompt}
 									{stopResponse}
@@ -244,7 +275,7 @@
 							</div>
 						{:else if $showArtifacts}
 							<div class="h-full max-h-full min-h-0 overflow-hidden">
-								<Artifacts {history} />
+								<svelte:component this={Artifacts} {history} />
 							</div>
 						{:else if $showOverview && OverviewHost}
 							<svelte:component

@@ -4,14 +4,20 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	import { chatId, settings, showArtifacts, showControls, artifactsRefresh } from '$lib/stores';
+	import {
+		chatId,
+		settings,
+		showArtifacts,
+		showControls,
+		chatArtifactLists
+	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
-		getChatArtifacts,
 		getZarrRenderUrl,
-		takePrefetchedChatArtifacts,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
+	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
+	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
 	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
@@ -37,16 +43,9 @@
 	let modalAlt = '';
 	let uploading = false;
 	let fileInput: HTMLInputElement;
-	let pollId: ReturnType<typeof setInterval> | null = null;
 	let loadingFiles = false;
 	let loadQueued = false;
-
-	const clearPoll = () => {
-		if (pollId != null) {
-			clearInterval(pollId);
-			pollId = null;
-		}
-	};
+	let loadedArtifactKey = '';
 
 	const revokePreview = () => {
 		if (previewUrl) {
@@ -120,10 +119,12 @@
 		}
 		loadingFiles = true;
 		try {
-			const prefetched = takePrefetchedChatArtifacts($chatId);
-			files = await (prefetched ?? getChatArtifacts(localStorage.token, $chatId));
+			const id = $chatId;
+			const listed = await refreshArtifacts(localStorage.token, id);
+			files = Array.isArray(listed) ? listed : [];
 		} catch (e) {
 			files = [];
+			loadedArtifactKey = '';
 			console.error(e);
 		} finally {
 			loadingFiles = false;
@@ -160,18 +161,21 @@
 		}
 	};
 
-	// Reload when the panel opens / chat changes / an explicit refresh is requested,
-	// and keep polling while open so skill writes show up without collapsing the pane.
+	// A cached file list paints with the transcript. Fetch only when this chat
+	// has no list yet. Later changes arrive on chat:artifacts, or from an upload.
 	$: {
-		clearPoll();
 		if ($showArtifacts && $chatId && $chatId !== 'local') {
-			void $artifactsRefresh;
-			loadFiles();
-			pollId = setInterval(() => {
+			const listed = $chatArtifactLists[$chatId];
+			if (Array.isArray(listed)) {
+				files = listed;
+				loadedArtifactKey = $chatId;
+			} else if (shouldLoadArtifactList(listed) && loadedArtifactKey !== $chatId) {
+				loadedArtifactKey = $chatId;
 				loadFiles();
-			}, 2000);
-		} else if (!$chatId || $chatId === 'local') {
-			files = [];
+			}
+		} else {
+			if (!$chatId || $chatId === 'local') files = [];
+			loadedArtifactKey = '';
 		}
 	}
 
@@ -314,7 +318,6 @@
 	};
 
 	onDestroy(() => {
-		clearPoll();
 		revokePreview();
 	});
 </script>

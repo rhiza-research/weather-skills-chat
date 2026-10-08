@@ -20,9 +20,11 @@
 		isApp,
 		organizations,
 		activeOrganizationId,
-		switchingOrganization
+		switchingOrganization,
+		socket
 	} from '$lib/stores';
-	import { onMount, getContext, tick, onDestroy } from 'svelte';
+	import { onMount, getContext, tick, onDestroy, type ComponentType } from 'svelte';
+	import { setSidebarRefresh } from '$lib/chat/reconnect';
 
 	const i18n = getContext('i18n');
 
@@ -43,7 +45,7 @@
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
-	import ArchivedChatsModal from './Sidebar/ArchivedChatsModal.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 	import UserMenu from './Sidebar/UserMenu.svelte';
 	import ChatItem from './Sidebar/ChatItem.svelte';
 	import Spinner from '../common/Spinner.svelte';
@@ -56,6 +58,12 @@
 	import Folders from './Sidebar/Folders.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
+
+	let ArchivedChatsModal: ComponentType | null = null;
+	const loadArchivedChatsModal = () =>
+		import('./Sidebar/ArchivedChatsModal.svelte').then((m) => (ArchivedChatsModal = m.default));
+	$: if ($showArchivedChats && !ArchivedChatsModal) loadArchivedChatsModal();
+	whenAppIdle(loadArchivedChatsModal);
 
 	const BREAKPOINT = 768;
 
@@ -76,17 +84,22 @@
 	/** Which chat time-range sections are expanded in the sidebar. Missing keys default to open. */
 	let openTimeRanges: Record<string, boolean> = {};
 
+	const TIME_RANGE_ORDER = ['Today', 'Yesterday', 'Previous 7 days', 'Previous 30 days'];
+
 	const groupChatsByTimeRange = (chatList: any[] | null | undefined) => {
-		const groups: { time_range: string; chats: any[] }[] = [];
+		const grouped = new Map<string, any[]>();
+		const extra: string[] = [];
 		for (const chat of chatList ?? []) {
-			const last = groups.at(-1);
-			if (!last || last.time_range !== chat.time_range) {
-				groups.push({ time_range: chat.time_range, chats: [chat] });
-			} else {
-				last.chats.push(chat);
+			const range = chat.time_range || 'Today';
+			if (!grouped.has(range)) {
+				grouped.set(range, []);
+				if (!TIME_RANGE_ORDER.includes(range)) extra.push(range);
 			}
+			grouped.get(range)!.push(chat);
 		}
-		return groups;
+		return [...TIME_RANGE_ORDER.filter((range) => grouped.has(range)), ...extra].map(
+			(time_range) => ({ time_range, chats: grouped.get(time_range) ?? [] })
+		);
 	};
 
 	const timeRangeKey = (scope: string, timeRange: string) => `${scope}::${timeRange}`;
@@ -300,27 +313,12 @@
 				...newcomers,
 				...existing.map((c) => (latestById[c.id] ? { ...c, ...latestById[c.id] } : c))
 			];
+			merged.sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
 			if (newcomers.length > 0 || merged.some((c, i) => c !== existing[i])) {
 				await chats.set(merged);
 			}
 		} catch (e) {
 			console.error(e);
-		}
-	};
-
-	let chatListPollId = null;
-
-	const startChatListPoll = () => {
-		if (chatListPollId != null) return;
-		chatListPollId = setInterval(() => {
-			softRefreshChatList();
-		}, 15000);
-	};
-
-	const stopChatListPoll = () => {
-		if (chatListPollId != null) {
-			clearInterval(chatListPollId);
-			chatListPollId = null;
 		}
 	};
 
@@ -492,7 +490,7 @@
 	};
 
 	const onFocus = () => {
-		softRefreshChatList();
+		if (!$socket?.connected) softRefreshChatList();
 	};
 
 	const onBlur = () => {
@@ -500,12 +498,13 @@
 	};
 
 	const onVisibilityChange = () => {
-		if (document.visibilityState === 'visible') {
+		if (document.visibilityState === 'visible' && !$socket?.connected) {
 			softRefreshChatList();
 		}
 	};
 
 	onMount(async () => {
+		setSidebarRefresh(softRefreshChatList);
 		showPinnedChat = localStorage?.showPinnedChat ? localStorage.showPinnedChat === 'true' : true;
 		try {
 			const stored = localStorage?.chatTimeRangeOpen
@@ -556,7 +555,6 @@
 		});
 
 		await initChatList();
-		startChatListPoll();
 
 		window.addEventListener('touchstart', onTouchStart);
 		window.addEventListener('touchend', onTouchEnd);
@@ -573,8 +571,7 @@
 	});
 
 	onDestroy(() => {
-		stopChatListPoll();
-
+		setSidebarRefresh(null);
 		window.removeEventListener('touchstart', onTouchStart);
 		window.removeEventListener('touchend', onTouchEnd);
 
@@ -590,12 +587,15 @@
 	});
 </script>
 
-<ArchivedChatsModal
-	bind:show={$showArchivedChats}
-	on:change={async () => {
-		await initChatList();
-	}}
-/>
+{#if ArchivedChatsModal}
+	<svelte:component
+		this={ArchivedChatsModal}
+		bind:show={$showArchivedChats}
+		on:change={async () => {
+			await initChatList();
+		}}
+	/>
+{/if}
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 

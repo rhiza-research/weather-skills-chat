@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import time
 from typing import Optional
 
 
@@ -8,6 +10,7 @@ from open_webui.models.chats import (
     ChatForm,
     ChatImportForm,
     ChatResponse,
+    ChatWriteError,
     Chats,
     ChatTitleIdResponse,
 )
@@ -17,7 +20,7 @@ from open_webui.models.users import Users
 
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import SRC_LOG_LEVELS
+from open_webui.env import SRC_LOG_LEVELS, ENABLE_E2E_FIXTURES
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -97,6 +100,40 @@ async def get_session_user_chat_list(
     return _attach_owner_names(chats)
 
 
+class E2EAgeForm(BaseModel):
+    days_ago: int
+
+
+def _require_e2e_fixtures():
+    if not ENABLE_E2E_FIXTURES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+
+@router.post("/e2e/clear", response_model=bool)
+async def e2e_clear_chats(user=Depends(get_verified_user)):
+    _require_e2e_fixtures()
+    return await asyncio.to_thread(Chats.delete_chats_by_user_id, user.id)
+
+
+@router.post("/{id}/e2e/age", response_model=Optional[ChatResponse])
+async def e2e_age_chat(id: str, form_data: E2EAgeForm, user=Depends(get_verified_user)):
+    _require_e2e_fixtures()
+    _require_writable_chat(id, user)
+    if form_data.days_ago < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
+        )
+    unix = int(time.time()) - form_data.days_ago * 24 * 3600
+    updated = await asyncio.to_thread(Chats.set_chat_times, id, unix, unix)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    return ChatResponse(**updated.model_dump())
+
+
 ############################
 # DeleteAllChats
 ############################
@@ -113,7 +150,7 @@ async def delete_all_user_chats(request: Request, user=Depends(get_verified_user
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    result = Chats.delete_chats_by_user_id(user.id)
+    result = await asyncio.to_thread(Chats.delete_chats_by_user_id, user.id)
     return result
 
 
@@ -168,7 +205,7 @@ async def create_new_chat(
         form_data.visibility = resolve_visibility(
             form_data.organization_id, form_data.visibility
         )
-        chat = Chats.insert_new_chat(user.id, form_data)
+        chat = await asyncio.to_thread(Chats.insert_new_chat, user.id, form_data)
         return ChatResponse(**chat.model_dump())
     except HTTPException:
         raise
@@ -193,7 +230,7 @@ async def import_chat(
     try:
         if not form_data.organization_id:
             form_data.organization_id = organization_id
-        chat = Chats.import_chat(user.id, form_data)
+        chat = await asyncio.to_thread(Chats.import_chat, user.id, form_data)
         if chat:
             tags = chat.meta.get("tags", [])
             for tag_id in tags:
@@ -253,6 +290,48 @@ async def search_user_chats(
                 Tags.delete_tag_by_name_and_user_id(tag_id, user.id)
 
     return chat_list
+
+
+############################
+# Recent chats for the in-memory cache
+############################
+
+
+@router.get("/recent")
+async def get_recent_chats(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    from types import SimpleNamespace
+
+    refs = Chats.get_recent_workspace_chat_refs(
+        user.id,
+        organization_id,
+        include_shared=not is_personal_org(organization_id),
+    )
+    rows = []
+    for ref in refs:
+        probe = SimpleNamespace(
+            user_id=ref["user_id"],
+            organization_id=ref["organization_id"],
+            visibility=ref["visibility"],
+        )
+        if not can_read_chat(user, probe):
+            continue
+        rows.append(
+            {
+                "id": ref["id"],
+                "updated_at": ref["updated_at"],
+                "revision": ref["revision"],
+            }
+        )
+    return rows
+
+
+class HistoryPatchForm(BaseModel):
+    upsert: dict = {}
+    delete: list[str] = []
+    expected_revision: Optional[int] = None
 
 
 ############################
@@ -374,7 +453,7 @@ async def get_archived_session_user_chat_list(
 
 @router.post("/archive/all", response_model=bool)
 async def archive_all_chats(user=Depends(get_verified_user)):
-    return Chats.archive_all_chats_by_user_id(user.id)
+    return await asyncio.to_thread(Chats.archive_all_chats_by_user_id, user.id)
 
 
 ############################
@@ -450,10 +529,64 @@ async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def update_chat_by_id(
     id: str, form_data: ChatForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
-    updated_chat = {**chat.chat, **form_data.chat}
-    chat = Chats.update_chat_by_id(id, updated_chat)
+    _require_writable_chat(id, user)
+    try:
+        chat = await asyncio.to_thread(Chats.update_chat_fields, id, form_data.chat)
+    except ChatWriteError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+                if exc.busy
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=exc.message,
+        ) from exc
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be saved. Please try again.",
+        )
     return ChatResponse(**chat.model_dump())
+
+
+@router.post("/{id}/history")
+async def patch_chat_history(
+    id: str, form_data: HistoryPatchForm, user=Depends(get_verified_user)
+):
+    chat = _require_writable_chat(id, user)
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    updated, state = Chats.apply_history_patch(
+        id,
+        form_data.upsert or {},
+        form_data.delete or [],
+        form_data.expected_revision,
+    )
+    if state == "conflict":
+        from open_webui.utils.chat_realtime import chat_revision, schedule_chat_committed
+
+        schedule_chat_committed(id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Another user has edited the chat. Please try again.",
+                "revision": chat_revision(updated) if updated else 0,
+            },
+        )
+    if state == "error":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The chat could not be saved. Please try again.",
+        )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be saved. Please try again.",
+        )
+    return ChatResponse(**updated.model_dump())
 
 
 ############################
@@ -481,7 +614,8 @@ async def update_chat_message_by_id(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    chat = Chats.upsert_message_to_chat_by_id_and_message_id(
+    chat = await asyncio.to_thread(
+        Chats.upsert_message_to_chat_by_id_and_message_id,
         id,
         message_id,
         {
@@ -591,9 +725,29 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
     except Exception:
         log.exception("Failed to delete chat artifacts")
 
-    if user.role == "admin":
-        return Chats.delete_chat_by_id(id)
-    return Chats.delete_chat_by_id_and_user_id(id, user.id)
+    from open_webui.utils.chat_realtime import publish_chat_removed
+
+    try:
+        deleted = (
+            await asyncio.to_thread(Chats.delete_chat_by_id, id)
+            if user.role == "admin"
+            else await asyncio.to_thread(
+                Chats.delete_chat_by_id_and_user_id, id, user.id
+            )
+        )
+    except Exception:
+        log.exception("Failed to delete chat")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The chat could not be deleted. Please try again.",
+        )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be deleted. Please try again.",
+        )
+    await publish_chat_removed(chat)
+    return deleted
 
 
 ############################
@@ -615,7 +769,7 @@ async def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
 @router.post("/{id}/pin", response_model=Optional[ChatResponse])
 async def pin_chat_by_id(id: str, user=Depends(get_verified_user)):
     _require_writable_chat(id, user)
-    return Chats.toggle_chat_pinned_by_id(id)
+    return await asyncio.to_thread(Chats.toggle_chat_pinned_by_id, id)
 
 
 ############################
@@ -640,7 +794,8 @@ async def clone_chat_by_id(
     }
 
     source_id = chat.id
-    chat = Chats.insert_new_chat(
+    chat = await asyncio.to_thread(
+        Chats.insert_new_chat,
         user.id,
         ChatForm(
             **{
@@ -681,7 +836,9 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
         }
 
         source_id = chat.id
-        chat = Chats.insert_new_chat(user.id, ChatForm(**{"chat": updated_chat}))
+        chat = await asyncio.to_thread(
+            Chats.insert_new_chat, user.id, ChatForm(**{"chat": updated_chat})
+        )
         try:
             from open_webui.utils.artifacts import copy_sandbox
 
@@ -704,7 +861,7 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
-        chat = Chats.toggle_chat_archive_by_id(id)
+        chat = await asyncio.to_thread(Chats.toggle_chat_archive_by_id, id)
 
         # Delete tags if chat is archived
         if chat.archived:
@@ -736,9 +893,13 @@ async def share_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
         if chat.share_id:
-            shared_chat = Chats.update_shared_chat_by_chat_id(chat.id)
+            shared_chat = await asyncio.to_thread(
+                Chats.update_shared_chat_by_chat_id, chat.id
+            )
         else:
-            shared_chat = Chats.insert_shared_chat_by_chat_id(chat.id)
+            shared_chat = await asyncio.to_thread(
+                Chats.insert_shared_chat_by_chat_id, chat.id
+            )
         if not shared_chat:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -765,8 +926,10 @@ async def delete_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
         if not chat.share_id:
             return False
 
-        result = Chats.delete_shared_chat_by_chat_id(id)
-        update_result = Chats.update_chat_share_id_by_id(id, None)
+        result = await asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id)
+        update_result = await asyncio.to_thread(
+            Chats.update_chat_share_id_by_id, id, None
+        )
 
         return result and update_result != None
     else:
@@ -800,7 +963,7 @@ async def update_chat_visibility_by_id(
             detail="Cannot share chats in the personal organization",
         )
     visibility = resolve_visibility(chat.organization_id, form_data.visibility)
-    chat = Chats.update_chat_visibility(id, visibility)
+    chat = await asyncio.to_thread(Chats.update_chat_visibility, id, visibility)
     if not chat:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
@@ -833,8 +996,11 @@ async def update_chat_folder_id_by_id(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ERROR_MESSAGES.DEFAULT(error),
                 )
-        chat = Chats.update_chat_folder_id_by_id_and_user_id(
-            id, user.id, form_data.folder_id
+        chat = await asyncio.to_thread(
+            Chats.update_chat_folder_id_by_id_and_user_id,
+            id,
+            user.id,
+            form_data.folder_id,
         )
         return ChatResponse(**chat.model_dump())
     else:
@@ -881,8 +1047,11 @@ async def add_tag_by_id_and_tag_name(
             )
 
         if tag_id not in tags:
-            Chats.add_chat_tag_by_id_and_user_id_and_tag_name(
-                id, user.id, form_data.name
+            await asyncio.to_thread(
+                Chats.add_chat_tag_by_id_and_user_id_and_tag_name,
+                id,
+                user.id,
+                form_data.name,
             )
 
         chat = Chats.get_chat_by_id(id)
@@ -905,7 +1074,9 @@ async def delete_tag_by_id_and_tag_name(
 ):
     chat = _require_writable_chat(id, user)
     if chat:
-        Chats.delete_tag_by_id_and_user_id_and_tag_name(id, user.id, form_data.name)
+        await asyncio.to_thread(
+            Chats.delete_tag_by_id_and_user_id_and_tag_name, id, user.id, form_data.name
+        )
 
         if Chats.count_chats_by_tag_name_and_user_id(form_data.name, user.id) == 0:
             Tags.delete_tag_by_name_and_user_id(form_data.name, user.id)
@@ -928,7 +1099,7 @@ async def delete_tag_by_id_and_tag_name(
 async def delete_all_tags_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
-        Chats.delete_all_tags_by_id_and_user_id(id, user.id)
+        await asyncio.to_thread(Chats.delete_all_tags_by_id_and_user_id, id, user.id)
 
         for tag in chat.meta.get("tags", []):
             if Chats.count_chats_by_tag_name_and_user_id(tag, user.id) == 0:

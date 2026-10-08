@@ -3,7 +3,7 @@
 	import dayjs from 'dayjs';
 
 	import { createEventDispatcher } from 'svelte';
-	import { onMount, tick, getContext } from 'svelte';
+	import { tick, getContext } from 'svelte';
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType, t } from 'i18next';
 
@@ -104,7 +104,7 @@
 	export let messageId;
 
 	let message: MessageType = JSON.parse(JSON.stringify(history.messages[messageId]));
-	$: if (history.messages) {
+	$: if (history.messages && paintKey >= 0) {
 		if (JSON.stringify(message) !== JSON.stringify(history.messages[messageId])) {
 			message = JSON.parse(JSON.stringify(history.messages[messageId]));
 		}
@@ -131,8 +131,8 @@
 
 	export let isLastMessage = true;
 	export let readOnly = false;
+	export let paintKey = 0;
 
-	let buttonsContainerElement: HTMLDivElement;
 	let showDeleteConfirm = false;
 
 	let model = null;
@@ -554,23 +554,6 @@
 		})();
 	}
 
-	onMount(async () => {
-		// console.log('ResponseMessage mounted');
-
-		await tick();
-		if (buttonsContainerElement) {
-			console.log(buttonsContainerElement);
-			buttonsContainerElement.addEventListener('wheel', function (event) {
-				// console.log(event.deltaY);
-
-				event.preventDefault();
-				if (event.deltaY !== 0) {
-					// Adjust horizontal scroll position based on vertical scroll
-					buttonsContainerElement.scrollLeft += event.deltaY;
-				}
-			});
-		}
-	});
 </script>
 
 <DeleteConfirmDialog
@@ -754,7 +737,7 @@
 												message.id
 											].content.replace(raw, raw.replace(oldContent, newContent));
 
-											updateChat();
+											updateChat(message.id);
 										}}
 										on:select={(e) => {
 											const { type, content } = e.detail;
@@ -880,8 +863,7 @@
 
 				{#if !edit}
 					<div
-						bind:this={buttonsContainerElement}
-						class="flex justify-start overflow-x-auto buttons text-gray-600 dark:text-gray-500 mt-0.5"
+						class="flex justify-start overflow-x-auto overflow-y-hidden buttons text-gray-600 dark:text-gray-500 mt-0.5"
 					>
 						{#if message.done || siblings.length > 1}
 							{#if siblings.length > 1}

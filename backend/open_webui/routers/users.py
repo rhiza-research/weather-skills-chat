@@ -381,6 +381,9 @@ async def delete_user_by_id(user_id: str, user=Depends(get_admin_user)):
         result = Auths.delete_auth_by_id(user_id)
 
         if result:
+            from open_webui.utils.chat_realtime import recheck_watches
+
+            await recheck_watches(user_id)
             return True
 
         raise HTTPException(

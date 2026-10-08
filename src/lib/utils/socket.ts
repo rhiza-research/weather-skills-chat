@@ -4,6 +4,7 @@ import { WEBUI_BASE_URL } from '$lib/constants';
 import type { Socket } from 'socket.io-client';
 
 let pending: Promise<Socket> | null = null;
+let socketOpened = false;
 
 /** Open the app socket once a session exists. Later calls reuse the same connection. */
 export function connectSocket(): Promise<Socket> {
@@ -39,6 +40,23 @@ async function openSocket(): Promise<Socket> {
 
 	liveSocket.on('connect', () => {
 		console.log('connected', liveSocket.id);
+		Promise.all([import('$lib/chat/cache'), import('$lib/chat/reconnect')]).then(
+			async ([cache, reconnectHooks]) => {
+				const reconnect = socketOpened;
+				socketOpened = true;
+				cache.setSocketUp(true);
+				cache.syncWatch(liveSocket);
+				if (!localStorage.token) return;
+				if (reconnect) {
+					await reconnectHooks.afterSocketReconnect({
+						refreshRecent: () => cache.refreshRecent(localStorage.token),
+						refreshSidebar: () => reconnectHooks.refreshSidebar(),
+						refreshArtifacts: () => cache.refreshCachedArtifacts(localStorage.token)
+					});
+				}
+				cache.syncWatch(liveSocket);
+			}
+		);
 	});
 
 	liveSocket.on('reconnect_attempt', (attempt) => {
@@ -50,6 +68,7 @@ async function openSocket(): Promise<Socket> {
 	});
 
 	liveSocket.on('disconnect', (reason, details) => {
+		import('$lib/chat/cache').then((cache) => cache.setSocketUp(false));
 		console.log(`Socket ${liveSocket.id} disconnected due to ${reason}`);
 		if (details) {
 			console.log('Additional details:', details);

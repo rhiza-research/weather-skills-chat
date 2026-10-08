@@ -283,6 +283,9 @@ async def remove_organization_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
+    from open_webui.utils.chat_realtime import recheck_watches
+
+    await recheck_watches(user_id)
     return _with_members(Organizations.get_organization_by_id(id), user.id)
 
 
@@ -303,6 +306,11 @@ async def delete_organization(
     if not is_owner(id, user.id):
         require_platform_admin(user, request)
     try:
-        return Organizations.delete_organization(id)
+        deleted = Organizations.delete_organization(id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    from open_webui.utils.chat_realtime import recheck_watches
+
+    # Its chats are gone. Every session watching one of them is told.
+    await recheck_watches()
+    return deleted

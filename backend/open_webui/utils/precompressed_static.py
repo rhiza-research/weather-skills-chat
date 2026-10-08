@@ -10,6 +10,11 @@ from starlette.staticfiles import StaticFiles
 # These names are not fingerprinted, so a replaced file can take a day to show up.
 STATIC_IMAGE_CACHE_CONTROL = "public, max-age=86400, immutable"
 _STATIC_IMAGE_SUFFIXES = {".png", ".ico", ".svg", ".webp", ".gif", ".jpg", ".jpeg", ".avif"}
+STATIC_AUDIO_CACHE_CONTROL = "public, max-age=86400"
+_STATIC_AUDIO_SUFFIXES = {".mp3", ".ogg", ".wav"}
+STATIC_FONT_CACHE_CONTROL = "public, max-age=86400, immutable"
+_STATIC_FONT_SUFFIXES = {".woff2", ".woff", ".ttf", ".otf"}
+HTML_CACHE_CONTROL = "no-cache"
 
 BROTLI_EXTENSIONS = {".js", ".mjs", ".css", ".html", ".json", ".svg", ".xml", ".txt"}
 # Vite fingerprints these. A year is safe; the URL changes when the bytes change.
@@ -57,8 +62,29 @@ def immutable_cache_control(path: str) -> str | None:
 	return IMMUTABLE_CACHE_CONTROL
 
 
+def static_audio_cache_control(path: str) -> str | None:
+	if Path(path).suffix.lower() in _STATIC_AUDIO_SUFFIXES:
+		return STATIC_AUDIO_CACHE_CONTROL
+	return None
+
+
+def static_font_cache_control(path: str) -> str | None:
+	if Path(path).suffix.lower() in _STATIC_FONT_SUFFIXES:
+		return STATIC_FONT_CACHE_CONTROL
+	return None
+
+
 def _apply_immutable_cache(response, path: str):
-	value = immutable_cache_control(path)
+	value = (
+		immutable_cache_control(path)
+		or static_audio_cache_control(path)
+		or static_font_cache_control(path)
+	)
+	content_type = response.headers.get("content-type", "")
+	if not value and (
+		Path(path).suffix.lower() == ".html" or content_type.startswith("text/html")
+	):
+		value = HTML_CACHE_CONTROL
 	if value:
 		response.headers["cache-control"] = value
 	return response

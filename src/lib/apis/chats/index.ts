@@ -496,7 +496,7 @@ export const getChatListByTagName = async (token: string = '', tagName: string) 
 	}));
 };
 
-export const getChatById = async (token: string, id: string) => {
+export const getChatById = async (token: string, id: string, priority?: 'high' | 'low' | 'auto') => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}`, {
@@ -506,8 +506,9 @@ export const getChatById = async (token: string, id: string) => {
 			'Content-Type': 'application/json',
 			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
-		}
-	})
+		},
+		...(priority ? { priority } : {})
+	} as RequestInit)
 		.then(async (res) => {
 			if (!res.ok) throw await parseApiError(res);
 			return res.json();
@@ -878,6 +879,40 @@ export const deleteSharedChatById = async (token: string, id: string) => {
 	}
 
 	return res;
+};
+
+export const getRecentChats = async (token: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/recent`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		priority: 'low'
+	} as RequestInit);
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
+};
+
+export const applyChatHistoryPatch = async (
+	token: string,
+	id: string,
+	patch: { upsert?: Record<string, unknown>; delete?: string[]; expected_revision?: number | null }
+) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/history`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		body: JSON.stringify(patch)
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
 };
 
 export const updateChatById = async (token: string, id: string, chat: object) => {

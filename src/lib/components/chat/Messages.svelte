@@ -1,19 +1,14 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
-	import {
-		chats,
-		config,
-		settings,
-		user as _user,
-		mobile,
-		currentChatPage,
-		temporaryChatEnabled
-	} from '$lib/stores';
+	import { settings, user as _user, temporaryChatEnabled } from '$lib/stores';
+	import { shouldPersistHistory } from '$lib/chat/persistHistory';
 	import { tick, getContext, onMount, createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
 	import { toast } from 'svelte-sonner';
-	import { getChatList, updateChatById } from '$lib/apis/chats';
+	import { applyChatHistoryPatch } from '$lib/apis/chats';
+	import { putChat, refetchChat, revisionOf } from '$lib/chat/cache';
+	import { chatScrollFor, rememberMessageCount } from '$lib/chat/scroll';
 	import { copyToClipboard, extractCurlyBraceWords } from '$lib/utils';
 
 	import Message from './Messages/Message.svelte';
@@ -47,23 +42,34 @@
 	export let addMessages: Function = () => {};
 
 	export let readOnly = false;
+	export let paintKey = 0;
 
 	export let bottomPadding = false;
 	export let autoScroll;
 
 	let messagesCount = 20;
 	let messagesLoading = false;
+	let windowFor = '';
+
+	$: if (chatId !== windowFor) {
+		windowFor = chatId;
+		messagesCount = chatScrollFor(chatId)?.messagesCount ?? 20;
+	}
 
 	const loadMoreMessages = async () => {
-		// scroll slightly down to disable continuous loading
 		const element = document.getElementById('messages-container');
-		element.scrollTop = element.scrollTop + 100;
-
+		if (!element || messagesLoading) return;
+		// Older messages are prepended. Keep the same lines on screen, and
+		// stay at the end when this tab is following the tail.
+		const previousHeight = element.scrollHeight;
+		const previousTop = element.scrollTop;
+		const stickToEnd = autoScroll;
 		messagesLoading = true;
 		messagesCount += 20;
-
+		rememberMessageCount(chatId, messagesCount);
 		await tick();
-
+		const delta = element.scrollHeight - previousHeight;
+		element.scrollTop = stickToEnd ? element.scrollHeight : previousTop + delta;
 		messagesLoading = false;
 	};
 
@@ -93,18 +99,31 @@
 		element.scrollTop = element.scrollHeight;
 	};
 
-	const updateChat = async () => {
-		if (!$temporaryChatEnabled) {
-			history = history;
-			await tick();
-			await updateChatById(localStorage.token, chatId, {
-				history: history,
-				messages: messages
-			});
-
-			currentChatPage.set(1);
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+	const updateChat = async (messageId = null) => {
+		if (!shouldPersistHistory($temporaryChatEnabled, chatId)) return;
+		const ids = Array.isArray(messageId) ? messageId : messageId ? [messageId] : [];
+		if (!ids.length) return;
+		history = history;
+		await tick();
+		const upsert = {};
+		for (const id of ids) {
+			if (history.messages?.[id]) upsert[id] = history.messages[id];
 		}
+		if (!Object.keys(upsert).length) return;
+		await applyChatHistoryPatch(localStorage.token, chatId, {
+			upsert,
+			expected_revision: revisionOf(chatId)
+		})
+			.then((saved) => {
+				if (saved) putChat(saved, null);
+			})
+			.catch(async (error) => {
+				if (error?.status === 409) {
+					await refetchChat(localStorage.token, chatId).catch(() => null);
+				}
+				const detail = typeof error?.detail === 'string' ? error.detail : 'Chat was updated';
+				toast.error(detail);
+			});
 	};
 
 	const gotoMessage = async (message, idx) => {
@@ -252,7 +271,7 @@
 			rating: rating
 		};
 
-		await updateChat();
+		await updateChat(messageId);
 	};
 
 	const editMessage = async (messageId, content, submit = true) => {
@@ -290,7 +309,7 @@
 			} else {
 				// Edit user message
 				history.messages[messageId].content = content;
-				await updateChat();
+				await updateChat(messageId);
 			}
 		} else {
 			if (submit) {
@@ -320,12 +339,12 @@
 					];
 				}
 
-				await updateChat();
+				await updateChat([responseMessageId, parentId].filter(Boolean));
 			} else {
 				// Edit response message
 				history.messages[messageId].originalContent = history.messages[messageId].content;
 				history.messages[messageId].content = content;
-				await updateChat();
+				await updateChat(messageId);
 			}
 		}
 	};
@@ -336,10 +355,11 @@
 
 	const saveMessage = async (messageId, message) => {
 		history.messages[messageId] = message;
-		await updateChat();
+		await updateChat(messageId);
 	};
 
 	const deleteMessage = async (messageId) => {
+		const persist = shouldPersistHistory($temporaryChatEnabled, chatId);
 		const messageToDelete = history.messages[messageId];
 		const parentMessageId = messageToDelete.parentId;
 		const childMessageIds = messageToDelete.childrenIds ?? [];
@@ -373,8 +393,29 @@
 
 		showMessage({ id: parentMessageId });
 
-		// Update the chat
-		await updateChat();
+		const upsert = {};
+		if (parentMessageId && history.messages[parentMessageId]) {
+			upsert[parentMessageId] = history.messages[parentMessageId];
+		}
+		for (const grandchildId of grandchildrenIds) {
+			if (history.messages[grandchildId]) upsert[grandchildId] = history.messages[grandchildId];
+		}
+		if (!persist) return;
+		await applyChatHistoryPatch(localStorage.token, chatId, {
+			upsert,
+			delete: [messageId, ...childMessageIds],
+			expected_revision: revisionOf(chatId)
+		})
+			.then((saved) => {
+				if (saved) putChat(saved, null);
+			})
+			.catch(async (error) => {
+				if (error?.status === 409) {
+					await refetchChat(localStorage.token, chatId).catch(() => null);
+				}
+				const detail = typeof error?.detail === 'string' ? error.detail : 'Chat was updated';
+				toast.error(detail);
+			});
 	};
 
 	const triggerScroll = () => {
@@ -415,11 +456,8 @@
 				<div class="w-full">
 					{#if messages.at(0)?.parentId !== null}
 						<Loader
-							on:visible={(e) => {
-								console.log('visible');
-								if (!messagesLoading) {
-									loadMoreMessages();
-								}
+							on:visible={() => {
+								if (!messagesLoading) loadMoreMessages();
 							}}
 						>
 							<div class="w-full flex justify-center py-1 text-xs animate-pulse items-center gap-2">
@@ -452,6 +490,7 @@
 							{addMessages}
 							{triggerScroll}
 							{readOnly}
+							{paintKey}
 						/>
 					{/each}
 				</div>

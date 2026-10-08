@@ -16,15 +16,15 @@
 		WEBUI_NAME,
 		mobile,
 		socket,
+		activeOrganizationId,
 		chatId,
 		chats,
-		currentChatPage,
+		pinnedChats,
 		tags,
 		temporaryChatEnabled,
 		isLastActiveTab,
 		isApp,
 		appInfo,
-		artifactsRefresh,
 		toolServers,
 		preferencesReady
 	} from '$lib/stores';
@@ -45,11 +45,21 @@
 	import { WEBUI_BASE_URL, WEBUI_HOSTNAME } from '$lib/constants';
 	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
 	import { bestMatchingLanguage } from '$lib/utils';
-	import { getAllTags, getChatList } from '$lib/apis/chats';
+	import { getAllTags } from '$lib/apis/chats';
+	import { applyChatListRow } from '$lib/chat/listRow';
+	import {
+		applyCachedStreamEvent,
+		dropChat,
+		onChatUpdated,
+		rememberArtifacts,
+		setOpenChat
+	} from '$lib/chat/cache';
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
+	import { requestChatTail } from '$lib/chat/scroll';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
 	import { connectSocket } from '$lib/utils/socket';
+	import { revealApp } from '$lib/utils/splash';
 
 	setContext('i18n', i18n);
 
@@ -170,7 +180,6 @@
 								outputArchive
 							);
 							extra.copied_outputs = uploaded?.written || [];
-							artifactsRefresh.update((n) => n + 1);
 						} catch (error) {
 							const message = error?.detail || error?.message || String(error);
 							stderr = stderr
@@ -236,6 +245,17 @@
 		return payload;
 	};
 
+	const onChatListRow = (row) => {
+		const next = applyChatListRow(row, get(chats) ?? [], get(pinnedChats) ?? [], {
+			organizationId: get(activeOrganizationId),
+			folderId: null
+		});
+		chats.set(next.chats);
+		pinnedChats.set(next.pinnedChats);
+	};
+
+	$: setOpenChat($chatId || '');
+
 	const chatEventHandler = async (event, cb) => {
 		const chat = $page.url.pathname.includes(`/c/${event.chat_id}`);
 
@@ -252,10 +272,17 @@
 		await tick();
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
+		applyCachedStreamEvent(event, localStorage.token);
 
-		if (type === 'chat:list' || type === 'chat:title') {
-			currentChatPage.set(1);
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		if (type === 'chat:title') {
+			const title = typeof data === 'string' ? data : data?.title;
+			if (title && event.chat_id) {
+				chats.update((list) =>
+					(list ?? []).map((item) =>
+						item.id === event.chat_id ? { ...item, title } : item
+					)
+				);
+			}
 		}
 
 		// Session-targeted RPC (Pyodide, tool servers, direct completion) must always
@@ -380,10 +407,13 @@
 					toast.custom(NotificationToast, {
 						componentProps: {
 							onClick: () => {
+								requestChatTail(event.chat_id);
 								goto(`/c/${event.chat_id}`);
 							},
 							content: content,
-							title: title
+							title: title,
+							focusedOnThisChat:
+								document.visibilityState === 'visible' && event.chat_id === $chatId
 						},
 						duration: 15000,
 						unstyled: true
@@ -455,12 +485,39 @@
 		};
 		window.addEventListener('resize', onResize);
 
+		const onChatList = (row) => onChatListRow(row);
+		const onChatUpdatedEvent = (row) => {
+			if (!row?.id) return;
+			onChatUpdated(row.id, Number(row.revision ?? 0), localStorage.token);
+		};
+		const onChatArtifacts = (row) => {
+			if (!row?.id || !Array.isArray(row.files)) return;
+			rememberArtifacts(row.id, row.files);
+		};
+		const onChatEvict = (row) => {
+			if (!row?.id) return;
+			dropChat(row.id);
+			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+		};
+		if (typeof window !== 'undefined') {
+			window.__wscChatEvent = (event) => chatEventHandler(event, () => {});
+		}
+
 		const bindRealtime = () => {
 			const liveSocket = get(socket);
 			if (!liveSocket) return;
 			liveSocket.off('chat-events', chatEventHandler);
+			liveSocket.off('chat:list', onChatList);
+			liveSocket.off('chat:updated', onChatUpdatedEvent);
+			liveSocket.off('chat:artifacts', onChatArtifacts);
+			liveSocket.off('chat:evict', onChatEvict);
 			if (get(user)) {
 				liveSocket.on('chat-events', chatEventHandler);
+				liveSocket.on('chat:list', onChatList);
+				liveSocket.on('chat:updated', onChatUpdatedEvent);
+				liveSocket.on('chat:artifacts', onChatArtifacts);
+				liveSocket.on('chat:evict', onChatEvict);
+				setOpenChat(get(chatId));
 			}
 		};
 		user.subscribe(() => bindRealtime());
@@ -503,29 +560,29 @@
 				.catch((error) => {
 					console.error(error);
 				});
-			getSessionUser(token)
-				.catch((error) => {
-					toast.error(`${error}`);
-					return null;
-				})
-				.then(async (sessionUser) => {
-					if (!sessionUser) {
-						localStorage.removeItem('token');
-						await goto(`/auth?redirect=${encodedUrl}`);
-						return;
-					}
-					await user.set(sessionUser);
-					try {
-						const liveSocket = await socketPromise;
+			// Keep the splash up until the session is known. Revealing the app first
+			// paints the last chat (artifacts pane and all) and then dumps a
+			// signed-out visitor onto /auth.
+			const sessionUser = await getSessionUser(token).catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
+			if (!sessionUser) {
+				localStorage.removeItem('token');
+				await goto(`/auth?redirect=${encodedUrl}`);
+			} else {
+				await user.set(sessionUser);
+				socketPromise
+					.then((liveSocket) => {
 						liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
-					} catch (error) {
+					})
+					.catch((error) => {
 						console.error(error);
-					}
-				});
+					});
+			}
 			appConfigPromise.then((appConfig) => {
 				if (!appConfig) goto('/error');
 			});
-			loaded = true;
 		} else {
 			const appConfig = await appConfigPromise;
 			if (!appConfig) {
@@ -540,10 +597,13 @@
 
 		await tick();
 
+		const bootProgress = window.__wscBoot?.finish?.() ?? 0;
+
 		if (
 			document.documentElement.classList.contains('her') &&
 			document.getElementById('progress-bar')
 		) {
+			loadingProgress.set(bootProgress, { hard: true });
 			loadingProgress.subscribe((value) => {
 				const progressBar = document.getElementById('progress-bar');
 
@@ -554,8 +614,6 @@
 
 			await loadingProgress.set(100);
 
-			document.getElementById('splash-screen')?.remove();
-
 			const audio = new Audio(`/audio/greeting.mp3`);
 			const playAudio = () => {
 				audio.play();
@@ -565,9 +623,14 @@
 			document.addEventListener('click', playAudio);
 
 			loaded = true;
+			await tick();
+			revealApp();
 		} else {
-			document.getElementById('splash-screen')?.remove();
 			loaded = true;
+			await tick();
+			// Auth and the app shell lift the splash once they have painted.
+			// A timeout is only a backstop so a failed child cannot trap it.
+			setTimeout(revealApp, 2000);
 		}
 
 		return () => {

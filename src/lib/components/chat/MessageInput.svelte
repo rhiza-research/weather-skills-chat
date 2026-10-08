@@ -2,7 +2,14 @@
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
+	import {
+		onMount,
+		tick,
+		getContext,
+		createEventDispatcher,
+		onDestroy,
+		type ComponentType
+	} from 'svelte';
 	const dispatch = createEventDispatcher();
 
 	import {
@@ -17,8 +24,7 @@
 		user as _user,
 		showControls,
 		TTSWorker,
-		chatId,
-		artifactsRefresh
+		chatId
 	} from '$lib/stores';
 
 	import {
@@ -51,7 +57,7 @@
 	import CommandLine from '../icons/CommandLine.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
-	import ToolServersModal from './ToolServersModal.svelte';
+	import { whenAppIdle } from '$lib/utils/idle';
 	import Wrench from '../icons/Wrench.svelte';
 
 	const i18n = getContext('i18n');
@@ -63,6 +69,7 @@
 	export let stopResponse: Function;
 
 	export let autoScroll = false;
+	export let newMessagesBelow = false;
 
 	export let atSelectedModel: Model | undefined = undefined;
 	export let selectedModels: [''];
@@ -94,6 +101,12 @@
 	});
 
 	let showTools = false;
+
+	let ToolServersModal: ComponentType | null = null;
+	const loadToolServersModal = () =>
+		import('./ToolServersModal.svelte').then((m) => (ToolServersModal = m.default));
+	$: if (showTools && !ToolServersModal) loadToolServersModal();
+	whenAppIdle(loadToolServersModal);
 
 	let loaded = false;
 	let recording = false;
@@ -165,7 +178,7 @@
 	const copyIntoArtifacts = async (file: File) => {
 		try {
 			const path = await copyFileIntoChatArtifacts(localStorage.token, $chatId, file);
-			if (path) artifactsRefresh.update((n) => n + 1);
+			void path;
 			return path;
 		} catch (e) {
 			console.error('Failed to copy chat-bar file into artifacts', e);
@@ -377,7 +390,9 @@
 
 <FilesOverlay show={dragged} />
 
-<ToolServersModal bind:show={showTools} {selectedToolIds} />
+{#if ToolServersModal}
+	<svelte:component this={ToolServersModal} bind:show={showTools} {selectedToolIds} />
+{/if}
 
 {#if loaded}
 	<div class="w-full font-primary">
@@ -393,17 +408,25 @@
 							class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 						>
 							<button
-								class=" bg-white border border-gray-100 dark:border-none dark:bg-white/20 p-1.5 rounded-full pointer-events-auto"
+								class="bg-white border border-gray-100 dark:border-none dark:bg-white/20 rounded-full pointer-events-auto flex items-center gap-1.5 {newMessagesBelow
+									? 'px-3 py-1.5'
+									: 'p-1.5'}"
 								on:click={() => {
 									autoScroll = true;
+									newMessagesBelow = false;
 									scrollToBottom();
 								}}
 							>
+								{#if newMessagesBelow}
+									<span class="text-xs font-medium whitespace-nowrap"
+										>{$i18n.t('New messages')}</span
+									>
+								{/if}
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-5 h-5"
+									class="w-5 h-5 shrink-0"
 								>
 									<path
 										fill-rule="evenodd"

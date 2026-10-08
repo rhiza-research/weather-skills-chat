@@ -52,27 +52,3 @@ export const clearSpinningToolCalls = (content: string) => {
 		'$1done="true"'
 	);
 };
-
-/**
- * Mark incomplete assistant messages as failed when no server task is live.
- * Returns how many messages were finalized.
- */
-export const finalizeOrphanAssistantMessages = (
-	messages: Record<string, any>,
-	hasLiveTask: boolean,
-	reason: string = GENERATION_LOST_MESSAGE
-): number => {
-	if (hasLiveTask) {
-		return 0;
-	}
-	let count = 0;
-	for (const message of Object.values(messages || {})) {
-		if (!message || message.role !== 'assistant') continue;
-		if (message.done === true) continue;
-		message.error = message.error ?? { content: reason };
-		message.done = true;
-		message.content = clearSpinningToolCalls(message.content ?? '');
-		count += 1;
-	}
-	return count;
-};

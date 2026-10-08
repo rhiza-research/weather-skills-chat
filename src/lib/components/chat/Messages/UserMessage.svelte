@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { tick, getContext, onMount } from 'svelte';
 
-	import { models, settings } from '$lib/stores';
+	import { models, settings, temporaryChatEnabled } from '$lib/stores';
 	import { user as _user } from '$lib/stores';
 	import { copyToClipboard as _copyToClipboard } from '$lib/utils';
 	import { formatDate } from '$lib/utils/formatDate';
@@ -47,7 +47,8 @@
 	let messageEditTextAreaElement: HTMLTextAreaElement;
 
 	let message = JSON.parse(JSON.stringify(history.messages[messageId]));
-	$: if (history.messages) {
+	export let paintKey = 0;
+	$: if (history.messages && paintKey >= 0) {
 		if (JSON.stringify(message) !== JSON.stringify(history.messages[messageId])) {
 			message = JSON.parse(JSON.stringify(history.messages[messageId]));
 		}
@@ -392,10 +393,11 @@
 								</button>
 							</Tooltip>
 
-							{#if !readOnly && (!isFirstMessage || siblings.length > 1)}
+							{#if !readOnly && ($temporaryChatEnabled || !isFirstMessage || siblings.length > 1)}
 								<Tooltip content={$i18n.t('Delete')} placement="bottom">
 									<button
 										class="invisible group-hover:visible p-1 rounded-sm dark:hover:text-white hover:text-black transition"
+										aria-label={$i18n.t('Delete')}
 										on:click={() => {
 											showDeleteConfirm = true;
 										}}

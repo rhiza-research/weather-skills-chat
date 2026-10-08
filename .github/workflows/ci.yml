@@ -168,6 +168,7 @@ jobs:
             -e BOOTSTRAP_ADMIN_PASSWORD=password \
             -e BOOTSTRAP_ADMIN_NAME=Admin \
             -e ENABLE_SIGNUP=true \
+            -e ENABLE_E2E_FIXTURES=true \
             weather-skills-chat:e2e
 
       - name: Set up Node

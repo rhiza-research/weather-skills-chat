@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="boot-progress">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/png" href="/static/favicon.png" />
@@ -75,43 +75,343 @@
 							metaThemeColorTag.setAttribute('content', '#ffffff');
 						}
 					}
+					setSplashBackground();
 				});
 
-				function setSplashImage() {
-					const logo = document.getElementById('logo');
-					const isDarkMode = document.documentElement.classList.contains('dark');
-
-					if (isDarkMode) {
-						const darkImage = new Image();
-						darkImage.src = '/static/splash-dark.png';
-
-						darkImage.onload = () => {
-							logo.src = '/static/splash-dark.png';
-							logo.style.filter = ''; // Ensure no inversion is applied if splash-dark.png exists
-						};
-
-						darkImage.onerror = () => {
-							logo.style.filter = 'invert(1)'; // Invert image if splash-dark.png is missing
-						};
-					}
+				function setSplashBackground() {
+					const root = document.documentElement;
+					root.style.setProperty(
+						'--splash-bg',
+						root.classList.contains('her')
+							? '#983724'
+							: root.classList.contains('dark')
+								? '#000'
+								: '#fff'
+					);
 				}
-
-				// Runs after classes are assigned
-				window.onload = setSplashImage;
+				setSplashBackground();
 			})();
 		</script>
 
+		<style>
+			html {
+				overflow-y: hidden !important;
+			}
+
+			html.boot-progress #wsc-app {
+				display: block !important;
+				position: fixed !important;
+				inset: 0 !important;
+				opacity: 0 !important;
+				pointer-events: none !important;
+				overflow: hidden !important;
+				z-index: 0 !important;
+			}
+
+			#splash-screen {
+				background: var(--splash-bg, #fff);
+			}
+
+			html.dark #logo {
+				filter: invert(1);
+			}
+
+			#logo-her,
+			#progress-background,
+			#progress-bar {
+				display: none;
+			}
+
+			#boot-progress {
+				display: none;
+				position: absolute;
+				top: calc(44% + 8rem);
+				left: 50%;
+				transform: translateX(-50%);
+				width: 10rem;
+				height: 0.25rem;
+				border-radius: 9999px;
+				overflow: hidden;
+				background: rgba(0, 0, 0, 0.1);
+			}
+
+			#boot-progress-bar {
+				width: 0%;
+				height: 100%;
+				border-radius: 9999px;
+				background: #171717;
+			}
+
+			html.boot-progress #boot-progress {
+				display: block;
+			}
+
+			html.dark #boot-progress {
+				background: rgba(255, 255, 255, 0.15);
+			}
+
+			html.dark #boot-progress-bar {
+				background: #e5e5e5;
+			}
+
+			html.her #boot-progress,
+			html.her #logo {
+				display: none;
+			}
+
+			html.her #logo-her,
+			html.her #progress-background,
+			html.her #progress-bar {
+				display: block;
+			}
+
+			@media (max-width: 24rem) {
+				html.her #progress-background,
+				html.her #progress-bar {
+					display: none;
+				}
+			}
+
+			@keyframes pulse {
+				50% {
+					opacity: 0.65;
+				}
+			}
+
+			.animate-pulse-fast {
+				animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+			}
+		</style>
+
 		<title>Weather Skills</title>
 
+		<link
+			rel="preload"
+			href="/assets/fonts/Archivo-Latin.woff2"
+			as="font"
+			type="font/woff2"
+			crossorigin
+		/>
+
 		%sveltekit.head%
+
+		<script id="wsc-boot-routes" type="application/json">null</script>
+		<script>
+			// Runs before SvelteKit starts. Must stay after %sveltekit.head% so the entry modules are
+			// requested first. URLs and headers below must match what the app's API helpers send,
+			// or the early responses are not reused.
+			(() => {
+				const isAuthPath = (path) => path === '/auth' || path.startsWith('/auth/');
+				const token = localStorage.token;
+				if (!token && !isAuthPath(location.pathname)) {
+					history.replaceState(
+						null,
+						'',
+						`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`
+					);
+				}
+
+				const nativeFetch = window.fetch.bind(window);
+				const early = new Map();
+				const keyOf = (url, headers) =>
+					[
+						new URL(url, location.href).href,
+						headers.get('authorization') ?? '',
+						headers.get('x-organization-id') ?? ''
+					].join('\n');
+				const prefetch = (urls, auth) => {
+					const org = localStorage.getItem('activeOrganizationId');
+					for (const url of urls) {
+						const headers = new Headers({ 'Content-Type': 'application/json' });
+						if (auth) headers.set('Authorization', `Bearer ${auth}`);
+						if (org) headers.set('X-Organization-Id', org);
+						const key = keyOf(url, headers);
+						const pending = nativeFetch(url, { headers });
+						pending.catch(() => {});
+						early.set(key, pending);
+						setTimeout(() => early.get(key) === pending && early.delete(key), 60000);
+					}
+				};
+				window.fetch = (input, init) => {
+					if (
+						early.size &&
+						typeof input === 'string' &&
+						(init?.method ?? 'GET').toUpperCase() === 'GET'
+					) {
+						const key = keyOf(input, new Headers(init?.headers));
+						const pending = early.get(key);
+						if (pending) {
+							early.delete(key);
+							return pending;
+						}
+					}
+					return nativeFetch(input, init);
+				};
+
+				const SESSION_URLS = ['/api/v1/user_config', '/api/v1/auths/'];
+				const APP_URLS = [
+					'/api/v1/user_config',
+					'/api/v1/users/user/settings',
+					'/api/v1/organizations/',
+					'/api/models',
+					'/api/v1/tool_summary',
+					'/api/v1/chats/all/tags',
+					'/api/v1/chats/pinned',
+					'/api/v1/chats/?page=1',
+					'/api/v1/configs/banners',
+					'/api/v1/folders/'
+				];
+
+				const boot = (window.__wscBoot = {
+					prefetchApp: (auth) => prefetch(APP_URLS, auth),
+					progress: () => 0,
+					finish: () => {}
+				});
+
+				const routes = JSON.parse(document.getElementById('wsc-boot-routes')?.textContent || 'null');
+				if (!routes) return;
+
+				const path = location.pathname;
+				const segment = path.split('/')[1] ?? '';
+				const inApp = !!token && (path === '/' || routes.appSegments.includes(segment));
+
+				prefetch(['/api/app_config'], null);
+				if (inApp) prefetch(['/api/v1/auths/', ...APP_URLS], token);
+				else if (token) prefetch(SESSION_URLS, token);
+
+				const names = ['entry', 'root'];
+				if (token) names.push('session');
+				if (path === '/auth') names.push('auth');
+				if (inApp) {
+					names.push('app');
+					if (path === '/') names.push('home');
+					else if (segment === 'c') names.push('chat');
+				}
+
+				const translation =
+					routes.locales[localStorage.locale] ?? routes.locales[navigator.language] ?? routes.locales['en-US'];
+				const translationLink = document.createElement('link');
+				translationLink.rel = 'modulepreload';
+				translationLink.href = translation;
+				document.head.appendChild(translationLink);
+
+				const tracked = new Map();
+				for (const name of names) {
+					for (const id of routes.sets[name]) {
+						const [href, size] = routes.files[id];
+						if (tracked.has(href)) continue;
+						tracked.set(href, size);
+						if (name === 'entry') continue;
+						const link = document.createElement('link');
+						if (href.endsWith('.css')) {
+							link.rel = 'preload';
+							link.as = 'style';
+							link.crossOrigin = '';
+						} else {
+							link.rel = 'modulepreload';
+						}
+						link.href = href;
+						document.head.appendChild(link);
+					}
+				}
+
+				// Browsers report a file only once it finishes, so delivered bytes are estimated at
+				// each completion. If HTTP/2 shared the link evenly, every unfinished file would
+				// have received as many bytes as the largest finished one. Servers actually take
+				// turns sending whole frames in request order, so a finished file only shows that
+				// files requested before it got as many bytes, and later ones a frame fewer.
+				// The truth lies between the two, so the estimate is their average.
+				const FRAME = 16384;
+				const total = [...tracked.values()].reduce((sum, size) => sum + size, 0);
+				const position = new Map([...tracked.keys()].map((href, index) => [href, index]));
+				const received = new Map();
+				const finished = new Set();
+				let done = 0;
+				let largest = 0;
+				const deliveredWith = (share) => {
+					let bytes = done;
+					for (const [href, size] of tracked) {
+						if (!finished.has(href)) bytes += Math.min(size, share);
+					}
+					return bytes;
+				};
+				const delivered = () => {
+					let inTurn = done;
+					for (const [href, bytes] of received) {
+						if (!finished.has(href)) inTurn += bytes;
+					}
+					return (deliveredWith(largest) + inTurn) / 2;
+				};
+				let measured = 0;
+				let measuredAt = performance.now();
+				let rate = 0;
+				let ceiling = 0;
+				const observer = new PerformanceObserver((list) => {
+					for (const entry of list.getEntries()) {
+						const href = new URL(entry.name).pathname;
+						if (!tracked.has(href) || finished.has(href)) continue;
+						const sent = tracked.get(href);
+						finished.add(href);
+						done += sent;
+						largest = Math.max(largest, sent);
+						for (const [other, size] of tracked) {
+							if (finished.has(other)) continue;
+							const share = position.get(other) < position.get(href) ? sent : sent - FRAME;
+							received.set(other, Math.max(received.get(other) ?? 0, Math.min(size, share)));
+						}
+					}
+					const now = performance.now();
+					const estimate = delivered();
+					if (estimate > measured) {
+						const sample = (estimate - measured) / Math.max(now - measuredAt, 1);
+						rate = rate ? (rate + sample) / 2 : sample;
+						measured = estimate;
+						measuredAt = now;
+					}
+					let smallest = Infinity;
+					for (const [href, size] of tracked) {
+						if (!finished.has(href)) smallest = Math.min(smallest, size);
+					}
+					ceiling = smallest === Infinity ? total : deliveredWith(Math.max(largest, smallest));
+				});
+				observer.observe({ type: 'resource', buffered: true });
+
+				let shown = 0;
+				let frame = 0;
+				const render = () => {
+					if (document.readyState !== 'loading' && !document.getElementById('splash-screen')) {
+						observer.disconnect();
+						return;
+					}
+					const now = performance.now();
+					const target = Math.min(measured + rate * (now - measuredAt), ceiling || total) / total;
+					shown = Math.max(shown, shown + (target - shown) * 0.2);
+					const width = `${(2 + shown * 93).toFixed(1)}%`;
+					for (const id of ['boot-progress-bar', 'progress-bar']) {
+						const bar = document.getElementById(id);
+						if (bar) bar.style.width = width;
+					}
+					frame = requestAnimationFrame(render);
+				};
+				document.documentElement.classList.add('boot-progress');
+				frame = requestAnimationFrame(render);
+
+				boot.progress = () => 2 + shown * 93;
+				boot.finish = () => {
+					cancelAnimationFrame(frame);
+					observer.disconnect();
+					return boot.progress();
+				};
+			})();
+		</script>
 	</head>
 
 	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
+		<div id="wsc-app" style="display: contents">%sveltekit.body%</div>
 
 		<div
 			id="splash-screen"
-			style="position: fixed; z-index: 100; top: 0; left: 0; width: 100%; height: 100%"
+			style="position: fixed; z-index: 100; top: 0; left: 0; width: 100%; height: 100%; background: var(--splash-bg, #fff)"
 		>
 			<style type="text/css" nonce="">
 				html {
@@ -121,6 +421,7 @@
 
 			<img
 				id="logo"
+				src="/static/splash.png"
 				style="
 					position: absolute;
 					width: auto;
@@ -131,6 +432,10 @@
 				"
 				alt=""
 			/>
+
+			<div id="boot-progress" role="progressbar" aria-label="Loading">
+				<div id="boot-progress-bar"></div>
+			</div>
 
 			<div
 				style="
@@ -148,13 +453,7 @@
 			>
 				<img id="logo-her" style="width: auto; height: 13rem" alt="" class="animate-pulse-fast" />
 				<script>
-					// One splash image. The hidden theme variant must not download a second copy.
-					(function () {
-						var target = document.documentElement.classList.contains('her')
-							? document.getElementById('logo-her')
-							: document.getElementById('logo');
-						if (target) target.src = '/static/splash.png';
-					})();
+					document.getElementById('logo-her').src = document.getElementById('logo').src;
 				</script>
 
 				<div style="position: relative; width: 24rem; margin-top: 0.5rem">
@@ -190,70 +489,3 @@
 		</div>
 	</body>
 </html>
-
-<style type="text/css" nonce="">
-	html {
-		overflow-y: hidden !important;
-	}
-
-	#splash-screen {
-		background: #fff;
-	}
-
-	html.dark #splash-screen {
-		background: #000;
-	}
-
-	html.her #splash-screen {
-		background: #983724;
-	}
-
-	#logo-her {
-		display: none;
-	}
-
-	#progress-background {
-		display: none;
-	}
-
-	#progress-bar {
-		display: none;
-	}
-
-	html.her #logo {
-		display: none;
-	}
-
-	html.her #logo-her {
-		display: block;
-		filter: invert(1);
-	}
-
-	html.her #progress-background {
-		display: block;
-	}
-
-	html.her #progress-bar {
-		display: block;
-	}
-
-	@media (max-width: 24rem) {
-		html.her #progress-background {
-			display: none;
-		}
-
-		html.her #progress-bar {
-			display: none;
-		}
-	}
-
-	@keyframes pulse {
-		50% {
-			opacity: 0.65;
-		}
-	}
-
-	.animate-pulse-fast {
-		animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-	}
-</style>

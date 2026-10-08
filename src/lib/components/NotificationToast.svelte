@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { settings, playingNotificationSound, isLastActiveTab } from '$lib/stores';
+	import { playNotificationSound } from '$lib/utils/notificationSound';
 
 	import { createEventDispatcher, getContext, onMount } from 'svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -10,6 +10,7 @@
 	export let onClick: Function = () => {};
 	export let title: string = 'HI';
 	export let content: string;
+	export let focusedOnThisChat = false;
 
 	let html = '';
 
@@ -19,21 +20,7 @@
 			import('marked')
 		]);
 		html = DOMPurify.sanitize(marked(content) as string);
-		if (!navigator.userActivation.hasBeenActive) {
-			return;
-		}
-
-		if ($settings?.notificationSound ?? true) {
-			if (!$playingNotificationSound && $isLastActiveTab) {
-				playingNotificationSound.set(true);
-
-				const audio = new Audio(`/audio/notification.mp3`);
-				audio.play().finally(() => {
-					// Ensure the global state is reset after the sound finishes
-					playingNotificationSound.set(false);
-				});
-			}
-		}
+		playNotificationSound({ focusedOnThisChat });
 	});
 </script>
 

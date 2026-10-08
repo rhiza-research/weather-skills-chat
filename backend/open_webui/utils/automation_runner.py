@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -166,11 +167,9 @@ async def _stream_automation_chat(
         if task is not None:
             await task
 
-    Chats.upsert_message_to_chat_by_id_and_message_id(
-        chat_id,
-        assistant_id,
-        {"done": True},
-    )
+    from open_webui.utils.chat_realtime import save_final_reply
+
+    await save_final_reply(chat_id, assistant_id, {"done": True})
 
 
 async def execute_automation(
@@ -232,7 +231,8 @@ async def execute_automation(
     }
 
     try:
-        chat = Chats.insert_new_chat(
+        chat = await asyncio.to_thread(
+            Chats.insert_new_chat,
             owner_id,
             ChatForm(
                 chat=chat_blob,
@@ -287,13 +287,12 @@ async def execute_automation(
                 AutomationRuns.update_run(
                     run.id, status="error", error=error_content, finished=True
                 )
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                from open_webui.utils.chat_realtime import save_final_reply
+
+                await save_final_reply(
                     chat.id,
                     assistant["id"],
-                    {
-                        "done": True,
-                        "error": {"content": error_content},
-                    },
+                    {"done": True, "error": {"content": error_content}},
                 )
                 if wait:
                     raise

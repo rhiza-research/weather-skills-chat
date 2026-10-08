@@ -28,6 +28,7 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `secretName` is required. It names a Kubernetes Secret that you create, which must hold `WEBUI_SECRET_KEY`. The README lists the other keys the chart reads from it.
 - `image.tag` selects the app version. By default it follows the chart's `appVersion`.
 - By default the app runs as one replica, with SQLite stored on a persistent volume.
+- SQLite supports one app process only: one replica, and `UVICORN_WORKERS` left at 1. Running more needs Postgres, or two processes can erase each other's changes to the same chat.
 - `sandbox.skillSandlock` is off by default, which turns off the skill confinement described on [[Skill Packs]].
 - `skillVenvs.enabled` gives each pod its own volume for skill environments, and `skillVenvs.maxBytes` sets how much of it skills may use. See [[Skill Packs]].
 - `langfuse.enabled` turns [[Tracing]] on or off.
