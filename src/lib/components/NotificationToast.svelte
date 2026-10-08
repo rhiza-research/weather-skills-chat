@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { settings, isLastActiveTab } from '$lib/stores';
 	import { playNotificationSound } from '$lib/utils/notificationSound';
 
 	import { createEventDispatcher, getContext, onMount } from 'svelte';
@@ -20,13 +19,7 @@
 			import('marked')
 		]);
 		html = DOMPurify.sanitize(marked(content) as string);
-		if (!navigator.userActivation.hasBeenActive) {
-			return;
-		}
-
-		if (($settings?.notificationSound ?? true) && $isLastActiveTab) {
-			playNotificationSound();
-		}
+		playNotificationSound();
 	});
 </script>
 

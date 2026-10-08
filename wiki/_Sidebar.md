@@ -8,6 +8,7 @@
 - [[Automations]]
 - [[Secrets]]
 - [[Preferences]]
+- [[Notifications]]
 - [[Tracing]]
 - [[Deployment]]
 - [[Development]]
