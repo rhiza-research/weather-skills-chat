@@ -1249,7 +1249,13 @@ async def chat_completion(
         form_data["metadata"] = metadata
 
         turn = form_data.pop("turn", None)
-        if turn and metadata.get("chat_id") and metadata["chat_id"] != "local":
+        if turn:
+            chat_id = metadata.get("chat_id")
+            if not chat_id or chat_id == "local":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A turn requires a saved chat id.",
+                )
             from open_webui.utils.chat_turns import (
                 ChatRevisionConflict,
                 prepare_completion_messages,
@@ -1257,13 +1263,13 @@ async def chat_completion(
 
             try:
                 form_data["messages"] = prepare_completion_messages(
-                    metadata["chat_id"], turn, user
+                    chat_id, turn, user
                 )
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
-                        "message": "Chat was updated",
+                        "message": "Another user has edited the chat. Please try again.",
                         "revision": conflict.revision,
                     },
                 ) from conflict

@@ -44,6 +44,7 @@ Models, skill packs, and knowledge bases form a catalog.
 Chats, automations, preferences, and folders are either private or shared with the organization. Everything in a personal organization is private.
 
 - A chat's owner can share it with the organization. Every member can then read it. Only the owner can change it.
+- If the owner makes a shared chat private, it leaves other members' chat lists. They can no longer open it.
 - Cloning a chat makes a private copy for the person who cloned it, in the same organization.
 - Shared chats go in the organization's team folders, and private chats in their owner's own folders.
 

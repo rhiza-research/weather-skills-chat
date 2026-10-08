@@ -23,7 +23,7 @@ const document = {
 };
 
 test('a background chat adopts the completion revision and marks the turn done', () => {
-	putChat(document, null, true);
+	putChat(document, null);
 	setOpenChat('chat-b');
 	applyCachedStreamEvent(
 		{
@@ -54,7 +54,7 @@ test('the open chat is written by the same path as a background chat', () => {
 			}
 		}
 	};
-	putChat(open, null, true);
+	putChat(open, null);
 	setOpenChat('chat-open');
 	applyCachedStreamEvent(
 		{
@@ -85,7 +85,7 @@ test('a download during a live turn keeps the history object already on screen',
 			}
 		}
 	};
-	putChat(local, null, true);
+	putChat(local, null);
 	beginLive('chat-live', 'asst');
 	const history = local.chat.history;
 	putChat(
@@ -102,8 +102,7 @@ test('a download during a live turn keeps the history object already on screen',
 				}
 			}
 		},
-		null,
-		true
+		null
 	);
 	expect(local.chat.history).toBe(history);
 	expect(history.messages.asst.content).toBe('hi');
@@ -185,7 +184,7 @@ test('opening a chat this tab is already generating does not mark it lost', asyn
 			}
 		}
 	};
-	putChat(live, null, true);
+	putChat(live, null);
 	beginLive('chat-switch', 'asst');
 	await settleLoadedTurn('chat-switch', 'token', false);
 	expect(live.chat.history.messages.asst.done).toBe(false);

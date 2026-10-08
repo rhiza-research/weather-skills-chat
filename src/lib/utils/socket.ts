@@ -40,15 +40,23 @@ async function openSocket(): Promise<Socket> {
 
 	liveSocket.on('connect', () => {
 		console.log('connected', liveSocket.id);
-		import('$lib/chat/cache').then(async (cache) => {
-			const reconnect = socketOpened;
-			socketOpened = true;
-			cache.setSocketUp(true);
-			cache.syncWatch(liveSocket);
-			if (!localStorage.token) return;
-			if (reconnect) await cache.refreshRecent(localStorage.token);
-			cache.syncWatch(liveSocket);
-		});
+		Promise.all([import('$lib/chat/cache'), import('$lib/chat/reconnect')]).then(
+			async ([cache, reconnectHooks]) => {
+				const reconnect = socketOpened;
+				socketOpened = true;
+				cache.setSocketUp(true);
+				cache.syncWatch(liveSocket);
+				if (!localStorage.token) return;
+				if (reconnect) {
+					await reconnectHooks.afterSocketReconnect({
+						refreshRecent: () => cache.refreshRecent(localStorage.token),
+						refreshSidebar: () => reconnectHooks.refreshSidebar(),
+						refreshArtifacts: () => cache.refreshCachedArtifacts(localStorage.token)
+					});
+				}
+				cache.syncWatch(liveSocket);
+			}
+		);
 	});
 
 	liveSocket.on('reconnect_attempt', (attempt) => {

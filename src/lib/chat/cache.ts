@@ -303,10 +303,11 @@ export function putChat(document: any, artifacts: any[] | null = null) {
 		const liveId = liveMessageIdFor(id);
 		const localLive = messages[liveId];
 		const remoteLive = remoteMessages[liveId];
-		if (revision >= existing.revision) {
-			existing.revision = revision;
-			existing.document.meta = { ...(document.meta || {}), revision };
+		if (revision < existing.revision) {
+			return existing;
 		}
+		existing.revision = revision;
+		existing.document.meta = { ...(document.meta || {}), revision };
 		if (remoteLive?.done === true && localLive?.done !== true) {
 			messages[liveId] = remoteLive;
 			endLive(liveId);
@@ -314,6 +315,10 @@ export function putChat(document: any, artifacts: any[] | null = null) {
 		for (const [messageId, remote] of Object.entries(remoteMessages)) {
 			if (messageId === liveId && messages[liveId]?.done !== true) continue;
 			messages[messageId] = remote;
+		}
+		for (const messageId of Object.keys(messages)) {
+			if (messageId === liveId && messages[liveId]?.done !== true) continue;
+			if (!(messageId in remoteMessages)) delete messages[messageId];
 		}
 		if (localLive && messages[liveId]?.done !== true) messages[liveId] = localLive;
 		if (!isLive(id) && id !== openId && document?.chat?.history?.currentId) {
@@ -833,6 +838,20 @@ export async function preloadRecent(token: string, organizationId: string) {
 export async function refreshRecent(token: string) {
 	if (!token || !recentOrganizationId) return;
 	await preloadRecent(token, recentOrganizationId);
+}
+
+/** Re-list artifacts after a disconnect so files written while offline appear. */
+export async function refreshCachedArtifacts(token: string) {
+	if (!token) return;
+	for (const id of [...entries.keys()]) {
+		const entry = entries.get(id);
+		if (entry) entry.artifacts = null;
+		try {
+			await fetchArtifacts(token, id, true);
+		} catch (error) {
+			console.error(error);
+		}
+	}
 }
 
 export function cachedArtifacts(id: string) {

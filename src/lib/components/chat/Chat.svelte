@@ -33,7 +33,6 @@
 		showOverview,
 		chatTitle,
 		showArtifacts,
-		artifactsRefresh,
 		tools,
 		toolServers,
 		activeOrganizationId,
@@ -60,6 +59,12 @@
 		formatGenerationRequestError
 	} from '$lib/utils/generationLiveness';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
+	import {
+		CHAT_CONFLICT_MESSAGE,
+		isChatConflict,
+		recoverEditConflict,
+		recoverSendConflict
+	} from '$lib/chat/conflict';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
 	import {
@@ -85,6 +90,7 @@
 		onTurnLost,
 		putChat,
 		holdHistory,
+		refetchChat,
 		revisionOf,
 		settleLoadedTurn,
 		setViewingLeaf,
@@ -265,7 +271,6 @@
 			}
 		}
 		pendingArtifactFiles = [];
-		artifactsRefresh.update((n) => n + 1);
 	};
 
 	const loadChatForProp = async (id: string) => {
@@ -792,7 +797,7 @@
 					$chatId,
 					file
 				);
-				if (fileItem.sandboxPath) artifactsRefresh.update((n) => n + 1);
+				void fileItem.sandboxPath;
 			} catch (e) {
 				console.error('Failed to copy chat-bar file into artifacts', e);
 			}
@@ -1070,7 +1075,7 @@
 	};
 
 	const applyChatDocument = (loadedChat) => {
-		const stored = putChat(loadedChat, null, true)?.document ?? loadedChat;
+		const stored = putChat(loadedChat, null)?.document ?? loadedChat;
 		chat = stored;
 		const chatContent = stored.chat;
 		if (!chatContent) return false;
@@ -1791,14 +1796,7 @@
 		}
 	};
 
-	const bumpArtifactsSoon = () => {
-		if (!$showArtifacts) return;
-		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
-		artifactsBumpTimer = setTimeout(() => {
-			artifactsRefresh.update((n) => n + 1);
-			artifactsBumpTimer = null;
-		}, 300);
-	};
+	const bumpArtifactsSoon = () => {};
 
 	const paintTranscript = (event) => {
 		if (event?.chat_id !== get(chatId)) return;
@@ -2170,9 +2168,7 @@
 				return Array.isArray(content) ? content.length > 0 : !!content;
 			});
 
-		const res = await generateOpenAIChatCompletion(
-			localStorage.token,
-			{
+		const completionBody = {
 				stream: stream,
 				model: model.id,
 				...(persistedTurn
@@ -2261,10 +2257,32 @@
 							}
 						}
 					: {})
-			},
+		};
+		const res = await generateOpenAIChatCompletion(
+			localStorage.token,
+			completionBody,
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
-			const reason = formatGenerationRequestError(error);
+			if (isChatConflict(error)) {
+				let retried = null;
+				const recovered = await recoverSendConflict({
+					refetch: () => refetchChat(localStorage.token, _chatId),
+					retry: async () => {
+						if (completionBody.turn) {
+							completionBody.turn.expected_revision = revisionOf(_chatId);
+						}
+						retried = await generateOpenAIChatCompletion(
+							localStorage.token,
+							completionBody,
+							`${WEBUI_BASE_URL}/api`
+						);
+					}
+				});
+				if (recovered === 'retried') return retried;
+			}
+			const reason = isChatConflict(error)
+				? CHAT_CONFLICT_MESSAGE
+				: formatGenerationRequestError(error);
 			responseMessage.error = { content: reason };
 			responseMessage.done = true;
 			endLive(responseMessageId);
@@ -2567,7 +2585,7 @@
 			);
 
 			_chatId = chat.id;
-			putChat(chat, null, true);
+			putChat(chat, null);
 			await chatId.set(_chatId);
 
 			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
@@ -2612,15 +2630,30 @@
 			});
 			if (saved) {
 				chat = saved;
-				putChat(saved, null, true);
+				putChat(saved, null);
 			}
 		} catch (error) {
 			console.error(error);
-			if (error?.status === 409) {
-				const document = await getChatById(localStorage.token, _chatId).catch(() => null);
-				if (document && $chatId === _chatId) {
-					applyChatDocument(document);
-				}
+			if (isChatConflict(error)) {
+				const recovered = await recoverEditConflict({
+					refetch: async () => {
+						const document = await getChatById(localStorage.token, _chatId).catch(() => null);
+						if (document && $chatId === _chatId) applyChatDocument(document);
+					},
+					reapply: async () => {
+						const saved = await applyChatHistoryPatch(localStorage.token, _chatId, {
+							upsert,
+							expected_revision: revisionOf(_chatId)
+						});
+						if (saved) {
+							chat = saved;
+							putChat(saved, null);
+						}
+					}
+				});
+				if (recovered === 'reapplied') return;
+				toast.error(CHAT_CONFLICT_MESSAGE);
+				return;
 			}
 			const detail = typeof error?.detail === 'string' ? error.detail : '';
 			toast.error(

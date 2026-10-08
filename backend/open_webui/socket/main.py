@@ -252,35 +252,72 @@ from open_webui.utils.chat_realtime import register as register_chat_watch
 register_chat_watch()
 
 
+SESSION_SCOPED_EVENT_TYPES = {
+    "execute",
+    "input",
+    "confirmation",
+    "execute:python",
+    "execute:tool",
+}
+
+
 def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
-        user_id = request_info["user_id"]
-
-        from open_webui.utils.chat_realtime import active_session_ids, watcher_session_ids
-
-        session_ids = list(
-            set(
-                USER_POOL.get(user_id, [])
-                + (
-                    [request_info.get("session_id")]
-                    if request_info.get("session_id")
-                    else []
-                )
-                + active_session_ids(request_info.get("chat_id"))
-                + watcher_session_ids(request_info.get("chat_id"))
-            )
+        from open_webui.socket import main as socket_main
+        from open_webui.utils.chat_realtime import (
+            _emit_if_allowed,
+            active_session_ids,
+            watcher_session_ids,
         )
+
+        user_id = request_info["user_id"]
+        event_type = (event_data or {}).get("type")
+        payload = {
+            "chat_id": request_info.get("chat_id", None),
+            "message_id": request_info.get("message_id", None),
+            "data": event_data,
+        }
+        if event_type in SESSION_SCOPED_EVENT_TYPES or str(event_type).startswith(
+            "execute"
+        ):
+            session_ids = (
+                [request_info.get("session_id")]
+                if request_info.get("session_id")
+                else []
+            )
+        else:
+            session_ids = list(
+                set(
+                    USER_POOL.get(user_id, [])
+                    + (
+                        [request_info.get("session_id")]
+                        if request_info.get("session_id")
+                        else []
+                    )
+                    + active_session_ids(request_info.get("chat_id"))
+                    + watcher_session_ids(request_info.get("chat_id"))
+                )
+            )
+
+        chat = None
+        chat_id = request_info.get("chat_id")
+        session_scoped = event_type in SESSION_SCOPED_EVENT_TYPES or str(
+            event_type
+        ).startswith("execute")
+        if chat_id and not session_scoped:
+            from open_webui.models.chats import Chats
+
+            chat = Chats.get_chat_access_row(chat_id)
 
         for session_id in session_ids:
             if not session_id:
                 continue
-            await sio.emit(
+            if chat is not None:
+                await _emit_if_allowed(session_id, chat, "chat-events", payload)
+                continue
+            await socket_main.sio.emit(
                 "chat-events",
-                {
-                    "chat_id": request_info.get("chat_id", None),
-                    "message_id": request_info.get("message_id", None),
-                    "data": event_data,
-                },
+                payload,
                 to=session_id,
             )
 
@@ -359,7 +396,7 @@ def get_event_emitter(request_info, update_db=True):
                         request_info["chat_id"],
                         request_info["message_id"],
                         patch,
-                        bump_revision=bool(data.get("done")),
+                        bump_revision=False,
                     )
 
     return __event_emitter__

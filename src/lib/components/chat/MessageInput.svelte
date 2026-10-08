@@ -24,8 +24,7 @@
 		user as _user,
 		showControls,
 		TTSWorker,
-		chatId,
-		artifactsRefresh
+		chatId
 	} from '$lib/stores';
 
 	import {
@@ -179,7 +178,7 @@
 	const copyIntoArtifacts = async (file: File) => {
 		try {
 			const path = await copyFileIntoChatArtifacts(localStorage.token, $chatId, file);
-			if (path) artifactsRefresh.update((n) => n + 1);
+			void path;
 			return path;
 		} catch (e) {
 			console.error('Failed to copy chat-bar file into artifacts', e);

@@ -16,6 +16,7 @@
 		getZarrRenderUrl,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
+	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
 	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
@@ -123,6 +124,7 @@
 			files = Array.isArray(listed) ? listed : [];
 		} catch (e) {
 			files = [];
+			loadedArtifactKey = '';
 			console.error(e);
 		} finally {
 			loadingFiles = false;
@@ -164,17 +166,16 @@
 	$: {
 		if ($showArtifacts && $chatId && $chatId !== 'local') {
 			const listed = $chatArtifactLists[$chatId];
-			const hasList = Array.isArray(listed);
-			if (hasList) files = listed;
-			if (!hasList) {
-				const key = `${$chatId}:${hasList}`;
-				if (loadedArtifactKey !== key) {
-					loadedArtifactKey = key;
-					loadFiles();
-				}
+			if (Array.isArray(listed)) {
+				files = listed;
+				loadedArtifactKey = $chatId;
+			} else if (shouldLoadArtifactList(listed) && loadedArtifactKey !== $chatId) {
+				loadedArtifactKey = $chatId;
+				loadFiles();
 			}
-		} else if (!$chatId || $chatId === 'local') {
-			files = [];
+		} else {
+			if (!$chatId || $chatId === 'local') files = [];
+			loadedArtifactKey = '';
 		}
 	}
 

@@ -16,6 +16,7 @@
 		WEBUI_NAME,
 		mobile,
 		socket,
+		activeOrganizationId,
 		chatId,
 		chats,
 		pinnedChats,
@@ -24,7 +25,6 @@
 		isLastActiveTab,
 		isApp,
 		appInfo,
-		artifactsRefresh,
 		toolServers,
 		preferencesReady
 	} from '$lib/stores';
@@ -46,7 +46,7 @@
 	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
 	import { bestMatchingLanguage } from '$lib/utils';
 	import { getAllTags } from '$lib/apis/chats';
-	import { getTimeRange } from '$lib/utils';
+	import { applyChatListRow } from '$lib/chat/listRow';
 	import {
 		applyCachedStreamEvent,
 		dropChat,
@@ -180,7 +180,6 @@
 								outputArchive
 							);
 							extra.copied_outputs = uploaded?.written || [];
-							artifactsRefresh.update((n) => n + 1);
 						} catch (error) {
 							const message = error?.detail || error?.message || String(error);
 							stderr = stderr
@@ -246,29 +245,13 @@
 		return payload;
 	};
 
-	const applyChatListRow = (row) => {
-		if (!row?.id) return;
-		if (row.removed || row.archived) {
-			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-			pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-			return;
-		}
-		const next = { ...row, time_range: getTimeRange(row.updated_at) };
-		if (row.pinned) {
-			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-			pinnedChats.update((list) => {
-				const items = (list ?? []).filter((item) => item.id !== row.id);
-				items.unshift(next);
-				return items;
-			});
-			return;
-		}
-		pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-		chats.update((list) => {
-			const items = (list ?? []).filter((item) => item.id !== row.id);
-			items.unshift(next);
-			return items;
+	const onChatListRow = (row) => {
+		const next = applyChatListRow(row, get(chats) ?? [], get(pinnedChats) ?? [], {
+			organizationId: get(activeOrganizationId),
+			folderId: null
 		});
+		chats.set(next.chats);
+		pinnedChats.set(next.pinnedChats);
 	};
 
 	$: setOpenChat($chatId || '');
@@ -500,7 +483,7 @@
 		};
 		window.addEventListener('resize', onResize);
 
-		const onChatList = (row) => applyChatListRow(row);
+		const onChatList = (row) => onChatListRow(row);
 		const onChatUpdatedEvent = (row) => {
 			if (!row?.id) return;
 			onChatUpdated(row.id, Number(row.revision ?? 0), localStorage.token);

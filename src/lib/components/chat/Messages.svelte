@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
 	import { settings, user as _user, temporaryChatEnabled } from '$lib/stores';
+	import { shouldPersistHistory } from '$lib/chat/persistHistory';
 	import { tick, getContext, onMount, createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -99,7 +100,7 @@
 	};
 
 	const updateChat = async (messageId = null) => {
-		if ($temporaryChatEnabled || !chatId) return;
+		if (!shouldPersistHistory($temporaryChatEnabled, chatId)) return;
 		const ids = Array.isArray(messageId) ? messageId : messageId ? [messageId] : [];
 		if (!ids.length) return;
 		history = history;
@@ -114,7 +115,7 @@
 			expected_revision: revisionOf(chatId)
 		})
 			.then((saved) => {
-				if (saved) putChat(saved, null, true);
+				if (saved) putChat(saved, null);
 			})
 			.catch(async (error) => {
 				if (error?.status === 409) {
@@ -358,6 +359,7 @@
 	};
 
 	const deleteMessage = async (messageId) => {
+		const persist = shouldPersistHistory($temporaryChatEnabled, chatId);
 		const messageToDelete = history.messages[messageId];
 		const parentMessageId = messageToDelete.parentId;
 		const childMessageIds = messageToDelete.childrenIds ?? [];
@@ -398,13 +400,14 @@
 		for (const grandchildId of grandchildrenIds) {
 			if (history.messages[grandchildId]) upsert[grandchildId] = history.messages[grandchildId];
 		}
+		if (!persist) return;
 		await applyChatHistoryPatch(localStorage.token, chatId, {
 			upsert,
 			delete: [messageId, ...childMessageIds],
 			expected_revision: revisionOf(chatId)
 		})
 			.then((saved) => {
-				if (saved) putChat(saved, null, true);
+				if (saved) putChat(saved, null);
 			})
 			.catch(async (error) => {
 				if (error?.status === 409) {

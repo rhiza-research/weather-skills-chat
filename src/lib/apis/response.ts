@@ -32,7 +32,13 @@ export async function parseApiError(
 						typeof data.detail.message === 'string'
 							? data.detail.message
 							: JSON.stringify(data.detail);
-					return { ...data, detail: message, status };
+					const revision = Number(data.detail.revision);
+					return {
+						...data,
+						detail: message,
+						status,
+						...(Number.isFinite(revision) ? { revision } : {})
+					};
 				}
 				if (data.error != null) {
 					return { ...data, status };

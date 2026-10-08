@@ -556,13 +556,19 @@ async def patch_chat_history(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
-                "message": "Chat was updated",
+                "message": "Another user has edited the chat. Please try again.",
                 "revision": chat_revision(updated) if updated else 0,
             },
         )
+    if state == "error":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The chat could not be saved. Please try again.",
+        )
     if updated is None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be saved. Please try again.",
         )
     return ChatResponse(**updated.model_dump())
 
@@ -704,10 +710,25 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
 
     from open_webui.utils.chat_realtime import publish_chat_removed
 
+    try:
+        deleted = (
+            Chats.delete_chat_by_id(id)
+            if user.role == "admin"
+            else Chats.delete_chat_by_id_and_user_id(id, user.id)
+        )
+    except Exception:
+        log.exception("Failed to delete chat")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The chat could not be deleted. Please try again.",
+        )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be deleted. Please try again.",
+        )
     await publish_chat_removed(chat)
-    if user.role == "admin":
-        return Chats.delete_chat_by_id(id)
-    return Chats.delete_chat_by_id_and_user_id(id, user.id)
+    return deleted
 
 
 ############################

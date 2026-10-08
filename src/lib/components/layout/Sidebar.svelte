@@ -24,6 +24,7 @@
 		socket
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy, type ComponentType } from 'svelte';
+	import { setSidebarRefresh } from '$lib/chat/reconnect';
 
 	const i18n = getContext('i18n');
 
@@ -503,6 +504,7 @@
 	};
 
 	onMount(async () => {
+		setSidebarRefresh(softRefreshChatList);
 		showPinnedChat = localStorage?.showPinnedChat ? localStorage.showPinnedChat === 'true' : true;
 		try {
 			const stored = localStorage?.chatTimeRangeOpen
@@ -569,6 +571,7 @@
 	});
 
 	onDestroy(() => {
+		setSidebarRefresh(null);
 		window.removeEventListener('touchstart', onTouchStart);
 		window.removeEventListener('touchend', onTouchEnd);
 

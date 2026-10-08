@@ -54,6 +54,7 @@ else:
 _status_pending: dict[tuple[str, str], list] = {}
 _status_tasks: dict[tuple[str, str], asyncio.Task] = {}
 _artifact_tasks: dict[str, asyncio.Task] = {}
+_artifact_dirty: set[str] = set()
 
 
 def chat_revision(chat) -> int:
@@ -179,10 +180,10 @@ def watcher_session_ids(chat_id: str | None) -> list[str]:
 
 
 def _access_row(chat_id: str):
-    chat = Chats.get_chat_by_id(chat_id)
-    if chat is None:
-        return None
-    return chat
+    row = Chats.get_chat_access_row(chat_id)
+    if row is not None:
+        return row
+    return Chats.get_chat_by_id(chat_id)
 
 
 async def _emit_if_allowed(sid: str, chat, event: str, payload: dict) -> bool:
@@ -208,11 +209,18 @@ async def _emit_to_user(user_id: str, event: str, payload: dict) -> None:
             log.debug("emit to user failed", exc_info=True)
 
 
-async def emit_chat_list(chat, row: dict | None = None) -> None:
+async def emit_chat_list(
+    chat, row: dict | None = None, *, previous_visibility: str | None = None
+) -> None:
     payload = row or list_row(chat)
     await _emit_to_user(chat.user_id, "chat:list", payload)
-    if getattr(chat, "visibility", None) != "organization":
+    was_org = previous_visibility == "organization"
+    is_org = getattr(chat, "visibility", None) == "organization"
+    if not is_org and not was_org:
         return
+    member_payload = (
+        {**payload, "removed": True} if was_org and not is_org else payload
+    )
     from open_webui.models.organizations import Organizations
 
     try:
@@ -223,7 +231,7 @@ async def emit_chat_list(chat, row: dict | None = None) -> None:
     for member in members:
         user_id = getattr(member, "user_id", None)
         if user_id and user_id != chat.user_id:
-            await _emit_to_user(user_id, "chat:list", payload)
+            await _emit_to_user(user_id, "chat:list", member_payload)
 
 
 async def emit_chat_updated(chat) -> None:
@@ -273,16 +281,20 @@ async def emit_chat_turn(
     )
 
 
-async def publish_chat_committed(chat_id: str) -> None:
+async def publish_chat_committed(
+    chat_id: str, previous_visibility: str | None = None
+) -> None:
     chat = Chats.get_chat_by_id(chat_id)
     if chat is None:
         return
     row = list_row(chat)
-    await emit_chat_list(chat, row)
+    await emit_chat_list(chat, row, previous_visibility=previous_visibility)
     await emit_chat_updated(chat)
 
 
-def schedule_chat_committed(chat_id: str) -> None:
+def schedule_chat_committed(
+    chat_id: str, previous_visibility: str | None = None
+) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -290,7 +302,9 @@ def schedule_chat_committed(chat_id: str) -> None:
 
     async def _run():
         try:
-            await publish_chat_committed(chat_id)
+            await publish_chat_committed(
+                chat_id, previous_visibility=previous_visibility
+            )
         except Exception:
             log.debug("publish chat failed", exc_info=True)
 
@@ -304,7 +318,7 @@ async def publish_chat_removed(chat) -> None:
     for sid in list(WATCH_INDEX.get(chat.id) or []):
         try:
             await sio.emit("chat:evict", {"id": chat.id}, to=sid)
-            clear_watch(sid)
+            drop_chat_watch(sid, chat.id)
         except Exception:
             log.debug("evict on delete failed", exc_info=True)
 
@@ -334,19 +348,25 @@ def schedule_artifacts(chat_id: str) -> None:
         return
     existing = _artifact_tasks.get(chat_id)
     if existing and not existing.done():
+        _artifact_dirty.add(chat_id)
         return
 
     async def _run():
         try:
-            await asyncio.sleep(ARTIFACT_DEBOUNCE_SECONDS)
-            from open_webui.utils.artifacts import list_artifacts
+            while True:
+                await asyncio.sleep(ARTIFACT_DEBOUNCE_SECONDS)
+                from open_webui.utils.artifacts import list_artifacts
 
-            files = await asyncio.to_thread(list_artifacts, chat_id)
-            await emit_chat_artifacts(chat_id, files)
+                files = await asyncio.to_thread(list_artifacts, chat_id)
+                await emit_chat_artifacts(chat_id, files)
+                if chat_id not in _artifact_dirty:
+                    break
+                _artifact_dirty.discard(chat_id)
         except Exception:
             log.debug("artifact emit failed", exc_info=True)
         finally:
             _artifact_tasks.pop(chat_id, None)
+            _artifact_dirty.discard(chat_id)
 
     _artifact_tasks[chat_id] = loop.create_task(_run())
 
@@ -408,7 +428,7 @@ def register() -> None:
         for chat_id in requested:
             if not isinstance(chat_id, str) or not chat_id or chat_id == "local":
                 continue
-            chat = Chats.get_chat_by_id(chat_id)
+            chat = Chats.get_chat_access_row(chat_id)
             if can_read_chat(user, chat):
                 allowed.append(chat_id)
         active_id = active if isinstance(active, str) and active in allowed else None

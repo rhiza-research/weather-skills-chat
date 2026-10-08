@@ -105,19 +105,37 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
     else:
         expected = None
 
-    stored, state = Chats.append_turn(
-        chat_id,
-        user_message,
-        assistant_message,
-        expected,
-    )
+    try:
+        stored, state = Chats.append_turn(
+            chat_id,
+            user_message,
+            assistant_message,
+            expected,
+        )
+    except Exception as exc:
+        from open_webui.models.chats import ChatWriteError
+
+        if isinstance(exc, ChatWriteError):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT if exc.busy else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
+        raise
     if state == "conflict":
         from open_webui.utils.chat_realtime import chat_revision, schedule_chat_committed
 
         schedule_chat_committed(chat_id)
         raise ChatRevisionConflict(chat_revision(stored) if stored else 0)
-    if stored is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Chat not found")
+    if state == "invalid":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="The parent message for this turn is missing.",
+        )
+    if state == "error" or stored is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be saved. Please try again.",
+        )
 
     history = (stored.chat or {}).get("history") or {}
     return messages_for_model(history, assistant_message["id"])
