@@ -539,6 +539,10 @@ def _resync_skill_packs(app_ref: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
+    from open_webui.utils.chat_realtime import set_main_loop
+
+    # Chat writes run in worker threads; their broadcasts run on this loop.
+    set_main_loop(asyncio.get_running_loop())
     if RESET_CONFIG_ON_START:
         reset_config()
 

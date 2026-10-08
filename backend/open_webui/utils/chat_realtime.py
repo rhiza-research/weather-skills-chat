@@ -6,6 +6,7 @@ do not bump the revision watchers compare, and they do not emit
 """
 
 import asyncio
+from typing import Optional
 import logging
 import time
 
@@ -59,6 +60,9 @@ else:
 _pending_updates: dict[tuple[str, str], dict] = {}
 _update_tasks: dict[tuple[str, str], asyncio.Task] = {}
 _artifact_tasks: dict[str, asyncio.Task] = {}
+# The server's event loop. Chat writes run in worker threads, and the
+# broadcasts they schedule must still run on this loop.
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
 _artifact_dirty: set[str] = set()
 
 
@@ -291,12 +295,35 @@ async def publish_chat_committed(
     await emit_chat_updated(chat)
 
 
+def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Record the server's event loop. Called once at startup."""
+    global _main_loop
+    _main_loop = loop
+
+
+def _hand_to_main_loop(fn, *args) -> bool:
+    """From a worker thread, run ``fn(*args)`` on the server's event loop.
+
+    False when there is no running server loop to hand it to.
+    """
+    loop = _main_loop
+    if loop is None or loop.is_closed() or not loop.is_running():
+        return False
+    loop.call_soon_threadsafe(fn, *args)
+    return True
+
+
 def schedule_chat_committed(
     chat_id: str, previous_visibility: str | None = None
 ) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
+        # A chat write in a worker thread. The broadcast runs on the loop.
+        if not _hand_to_main_loop(
+            schedule_chat_committed, chat_id, previous_visibility
+        ):
+            log.debug("no event loop to publish chat %s", chat_id)
         return
 
     async def _run():
@@ -378,6 +405,8 @@ def schedule_artifacts(chat_id: str) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
+        if not _hand_to_main_loop(schedule_artifacts, chat_id):
+            log.debug("no event loop to list artifacts for chat %s", chat_id)
         return
     existing = _artifact_tasks.get(chat_id)
     if existing and not existing.done():
@@ -411,15 +440,21 @@ def schedule_message_update(chat_id: str, message_id: str, kind: str, data) -> N
         return
     from open_webui.utils.message_updates import add_to_pending
 
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # The batch belongs to the event loop; a worker thread hands it over.
+        if _hand_to_main_loop(schedule_message_update, chat_id, message_id, kind, data):
+            return
+        # No server loop at all (a script): write this part now.
+        pending: dict = {}
+        add_to_pending(pending, kind, data)
+        Chats.merge_message_updates(chat_id, message_id, pending)
+        return
     key = (chat_id, message_id)
     add_to_pending(_pending_updates.setdefault(key, {}), kind, data)
     task = _update_tasks.get(key)
     if task is not None and not task.done():
-        return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        flush_message_updates_now(chat_id, message_id)
         return
 
     async def _later():

@@ -33,6 +33,25 @@ def _tree():
     }
 
 
+class _NoBackgroundPublish:
+    """Tests that set watches for pretend sessions. Without this, creating a
+    chat publishes it on the test client's loop in the background, and that
+    publish drops watches whose session has no signed-in user."""
+
+    def setup_method(self):
+        from open_webui.utils import chat_realtime
+
+        self._saved_loop = chat_realtime._main_loop
+        chat_realtime._main_loop = None
+        super().setup_method()
+
+    def teardown_method(self):
+        from open_webui.utils import chat_realtime
+
+        chat_realtime._main_loop = self._saved_loop
+        super().teardown_method()
+
+
 class TestChatSyncWrites(AbstractPostgresTest):
     def setup_method(self):
         super().setup_method()
@@ -226,7 +245,7 @@ class TestChatSyncWrites(AbstractPostgresTest):
         assert "get_chat_access_row" in source
 
 
-class TestChatRealtimeSync(AbstractPostgresTest):
+class TestChatRealtimeSync(_NoBackgroundPublish, AbstractPostgresTest):
     def setup_method(self):
         super().setup_method()
         from open_webui.models.chats import ChatForm, Chats
@@ -421,7 +440,7 @@ class TestChatWatchLimit(AbstractPostgresTest):
         chat_realtime.clear_watch("sid-cap")
 
 
-class TestEmitterAndRecheck(AbstractPostgresTest):
+class TestEmitterAndRecheck(_NoBackgroundPublish, AbstractPostgresTest):
     def setup_method(self):
         super().setup_method()
         from open_webui.models.chats import ChatForm, Chats
@@ -821,3 +840,28 @@ class TestFinalReplySave(AbstractPostgresTest):
         )
         assert saved is False
         assert calls["n"] == 3
+
+
+class TestBroadcastFromWorkerThreads(AbstractPostgresTest):
+    def test_a_write_in_a_worker_thread_still_publishes_the_chat(self, monkeypatch):
+        from open_webui.models.chats import ChatForm, Chats
+        from open_webui.utils import chat_realtime
+
+        # No loop yet, so creating the chat publishes nothing.
+        monkeypatch.setattr(chat_realtime, "_main_loop", None)
+        chat = Chats.insert_new_chat("2", ChatForm(chat=_tree()))
+        published = []
+
+        async def record(chat_id, previous_visibility=None):
+            published.append(chat_id)
+
+        monkeypatch.setattr(chat_realtime, "publish_chat_committed", record)
+
+        async def run():
+            chat_realtime.set_main_loop(asyncio.get_running_loop())
+            await asyncio.to_thread(Chats.toggle_chat_pinned_by_id, chat.id)
+            for _ in range(5):
+                await asyncio.sleep(0.01)
+
+        asyncio.run(run())
+        assert published == [chat.id]
