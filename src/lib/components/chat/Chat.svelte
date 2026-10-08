@@ -161,6 +161,7 @@
 	let scrollChatId = '';
 	/** Re-apply a saved position while the transcript is still growing, until the user scrolls. */
 	let settleScroll = false;
+	let readerMovedScroll = false;
 	let paintKey = 0;
 
 	let navbarElement;
@@ -1122,6 +1123,7 @@
 		newMessagesBelow = false;
 		heardBelowId = '';
 		settleScroll = true;
+		readerMovedScroll = false;
 		taskIds = null;
 		stopRequested = false;
 		chatId.set(id);
@@ -2756,6 +2758,15 @@
 								}
 								placeSavedScroll(messagesContainerElement);
 							}}
+							on:wheel={() => {
+								readerMovedScroll = true;
+							}}
+							on:touchstart={() => {
+								readerMovedScroll = true;
+							}}
+							on:pointerdown={() => {
+								readerMovedScroll = true;
+							}}
 							on:scroll={() => {
 								if (pinningScroll || !messagesContainerElement || !scrollChatId) return;
 								const element = messagesContainerElement;
@@ -2766,6 +2777,10 @@
 									autoScroll = true;
 									window.clearTimeout(scrollStopTimer);
 									pinScrollToEnd();
+									return;
+								}
+								if (settleScroll && !readerMovedScroll) {
+									placeSavedScroll(element);
 									return;
 								}
 								autoScroll = atBottom;

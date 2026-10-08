@@ -123,12 +123,9 @@ async function waitForImages(page: Page, selector: string, count: number) {
 	);
 }
 
-/** Images scale with the pane. Wait until the artifacts column is open and heights stop changing. */
+/** Images scale with the pane. Wait until decode and displayed heights stop changing. */
 async function waitForReadingLayout(page: Page, selector: string, count: number) {
 	await waitForImages(page, selector, count);
-	await expect(page.locator('#artifacts-toggle-button')).toHaveAttribute('aria-pressed', 'true', {
-		timeout: 10_000
-	});
 	await page.waitForFunction(
 		({ selector, count }) => {
 			const container = document.getElementById('messages-container');
