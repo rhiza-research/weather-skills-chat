@@ -11,11 +11,9 @@ test('a failed first artifacts fetch is retried the next time the panel opens', 
 	const socket = waitForSocket(page);
 	await page.goto(`/c/${id}`);
 	await socket;
-	const toggle = page.locator('#artifacts-toggle-button');
-	await expect(toggle).toBeVisible();
+	const open = page.getByRole('button', { name: 'Open artifacts' });
+	await expect(open).toBeVisible();
 
-	// Fail only the first listing after the panel is about to open, so a
-	// successful preload does not consume the 502.
 	let failed = false;
 	await page.route(`**/api/v1/chats/${id}/artifacts**`, async (route) => {
 		if (!failed && route.request().method() === 'GET') {
@@ -26,11 +24,10 @@ test('a failed first artifacts fetch is retried the next time the panel opens', 
 		await route.continue();
 	});
 
-	await toggle.click();
-	await expect(page.getByText(/no files in this chat yet|plot\.png/i)).toBeVisible({
-		timeout: 10_000
-	});
-	await toggle.click();
-	await toggle.click();
+	await open.click();
+	await expect(page.getByRole('button', { name: /^upload$/i })).toBeVisible({ timeout: 10_000 });
+	await page.getByRole('button', { name: 'Close artifacts' }).click();
+	await expect(open).toBeVisible();
+	await open.click();
 	await expect(page.getByText('plot.png')).toBeVisible({ timeout: 15_000 });
 });

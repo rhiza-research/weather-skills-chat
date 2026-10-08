@@ -28,7 +28,7 @@ const message = (
 export function chatDocument(title: string, assistant: string) {
 	return {
 		title,
-		models: [],
+		models: ['e2e-sender'],
 		history: {
 			currentId: 'assistant-1',
 			messages: {
@@ -55,6 +55,7 @@ async function authed() {
 export async function seedChat(title: string, assistant: string): Promise<SeededChat> {
 	const { api, token } = await authed();
 	try {
+		await ensureChatModel(token);
 		const created = await api.post('/api/v1/chats/new', {
 			headers: { authorization: `Bearer ${token}` },
 			data: { chat: chatDocument(title, assistant), visibility: 'private' }
