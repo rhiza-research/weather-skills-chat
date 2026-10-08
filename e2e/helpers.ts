@@ -58,3 +58,65 @@ export function watchChatGets(page: Page, id: string) {
 	});
 	return hits;
 }
+
+type NotificationWindow = Window & {
+	__notificationPlays?: number;
+	__wscChatEvent?: (event: unknown) => unknown;
+};
+
+/** Count plays of the completion chime. Call before the first navigation. */
+export async function watchNotificationSound(page: Page) {
+	await page.addInitScript(() => {
+		const self = window as NotificationWindow;
+		self.__notificationPlays = 0;
+		const Original = window.Audio;
+		window.Audio = function (this: HTMLAudioElement, src?: string) {
+			const audio = new Original(src);
+			const play = audio.play.bind(audio);
+			audio.play = () => {
+				const href = String(src ?? audio.src ?? '');
+				if (href.includes('notification')) {
+					self.__notificationPlays = (self.__notificationPlays ?? 0) + 1;
+				}
+				return play();
+			};
+			return audio;
+		} as unknown as typeof Audio;
+		window.Audio.prototype = Original.prototype;
+	});
+}
+
+export async function notificationPlays(page: Page) {
+	return page.evaluate(() => (window as NotificationWindow).__notificationPlays ?? 0);
+}
+
+export async function hideTab(page: Page) {
+	await page.evaluate(() => {
+		Object.defineProperty(document, 'visibilityState', {
+			configurable: true,
+			get: () => 'hidden'
+		});
+	});
+}
+
+export async function emitChatCompletion(page: Page, chatId: string, title: string) {
+	await expect
+		.poll(async () => page.evaluate(() => typeof (window as NotificationWindow).__wscChatEvent), {
+			timeout: 10_000
+		})
+		.toBe('function');
+	await page.evaluate(
+		({ chatId, title }) => {
+			const emit = (window as NotificationWindow).__wscChatEvent;
+			if (!emit) throw new Error('chat event hook missing');
+			return emit({
+				chat_id: chatId,
+				data: {
+					type: 'chat:completion',
+					data: { done: true, content: 'The reply is ready.', title }
+				}
+			});
+		},
+		{ chatId, title }
+	);
+}

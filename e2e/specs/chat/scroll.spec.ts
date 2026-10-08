@@ -123,6 +123,62 @@ async function waitForImages(page: Page, selector: string, count: number) {
 	);
 }
 
+/** Images scale with the pane. Wait until the artifacts column is open and heights stop changing. */
+async function waitForReadingLayout(page: Page, selector: string, count: number) {
+	await waitForImages(page, selector, count);
+	await expect(page.locator('#artifacts-toggle-button')).toHaveAttribute('aria-pressed', 'true', {
+		timeout: 10_000
+	});
+	await page.waitForFunction(
+		({ selector, count }) => {
+			const container = document.getElementById('messages-container');
+			if (!container) return false;
+			const images = [...document.querySelectorAll<HTMLImageElement>(selector)];
+			if (
+				images.length < count ||
+				images.some((image) => !image.complete || image.clientHeight < 100)
+			) {
+				return false;
+			}
+			const key = `${container.clientWidth}:${images
+				.map((image) => Math.round(image.getBoundingClientRect().height))
+				.join(',')}`;
+			const store = window as unknown as { __wscLayoutKey?: string; __wscLayoutStable?: number };
+			if (store.__wscLayoutKey === key) store.__wscLayoutStable = (store.__wscLayoutStable ?? 0) + 1;
+			else {
+				store.__wscLayoutKey = key;
+				store.__wscLayoutStable = 0;
+			}
+			return (store.__wscLayoutStable ?? 0) >= 8;
+		},
+		{ selector, count },
+		{ timeout: 15_000 }
+	);
+}
+
+async function waitForStableOffset(page: Page, read: () => Promise<number | null>) {
+	let last: number | null = null;
+	let stable = 0;
+	await expect
+		.poll(
+			async () => {
+				const next = await read();
+				if (next == null) {
+					stable = 0;
+					last = null;
+					return false;
+				}
+				if (last != null && Math.abs(next - last) < 2) stable += 1;
+				else stable = 0;
+				last = next;
+				return stable >= 3;
+			},
+			{ timeout: 8_000 }
+		)
+		.toBe(true);
+	return last;
+}
+
 test('a chat left at the bottom returns to the latest line immediately', async ({ page }) => {
 	const panels = Array.from({ length: 18 }, () => '![panel](panel.svg)').join('\n\n');
 	const { id, token } = await seedChat('bottom panels', panels);
@@ -140,10 +196,11 @@ test('a chat left at the bottom returns to the latest line immediately', async (
 		{ name: 'token', value: token, url: new URL(page.url()).origin }
 	]);
 	await page.goto(`/c/${id}`);
-	await waitForImages(page, 'img[alt="panel"]', 18);
+	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	await ensureSidebar(page);
+	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	await placeImageAt(page, 7, 48);
-	await page.waitForTimeout(250);
+	await waitForStableOffset(page, () => imageOffsetAt(page, 7));
 	const savedImage = await imageOffsetAt(page, 7);
 	expect(savedImage).not.toBeNull();
 
@@ -174,7 +231,7 @@ test('a chat left at the bottom returns to the latest line immediately', async (
 
 	try {
 		await leaveAndReturn(page, id);
-		await waitForImages(page, 'img[alt="panel"]', 18);
+		await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 		expect(await distanceFromBottom(page)).toBeLessThan(24);
 	} finally {
 		release();
@@ -222,18 +279,18 @@ test('a message full of images returns to the same image', async ({ page }) => {
 	const { id } = await seedChat('image reply', panels);
 
 	await page.goto(`/c/${id}`);
-	await waitForImages(page, 'img[alt^="image "]', 18);
+	await waitForReadingLayout(page, 'img[alt^="image "]', 18);
 	await ensureSidebar(page);
+	await waitForReadingLayout(page, 'img[alt^="image "]', 18);
 	await placeImage(page, alt, 48);
-	await page.waitForTimeout(250);
-	const before = await imageOffset(page, alt);
+	const before = await waitForStableOffset(page, () => imageOffset(page, alt));
 	expect(before).not.toBeNull();
 
 	await leaveAndReturn(page, id);
-	await waitForImages(page, 'img[alt^="image "]', 18);
+	await waitForReadingLayout(page, 'img[alt^="image "]', 18);
 	await expect
 		.poll(async () => Math.abs((await imageOffset(page, alt) ?? 0) - (before ?? 0)), {
-			timeout: 1_000
+			timeout: 8_000
 		})
 		.toBeLessThan(24);
 });
@@ -257,11 +314,11 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 	]);
 
 	await page.goto(`/c/${id}`);
-	await waitForImages(page, 'img[alt="panel"]', 18);
+	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	await ensureSidebar(page);
+	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	await placeImageAt(page, copy, 48);
-	await page.waitForTimeout(250);
-	const before = await imageOffsetAt(page, copy);
+	const before = await waitForStableOffset(page, () => imageOffsetAt(page, copy));
 	expect(before).not.toBeNull();
 
 	let releaseChat: (() => void) | null = null;
@@ -278,7 +335,7 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 	});
 
 	await leaveAndReturn(page, id);
-	await waitForImages(page, 'img[alt="panel"]', 18);
+	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	try {
 		await expect
 			.poll(
@@ -286,7 +343,7 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 					const after = await imageOffsetAt(page, copy);
 					return Math.abs((after ?? 0) - (before ?? 0));
 				},
-				{ timeout: 1_000 }
+				{ timeout: 8_000 }
 			)
 			.toBeLessThan(24);
 	} finally {

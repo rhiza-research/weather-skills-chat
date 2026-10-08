@@ -497,6 +497,10 @@
 			dropChat(row.id);
 			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
 		};
+		if (typeof window !== 'undefined') {
+			window.__wscChatEvent = (event) => chatEventHandler(event, () => {});
+		}
+
 		const bindRealtime = () => {
 			const liveSocket = get(socket);
 			if (!liveSocket) return;
