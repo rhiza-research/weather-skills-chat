@@ -26,6 +26,7 @@ from open_webui import tasks as task_registry
 from open_webui.routers import openai as openai_router
 from open_webui.utils import automation_runner
 from open_webui.utils import chat
+from open_webui.utils import chat_realtime
 from open_webui.utils import langfuse_tracing as lf
 from open_webui.utils import usage as usage_module
 
@@ -642,17 +643,21 @@ class AutomationTraceTest(RealLangfuseTestCase):
     The middleware and model-call functions the runner calls are replaced by
     fakes that make the same tracing calls: the model call goes through
     observe_generation, and the tool loop task records a tool span and a
-    generation, then ends the root span with the reply or "cancelled".
+    generation, then ends the root span with the reply or "cancelled". The
+    final reply save is replaced too.
     """
 
     def setUp(self):
         super().setUp()
-        self.chats = MagicMock()
         self.loop_started = asyncio.Event()
         self.loop_body = self._loop_success
         self.handler_error = None
+        save_patch = patch.object(
+            chat_realtime, "save_final_reply", autospec=True, return_value=True
+        )
+        self.save_final_reply = save_patch.start()
+        self.addCleanup(save_patch.stop)
         for p in (
-            patch.object(automation_runner, "Chats", self.chats),
             patch.object(
                 automation_runner, "process_chat_payload", self._process_payload
             ),
@@ -760,7 +765,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
             self.assertEqual(span.context.trace_id, root.context.trace_id)
             self.assertLessEqual(span.end_time, root.end_time)
         self.assertIsNone(lf.current_trace())
-        self.chats.upsert_message_to_chat_by_id_and_message_id.assert_called_once_with(
+        self.save_final_reply.assert_awaited_once_with(
             "chat-auto", "msg-auto", {"done": True}
         )
 
@@ -777,7 +782,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         (generation,) = self._children(root)
         self.assertEqual(generation.attributes[A.OBSERVATION_LEVEL], "ERROR")
         self.assertIsNone(lf.current_trace())
-        self.chats.upsert_message_to_chat_by_id_and_message_id.assert_not_called()
+        self.save_final_reply.assert_not_awaited()
 
     async def test_tool_loop_failure_ends_root_with_error(self):
         async def loop_crash():
@@ -797,6 +802,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
             sorted(s.name for s in self._children(root)), ["llm", "tool:ecmwf_fetch"]
         )
         self.assertIsNone(lf.current_trace())
+        self.save_final_reply.assert_not_awaited()
 
     async def test_failure_after_loop_ended_root_is_logged_not_attached(self):
         async def loop_end_then_crash():
@@ -821,6 +827,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
             any("late failure" in line for line in logs.output), logs.output
         )
         self.assertIsNone(lf.current_trace())
+        self.save_final_reply.assert_not_awaited()
 
     async def test_non_streaming_result_is_the_root_output(self):
         async def process_response(*args):
@@ -839,6 +846,9 @@ class AutomationTraceTest(RealLangfuseTestCase):
         )
         self.assertEqual([s.name for s in self._children(root)], ["llm"])
         self.assertIsNone(lf.current_trace())
+        self.save_final_reply.assert_awaited_once_with(
+            "chat-auto", "msg-auto", {"done": True}
+        )
 
     async def test_missing_loop_task_still_ends_root(self):
         async def process_response(*args):
@@ -853,7 +863,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         self.assertNotIn(A.OBSERVATION_LEVEL, root.attributes)
         self.assertNotIn(A.OBSERVATION_OUTPUT, root.attributes)
         self.assertIsNone(lf.current_trace())
-        self.chats.upsert_message_to_chat_by_id_and_message_id.assert_called_once_with(
+        self.save_final_reply.assert_awaited_once_with(
             "chat-auto", "msg-auto", {"done": True}
         )
 
@@ -872,6 +882,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
 
         self._assert_error_root("worker shutting down")
         self.assertIsNone(lf.current_trace())
+        self.save_final_reply.assert_not_awaited()
 
     async def test_cancel_during_tool_loop_ends_root_once(self):
         async def loop_until_cancelled():
@@ -894,6 +905,9 @@ class AutomationTraceTest(RealLangfuseTestCase):
 
         self._assert_error_root("cancelled")
         self.assertIsNone(lf.current_trace())
+        self.save_final_reply.assert_awaited_once_with(
+            "chat-auto", "msg-auto", {"done": True}
+        )
 
     async def test_cancel_before_tool_loop_ends_root(self):
         async def payload_until_cancelled(*args):
@@ -912,6 +926,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
 
         root = self._assert_error_root("cancelled")
         self.assertEqual(self._children(root), [])
+        self.save_final_reply.assert_not_awaited()
 
     async def test_tracing_disabled_runs_unchanged_and_records_nothing(self):
         with patch.object(lf, "LANGFUSE_ENABLED", False):
@@ -919,7 +934,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         self._flush()
 
         self.assertEqual(self._spans(), ())
-        self.chats.upsert_message_to_chat_by_id_and_message_id.assert_called_once_with(
+        self.save_final_reply.assert_awaited_once_with(
             "chat-auto", "msg-auto", {"done": True}
         )
 
