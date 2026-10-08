@@ -2,30 +2,23 @@ import { expect, test } from '@playwright/test';
 import { getChat, patchHistory, seedChat } from '../../chats';
 import { waitForSocket } from '../../helpers';
 
-test('a stale send shows a chat-edited message and the next send can proceed', async ({
-	page
-}) => {
+test('a stale send retries after refetch and does not show a raw 409', async ({ page }) => {
 	const { id, token } = await seedChat('conflict send', 'original reply');
 	const socket = waitForSocket(page);
-	const completions: { status: number; body: unknown }[] = [];
 	let first = true;
 	await page.route('**/api/chat/completions', async (route) => {
 		if (first) {
 			first = false;
 			const current = await getChat(token, id);
-			completions.push({
+			await route.fulfill({
 				status: 409,
-				body: {
+				contentType: 'application/json',
+				body: JSON.stringify({
 					detail: {
 						message: 'Another user has edited the chat. Please try again.',
 						revision: (current.meta?.revision ?? 0) + 1
 					}
-				}
-			});
-			await route.fulfill({
-				status: 409,
-				contentType: 'application/json',
-				body: JSON.stringify(completions[0].body)
+				})
 			});
 			return;
 		}
@@ -35,6 +28,31 @@ test('a stale send shows a chat-edited message and the next send can proceed', a
 	await socket;
 	await expect(page.getByText('original reply')).toBeVisible();
 	await page.locator('#chat-input').fill('follow up after a conflict');
+	await page.locator('#chat-input').press('Enter');
+	await expect(page.getByText('follow up after a conflict')).toBeVisible({ timeout: 10_000 });
+	await expect(page.locator('body')).not.toContainText(/\b409\b/);
+});
+
+test('a send that stays in conflict shows the chat-edited message', async ({ page }) => {
+	const { id, token } = await seedChat('conflict sticky', 'original reply');
+	const socket = waitForSocket(page);
+	await page.route('**/api/chat/completions', async (route) => {
+		const current = await getChat(token, id);
+		await route.fulfill({
+			status: 409,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				detail: {
+					message: 'Another user has edited the chat. Please try again.',
+					revision: (current.meta?.revision ?? 0) + 1
+				}
+			})
+		});
+	});
+	await page.goto(`/c/${id}`);
+	await socket;
+	await expect(page.getByText('original reply')).toBeVisible();
+	await page.locator('#chat-input').fill('this should stay conflicted');
 	await page.locator('#chat-input').press('Enter');
 	await expect(page.getByText(/another user has edited the chat/i)).toBeVisible({
 		timeout: 10_000

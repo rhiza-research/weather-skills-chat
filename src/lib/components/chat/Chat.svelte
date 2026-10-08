@@ -61,9 +61,11 @@
 	import { isUsageLimitMessage } from '$lib/utils/usage';
 	import {
 		CHAT_CONFLICT_MESSAGE,
+		isChatBusy,
 		isChatConflict,
 		recoverEditConflict,
-		recoverSendConflict
+		recoverSendConflict,
+		writeErrorMessage
 	} from '$lib/chat/conflict';
 
 	import { generateChatCompletion } from '$lib/apis/ollama';
@@ -2263,7 +2265,7 @@
 			completionBody,
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
-			if (isChatConflict(error)) {
+			if (isChatConflict(error) || isChatBusy(error)) {
 				let retried = null;
 				const recovered = await recoverSendConflict({
 					refetch: () => refetchChat(localStorage.token, _chatId),
@@ -2280,9 +2282,8 @@
 				});
 				if (recovered === 'retried') return retried;
 			}
-			const reason = isChatConflict(error)
-				? CHAT_CONFLICT_MESSAGE
-				: formatGenerationRequestError(error);
+			const reason =
+				writeErrorMessage(error) || formatGenerationRequestError(error);
 			responseMessage.error = { content: reason };
 			responseMessage.done = true;
 			endLive(responseMessageId);
@@ -2652,7 +2653,7 @@
 					}
 				});
 				if (recovered === 'reapplied') return;
-				toast.error(CHAT_CONFLICT_MESSAGE);
+				toast.error(writeErrorMessage(error) || CHAT_CONFLICT_MESSAGE);
 				return;
 			}
 			const detail = typeof error?.detail === 'string' ? error.detail : '';

@@ -2,9 +2,29 @@ export const CHAT_CONFLICT_MESSAGE = 'Another user has edited the chat. Please t
 export const CHAT_BUSY_MESSAGE =
 	'This chat is being edited by another window. Please try again shortly.';
 
+export function isChatBusy(error: unknown): boolean {
+	const detail =
+		typeof error === 'string'
+			? error
+			: String((error as { detail?: unknown } | null)?.detail ?? '');
+	return /another window/i.test(detail);
+}
+
 export function isChatConflict(error: unknown): boolean {
+	if (isChatBusy(error)) return false;
 	const status = (error as { status?: number } | null)?.status;
-	return status === 409;
+	if (status === 409) return true;
+	const detail =
+		typeof error === 'string'
+			? error
+			: String((error as { detail?: unknown } | null)?.detail ?? '');
+	return /another user has edited the chat/i.test(detail);
+}
+
+export function writeErrorMessage(error: unknown): string {
+	if (isChatBusy(error)) return CHAT_BUSY_MESSAGE;
+	if (isChatConflict(error)) return CHAT_CONFLICT_MESSAGE;
+	return '';
 }
 
 export function conflictRevision(error: unknown): number | null {

@@ -9,6 +9,7 @@ from open_webui.models.chats import (
     ChatForm,
     ChatImportForm,
     ChatResponse,
+    ChatWriteError,
     Chats,
     ChatTitleIdResponse,
 )
@@ -529,7 +530,22 @@ async def update_chat_by_id(
 ):
     chat = _require_writable_chat(id, user)
     updated_chat = {**chat.chat, **form_data.chat}
-    chat = Chats.update_chat_by_id(id, updated_chat)
+    try:
+        chat = Chats.update_chat_by_id(id, updated_chat)
+    except ChatWriteError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+                if exc.busy
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            detail=exc.message,
+        ) from exc
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be saved. Please try again.",
+        )
     return ChatResponse(**chat.model_dump())
 
 

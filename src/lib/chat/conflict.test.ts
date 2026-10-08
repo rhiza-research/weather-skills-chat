@@ -11,9 +11,11 @@ import {
 	CHAT_BUSY_MESSAGE,
 	CHAT_CONFLICT_MESSAGE,
 	conflictRevision,
+	isChatBusy,
 	isChatConflict,
 	recoverEditConflict,
-	recoverSendConflict
+	recoverSendConflict,
+	writeErrorMessage
 } from './conflict';
 
 test('conflict copy talks about another user, not a raw 409', () => {
@@ -26,6 +28,12 @@ test('isChatConflict reads status and revision from a parsed error', () => {
 	expect(isChatConflict({ status: 409, revision: 7, detail: CHAT_CONFLICT_MESSAGE })).toBe(true);
 	expect(isChatConflict({ status: 400, detail: 'nope' })).toBe(false);
 	expect(conflictRevision({ status: 409, revision: 7 })).toBe(7);
+	expect(isChatBusy({ status: 409, detail: CHAT_BUSY_MESSAGE })).toBe(true);
+	expect(isChatConflict({ status: 409, detail: CHAT_BUSY_MESSAGE })).toBe(false);
+	expect(writeErrorMessage({ status: 409, detail: CHAT_BUSY_MESSAGE })).toBe(CHAT_BUSY_MESSAGE);
+	expect(writeErrorMessage({ status: 409, detail: CHAT_CONFLICT_MESSAGE })).toBe(
+		CHAT_CONFLICT_MESSAGE
+	);
 });
 
 test('a send conflict refetches and retries once', async () => {
