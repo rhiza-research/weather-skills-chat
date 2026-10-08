@@ -8,6 +8,7 @@
 - [[Automations]]
 - [[Secrets]]
 - [[Preferences]]
+- [[Live Chat Updates]]
 - [[Notifications]]
 - [[Tracing]]
 - [[Deployment]]

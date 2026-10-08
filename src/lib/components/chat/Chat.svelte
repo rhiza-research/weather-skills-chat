@@ -92,6 +92,8 @@
 		onTurnLost,
 		putChat,
 		holdHistory,
+		holdPendingTurn,
+		moveTurnToEnd,
 		refetchChat,
 		revisionOf,
 		settleLoadedTurn,
@@ -2116,7 +2118,10 @@
 
 		const stream = model?.info?.params?.stream_response ?? true;
 		const persistedTurn = Boolean(_chatId && _chatId !== 'local' && !$temporaryChatEnabled);
-		if (persistedTurn) beginLive(_chatId, responseMessageId);
+		if (persistedTurn) {
+			beginLive(_chatId, responseMessageId);
+			holdPendingTurn(_chatId, [userMessage?.id, responseMessageId]);
+		}
 		const transcript = createMessagesList(_history, responseMessageId);
 		const firstTurn = transcript.filter((message) => message.role === 'user').length <= 1;
 
@@ -2271,7 +2276,16 @@
 					refetch: () => refetchChat(localStorage.token, _chatId),
 					retry: async () => {
 						if (completionBody.turn) {
+							// Another tab added to this conversation. Send this
+							// message after the newest one instead of branching.
+							const parentId = moveTurnToEnd(_chatId, completionBody.turn.user_message.id);
+							completionBody.turn.parent_id = parentId;
+							completionBody.turn.user_message = {
+								...completionBody.turn.user_message,
+								parentId
+							};
 							completionBody.turn.expected_revision = revisionOf(_chatId);
+							if (get(chatId) === _chatId) history = history;
 						}
 						retried = await generateOpenAIChatCompletion(
 							localStorage.token,

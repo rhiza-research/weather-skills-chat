@@ -36,6 +36,12 @@ let openId = '';
 /** Chats this tab has opened. A revision ping can refresh these on the next open. */
 const subscribed = new Set<string>();
 const liveTurns = new Map<string, string>();
+/**
+ * Messages this tab sent that the server has not stored yet, by chat. A reload
+ * of the chat must not delete them: a send that is retried, or that failed,
+ * still shows the prompt and its reply.
+ */
+const pendingTurns = new Map<string, Set<string>>();
 let recentOrganizationId = '';
 
 export function revisionFrom(document: any): number {
@@ -60,6 +66,81 @@ export function beginLive(id: string, messageId: string) {
 	if (!id || !messageId) return;
 	liveTurns.set(id, messageId);
 	armTurnWatch(id, messageId);
+}
+
+/** Keep these messages through reloads until the server has them. */
+export function holdPendingTurn(id: string, messageIds: (string | null | undefined)[]) {
+	if (!id) return;
+	const held = pendingTurns.get(id) ?? new Set<string>();
+	for (const messageId of messageIds) if (messageId) held.add(messageId);
+	if (held.size) pendingTurns.set(id, held);
+}
+
+function releasePending(id: string, messageIds: string[]) {
+	const held = pendingTurns.get(id);
+	if (!held) return;
+	for (const messageId of messageIds) held.delete(messageId);
+	if (!held.size) pendingTurns.delete(id);
+}
+
+export function isPendingMessage(id: string, messageId: string) {
+	return !!pendingTurns.get(id)?.has(messageId);
+}
+
+/**
+ * Newest message on the branch below `fromId`: follow the last child until
+ * there is none. Messages in `skip` (this tab's unsent turn) are not followed.
+ */
+export function endOfBranch(
+	messages: Record<string, any>,
+	fromId: string | null | undefined,
+	skip: Set<string> = new Set()
+) {
+	if (!fromId || !messages?.[fromId]) return fromId ?? null;
+	let cursor = fromId;
+	const seen = new Set<string>([cursor]);
+	while (true) {
+		const children = (messages[cursor]?.childrenIds ?? []).filter(
+			(child: string) => messages[child] && !skip.has(child) && !seen.has(child)
+		);
+		if (!children.length) return cursor;
+		cursor = children[children.length - 1];
+		seen.add(cursor);
+	}
+}
+
+/**
+ * After a conflict, put this tab's unsent user message at the end of the
+ * conversation it was sent from, so the retry appends instead of branching.
+ * Returns the message it now follows.
+ */
+export function moveTurnToEnd(id: string, userMessageId: string) {
+	const messages = entries.get(id)?.document?.chat?.history?.messages;
+	const user = messages?.[userMessageId];
+	if (!messages || !user) return user?.parentId ?? null;
+	// A stored message (a regenerated reply's prompt) stays where it is.
+	if (!isPendingMessage(id, userMessageId)) return user.parentId ?? null;
+	const skip = new Set<string>([...(pendingTurns.get(id) ?? []), userMessageId]);
+	const previous = user.parentId ?? null;
+	const end = endOfBranch(messages, previous, skip);
+	if (end && end !== previous) {
+		const old = messages[previous];
+		if (old?.childrenIds) {
+			old.childrenIds = old.childrenIds.filter((child: string) => child !== userMessageId);
+		}
+		user.parentId = end;
+	}
+	linkPending(messages, userMessageId);
+	return user.parentId ?? null;
+}
+
+/** A reload replaces the parent with the server copy, which lacks the unsent child. */
+function linkPending(messages: Record<string, any>, messageId: string) {
+	const message = messages[messageId];
+	const parent = message?.parentId ? messages[message.parentId] : null;
+	if (!parent) return;
+	const children = parent.childrenIds ?? [];
+	if (!children.includes(messageId)) parent.childrenIds = [...children, messageId];
 }
 
 export function endLive(messageId?: string) {
@@ -312,15 +393,26 @@ export function putChat(document: any, artifacts: any[] | null = null) {
 			messages[liveId] = remoteLive;
 			endLive(liveId);
 		}
+		// The server has these now. Its copy wins from here on.
+		releasePending(
+			id,
+			[...(pendingTurns.get(id) ?? [])].filter((messageId) => messageId in remoteMessages)
+		);
+		const pending = pendingTurns.get(id) ?? new Set<string>();
 		for (const [messageId, remote] of Object.entries(remoteMessages)) {
 			if (messageId === liveId && messages[liveId]?.done !== true) continue;
 			messages[messageId] = remote;
 		}
 		for (const messageId of Object.keys(messages)) {
 			if (messageId === liveId && messages[liveId]?.done !== true) continue;
+			if (pending.has(messageId)) continue;
 			if (!(messageId in remoteMessages)) delete messages[messageId];
 		}
 		if (localLive && messages[liveId]?.done !== true) messages[liveId] = localLive;
+		for (const messageId of pending) {
+			if (messages[messageId]) linkPending(messages, messageId);
+			else releasePending(id, [messageId]);
+		}
 		if (!isLive(id) && id !== openId && document?.chat?.history?.currentId) {
 			history.currentId = document.chat.history.currentId;
 		} else if (!history.currentId) {
@@ -406,6 +498,7 @@ function catchUp(id: string) {
 
 export function dropChat(id: string) {
 	entries.delete(id);
+	pendingTurns.delete(id);
 	subscribed.delete(id);
 	viewingLeaf.delete(id);
 	chatArtifactLists.update((current) => {
@@ -600,6 +693,22 @@ function adoptTurn(messages: Record<string, any>, userMessage: any, assistantMes
 	}
 }
 
+const fileKey = (file: any) =>
+	file?.url ? `url:${file.url}` : file?.id ? `id:${file.id}` : `json:${JSON.stringify(file)}`;
+
+/** Same rule as the server: append, without repeating a file already listed. */
+export function mergeFiles(existing: any[] | undefined, incoming: any[] | undefined) {
+	const merged = [...(existing ?? [])];
+	const seen = new Set(merged.map(fileKey));
+	for (const file of incoming ?? []) {
+		const key = fileKey(file);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		merged.push(file);
+	}
+	return merged;
+}
+
 function writeCachedStream(event: any, token: string) {
 	const id = event?.chat_id;
 	const entry = entries.get(id);
@@ -628,6 +737,7 @@ function writeCachedStream(event: any, token: string) {
 		const assistantMessage = data?.assistant_message;
 		if (!userMessage?.id || !assistantMessage?.id) return false;
 		adoptTurn(messages, userMessage, assistantMessage);
+		releasePending(id, [userMessage.id, assistantMessage.id]);
 		const remoteId = assistantMessage.id;
 		if (
 			!isLive(id) &&
@@ -649,8 +759,8 @@ function writeCachedStream(event: any, token: string) {
 	if (type === 'status') {
 		if (message.done === true) return false;
 		if (data?.action === 'generation_heartbeat') return false;
-		if (message.statusHistory) message.statusHistory.push(data);
-		else message.statusHistory = [data];
+		// Only the latest status is shown, and only the latest is saved.
+		message.statusHistory = [data];
 		return true;
 	}
 	if (type === 'chat:completion') {
@@ -685,7 +795,7 @@ function writeCachedStream(event: any, token: string) {
 	} else if (type === 'chat:message' || type === 'replace') {
 		message.content = data?.content ?? '';
 	} else if (type === 'chat:message:files' || type === 'files') {
-		message.files = data?.files;
+		message.files = mergeFiles(message.files, data?.files);
 	} else if (type === 'source' || type === 'citation') {
 		if (data?.type === 'code_execution') {
 			if (!message.code_executions) message.code_executions = [];

@@ -48,6 +48,19 @@ Compose passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WE
 
 `docker compose --profile suite run --rm --build test` runs the backend test suite in a container built from the app image with the development packages added. It needs no database server and no access to Docker from inside the container.
 
+## Browser tests
+
+`npm run test:e2e` runs the Playwright browser tests against an app that is already running. Install the browser once with `npx playwright install chromium`.
+
+The tests sign in as the first admin, so the app must start with an empty database and the `BOOTSTRAP_ADMIN_*` settings on [[Deployment]]. They also need `ENABLE_E2E_FIXTURES` on the app.
+
+| Env var | Set on | Default | Effect |
+|-|-|-|-|
+| `ENABLE_E2E_FIXTURES` | The app | `false` | Turns on test-only actions the browser tests use: deleting every chat of the signed-in user, and back-dating a chat so the chat list files it under an older day. Never set it on staging or production. |
+| `PLAYWRIGHT_BASE_URL` | The test run | `http://127.0.0.1:3000` | Address of the app under test |
+| `PLAYWRIGHT_API_URL` | The test run | `PLAYWRIGHT_BASE_URL` | Address the tests use to set up chats directly, when it differs from the page address |
+| `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_ADMIN_NAME` | The test run | `admin@example.com`, `password`, `Admin` | The first admin's account, matching the app's `BOOTSTRAP_ADMIN_*` settings |
+
 ## Skill smoke test
 
 `scripts/smoke_skills.py` checks the whole skill pipeline against the configured database and folders: it installs a small test skill pack, checks the tool made from it, runs the skill in a test chat, and checks that bad secret names and non-https pack addresses are refused. It prints `ALL-SMOKE-OK` when every check passes. The test pack, its tool, and the test chat's files are left in place afterward.

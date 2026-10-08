@@ -1033,7 +1033,9 @@ async def send_email(
     if not from_email:
         return "Email delivery is not configured (missing EMAIL_TOOL_FROM_EMAIL)."
 
-    share_link = _ensure_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
+    share_link = await asyncio.to_thread(
+        _ensure_chat_share_link, chat_id, getattr(config, "WEBUI_URL", "")
+    )
     footer = (
         "\n\n---\n"
         f"This email was generated from Weather Skills Chat by user {user.email}. "

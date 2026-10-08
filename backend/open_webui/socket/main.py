@@ -264,11 +264,7 @@ SESSION_SCOPED_EVENT_TYPES = {
 def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         from open_webui.socket import main as socket_main
-        from open_webui.utils.chat_realtime import (
-            _emit_if_allowed,
-            active_session_ids,
-            watcher_session_ids,
-        )
+        from open_webui.utils.chat_realtime import watcher_session_ids
 
         user_id = request_info["user_id"]
         event_type = (event_data or {}).get("type")
@@ -277,65 +273,69 @@ def get_event_emitter(request_info, update_db=True):
             "message_id": request_info.get("message_id", None),
             "data": event_data,
         }
+        session_id = request_info.get("session_id")
         if event_type in SESSION_SCOPED_EVENT_TYPES or str(event_type).startswith(
             "execute"
         ):
-            session_ids = (
-                [request_info.get("session_id")]
-                if request_info.get("session_id")
-                else []
-            )
+            session_ids = [session_id] if session_id else []
         else:
+            # No access check per event. The sender owns the chat: every
+            # endpoint that creates an emitter for a saved chat checks that.
+            # A watcher session was checked when it subscribed, and
+            # chat_realtime.recheck_watches drops it when its access ends.
             session_ids = list(
-                set(
-                    USER_POOL.get(user_id, [])
-                    + (
-                        [request_info.get("session_id")]
-                        if request_info.get("session_id")
-                        else []
-                    )
-                    + active_session_ids(request_info.get("chat_id"))
+                dict.fromkeys(
+                    list(USER_POOL.get(user_id, []))
+                    + ([session_id] if session_id else [])
                     + watcher_session_ids(request_info.get("chat_id"))
                 )
             )
 
-        chat = None
-        chat_id = request_info.get("chat_id")
-        session_scoped = event_type in SESSION_SCOPED_EVENT_TYPES or str(
-            event_type
-        ).startswith("execute")
-        if chat_id and not session_scoped:
-            from open_webui.models.chats import Chats
-
-            chat = Chats.get_chat_access_row(chat_id)
-
-        for session_id in session_ids:
-            if not session_id:
+        for sid in session_ids:
+            if not sid:
                 continue
-            if chat is not None:
-                await _emit_if_allowed(session_id, chat, "chat-events", payload)
-                continue
-            await socket_main.sio.emit(
-                "chat-events",
-                payload,
-                to=session_id,
-            )
+            await socket_main.sio.emit("chat-events", payload, to=sid)
 
         if update_db:
+            from open_webui.utils.chat_realtime import schedule_message_update
+
+            def save_part(kind, data):
+                schedule_message_update(
+                    request_info.get("chat_id"),
+                    request_info.get("message_id"),
+                    kind,
+                    data,
+                )
+
+            event_body = event_data.get("data") or {}
+            if event_type == "chat:completion" and isinstance(event_body, dict):
+                # One report per model call; the batch adds them up.
+                if event_body.get("usage"):
+                    save_part("usage", event_body["usage"])
+            elif event_type in ("source", "citation") and isinstance(event_body, dict):
+                if event_body.get("type") == "code_execution":
+                    save_part("code_execution", event_body)
+                else:
+                    save_part("source", event_body)
+            elif event_type in ("files", "chat:message:files") and isinstance(
+                event_body, dict
+            ):
+                if isinstance(event_body.get("files"), list):
+                    save_part("files", event_body["files"])
+
             if "type" in event_data and event_data["type"] == "status":
                 status_data = event_data.get("data", {}) or {}
                 action = status_data.get("action")
-                # Liveness pings only — do not grow statusHistory in the DB.
-                # Other statuses are emitted immediately above and flushed
-                # to the database on a short interval, not once per tick.
-                if action != "generation_heartbeat":
-                    from open_webui.utils.chat_realtime import schedule_status
-
-                    schedule_status(
-                        request_info.get("chat_id"),
-                        request_info.get("message_id"),
-                        status_data,
-                    )
+                # Sent to the browser, never saved: the liveness ping, and the
+                # waiting-for-model updates that repeat every second. The
+                # waiting status's closing update is saved, so a reload ends on
+                # the same status line the live view did. Only the latest
+                # status is kept.
+                transient = action == "generation_heartbeat" or (
+                    action == "waiting_response" and not status_data.get("done")
+                )
+                if not transient:
+                    save_part("status", status_data)
                 if (
                     status_data.get("done")
                     and action not in ("generation_heartbeat", "waiting_response")
@@ -346,28 +346,18 @@ def get_event_emitter(request_info, update_db=True):
                     schedule_artifacts(request_info["chat_id"])
 
             if "type" in event_data and event_data["type"] == "message":
-                message = Chats.get_message_by_id_and_message_id(
+                await asyncio.to_thread(
+                    Chats.append_message_content,
                     request_info["chat_id"],
                     request_info["message_id"],
+                    event_data.get("data", {}).get("content", ""),
                 )
-
-                if message:
-                    content = message.get("content", "")
-                    content += event_data.get("data", {}).get("content", "")
-
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        request_info["chat_id"],
-                        request_info["message_id"],
-                        {
-                            "content": content,
-                        },
-                        bump_revision=False,
-                    )
 
             if "type" in event_data and event_data["type"] == "replace":
                 content = event_data.get("data", {}).get("content", "")
 
-                Chats.upsert_message_to_chat_by_id_and_message_id(
+                await asyncio.to_thread(
+                    Chats.upsert_message_to_chat_by_id_and_message_id,
                     request_info["chat_id"],
                     request_info["message_id"],
                     {
@@ -392,7 +382,8 @@ def get_event_emitter(request_info, update_db=True):
                 if data.get("error"):
                     patch["error"] = data["error"]
                 if patch:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                    await asyncio.to_thread(
+                        Chats.upsert_message_to_chat_by_id_and_message_id,
                         request_info["chat_id"],
                         request_info["message_id"],
                         patch,

@@ -125,3 +125,38 @@ class TestChatSyncRoutes(AbstractPostgresTest):
         assert response.status_code >= 400
         assert published == []
         assert self.chats.get_chat_by_id(self.chat.id) is not None
+
+
+class TestChatOwnershipOnCompletion(AbstractPostgresTest):
+    BASE_PATH = "/api/v1/chats"
+
+    def setup_method(self):
+        super().setup_method()
+        from open_webui.models.chats import ChatForm, Chats
+
+        self.chats = Chats
+        self.chat = Chats.insert_new_chat("owner", ChatForm(chat=_tree()))
+
+    def _post(self, path, body):
+        with mock_webui_user(id="intruder"):
+            return self.fast_api_client.post(path, json=body)
+
+    def test_completion_into_someone_elses_chat_is_refused_and_writes_nothing(self):
+        before = self.chats.get_chat_by_id(self.chat.id).chat
+        response = self._post(
+            "/api/chat/completions",
+            {
+                "model": "x",
+                "model_item": {"direct": True, "id": "x"},
+                "chat_id": self.chat.id,
+                "id": "a1",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
+        assert response.status_code == 401
+        assert self.chats.get_chat_by_id(self.chat.id).chat == before
+
+    def test_outlet_and_action_into_someone_elses_chat_are_refused(self):
+        body = {"model": "x", "chat_id": self.chat.id, "id": "a1", "messages": []}
+        assert self._post("/api/chat/completed", body).status_code == 401
+        assert self._post("/api/chat/actions/any", body).status_code == 401

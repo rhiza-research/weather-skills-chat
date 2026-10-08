@@ -1,5 +1,7 @@
 import logging
 import json
+import threading
+from contextlib import contextmanager
 import time
 import uuid
 from typing import Optional
@@ -84,6 +86,26 @@ class ChatWriteError(Exception):
         self.busy = busy
 
 
+# How long a chat write waits for another write to the same chat to finish.
+# A save from the browser fails fast with "busy" so the user can try again; a
+# save the server makes for itself (a reply, its status, its title) waits
+# longer. Writes run in worker threads, so waiting never stalls the server.
+BROWSER_WRITE_WAIT_S = 3.0
+SERVER_WRITE_WAIT_S = 15.0
+
+# How writes to one chat take turns depends on the database:
+# - Postgres: the row lock (SELECT ... FOR UPDATE). It holds across every
+#   process and pod, so nothing in this process is involved.
+# - SQLite: there is no row lock, so writes take turns on these in-process
+#   locks. That is only correct with a single app process, which is the only
+#   way SQLite is supported.
+_CHAT_WRITE_LOCKS = tuple(threading.RLock() for _ in range(64))
+
+
+def _chat_write_lock(chat_id: str):
+    return _CHAT_WRITE_LOCKS[hash(chat_id) % len(_CHAT_WRITE_LOCKS)]
+
+
 ####################
 # Forms
 ####################
@@ -148,14 +170,38 @@ def _chat_visible_filter(user_id: str, organization_id: str):
 
 
 class ChatTable:
-    def _lock_chat_row(self, db, id: str):
+
+    @staticmethod
+    def _has_row_locks(db) -> bool:
         dialect = getattr(getattr(db, "bind", None), "dialect", None)
-        if dialect is not None and dialect.name == "postgresql":
-            db.execute(text("SET LOCAL lock_timeout = '3s'"))
+        return dialect is not None and dialect.name == "postgresql"
+
+    def _lock_chat_row(self, db, id: str, wait_s: float):
+        if self._has_row_locks(db):
+            db.execute(text(f"SET LOCAL lock_timeout = '{int(wait_s * 1000)}ms'"))
             return (
                 db.query(Chat).filter(Chat.id == id).with_for_update().first()
             )
         return db.get(Chat, id)
+
+    @contextmanager
+    def _locked_chat(self, id: str, wait_s: float = BROWSER_WRITE_WAIT_S):
+        """A session holding this chat for writing: (db, chat row or None).
+
+        Call it from a worker thread, never from the event loop: it can wait
+        up to ``wait_s`` for another write to the same chat.
+        """
+        with get_db() as db:
+            if self._has_row_locks(db):
+                yield db, self._lock_chat_row(db, id, wait_s)
+                return
+            lock = _chat_write_lock(id)
+            if not lock.acquire(timeout=wait_s):
+                raise ChatWriteError(CHAT_BUSY_MESSAGE, busy=True)
+            try:
+                yield db, self._lock_chat_row(db, id, wait_s)
+            finally:
+                lock.release()
 
     def _write_locked_chat(
         self,
@@ -165,14 +211,14 @@ class ChatTable:
         expected_revision: Optional[int] = None,
         bump_revision: bool = True,
         check_revision: bool = False,
+        wait_s: float = SERVER_WRITE_WAIT_S,
     ) -> tuple[Optional[ChatModel], str]:
         from sqlalchemy.exc import OperationalError
 
         from open_webui.utils.chat_realtime import chat_revision
 
         try:
-            with get_db() as db:
-                chat_item = self._lock_chat_row(db, id)
+            with self._locked_chat(id, wait_s) as (db, chat_item):
                 if chat_item is None:
                     return None, "missing"
                 current = chat_revision(chat_item)
@@ -208,6 +254,15 @@ class ChatTable:
         except Exception as exc:
             log.exception("chat write failed")
             raise ChatWriteError(CHAT_SAVE_FAILED_MESSAGE) from exc
+
+    def get_chat_revision(self, id: str) -> int:
+        """The chat's revision, read from ``meta`` alone. 0 when the chat is gone."""
+        from open_webui.utils.chat_realtime import chat_revision
+        from types import SimpleNamespace
+
+        with get_db() as db:
+            meta = db.query(Chat.meta).filter(Chat.id == id).scalar()
+        return chat_revision(SimpleNamespace(meta=meta))
 
     def get_chat_access_row(self, id: str) -> Optional[ChatAccessRow]:
         from sqlalchemy.orm import defer, load_only
@@ -373,8 +428,7 @@ class ChatTable:
         self, id: str, created_at: int, updated_at: int
     ) -> Optional[ChatModel]:
         """Stamp timestamps without a visible commit (used by e2e fixtures)."""
-        with get_db() as db:
-            chat_item = db.get(Chat, id)
+        with self._locked_chat(id) as (db, chat_item):
             if chat_item is None:
                 return None
             chat_item.created_at = created_at
@@ -383,17 +437,34 @@ class ChatTable:
             db.refresh(chat_item)
             return ChatModel.model_validate(chat_item)
 
+    def update_chat_fields(
+        self,
+        id: str,
+        fields: dict,
+        *,
+        bump_revision: bool = True,
+        wait_s: float = BROWSER_WRITE_WAIT_S,
+    ) -> Optional[ChatModel]:
+        """Set top-level fields of the stored chat, keeping everything else.
+
+        The merge happens on the copy read under the lock, so a reply saved a
+        moment earlier is not erased.
+        """
+
+        def apply(current, _item):
+            return {**current, **(fields or {})}, True
+
+        result, state = self._write_locked_chat(
+            id, apply, bump_revision=bump_revision, wait_s=wait_s
+        )
+        return None if state == "missing" else result
+
     def update_chat_title_by_id(self, id: str, title: str) -> Optional[ChatModel]:
-        chat = self.get_chat_by_id(id)
-        if chat is None:
-            return None
-
-        chat = chat.chat
-        chat["title"] = title
-
         # Title is sidebar metadata. It must not move the transcript revision
         # the next turn sends, or a follow-up races this write.
-        return self.update_chat_by_id(id, chat, bump_revision=False)
+        return self.update_chat_fields(
+            id, {"title": title}, bump_revision=False, wait_s=SERVER_WRITE_WAIT_S
+        )
 
     def update_chat_tags_by_id(
         self, id: str, tags: list[str], user
@@ -445,6 +516,7 @@ class ChatTable:
         message: dict,
         *,
         bump_revision: bool = True,
+        wait_s: float = SERVER_WRITE_WAIT_S,
     ) -> Optional[ChatModel]:
         def apply(chat, _item):
             history = chat.get("history", {})
@@ -462,24 +534,74 @@ class ChatTable:
             return chat, True
 
         result, state = self._write_locked_chat(
-            id, apply, bump_revision=bump_revision, check_revision=False
+            id, apply, bump_revision=bump_revision, check_revision=False, wait_s=wait_s
         )
         return None if state == "missing" else result
 
-    def append_message_statuses(
-        self, id: str, message_id: str, statuses: list
+    def append_message_content(
+        self, id: str, message_id: str, text: str
     ) -> Optional[ChatModel]:
-        """Re-read the row and append statuses without bumping the watcher revision."""
-        if not statuses:
-            return self.get_chat_by_id(id)
+        """Add text to the end of a stored message, read and written under the lock."""
 
         def apply(chat, _item):
             history = chat.get("history", {})
             messages = history.get("messages", {})
-            if message_id in messages:
-                status_history = list(messages[message_id].get("statusHistory") or [])
-                status_history.extend(statuses)
-                messages[message_id]["statusHistory"] = status_history
+            message = messages.get(message_id)
+            if not isinstance(message, dict) or not text:
+                return chat, False
+            messages[message_id] = {
+                **message,
+                "content": f"{message.get('content') or ''}{text}",
+            }
+            history["messages"] = messages
+            chat["history"] = history
+            return chat, True
+
+        result, state = self._write_locked_chat(id, apply, bump_revision=False)
+        return None if state == "missing" else result
+
+    def save_reply(
+        self, id: str, message_id: str, patch: dict, updates: Optional[dict] = None
+    ) -> Optional[ChatModel]:
+        """The final save of a reply: its pending streamed parts and its text
+        in one write. Raises ChatWriteError when the chat cannot be written."""
+        from open_webui.utils.message_updates import apply_to_message
+
+        def apply(chat, _item):
+            history = chat.get("history", {})
+            messages = history.get("messages", {})
+            current = messages.get(message_id)
+            base = current if isinstance(current, dict) else {}
+            if updates:
+                base = apply_to_message(base, updates)
+            messages[message_id] = {**base, **patch}
+            history["messages"] = messages
+            history["currentId"] = message_id
+            chat["history"] = history
+            return chat, True
+
+        result, state = self._write_locked_chat(id, apply)
+        return None if state == "missing" else result
+
+    def merge_message_updates(
+        self, id: str, message_id: str, updates: dict
+    ) -> Optional[ChatModel]:
+        """Write a batch of streamed reply parts into the stored message.
+
+        The row is re-read under its lock, so content written since the batch
+        was collected is kept. Does not move the watcher revision.
+        """
+        if not updates:
+            return self.get_chat_by_id(id)
+        from open_webui.utils.message_updates import apply_to_message
+
+        def apply(chat, _item):
+            history = chat.get("history", {})
+            messages = history.get("messages", {})
+            message = messages.get(message_id)
+            if not isinstance(message, dict):
+                return chat, False
+            messages[message_id] = apply_to_message(message, updates)
             history["messages"] = messages
             chat["history"] = history
             return chat, True
@@ -492,7 +614,9 @@ class ChatTable:
     def add_message_status_to_chat_by_id_and_message_id(
         self, id: str, message_id: str, status: dict
     ) -> Optional[ChatModel]:
-        return self.append_message_statuses(id, message_id, [status] if status else [])
+        return self.merge_message_updates(
+            id, message_id, {"status": status} if status else {}
+        )
 
     def append_turn(
         self,
@@ -574,6 +698,7 @@ class ChatTable:
                 apply,
                 expected_revision=expected_revision,
                 check_revision=True,
+                wait_s=BROWSER_WRITE_WAIT_S,
             )
         except ChatWriteError as exc:
             if "parent message" in str(exc).lower():
@@ -593,13 +718,11 @@ class ChatTable:
             history = chat.get("history") or {}
             messages = history.get("messages") or {}
             delete_set = set(delete_ids or [])
-            fallback_parent = None
             current_id = history.get("currentId")
-            for message_id in delete_set:
-                message = messages.get(message_id) or {}
-                if current_id == message_id:
-                    fallback_parent = message.get("parentId")
-                messages.pop(message_id, None)
+            deleted = {
+                message_id: messages.pop(message_id, None) or {}
+                for message_id in delete_set
+            }
             for message in messages.values():
                 if isinstance(message, dict) and message.get("childrenIds"):
                     message["childrenIds"] = [
@@ -608,9 +731,15 @@ class ChatTable:
                         if child not in delete_set
                     ]
             if current_id in delete_set:
-                history["currentId"] = (
-                    fallback_parent if fallback_parent in messages else None
-                )
+                # Deleting a user message also deletes its replies, and the
+                # current message is usually one of them. Climb past every
+                # deleted message to the nearest one that is still stored.
+                cursor = current_id
+                seen = set()
+                while cursor in deleted and cursor not in seen:
+                    seen.add(cursor)
+                    cursor = deleted[cursor].get("parentId")
+                history["currentId"] = cursor if cursor in messages else None
             for message_id, message in (upsert or {}).items():
                 if not isinstance(message, dict):
                     continue
@@ -628,6 +757,7 @@ class ChatTable:
                 apply,
                 expected_revision=expected_revision,
                 check_revision=True,
+                wait_s=BROWSER_WRITE_WAIT_S,
             )
         except ChatWriteError:
             return None, "error"
@@ -772,8 +902,7 @@ class ChatTable:
         self, id: str, share_id: Optional[str]
     ) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 chat.share_id = share_id
                 db.commit()
                 db.refresh(chat)
@@ -783,8 +912,7 @@ class ChatTable:
 
     def toggle_chat_pinned_by_id(self, id: str) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 chat.pinned = not chat.pinned
                 self._touch_visible(chat)
                 db.commit()
@@ -797,8 +925,7 @@ class ChatTable:
 
     def toggle_chat_archive_by_id(self, id: str) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 chat.archived = not chat.archived
                 self._touch_visible(chat)
                 db.commit()
@@ -950,8 +1077,7 @@ class ChatTable:
         self, id: str, visibility: str
     ) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 previous_visibility = chat.visibility
                 chat.visibility = visibility
                 # A private folder and a team folder are different lists. Leave
@@ -1254,8 +1380,7 @@ class ChatTable:
         self, id: str, user_id: str, folder_id: str
     ) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 chat.folder_id = folder_id
                 chat.pinned = False
                 self._touch_visible(chat)
@@ -1311,8 +1436,7 @@ class ChatTable:
         if tag is None:
             tag = Tags.insert_new_tag(tag_name, user_id)
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
 
                 tag_id = tag.id
                 if tag_id not in chat.meta.get("tags", []):
@@ -1367,8 +1491,7 @@ class ChatTable:
         self, id: str, user_id: str, tag_name: str
     ) -> bool:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 tags = chat.meta.get("tags", [])
                 tag_id = tag_name.replace(" ", "_").lower()
 
@@ -1384,8 +1507,7 @@ class ChatTable:
 
     def delete_all_tags_by_id_and_user_id(self, id: str, user_id: str) -> bool:
         try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
+            with self._locked_chat(id) as (db, chat):
                 chat.meta = {
                     **chat.meta,
                     "tags": [],

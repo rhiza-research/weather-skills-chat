@@ -78,6 +78,17 @@ if "sqlite" in SQLALCHEMY_DATABASE_URL:
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
     )
+    from open_webui.env import UVICORN_WORKERS
+
+    if UVICORN_WORKERS > 1:
+        # Chat writes take turns on locks inside one process (see
+        # models/chats.py). Separate processes can erase each other's changes.
+        log.warning(
+            "SQLite with UVICORN_WORKERS=%s is not supported: concurrent chat "
+            "writes from different workers can be lost. Use one worker, or "
+            "Postgres.",
+            UVICORN_WORKERS,
+        )
 else:
     if DATABASE_POOL_SIZE > 0:
         engine = create_engine(

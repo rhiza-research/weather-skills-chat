@@ -407,7 +407,8 @@ from open_webui.utils.catalog import (
     can_manage_public,
 )
 from open_webui.models.org_catalog import RESOURCE_MODEL
-from open_webui.utils.organizations import get_active_organization_id
+from open_webui.utils.organizations import can_write_chat, get_active_organization_id
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.usage import UsageLimitExceeded
 from open_webui.utils.usage import check_usage_caps
 
@@ -1174,6 +1175,24 @@ async def get_base_models(
     return {"data": models}
 
 
+def require_owned_chat(chat_id, user) -> None:
+    """Refuse a request that names a saved chat the user does not own.
+
+    Completions, outlets, and actions write into the chat and stream into
+    every tab watching it, so only the owner may target a chat. A temporary
+    chat has no saved id and is not checked.
+    """
+    if not chat_id or chat_id == "local":
+        return
+    if not isinstance(chat_id, str) or not can_write_chat(
+        user, Chats.get_chat_access_row(chat_id)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+
+
 @app.post("/api/chat/completions")
 async def chat_completion(
     request: Request,
@@ -1181,6 +1200,9 @@ async def chat_completion(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
+    # Before anything else: the error path below writes into this chat id.
+    require_owned_chat(form_data.get("chat_id"), user)
+
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
 
@@ -1262,8 +1284,8 @@ async def chat_completion(
             )
 
             try:
-                form_data["messages"] = prepare_completion_messages(
-                    chat_id, turn, user
+                form_data["messages"] = await asyncio.to_thread(
+                    prepare_completion_messages, chat_id, turn, user
                 )
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
@@ -1291,7 +1313,8 @@ async def chat_completion(
     except Exception as e:
         log.debug(f"Error preparing chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):
-            Chats.upsert_message_to_chat_by_id_and_message_id(
+            await asyncio.to_thread(
+                Chats.upsert_message_to_chat_by_id_and_message_id,
                 metadata["chat_id"],
                 metadata["message_id"],
                 {
@@ -1385,19 +1408,11 @@ async def chat_completion(
                 except Exception:
                     log.debug("Failed to emit cancel events", exc_info=True)
             if job_metadata.get("chat_id") and job_metadata.get("message_id"):
-                try:
-                    from open_webui.utils.chat_realtime import flush_statuses
+                from open_webui.utils.chat_realtime import save_final_reply
 
-                    await flush_statuses(
-                        job_metadata["chat_id"], job_metadata["message_id"]
-                    )
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        job_metadata["chat_id"],
-                        job_metadata["message_id"],
-                        {"done": True},
-                    )
-                except Exception:
-                    log.debug("Failed to persist cancel state", exc_info=True)
+                await save_final_reply(
+                    job_metadata["chat_id"], job_metadata["message_id"], {"done": True}
+                )
                 try:
                     await emit_chat_title_if_needed(
                         request,
@@ -1439,22 +1454,13 @@ async def chat_completion(
                 except Exception:
                     log.debug("Failed to emit chat error event", exc_info=True)
             if job_metadata.get("chat_id") and job_metadata.get("message_id"):
-                try:
-                    from open_webui.utils.chat_realtime import flush_statuses
+                from open_webui.utils.chat_realtime import save_final_reply
 
-                    await flush_statuses(
-                        job_metadata["chat_id"], job_metadata["message_id"]
-                    )
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        job_metadata["chat_id"],
-                        job_metadata["message_id"],
-                        {
-                            "done": True,
-                            "error": {"content": error_content},
-                        },
-                    )
-                except Exception:
-                    log.debug("Failed to persist chat error", exc_info=True)
+                await save_final_reply(
+                    job_metadata["chat_id"],
+                    job_metadata["message_id"],
+                    {"done": True, "error": {"content": error_content}},
+                )
             if LANGFUSE_ENABLED:
                 end_chat_trace(error=e)
 
@@ -1477,6 +1483,7 @@ generate_chat_completion = chat_completion
 async def chat_completed(
     request: Request, form_data: dict, user=Depends(get_verified_user)
 ):
+    require_owned_chat(form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
@@ -1496,6 +1503,7 @@ async def chat_completed(
 async def chat_action(
     request: Request, action_id: str, form_data: dict, user=Depends(get_verified_user)
 ):
+    require_owned_chat(form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
