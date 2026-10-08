@@ -25,6 +25,7 @@ from open_webui.functions import generate_function_chat_completion
 
 from open_webui.routers.openai import (
     generate_chat_completion as generate_openai_chat_completion,
+    model_call_tracing_style_for_model,
 )
 
 from open_webui.routers.ollama import (
@@ -47,7 +48,12 @@ from open_webui.utils.response import (
     convert_response_ollama_to_openai,
     convert_streaming_response_ollama_to_openai,
 )
-from open_webui.utils.langfuse_tracing import observe_generation
+from open_webui.utils.langfuse_tracing import (
+    MODEL_CALL_TRACING_APP,
+    MODEL_CALL_TRACING_KEY,
+    observe_generation,
+    tracing_enabled,
+)
 from open_webui.utils.usage import (
     bind_usage_to_response,
     enforce_usage_caps,
@@ -168,15 +174,78 @@ async def generate_chat_completion(
     user: Any,
     bypass_filter: bool = False,
 ):
+    if _is_arena_model(request, form_data):
+        # The arena calls this function again for the model it selects, and
+        # that call enforces the usage caps and records the generation and
+        # the usage.
+        return await _generate_chat_completion(request, form_data, user, bypass_filter)
     inject_include_usage(form_data)
     enforce_usage_caps(request, form_data, user)
+    style = _model_call_tracing_style(request, form_data)
+    _carry_model_call_tracing_style(form_data, style)
     response = await observe_generation(
         form_data,
         _generate_chat_completion(request, form_data, user, bypass_filter),
+        style=style,
     )
     return bind_usage_to_response(
         response, resolve_usage_context(request, form_data, user)
     )
+
+
+def _catalog_model(request: Request, form_data: dict) -> Optional[dict]:
+    """The call's model from request.app.state.MODELS; None for direct models."""
+    if getattr(request.state, "direct", False):
+        return None
+    return request.app.state.MODELS.get(form_data.get("model"))
+
+
+def _is_arena_model(request: Request, form_data: dict) -> bool:
+    try:
+        model = _catalog_model(request, form_data)
+        return bool(model) and model.get("owned_by") == "arena"
+    except Exception:
+        log.debug("Resolving the arena model failed", exc_info=True)
+        return False
+
+
+def _model_call_tracing_style(request: Request, form_data: dict) -> str:
+    """Who records this call; only OpenAI-connection models can opt out of "app".
+
+    Direct, pipe and Ollama models never reach the OpenAI router, so the app
+    records them. Arena calls never reach this function: generate_chat_completion
+    sends them past recording (see _is_arena_model) and records the selected
+    model's call instead.
+    """
+    if not tracing_enabled():
+        return MODEL_CALL_TRACING_APP
+    try:
+        model = _catalog_model(request, form_data)
+        if not model or model.get("owned_by") == "ollama" or model.get("pipe"):
+            return MODEL_CALL_TRACING_APP
+        return model_call_tracing_style_for_model(request, form_data.get("model"))
+    except Exception:
+        log.debug("Resolving model-call tracing style failed", exc_info=True)
+        return MODEL_CALL_TRACING_APP
+
+
+def _carry_model_call_tracing_style(form_data: dict, style: str) -> None:
+    """Hand the decided style to the OpenAI router in the call's metadata.
+
+    The router adds provider fields only for this style, so a call is never
+    recorded by both the app and the provider. The metadata dict is replaced,
+    not mutated, because it can be shared with request.state and other calls.
+    """
+    metadata = form_data.get("metadata")
+    has_key = isinstance(metadata, dict) and MODEL_CALL_TRACING_KEY in metadata
+    if style == MODEL_CALL_TRACING_APP and not has_key:
+        return
+    metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    if style == MODEL_CALL_TRACING_APP:
+        metadata.pop(MODEL_CALL_TRACING_KEY, None)
+    else:
+        metadata[MODEL_CALL_TRACING_KEY] = style
+    form_data["metadata"] = metadata
 
 
 async def _generate_chat_completion(
