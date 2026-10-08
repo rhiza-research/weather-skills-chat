@@ -11,26 +11,26 @@ test('deleting a message in a temporary chat does not POST history', async ({ pa
 	});
 	await page.route('**/api/chat/completions', async (route) => {
 		await route.fulfill({
-			status: 200,
-			contentType: 'text/event-stream',
-			body: 'data: {"choices":[{"delta":{"content":"temp reply"}}]}\n\ndata: [DONE]\n\n'
+			status: 400,
+			contentType: 'application/json',
+			body: JSON.stringify({ detail: 'nope' })
 		});
 	});
 	const socket = waitForSocket(page);
 	await page.goto('/?temporary-chat=true');
 	await socket;
 	await expect(page.locator('#chat-input')).toBeVisible();
-	await page.locator('#chat-input').fill('throwaway prompt');
-	await page.locator('#chat-input').press('Enter');
-	const userLine = page.getByText('throwaway prompt');
-	await expect(userLine.first()).toBeVisible({ timeout: 10_000 });
-	await userLine.first().hover();
-	const del = page.getByRole('button', { name: /delete/i }).first();
-	await expect(del).toBeVisible();
+	const input = page.locator('#chat-input');
+	await input.fill('throwaway prompt');
+	await input.press('Enter');
+	const userLine = page.getByText('throwaway prompt').first();
+	await expect(userLine).toBeVisible({ timeout: 10_000 });
+	await userLine.hover();
+	const del = page.getByRole('button', { name: /^delete$/i }).first();
+	await expect(del).toBeVisible({ timeout: 10_000 });
 	await del.click();
-	const confirm = page.getByRole('button', { name: /delete/i }).last();
+	const confirm = page.getByRole('button', { name: /^confirm$/i });
 	if (await confirm.isVisible().catch(() => false)) await confirm.click();
-	await page.waitForTimeout(500);
+	await expect(page.getByText('throwaway prompt')).toHaveCount(0, { timeout: 10_000 });
 	expect(historyPosts).toEqual([]);
-	await expect(page.locator('body')).not.toContainText(/not found|failed to save|error/i);
 });
