@@ -411,7 +411,9 @@
 								goto(`/c/${event.chat_id}`);
 							},
 							content: content,
-							title: title
+							title: title,
+							focusedOnThisChat:
+								document.visibilityState === 'visible' && event.chat_id === $chatId
 						},
 						duration: 15000,
 						unstyled: true

@@ -28,7 +28,7 @@ test('a reply in the open chat does not play a sound while this tab is focused',
 	expect(await notificationPlays(page)).toBe(before);
 });
 
-test('a reply in another chat does not play a sound while this tab is focused', async ({
+test('a reply in another chat plays a sound while this tab is focused', async ({
 	page
 }) => {
 	const open = await seedChat('notify this chat', 'this reply');
@@ -37,8 +37,7 @@ test('a reply in another chat does not play a sound while this tab is focused', 
 	await openChat(page, open.id);
 	const before = await notificationPlays(page);
 	await emitChatCompletion(page, other.id, 'notify other chat');
-	await page.waitForTimeout(500);
-	expect(await notificationPlays(page)).toBe(before);
+	await expect.poll(() => notificationPlays(page), { timeout: 5_000 }).toBeGreaterThan(before);
 });
 
 test('a reply plays a sound when this tab is in the background', async ({ page }) => {

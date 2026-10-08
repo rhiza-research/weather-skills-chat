@@ -1,24 +1,24 @@
 import { expect, test } from 'vitest';
 import { shouldPlayCompletionSound } from './notifyCompletion';
 
-test('a completion chime plays only when this tab is in the background', () => {
+test('a reply in another chat plays a chime while this tab is focused', () => {
 	expect(
 		shouldPlayCompletionSound({
 			soundEnabled: true,
 			isLastActiveTab: true,
-			tabVisible: false,
-			hasBeenActive: true
+			hasBeenActive: true,
+			focusedOnThisChat: false
 		})
 	).toBe(true);
 });
 
-test('a focused tab does not play a completion chime', () => {
+test('a reply in the open chat does not play a chime', () => {
 	expect(
 		shouldPlayCompletionSound({
 			soundEnabled: true,
 			isLastActiveTab: true,
-			tabVisible: true,
-			hasBeenActive: true
+			hasBeenActive: true,
+			focusedOnThisChat: true
 		})
 	).toBe(false);
 });
@@ -28,8 +28,8 @@ test('another app tab does not also play the chime', () => {
 		shouldPlayCompletionSound({
 			soundEnabled: true,
 			isLastActiveTab: false,
-			tabVisible: false,
-			hasBeenActive: true
+			hasBeenActive: true,
+			focusedOnThisChat: false
 		})
 	).toBe(false);
 });

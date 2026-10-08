@@ -10,6 +10,7 @@
 	export let onClick: Function = () => {};
 	export let title: string = 'HI';
 	export let content: string;
+	export let focusedOnThisChat = false;
 
 	let html = '';
 
@@ -19,7 +20,7 @@
 			import('marked')
 		]);
 		html = DOMPurify.sanitize(marked(content) as string);
-		playNotificationSound();
+		playNotificationSound({ focusedOnThisChat });
 	});
 </script>
 
