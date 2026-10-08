@@ -1,54 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { ageChat, clearChats, seedChat, sendTurn } from '../../chats';
-
-const RANGES = new Set(['Today', 'Yesterday', 'Previous 7 days', 'Previous 30 days']);
-
-async function waitForSocket(page: Page) {
-	await page.waitForEvent('websocket', {
-		predicate: (socket) => socket.url().includes('socket.io'),
-		timeout: 20_000
-	});
-}
-
-async function openSidebar(page: Page) {
-	const sidebar = page.locator('#sidebar');
-	if (await sidebar.locator('a[href^="/c/"]').first().isVisible().catch(() => false)) return;
-	await page.locator('#sidebar-toggle-button').click();
-	await expect(sidebar.locator('a[href^="/c/"]').first()).toBeVisible();
-}
-
-async function listing(page: Page) {
-	return page.evaluate((ranges) => {
-		const sidebar = document.getElementById('sidebar');
-		const sections: string[] = [];
-		const chats: { id: string; title: string; section: string }[] = [];
-		if (!sidebar) return { sections, chats };
-		let section = '';
-		const walk = (node: Element) => {
-			if (node instanceof HTMLAnchorElement) {
-				const href = node.getAttribute('href') || '';
-				if (href.startsWith('/c/')) {
-					chats.push({
-						id: href.slice('/c/'.length),
-						title: (node.textContent || '').replace(/\s+/g, ' ').trim(),
-						section
-					});
-				}
-				return;
-			}
-			if (node instanceof HTMLButtonElement) {
-				const label = (node.textContent || '').replace(/\s+/g, ' ').trim();
-				if (ranges.includes(label)) {
-					sections.push(label);
-					section = label;
-				}
-			}
-			for (const child of node.children) walk(child);
-		};
-		walk(sidebar);
-		return { sections, chats };
-	}, [...RANGES]);
-}
+import { listing, openSidebar, waitForSocket } from '../../helpers';
 
 function expectOneSection(rows: { sections: string[] }, name: string) {
 	expect(rows.sections.filter((section) => section === name)).toHaveLength(1);
@@ -73,10 +25,14 @@ test('chatting with an older chat moves it into Today on every open page', async
 	await openSidebar(page);
 	await openSidebar(other);
 
-	await expect.poll(async () => (await listing(page)).chats.some((chat) => chat.id === moving.id)).toBe(
-		true
-	);
+	const ids = [today.id, extraToday.id, moving.id, staying.id];
 	for (const tab of [page, other]) {
+		await expect
+			.poll(async () => {
+				const rows = await listing(tab);
+				return ids.every((id) => rows.chats.some((chat) => chat.id === id));
+			})
+			.toBe(true);
 		const before = await listing(tab);
 		expectOneSection(before, 'Today');
 		expectOneSection(before, 'Previous 7 days');

@@ -1,24 +1,8 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { replaceAssistant, seedChat, sendTurn } from '../../chats';
+import { waitForSocket, watchChatGets } from '../../helpers';
 
 const ORIGINAL = 'cached reply before the other tab writes';
-
-function watchChatGets(page: Page, id: string) {
-	const hits: string[] = [];
-	page.on('request', (request) => {
-		if (request.method() !== 'GET') return;
-		const path = new URL(request.url()).pathname;
-		if (path === `/api/v1/chats/${id}`) hits.push(request.url());
-	});
-	return hits;
-}
-
-async function waitForSocket(page: Page) {
-	await page.waitForEvent('websocket', {
-		predicate: (socket) => socket.url().includes('socket.io'),
-		timeout: 20_000
-	});
-}
 
 test('a cached unopened chat is fetched once when another tab updates it', async ({ page }) => {
 	const { id, token } = await seedChat('unopened cache', ORIGINAL);

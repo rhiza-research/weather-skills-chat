@@ -111,6 +111,67 @@ test('a download during a live turn keeps the history object already on screen',
 	endLive('asst');
 });
 
+test('putChat drops messages the newer copy no longer has', () => {
+	const local = {
+		id: 'chat-delete',
+		meta: { revision: 1 },
+		chat: {
+			history: {
+				currentId: 'keep',
+				messages: {
+					keep: { id: 'keep', role: 'assistant', content: 'stay', done: true },
+					gone: { id: 'gone', role: 'user', content: 'delete me', done: true }
+				}
+			}
+		}
+	};
+	putChat(local);
+	putChat({
+		id: 'chat-delete',
+		meta: { revision: 2 },
+		chat: {
+			history: {
+				currentId: 'keep',
+				messages: {
+					keep: { id: 'keep', role: 'assistant', content: 'stay', done: true }
+				}
+			}
+		}
+	});
+	expect(local.chat.history.messages.gone).toBeUndefined();
+	expect(local.chat.history.messages.keep.content).toBe('stay');
+});
+
+test('putChat ignores an older revision so a late fetch cannot rewind the tree', () => {
+	const local = {
+		id: 'chat-stale',
+		meta: { revision: 5 },
+		chat: {
+			history: {
+				currentId: 'asst',
+				messages: {
+					asst: { id: 'asst', role: 'assistant', content: 'newer', done: true }
+				}
+			}
+		}
+	};
+	putChat(local);
+	putChat({
+		id: 'chat-stale',
+		meta: { revision: 2 },
+		chat: {
+			history: {
+				currentId: 'asst',
+				messages: {
+					asst: { id: 'asst', role: 'assistant', content: 'older', done: true }
+				}
+			}
+		}
+	});
+	expect(local.chat.history.messages.asst.content).toBe('newer');
+	expect(revisionOf('chat-stale')).toBe(5);
+});
+
 test('opening a chat this tab is already generating does not mark it lost', async () => {
 	const live = {
 		id: 'chat-switch',

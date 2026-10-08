@@ -122,8 +122,40 @@ export async function ensureChatModel(token: string) {
 }
 
 /** The same completion request a focused tab sends. */
+export async function getChat(token: string, id: string) {
+	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
+	try {
+		const got = await api.get(`/api/v1/chats/${id}`, {
+			headers: { authorization: `Bearer ${token}` }
+		});
+		if (!got.ok()) {
+			throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
+		}
+		return (await got.json()) as {
+			id: string;
+			updated_at: number;
+			meta?: { revision?: number };
+			chat?: { history?: { messages?: Record<string, { content?: string }> } };
+		};
+	} finally {
+		await api.dispose();
+	}
+}
+
+async function waitUntilChatIdle(token: string, id: string) {
+	let last = -1;
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const row = await getChat(token, id);
+		if (row.updated_at === last) return row;
+		last = row.updated_at;
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	return getChat(token, id);
+}
+
 export async function sendTurn(token: string, id: string, content: string) {
 	await ensureChatModel(token);
+	const current = await getChat(token, id);
 	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
 	const userId = `user-${Date.now()}`;
 	const assistantId = `assistant-${Date.now()}`;
@@ -138,6 +170,7 @@ export async function sendTurn(token: string, id: string, content: string) {
 				id: assistantId,
 				turn: {
 					parent_id: 'assistant-1',
+					expected_revision: current.meta?.revision ?? 0,
 					user_message: {
 						id: userId,
 						parentId: 'assistant-1',
@@ -186,46 +219,56 @@ export async function clearChats() {
 
 /** Move a chat onto a past calendar day so the sidebar lists it under an older range. */
 export async function ageChat(token: string, id: string, daysAgo: number) {
-	for (let attempt = 0; attempt < 8; attempt++) {
-		const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
-		try {
-			const aged = await api.post(`/api/v1/chats/${id}/e2e/age`, {
-				headers: { authorization: `Bearer ${token}` },
-				data: { days_ago: daysAgo }
-			});
-			if (aged.status() === 404) throw new Error(fixturesOff);
-			if (!aged.ok()) {
-				throw new Error(`age chat failed: ${aged.status()} ${await aged.text()}`);
-			}
-			const stamped = (await aged.json()) as { updated_at: number };
-			await new Promise((resolve) => setTimeout(resolve, 200));
-			const got = await api.get(`/api/v1/chats/${id}`, {
-				headers: { authorization: `Bearer ${token}` }
-			});
-			if (!got.ok()) {
-				throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
-			}
-			const row = (await got.json()) as { updated_at: number };
-			if (Math.abs(row.updated_at - stamped.updated_at) < 2) return;
-		} finally {
-			await api.dispose();
+	await waitUntilChatIdle(token, id);
+	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
+	try {
+		const aged = await api.post(`/api/v1/chats/${id}/e2e/age`, {
+			headers: { authorization: `Bearer ${token}` },
+			data: { days_ago: daysAgo }
+		});
+		if (aged.status() === 404) throw new Error(fixturesOff);
+		if (!aged.ok()) {
+			throw new Error(`age chat failed: ${aged.status()} ${await aged.text()}`);
 		}
+		const stamped = (await aged.json()) as { updated_at: number };
+		const row = await getChat(token, id);
+		if (Math.abs(row.updated_at - stamped.updated_at) >= 2) {
+			throw new Error(`chat ${id} would not stay aged`);
+		}
+	} finally {
+		await api.dispose();
 	}
-	throw new Error(`chat ${id} would not stay aged`);
 }
 
-/** Replace the assistant message. This commits the chat and emits chat:updated. */
-export async function replaceAssistant(token: string, id: string, content: string) {
+export async function patchHistory(
+	token: string,
+	id: string,
+	patch: { upsert?: Record<string, unknown>; delete?: string[]; expected_revision?: number | null }
+) {
 	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
 	try {
 		const patched = await api.post(`/api/v1/chats/${id}/history`, {
 			headers: { authorization: `Bearer ${token}` },
-			data: { upsert: { 'assistant-1': { content } } }
+			data: patch
 		});
-		if (!patched.ok()) {
-			throw new Error(`patch chat failed: ${patched.status()} ${await patched.text()}`);
-		}
+		return {
+			ok: patched.ok(),
+			status: patched.status(),
+			body: await patched.json().catch(async () => ({ detail: await patched.text() }))
+		};
 	} finally {
 		await api.dispose();
+	}
+}
+
+/** Replace the assistant message. This commits the chat and emits chat:updated. */
+export async function replaceAssistant(token: string, id: string, content: string) {
+	const current = await getChat(token, id);
+	const patched = await patchHistory(token, id, {
+		upsert: { 'assistant-1': { content } },
+		expected_revision: current.meta?.revision ?? 0
+	});
+	if (!patched.ok) {
+		throw new Error(`patch chat failed: ${patched.status()} ${JSON.stringify(patched.body)}`);
 	}
 }
