@@ -7,6 +7,7 @@ from typing import Optional
 from open_webui.internal.db import Base, get_db
 from open_webui.models.tags import TagModel, Tag, Tags
 from open_webui.env import SRC_LOG_LEVELS
+from open_webui.utils.chat_errors import CHAT_BUSY_MESSAGE, ChatBusy
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON
@@ -225,11 +226,13 @@ class ChatTable:
                     pass
             return ChatModel.model_validate(result) if result else None
 
-    def _schedule_visible_commit(self, chat_id: str) -> None:
+    def _schedule_visible_commit(
+        self, chat_id: str, previous_visibility: Optional[str] = None
+    ) -> None:
         try:
             from open_webui.utils.chat_realtime import schedule_chat_committed
 
-            schedule_chat_committed(chat_id)
+            schedule_chat_committed(chat_id, previous_visibility=previous_visibility)
         except Exception:
             log.debug("schedule chat commit failed", exc_info=True)
 
@@ -238,34 +241,80 @@ class ChatTable:
 
         touch_revision(chat_item)
 
+    def _locked_row(self, db, id: str):
+        bind = db.get_bind()
+        if bind is not None and getattr(bind.dialect, "name", "") == "postgresql":
+            db.execute(text("SET LOCAL lock_timeout = '3s'"))
+        try:
+            return (
+                db.query(Chat).filter(Chat.id == id).with_for_update().one_or_none()
+            )
+        except Exception as exc:
+            lowered = str(exc).lower()
+            if (
+                "lock timeout" in lowered
+                or "lock_timeout" in lowered
+                or "locknotavailable" in lowered
+            ):
+                raise ChatBusy(CHAT_BUSY_MESSAGE) from exc
+            raise
+
+    def _write_chat(
+        self,
+        id: str,
+        apply,
+        *,
+        bump_revision: bool = True,
+        expected_revision: Optional[int] = None,
+        schedule: bool = True,
+    ):
+        """Lock the row, re-read, apply, write. ``apply(item, chat) -> bool|'conflict'``."""
+        from open_webui.utils.chat_realtime import chat_revision
+
+        with get_db() as db:
+            item = self._locked_row(db, id)
+            if item is None:
+                return None, "missing"
+            current = chat_revision(item)
+            if expected_revision is not None and int(expected_revision) != current:
+                return ChatModel.model_validate(item), "conflict"
+            chat = json.loads(json.dumps(item.chat or {}))
+            changed = apply(item, chat)
+            if changed == "conflict":
+                return ChatModel.model_validate(item), "conflict"
+            if not changed:
+                return ChatModel.model_validate(item), "ok"
+            item.chat = chat
+            if bump_revision:
+                self._touch_visible(item)
+            db.commit()
+            db.refresh(item)
+            result = ChatModel.model_validate(item)
+        if schedule and bump_revision:
+            self._schedule_visible_commit(id)
+        return result, "ok"
+
     def update_chat_by_id(
         self, id: str, chat: dict, *, bump_revision: bool = True
     ) -> Optional[ChatModel]:
         from open_webui.utils.chat_timing import log_timing
 
         t0 = time.perf_counter()
-        try:
-            with get_db() as db:
-                chat_item = db.get(Chat, id)
-                chat_item.chat = chat
-                chat_item.title = chat["title"] if "title" in chat else "New Chat"
-                if bump_revision:
-                    self._touch_visible(chat_item)
-                db.commit()
-                db.refresh(chat_item)
 
-                result = ChatModel.model_validate(chat_item)
-            log_timing(
-                "db.Chats.update_chat_by_id",
-                time.perf_counter() - t0,
-                chat_id=id,
-                chat_json_bytes=len(json.dumps(chat or {}, default=str)),
-            )
-            if bump_revision and result:
-                self._schedule_visible_commit(id)
-            return result
-        except Exception:
-            return None
+        def apply(item, current):
+            current.clear()
+            current.update(chat or {})
+            item.title = chat["title"] if "title" in (chat or {}) else "New Chat"
+            return True
+
+        result, _state = self._write_chat(id, apply, bump_revision=bump_revision)
+        log_timing(
+            "db.Chats.update_chat_by_id",
+            time.perf_counter() - t0,
+            chat_id=id,
+            chat_json_bytes=len(json.dumps(chat or {}, default=str)),
+        )
+        return result
 
     def set_chat_times(
         self, id: str, created_at: int, updated_at: int
@@ -344,27 +393,18 @@ class ChatTable:
         *,
         bump_revision: bool = True,
     ) -> Optional[ChatModel]:
-        chat = self.get_chat_by_id(id)
-        if chat is None:
-            return None
+        def apply(_item, chat):
+            history = chat.setdefault("history", {})
+            messages = history.setdefault("messages", {})
+            if message_id in messages and isinstance(messages[message_id], dict):
+                messages[message_id] = {**messages[message_id], **message}
+            else:
+                messages[message_id] = message
+            history["currentId"] = message_id
+            return True
 
-        # Copy so a later writer cannot be overwritten by this snapshot.
-        chat = json.loads(json.dumps(chat.chat or {}))
-        history = chat.get("history", {})
-        messages = history.get("messages", {})
-
-        if message_id in messages:
-            messages[message_id] = {
-                **messages[message_id],
-                **message,
-            }
-        else:
-            messages[message_id] = message
-
-        history["messages"] = messages
-        history["currentId"] = message_id
-        chat["history"] = history
-        return self.update_chat_by_id(id, chat, bump_revision=bump_revision)
+        result, _state = self._write_chat(id, apply, bump_revision=bump_revision)
+        return result
 
     def append_message_statuses(
         self, id: str, message_id: str, statuses: list
@@ -372,20 +412,18 @@ class ChatTable:
         """Re-read the row and append statuses without bumping the watcher revision."""
         if not statuses:
             return self.get_chat_by_id(id)
-        chat = self.get_chat_by_id(id)
-        if chat is None:
-            return None
 
-        chat = json.loads(json.dumps(chat.chat or {}))
-        history = chat.get("history", {})
-        messages = history.get("messages", {})
-        if message_id in messages:
-            status_history = list(messages[message_id].get("statusHistory") or [])
-            status_history.extend(statuses)
-            messages[message_id]["statusHistory"] = status_history
-        history["messages"] = messages
-        chat["history"] = history
-        return self.update_chat_by_id(id, chat, bump_revision=False)
+        def apply(_item, chat):
+            history = chat.setdefault("history", {})
+            messages = history.setdefault("messages", {})
+            if message_id in messages and isinstance(messages[message_id], dict):
+                status_history = list(messages[message_id].get("statusHistory") or [])
+                status_history.extend(statuses)
+                messages[message_id]["statusHistory"] = status_history
+            return True
+
+        result, _state = self._write_chat(id, apply, bump_revision=False)
+        return result
 
     def add_message_status_to_chat_by_id_and_message_id(
         self, id: str, message_id: str, status: dict
@@ -404,86 +442,67 @@ class ChatTable:
         Returns ``(chat, "ok" | "conflict" | "missing")``. A conflict leaves the
         row unchanged.
         """
-        from open_webui.utils.chat_realtime import chat_revision
 
-        try:
-            with get_db() as db:
-                chat_item = db.get(Chat, id)
-                if chat_item is None:
-                    return None, "missing"
-                current = chat_revision(chat_item)
-                if expected_revision is not None and int(expected_revision) != current:
-                    return ChatModel.model_validate(chat_item), "conflict"
+        def apply(_item, chat):
+            history = chat.setdefault("history", {})
+            messages = history.setdefault("messages", {})
+            user_id = user_message.get("id")
+            assistant_id = assistant_message.get("id")
+            parent_id = user_message.get("parentId")
+            if parent_id and parent_id not in messages:
+                return "conflict"
+            changed = False
 
-                chat = json.loads(json.dumps(chat_item.chat or {}))
-                history = chat.get("history") or {}
-                messages = history.get("messages") or {}
-                user_id = user_message.get("id")
-                assistant_id = assistant_message.get("id")
-                parent_id = user_message.get("parentId")
-                changed = False
-
-                if user_id and user_id not in messages:
-                    stored_user = dict(user_message)
+            if user_id and user_id not in messages:
+                stored_user = dict(user_message)
+                children = list(stored_user.get("childrenIds") or [])
+                if assistant_id and assistant_id not in children:
+                    children.append(assistant_id)
+                stored_user["childrenIds"] = children
+                stored_user.setdefault("role", "user")
+                messages[user_id] = stored_user
+                changed = True
+                if parent_id and parent_id in messages:
+                    parent = dict(messages[parent_id])
+                    parent_children = list(parent.get("childrenIds") or [])
+                    if user_id not in parent_children:
+                        parent_children.append(user_id)
+                        parent["childrenIds"] = parent_children
+                        messages[parent_id] = parent
+            elif user_id and user_id in messages:
+                stored_user = dict(messages[user_id])
+                incoming_content = user_message.get("content")
+                if incoming_content and incoming_content != stored_user.get("content"):
+                    stored_user["content"] = incoming_content
+                    changed = True
+                if user_message.get("files"):
+                    stored_user["files"] = user_message.get("files")
+                    changed = True
+                if assistant_id:
                     children = list(stored_user.get("childrenIds") or [])
-                    if assistant_id and assistant_id not in children:
+                    if assistant_id not in children:
                         children.append(assistant_id)
-                    stored_user["childrenIds"] = children
-                    stored_user.setdefault("role", "user")
-                    messages[user_id] = stored_user
-                    changed = True
-                    if parent_id and parent_id in messages:
-                        parent = dict(messages[parent_id])
-                        parent_children = list(parent.get("childrenIds") or [])
-                        if user_id not in parent_children:
-                            parent_children.append(user_id)
-                            parent["childrenIds"] = parent_children
-                            messages[parent_id] = parent
-                elif user_id and user_id in messages:
-                    stored_user = dict(messages[user_id])
-                    incoming_content = user_message.get("content")
-                    if incoming_content and incoming_content != stored_user.get("content"):
-                        stored_user["content"] = incoming_content
+                        stored_user["childrenIds"] = children
                         changed = True
-                    if user_message.get("files"):
-                        stored_user["files"] = user_message.get("files")
-                        changed = True
-                    if assistant_id:
-                        children = list(stored_user.get("childrenIds") or [])
-                        if assistant_id not in children:
-                            children.append(assistant_id)
-                            stored_user["childrenIds"] = children
-                            changed = True
-                    messages[user_id] = stored_user
+                messages[user_id] = stored_user
 
-                if assistant_id and assistant_id not in messages:
-                    stored_assistant = dict(assistant_message)
-                    stored_assistant.setdefault("role", "assistant")
-                    stored_assistant.setdefault("content", "")
-                    stored_assistant.setdefault("childrenIds", [])
-                    stored_assistant["parentId"] = user_id
-                    messages[assistant_id] = stored_assistant
-                    changed = True
+            if assistant_id and assistant_id not in messages:
+                stored_assistant = dict(assistant_message)
+                stored_assistant.setdefault("role", "assistant")
+                stored_assistant.setdefault("content", "")
+                stored_assistant.setdefault("childrenIds", [])
+                stored_assistant["parentId"] = user_id
+                messages[assistant_id] = stored_assistant
+                changed = True
 
-                if assistant_id and history.get("currentId") != assistant_id:
-                    history["currentId"] = assistant_id
-                    changed = True
-                if not changed:
-                    return ChatModel.model_validate(chat_item), "ok"
-                history["messages"] = messages
-                chat["history"] = history
-                chat_item.chat = chat
-                if changed:
-                    self._touch_visible(chat_item)
-                db.commit()
-                db.refresh(chat_item)
-                result = ChatModel.model_validate(chat_item)
-            if changed:
-                self._schedule_visible_commit(id)
-            return result, "ok"
-        except Exception:
-            log.exception("append_turn failed")
-            return None, "missing"
+            if assistant_id and history.get("currentId") != assistant_id:
+                history["currentId"] = assistant_id
+                changed = True
+            return changed
+
+        return self._write_chat(
+            id, apply, bump_revision=True, expected_revision=expected_revision
+        )
 
     def apply_history_patch(
         self,
@@ -492,92 +511,50 @@ class ChatTable:
         delete_ids: list,
         expected_revision: Optional[int],
     ) -> tuple[Optional[ChatModel], str]:
-        """Merge a few messages into the stored tree. Does not move currentId."""
-        from open_webui.utils.chat_realtime import chat_revision
+        """Merge a few messages into the stored tree."""
 
-        try:
-            with get_db() as db:
-                chat_item = db.get(Chat, id)
-                if chat_item is None:
-                    return None, "missing"
-                current = chat_revision(chat_item)
-                if expected_revision is not None and int(expected_revision) != current:
-                    return ChatModel.model_validate(chat_item), "conflict"
-
-                chat = json.loads(json.dumps(chat_item.chat or {}))
-                history = chat.get("history") or {}
-                messages = history.get("messages") or {}
-                for message_id in delete_ids or []:
-                    messages.pop(message_id, None)
-                current_id = history.get("currentId")
-                if current_id in (delete_ids or []):
-                    history["currentId"] = None
-                for message_id, message in (upsert or {}).items():
-                    if not isinstance(message, dict):
-                        continue
-                    if message_id in messages and isinstance(messages[message_id], dict):
-                        messages[message_id] = {**messages[message_id], **message}
-                    else:
-                        messages[message_id] = message
-                history["messages"] = messages
-                chat["history"] = history
-                chat_item.chat = chat
-                self._touch_visible(chat_item)
-                db.commit()
-                db.refresh(chat_item)
-                result = ChatModel.model_validate(chat_item)
-            self._schedule_visible_commit(id)
-            return result, "ok"
-        except Exception:
-            log.exception("apply_history_patch failed")
-            return None, "missing"
-
-    def get_recent_workspace_chats(
-        self,
-        user_id: str,
-        organization_id: str,
-        *,
-        days: int = 7,
-        limit: int = 5,
-        include_shared: bool = True,
-    ) -> list[ChatModel]:
-        cutoff = int(time.time()) - days * 24 * 60 * 60
-        with get_db() as db:
-            own = (
-                db.query(Chat)
-                .filter(
-                    Chat.user_id == user_id,
-                    Chat.organization_id == organization_id,
-                    Chat.archived == False,  # noqa: E712
-                    Chat.updated_at >= cutoff,
-                )
-                .order_by(Chat.updated_at.desc())
-                .limit(limit)
-                .all()
-            )
-            shared = []
-            if include_shared:
-                shared = (
-                    db.query(Chat)
-                    .filter(
-                        Chat.organization_id == organization_id,
-                        Chat.visibility == "organization",
-                        Chat.user_id != user_id,
-                        Chat.archived == False,  # noqa: E712
-                        Chat.updated_at >= cutoff,
-                    )
-                    .order_by(Chat.updated_at.desc())
-                    .limit(limit)
-                    .all()
-                )
-            seen = set()
-            rows = []
-            for chat in [*own, *shared]:
-                if chat.id in seen:
+        def apply(_item, chat):
+            history = chat.setdefault("history", {})
+            messages = history.setdefault("messages", {})
+            delete_set = {mid for mid in (delete_ids or []) if mid}
+            current_id = history.get("currentId")
+            fallback = None
+            if current_id in delete_set:
+                cursor = current_id
+                seen = set()
+                while cursor and cursor not in seen:
+                    seen.add(cursor)
+                    parent = (messages.get(cursor) or {}).get("parentId")
+                    if parent and parent not in delete_set:
+                        fallback = parent
+                        break
+                    cursor = parent
+            for message_id in delete_set:
+                messages.pop(message_id, None)
+            for message_id, message in list(messages.items()):
+                if not isinstance(message, dict):
                     continue
-                seen.add(chat.id)
-                rows.append(ChatModel.model_validate(chat))
-            return rows
+                children = [
+                    child
+                    for child in (message.get("childrenIds") or [])
+                    if child not in delete_set
+                ]
+                if children != (message.get("childrenIds") or []):
+                    messages[message_id] = {**message, "childrenIds": children}
+            if current_id in delete_set:
+                history["currentId"] = fallback if fallback in messages else None
+            for message_id, message in (upsert or {}).items():
+                if not isinstance(message, dict):
+                    continue
+                if message_id in messages and isinstance(messages[message_id], dict):
+                    messages[message_id] = {**messages[message_id], **message}
+                else:
+                    messages[message_id] = message
+            return True
+
+        return self._write_chat(
+            id, apply, bump_revision=True, expected_revision=expected_revision
+        )
 
     def get_recent_workspace_chat_refs(
         self,
@@ -896,21 +873,23 @@ class ChatTable:
     def update_chat_visibility(
         self, id: str, visibility: str
     ) -> Optional[ChatModel]:
-        try:
-            with get_db() as db:
-                chat = db.get(Chat, id)
-                chat.visibility = visibility
-                # A private folder and a team folder are different lists. Leave
-                # the chat unfiled so it shows up in the section it now belongs to.
-                chat.folder_id = None
-                self._touch_visible(chat)
-                db.commit()
-                db.refresh(chat)
-                result = ChatModel.model_validate(chat)
-            self._schedule_visible_commit(id)
-            return result
-        except Exception:
-            return None
+        previous = None
+
+        def apply(item, _chat):
+            nonlocal previous
+            previous = item.visibility
+            item.visibility = visibility
+            # A private folder and a team folder are different lists. Leave
+            # the chat unfiled so it shows up in the section it now belongs to.
+            item.folder_id = None
+            return True
+
+        result, _state = self._write_chat(
+            id, apply, bump_revision=True, schedule=False
+        )
+        if result:
+            self._schedule_visible_commit(id, previous_visibility=previous)
+        return result
 
     def get_chat_list_by_chat_ids(
         self, chat_ids: list[str], skip: int = 0, limit: int = 50
@@ -943,6 +922,30 @@ class ChatTable:
             return result
         except Exception:
             return None
+
+    def get_chat_without_transcript(self, id: str) -> Optional[ChatModel]:
+        """Id, access, and sidebar fields without loading the message JSON."""
+        from sqlalchemy.orm import defer
+
+        with get_db() as db:
+            row = db.query(Chat).options(defer(Chat.chat)).filter(Chat.id == id).first()
+            if row is None:
+                return None
+            return ChatModel(
+                id=row.id,
+                user_id=row.user_id,
+                title=row.title or "",
+                chat={},
+                created_at=row.created_at or 0,
+                updated_at=row.updated_at or 0,
+                share_id=row.share_id,
+                archived=bool(row.archived),
+                pinned=bool(row.pinned),
+                meta=row.meta or {},
+                folder_id=row.folder_id,
+                organization_id=row.organization_id,
+                visibility=row.visibility or "private",
+            )
 
     def get_chat_by_share_id(self, id: str) -> Optional[ChatModel]:
         try:

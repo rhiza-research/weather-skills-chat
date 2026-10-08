@@ -121,6 +121,17 @@ export async function ensureChatModel(token: string) {
 	}
 }
 
+async function chatRevision(api: Awaited<ReturnType<typeof playwrightRequest.newContext>>, token: string, id: string) {
+	const got = await api.get(`/api/v1/chats/${id}`, {
+		headers: { authorization: `Bearer ${token}` }
+	});
+	if (!got.ok()) {
+		throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
+	}
+	const body = (await got.json()) as { meta?: { revision?: number } };
+	return Number(body?.meta?.revision ?? 0);
+}
+
 /** The same completion request a focused tab sends. */
 export async function sendTurn(token: string, id: string, content: string) {
 	await ensureChatModel(token);
@@ -128,6 +139,7 @@ export async function sendTurn(token: string, id: string, content: string) {
 	const userId = `user-${Date.now()}`;
 	const assistantId = `assistant-${Date.now()}`;
 	try {
+		const expectedRevision = await chatRevision(api, token, id);
 		const sent = await api.post('/api/chat/completions', {
 			headers: { authorization: `Bearer ${token}` },
 			timeout: 20_000,
@@ -138,6 +150,7 @@ export async function sendTurn(token: string, id: string, content: string) {
 				id: assistantId,
 				turn: {
 					parent_id: 'assistant-1',
+					expected_revision: expectedRevision,
 					user_message: {
 						id: userId,
 						parentId: 'assistant-1',
@@ -165,6 +178,54 @@ export async function sendTurn(token: string, id: string, content: string) {
 	}
 }
 
+/** A send that must 409 because the client is carrying a stale revision. */
+export async function sendTurnAtRevision(
+	token: string,
+	id: string,
+	content: string,
+	expectedRevision: number
+) {
+	await ensureChatModel(token);
+	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
+	const userId = `user-${Date.now()}`;
+	const assistantId = `assistant-${Date.now()}`;
+	try {
+		const sent = await api.post('/api/chat/completions', {
+			headers: { authorization: `Bearer ${token}` },
+			timeout: 20_000,
+			data: {
+				stream: true,
+				model: 'e2e-sender',
+				chat_id: id,
+				id: assistantId,
+				turn: {
+					parent_id: 'assistant-1',
+					expected_revision: expectedRevision,
+					user_message: {
+						id: userId,
+						parentId: 'assistant-1',
+						childrenIds: [assistantId],
+						role: 'user',
+						content
+					},
+					assistant_message: {
+						id: assistantId,
+						parentId: userId,
+						childrenIds: [],
+						role: 'assistant',
+						content: '',
+						done: false,
+						model: 'e2e-sender'
+					}
+				}
+			}
+		});
+		return { status: sent.status(), body: await sent.text() };
+	} finally {
+		await api.dispose();
+	}
+}
+
 const fixturesOff =
 	'ENABLE_E2E_FIXTURES is not true on the app under test. Set it on the server (CI Docker, local Docker, or uvicorn). Playwright does not need it.';
 
@@ -186,41 +247,45 @@ export async function clearChats() {
 
 /** Move a chat onto a past calendar day so the sidebar lists it under an older range. */
 export async function ageChat(token: string, id: string, daysAgo: number) {
-	for (let attempt = 0; attempt < 8; attempt++) {
-		const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
-		try {
-			const aged = await api.post(`/api/v1/chats/${id}/e2e/age`, {
-				headers: { authorization: `Bearer ${token}` },
-				data: { days_ago: daysAgo }
-			});
-			if (aged.status() === 404) throw new Error(fixturesOff);
-			if (!aged.ok()) {
-				throw new Error(`age chat failed: ${aged.status()} ${await aged.text()}`);
-			}
-			const stamped = (await aged.json()) as { updated_at: number };
-			await new Promise((resolve) => setTimeout(resolve, 200));
-			const got = await api.get(`/api/v1/chats/${id}`, {
-				headers: { authorization: `Bearer ${token}` }
-			});
-			if (!got.ok()) {
-				throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
-			}
-			const row = (await got.json()) as { updated_at: number };
-			if (Math.abs(row.updated_at - stamped.updated_at) < 2) return;
-		} finally {
-			await api.dispose();
+	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
+	try {
+		const aged = await api.post(`/api/v1/chats/${id}/e2e/age`, {
+			headers: { authorization: `Bearer ${token}` },
+			data: { days_ago: daysAgo }
+		});
+		if (aged.status() === 404) throw new Error(fixturesOff);
+		if (!aged.ok()) {
+			throw new Error(`age chat failed: ${aged.status()} ${await aged.text()}`);
 		}
+		const stamped = (await aged.json()) as { updated_at: number };
+		const got = await api.get(`/api/v1/chats/${id}`, {
+			headers: { authorization: `Bearer ${token}` }
+		});
+		if (!got.ok()) {
+			throw new Error(`get chat failed: ${got.status()} ${await got.text()}`);
+		}
+		const row = (await got.json()) as { updated_at: number };
+		if (Math.abs(row.updated_at - stamped.updated_at) >= 2) {
+			throw new Error(
+				`chat ${id} did not stay aged (set ${stamped.updated_at}, got ${row.updated_at})`
+			);
+		}
+	} finally {
+		await api.dispose();
 	}
-	throw new Error(`chat ${id} would not stay aged`);
 }
 
 /** Replace the assistant message. This commits the chat and emits chat:updated. */
 export async function replaceAssistant(token: string, id: string, content: string) {
 	const api = await playwrightRequest.newContext({ baseURL: apiOrigin() });
 	try {
+		const expectedRevision = await chatRevision(api, token, id);
 		const patched = await api.post(`/api/v1/chats/${id}/history`, {
 			headers: { authorization: `Bearer ${token}` },
-			data: { upsert: { 'assistant-1': { content } } }
+			data: {
+				upsert: { 'assistant-1': { content } },
+				expected_revision: expectedRevision
+			}
 		});
 		if (!patched.ok()) {
 			throw new Error(`patch chat failed: ${patched.status()} ${await patched.text()}`);

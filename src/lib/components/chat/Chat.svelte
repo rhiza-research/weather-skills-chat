@@ -33,7 +33,6 @@
 		showOverview,
 		chatTitle,
 		showArtifacts,
-		artifactsRefresh,
 		tools,
 		toolServers,
 		activeOrganizationId,
@@ -84,8 +83,10 @@
 		onOpenTranscript,
 		onTurnLost,
 		putChat,
+		adoptRevision,
 		holdHistory,
 		revisionOf,
+		refetchChat,
 		settleLoadedTurn,
 		setViewingLeaf,
 		viewingLeafFor
@@ -166,8 +167,6 @@
 	let eventCallback = null;
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
-	let artifactsBumpTimer: ReturnType<typeof setTimeout> | null = null;
-
 	let selectedModels = [''];
 	let atSelectedModel: Model | undefined;
 	let selectedModelIds = [];
@@ -265,7 +264,6 @@
 			}
 		}
 		pendingArtifactFiles = [];
-		artifactsRefresh.update((n) => n + 1);
 	};
 
 	const loadChatForProp = async (id: string) => {
@@ -677,7 +675,6 @@
 		stopTailRequest();
 		stopControlsWatch();
 		chatIdUnsubscriber?.();
-		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		window.removeEventListener('message', onMessageHandler);
 		window.clearTimeout(scrollStopTimer);
 		cancelAnimationFrame(tailWatch);
@@ -792,7 +789,7 @@
 					$chatId,
 					file
 				);
-				if (fileItem.sandboxPath) artifactsRefresh.update((n) => n + 1);
+				void fileItem.sandboxPath;
 			} catch (e) {
 				console.error('Failed to copy chat-bar file into artifacts', e);
 			}
@@ -1070,7 +1067,7 @@
 	};
 
 	const applyChatDocument = (loadedChat) => {
-		const stored = putChat(loadedChat, null, true)?.document ?? loadedChat;
+		const stored = putChat(loadedChat)?.document ?? loadedChat;
 		chat = stored;
 		const chatContent = stored.chat;
 		if (!chatContent) return false;
@@ -1791,15 +1788,6 @@
 		}
 	};
 
-	const bumpArtifactsSoon = () => {
-		if (!$showArtifacts) return;
-		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
-		artifactsBumpTimer = setTimeout(() => {
-			artifactsRefresh.update((n) => n + 1);
-			artifactsBumpTimer = null;
-		}, 300);
-	};
-
 	const paintTranscript = (event) => {
 		if (event?.chat_id !== get(chatId)) return;
 		const type = event?.data?.type ?? null;
@@ -1809,13 +1797,11 @@
 		if (!message) return;
 		if (type === 'status') {
 			if (data?.action === GENERATION_HEARTBEAT_ACTION) return;
-			if (data?.done) bumpArtifactsSoon();
 			if (autoScroll) scrollToBottom();
 			return;
 		}
 		if (type === 'chat:completion') {
 			paintCompletion(data, message, event.chat_id);
-			bumpArtifactsSoon();
 			return;
 		}
 		if (
@@ -1824,7 +1810,7 @@
 			type === 'chat:message:files' ||
 			type === 'files'
 		) {
-			bumpArtifactsSoon();
+			// Artifact lists arrive on chat:artifacts.
 		}
 		if (autoScroll) scrollToBottom();
 		else noteNewMessagesBelow(message.id);
@@ -2083,7 +2069,7 @@
 		);
 	};
 
-	const sendPromptSocket = async (_history, model, responseMessageId, _chatId) => {
+	const sendPromptSocket = async (_history, model, responseMessageId, _chatId, retried = false) => {
 		if (_chatId && _chatId !== 'local') {
 			const bound = holdHistory(_chatId, history);
 			if (bound) history = bound;
@@ -2264,6 +2250,11 @@
 			},
 			`${WEBUI_BASE_URL}/api`
 		).catch(async (error) => {
+			if (error?.status === 409 && !retried) {
+				if (typeof error.revision === 'number') adoptRevision(_chatId, error.revision);
+				await refetchChat(localStorage.token, _chatId).catch(() => null);
+				return sendPromptSocket(_history, model, responseMessageId, _chatId, true);
+			}
 			const reason = formatGenerationRequestError(error);
 			responseMessage.error = { content: reason };
 			responseMessage.done = true;
@@ -2567,7 +2558,7 @@
 			);
 
 			_chatId = chat.id;
-			putChat(chat, null, true);
+			putChat(chat);
 			await chatId.set(_chatId);
 
 			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
@@ -2605,26 +2596,39 @@
 			if (id && history.messages?.[id]) upsert[id] = history.messages[id];
 		}
 		if (!Object.keys(upsert).length) return;
-		try {
-			const saved = await applyChatHistoryPatch(localStorage.token, _chatId, {
+		const write = async () =>
+			applyChatHistoryPatch(localStorage.token, _chatId, {
 				upsert,
 				expected_revision: revisionOf(_chatId)
 			});
+		try {
+			let saved = await write();
 			if (saved) {
 				chat = saved;
-				putChat(saved, null, true);
+				putChat(saved);
 			}
 		} catch (error) {
 			console.error(error);
 			if (error?.status === 409) {
+				if (typeof error.revision === 'number') adoptRevision(_chatId, error.revision);
 				const document = await getChatById(localStorage.token, _chatId).catch(() => null);
 				if (document && $chatId === _chatId) {
 					applyChatDocument(document);
 				}
+				try {
+					const saved = await write();
+					if (saved) {
+						chat = saved;
+						putChat(saved);
+					}
+					return;
+				} catch (retryError) {
+					error = retryError;
+				}
 			}
 			const detail = typeof error?.detail === 'string' ? error.detail : '';
 			toast.error(
-				detail ? `${$i18n.t('Failed to save chat')}: ${detail}` : $i18n.t('Failed to save chat')
+				detail || $i18n.t('Another user has edited the chat. Please try again.')
 			);
 		}
 	};

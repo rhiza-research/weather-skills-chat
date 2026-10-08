@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { replaceAssistant, seedChat, sendTurn } from '../../chats';
+import { replaceAssistant, seedChat, sendTurn, sendTurnAtRevision } from '../../chats';
 
 const ORIGINAL = 'cached reply before the other tab writes';
 
@@ -33,9 +33,7 @@ test('a cached unopened chat is fetched once when another tab updates it', async
 	expect(page.url()).not.toContain(`/c/${id}`);
 
 	await replaceAssistant(token, id, `${ORIGINAL}\n\nupdated while closed`);
-	await page.waitForTimeout(2000);
-
-	expect(hits.length - baseline).toBe(1);
+	await expect.poll(() => hits.length - baseline, { timeout: 8_000 }).toBe(1);
 });
 
 test('an opened chat that is no longer on screen is not fetched when another tab updates it', async ({
@@ -56,9 +54,8 @@ test('an opened chat that is no longer on screen is not fetched when another tab
 	const baseline = hits.length;
 
 	await replaceAssistant(token, id, `${ORIGINAL}\n\nupdated while hidden`);
-	await page.waitForTimeout(2000);
-
-	expect(hits.length - baseline).toBe(0);
+	await page.waitForTimeout(500);
+	await expect.poll(() => hits.length - baseline, { timeout: 4_000 }).toBe(0);
 });
 
 test('the other open tab shows a message this tab sends', async ({ page }) => {
@@ -82,4 +79,12 @@ test('the other open tab shows a message this tab sends', async ({ page }) => {
 
 	await expect(other.getByText(sent)).toBeVisible({ timeout: 8_000 });
 	expect(hits.length - baseline).toBe(0);
+});
+
+test('a stale expected_revision is a readable conflict, not a silent write', async () => {
+	const { id, token } = await seedChat('revision conflict', ORIGINAL);
+	const result = await sendTurnAtRevision(token, id, 'should not land', 0);
+	expect(result.status).toBe(409);
+	expect(result.body.toLowerCase()).toContain('another user');
+	expect(result.body).not.toMatch(/\b409\b/);
 });

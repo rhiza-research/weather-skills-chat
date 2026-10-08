@@ -28,10 +28,17 @@ export const formatGenerationRequestError = (error: unknown): string => {
 	if (isServerUnreachableError(error)) {
 		return SERVER_UNREACHABLE_MESSAGE;
 	}
+	const status = (error as { status?: unknown })?.status;
+	const detail = (error as { detail?: unknown })?.detail;
+	if (status === 409 && typeof detail === 'string' && detail.trim()) {
+		return detail;
+	}
 	if (typeof error === 'string') {
+		if (/^\s*409\b/.test(error) || /status(?: code)? 409/i.test(error)) {
+			return 'Another user has edited the chat. Please try again.';
+		}
 		return error;
 	}
-	const detail = (error as { detail?: unknown })?.detail;
 	if (typeof detail === 'string') {
 		return detail;
 	}

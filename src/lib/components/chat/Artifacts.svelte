@@ -120,8 +120,14 @@
 		try {
 			const id = $chatId;
 			const listed = await refreshArtifacts(localStorage.token, id);
-			files = Array.isArray(listed) ? listed : [];
+			if (!Array.isArray(listed)) {
+				loadedArtifactKey = '';
+				files = [];
+				return;
+			}
+			files = listed;
 		} catch (e) {
+			loadedArtifactKey = '';
 			files = [];
 			console.error(e);
 		} finally {

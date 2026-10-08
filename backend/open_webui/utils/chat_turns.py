@@ -22,7 +22,9 @@ _HIDDEN_DETAILS = re.compile(
 
 class ChatRevisionConflict(Exception):
     def __init__(self, revision: int):
-        super().__init__("Chat was updated")
+        from open_webui.utils.chat_errors import CHAT_CONFLICT_MESSAGE
+
+        super().__init__(CHAT_CONFLICT_MESSAGE)
         self.revision = revision
 
 
@@ -105,19 +107,30 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
     else:
         expected = None
 
-    stored, state = Chats.append_turn(
-        chat_id,
-        user_message,
-        assistant_message,
-        expected,
-    )
+    from open_webui.utils.chat_errors import ChatBusy, busy_detail
+
+    try:
+        stored, state = Chats.append_turn(
+            chat_id,
+            user_message,
+            assistant_message,
+            expected,
+        )
+    except ChatBusy as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail=busy_detail()
+        ) from exc
     if state == "conflict":
         from open_webui.utils.chat_realtime import chat_revision, schedule_chat_committed
 
         schedule_chat_committed(chat_id)
         raise ChatRevisionConflict(chat_revision(stored) if stored else 0)
     if stored is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Chat not found")
+        from open_webui.utils.chat_errors import CHAT_SAVE_FAILED_MESSAGE
+
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail=CHAT_SAVE_FAILED_MESSAGE
+        )
 
     history = (stored.chat or {}).get("history") or {}
     return messages_for_model(history, assistant_message["id"])

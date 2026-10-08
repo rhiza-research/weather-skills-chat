@@ -23,7 +23,7 @@ const document = {
 };
 
 test('a background chat adopts the completion revision and marks the turn done', () => {
-	putChat(document, null, true);
+	putChat(document);
 	setOpenChat('chat-b');
 	applyCachedStreamEvent(
 		{
@@ -54,7 +54,7 @@ test('the open chat is written by the same path as a background chat', () => {
 			}
 		}
 	};
-	putChat(open, null, true);
+	putChat(open);
 	setOpenChat('chat-open');
 	applyCachedStreamEvent(
 		{
@@ -85,7 +85,7 @@ test('a download during a live turn keeps the history object already on screen',
 			}
 		}
 	};
-	putChat(local, null, true);
+	putChat(local);
 	beginLive('chat-live', 'asst');
 	const history = local.chat.history;
 	putChat(
@@ -102,8 +102,7 @@ test('a download during a live turn keeps the history object already on screen',
 				}
 			}
 		},
-		null,
-		true
+		null
 	);
 	expect(local.chat.history).toBe(history);
 	expect(history.messages.asst.content).toBe('hi');
@@ -124,10 +123,67 @@ test('opening a chat this tab is already generating does not mark it lost', asyn
 			}
 		}
 	};
-	putChat(live, null, true);
+	putChat(live);
 	beginLive('chat-switch', 'asst');
 	await settleLoadedTurn('chat-switch', 'token', false);
 	expect(live.chat.history.messages.asst.done).toBe(false);
 	expect(live.chat.history.messages.asst.error).toBeUndefined();
 	endLive('asst');
+});
+
+test('putChat ignores an older download', () => {
+	const newer = {
+		id: 'chat-rev',
+		meta: { revision: 5 },
+		chat: {
+			history: {
+				currentId: 'a',
+				messages: { a: { id: 'a', role: 'assistant', content: 'new', done: true } }
+			}
+		}
+	};
+	putChat(newer);
+	putChat({
+		id: 'chat-rev',
+		meta: { revision: 2 },
+		chat: {
+			history: {
+				currentId: 'a',
+				messages: { a: { id: 'a', role: 'assistant', content: 'old', done: true } }
+			}
+		}
+	});
+	expect(newer.chat.history.messages.a.content).toBe('new');
+	expect(revisionOf('chat-rev')).toBe(5);
+});
+
+test('putChat drops messages missing from a newer remote', () => {
+	const local = {
+		id: 'chat-del',
+		meta: { revision: 1 },
+		chat: {
+			history: {
+				currentId: 'keep',
+				messages: {
+					keep: { id: 'keep', role: 'assistant', content: 'stay', done: true },
+					gone: { id: 'gone', role: 'assistant', content: 'bye', done: true }
+				}
+			}
+		}
+	};
+	putChat(local);
+	putChat({
+		id: 'chat-del',
+		meta: { revision: 2 },
+		chat: {
+			history: {
+				currentId: 'keep',
+				messages: {
+					keep: { id: 'keep', role: 'assistant', content: 'stay', done: true }
+				}
+			}
+		}
+	});
+	expect(local.chat.history.messages.keep).toBeTruthy();
+	expect(local.chat.history.messages.gone).toBeUndefined();
 });

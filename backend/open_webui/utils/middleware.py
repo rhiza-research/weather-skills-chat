@@ -131,7 +131,7 @@ def completion_revision(chat_id: str | None) -> int:
         return 0
     from open_webui.utils.chat_realtime import chat_revision
 
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_without_transcript(chat_id)
     return chat_revision(chat) if chat else 0
 
 

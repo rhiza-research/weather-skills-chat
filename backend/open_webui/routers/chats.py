@@ -529,7 +529,14 @@ async def update_chat_by_id(
 ):
     chat = _require_writable_chat(id, user)
     updated_chat = {**chat.chat, **form_data.chat}
-    chat = Chats.update_chat_by_id(id, updated_chat)
+    from open_webui.utils.chat_errors import ChatBusy, busy_detail
+
+    try:
+        chat = Chats.update_chat_by_id(id, updated_chat)
+    except ChatBusy as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=busy_detail()
+        ) from exc
     return ChatResponse(**chat.model_dump())
 
 
@@ -543,26 +550,35 @@ async def patch_chat_history(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    updated, state = Chats.apply_history_patch(
-        id,
-        form_data.upsert or {},
-        form_data.delete or [],
-        form_data.expected_revision,
+    from open_webui.utils.chat_errors import (
+        CHAT_SAVE_FAILED_MESSAGE,
+        ChatBusy,
+        busy_detail,
+        conflict_detail,
     )
+
+    try:
+        updated, state = Chats.apply_history_patch(
+            id,
+            form_data.upsert or {},
+            form_data.delete or [],
+            form_data.expected_revision,
+        )
+    except ChatBusy as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=busy_detail()
+        ) from exc
     if state == "conflict":
         from open_webui.utils.chat_realtime import chat_revision, schedule_chat_committed
 
         schedule_chat_committed(id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": "Chat was updated",
-                "revision": chat_revision(updated) if updated else 0,
-            },
+            detail=conflict_detail(chat_revision(updated) if updated else 0),
         )
     if updated is None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
+            status_code=status.HTTP_400_BAD_REQUEST, detail=CHAT_SAVE_FAILED_MESSAGE
         )
     return ChatResponse(**updated.model_dump())
 
@@ -704,10 +720,13 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
 
     from open_webui.utils.chat_realtime import publish_chat_removed
 
-    await publish_chat_removed(chat)
     if user.role == "admin":
-        return Chats.delete_chat_by_id(id)
-    return Chats.delete_chat_by_id_and_user_id(id, user.id)
+        deleted = Chats.delete_chat_by_id(id)
+    else:
+        deleted = Chats.delete_chat_by_id_and_user_id(id, user.id)
+    if deleted:
+        await publish_chat_removed(chat)
+    return deleted
 
 
 ############################

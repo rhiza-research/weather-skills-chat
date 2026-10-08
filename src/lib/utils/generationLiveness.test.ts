@@ -19,6 +19,12 @@ test('formatGenerationRequestError maps unreachable errors', () => {
 		SERVER_UNREACHABLE_MESSAGE
 	);
 	expect(formatGenerationRequestError({ detail: 'model not found' })).toBe('model not found');
+	expect(formatGenerationRequestError({ status: 409, detail: 'Another user has edited the chat. Please try again.' })).toBe(
+		'Another user has edited the chat. Please try again.'
+	);
+	expect(formatGenerationRequestError('409 Chat was updated')).toBe(
+		'Another user has edited the chat. Please try again.'
+	);
 });
 
 test('clearSpinningToolCalls marks incomplete tool details done', () => {

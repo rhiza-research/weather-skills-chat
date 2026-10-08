@@ -1249,11 +1249,21 @@ async def chat_completion(
         form_data["metadata"] = metadata
 
         turn = form_data.pop("turn", None)
+        if turn and (
+            not metadata.get("chat_id") or metadata["chat_id"] == "local"
+        ):
+            from open_webui.utils.chat_errors import CHAT_TURN_REQUIRES_ID_MESSAGE
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=CHAT_TURN_REQUIRES_ID_MESSAGE,
+            )
         if turn and metadata.get("chat_id") and metadata["chat_id"] != "local":
             from open_webui.utils.chat_turns import (
                 ChatRevisionConflict,
                 prepare_completion_messages,
             )
+            from open_webui.utils.chat_errors import conflict_detail
 
             try:
                 form_data["messages"] = prepare_completion_messages(
@@ -1262,10 +1272,7 @@ async def chat_completion(
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail={
-                        "message": "Chat was updated",
-                        "revision": conflict.revision,
-                    },
+                    detail=conflict_detail(conflict.revision),
                 ) from conflict
             from open_webui.utils.chat_realtime import emit_chat_turn
 

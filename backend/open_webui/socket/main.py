@@ -256,33 +256,49 @@ def get_event_emitter(request_info, update_db=True):
     async def __event_emitter__(event_data):
         user_id = request_info["user_id"]
 
-        from open_webui.utils.chat_realtime import active_session_ids, watcher_session_ids
-
-        session_ids = list(
-            set(
-                USER_POOL.get(user_id, [])
-                + (
-                    [request_info.get("session_id")]
-                    if request_info.get("session_id")
-                    else []
-                )
-                + active_session_ids(request_info.get("chat_id"))
-                + watcher_session_ids(request_info.get("chat_id"))
-            )
+        from open_webui.utils.chat_realtime import (
+            _access_row,
+            _user_for_sid,
+            active_session_ids,
+            watcher_session_ids,
         )
+        from open_webui.utils.organizations import can_read_chat
 
+        event_type = event_data.get("type") if isinstance(event_data, dict) else None
+        restricted = event_type in {
+            "execute",
+            "execute:python",
+            "execute:tool",
+            "input",
+            "confirmation",
+        }
+        origin = request_info.get("session_id")
+        if restricted:
+            session_ids = [origin] if origin else []
+        else:
+            session_ids = list(
+                set(
+                    USER_POOL.get(user_id, [])
+                    + ([origin] if origin else [])
+                    + active_session_ids(request_info.get("chat_id"))
+                    + watcher_session_ids(request_info.get("chat_id"))
+                )
+            )
+
+        chat = _access_row(request_info.get("chat_id")) if request_info.get("chat_id") else None
+        payload = {
+            "chat_id": request_info.get("chat_id", None),
+            "message_id": request_info.get("message_id", None),
+            "data": event_data,
+        }
         for session_id in session_ids:
             if not session_id:
                 continue
-            await sio.emit(
-                "chat-events",
-                {
-                    "chat_id": request_info.get("chat_id", None),
-                    "message_id": request_info.get("message_id", None),
-                    "data": event_data,
-                },
-                to=session_id,
-            )
+            if chat is not None:
+                user = _user_for_sid(session_id)
+                if user is None or not can_read_chat(user, chat):
+                    continue
+            await sio.emit("chat-events", payload, to=session_id)
 
         if update_db:
             if "type" in event_data and event_data["type"] == "status":
@@ -359,7 +375,7 @@ def get_event_emitter(request_info, update_db=True):
                         request_info["chat_id"],
                         request_info["message_id"],
                         patch,
-                        bump_revision=bool(data.get("done")),
+                        bump_revision=False,
                     )
 
     return __event_emitter__

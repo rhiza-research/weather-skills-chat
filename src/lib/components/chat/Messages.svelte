@@ -114,13 +114,16 @@
 			expected_revision: revisionOf(chatId)
 		})
 			.then((saved) => {
-				if (saved) putChat(saved, null, true);
+				if (saved) putChat(saved);
 			})
 			.catch(async (error) => {
 				if (error?.status === 409) {
 					await refetchChat(localStorage.token, chatId).catch(() => null);
 				}
-				const detail = typeof error?.detail === 'string' ? error.detail : 'Chat was updated';
+				const detail =
+					typeof error?.detail === 'string'
+						? error.detail
+						: 'Another user has edited the chat. Please try again.';
 				toast.error(detail);
 			});
 	};
@@ -358,6 +361,31 @@
 	};
 
 	const deleteMessage = async (messageId) => {
+		if ($temporaryChatEnabled || !chatId || chatId === 'local') {
+			const messageToDelete = history.messages[messageId];
+			const parentMessageId = messageToDelete.parentId;
+			const childMessageIds = messageToDelete.childrenIds ?? [];
+			const grandchildrenIds = childMessageIds.flatMap(
+				(childId) => history.messages[childId]?.childrenIds ?? []
+			);
+			if (parentMessageId && history.messages[parentMessageId]) {
+				history.messages[parentMessageId].childrenIds = [
+					...history.messages[parentMessageId].childrenIds.filter((id) => id !== messageId),
+					...grandchildrenIds
+				];
+			}
+			grandchildrenIds.forEach((grandchildId) => {
+				if (history.messages[grandchildId]) {
+					history.messages[grandchildId].parentId = parentMessageId;
+				}
+			});
+			[messageId, ...childMessageIds].forEach((id) => {
+				delete history.messages[id];
+			});
+			await tick();
+			showMessage({ id: parentMessageId });
+			return;
+		}
 		const messageToDelete = history.messages[messageId];
 		const parentMessageId = messageToDelete.parentId;
 		const childMessageIds = messageToDelete.childrenIds ?? [];
@@ -404,13 +432,16 @@
 			expected_revision: revisionOf(chatId)
 		})
 			.then((saved) => {
-				if (saved) putChat(saved, null, true);
+				if (saved) putChat(saved);
 			})
 			.catch(async (error) => {
 				if (error?.status === 409) {
 					await refetchChat(localStorage.token, chatId).catch(() => null);
 				}
-				const detail = typeof error?.detail === 'string' ? error.detail : 'Chat was updated';
+				const detail =
+					typeof error?.detail === 'string'
+						? error.detail
+						: 'Another user has edited the chat. Please try again.';
 				toast.error(detail);
 			});
 	};

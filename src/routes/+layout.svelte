@@ -26,7 +26,8 @@
 		appInfo,
 		artifactsRefresh,
 		toolServers,
-		preferencesReady
+		preferencesReady,
+		activeOrganizationId
 	} from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -253,22 +254,32 @@
 			pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
 			return;
 		}
+		if (
+			row.organization_id &&
+			$activeOrganizationId &&
+			row.organization_id !== $activeOrganizationId
+		) {
+			return;
+		}
+		if (row.folder_id) {
+			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			return;
+		}
 		const next = { ...row, time_range: getTimeRange(row.updated_at) };
+		const byUpdated = (list) => {
+			const items = (list ?? []).filter((item) => item.id !== row.id);
+			items.push(next);
+			items.sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
+			return items;
+		};
 		if (row.pinned) {
 			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-			pinnedChats.update((list) => {
-				const items = (list ?? []).filter((item) => item.id !== row.id);
-				items.unshift(next);
-				return items;
-			});
+			pinnedChats.update(byUpdated);
 			return;
 		}
 		pinnedChats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
-		chats.update((list) => {
-			const items = (list ?? []).filter((item) => item.id !== row.id);
-			items.unshift(next);
-			return items;
-		});
+		chats.update(byUpdated);
 	};
 
 	$: setOpenChat($chatId || '');

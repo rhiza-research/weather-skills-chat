@@ -1,8 +1,8 @@
 import { get } from 'svelte/store';
-import { applyChatHistoryPatch, getChatById, getRecentChats } from '$lib/apis/chats';
+import { applyChatHistoryPatch, getChatById, getChatList, getRecentChats } from '$lib/apis/chats';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import { markUnseenMessages } from '$lib/chat/scroll';
-import { chatArtifactLists, chatId, socket, socketConnected } from '$lib/stores';
+import { chatArtifactLists, chatId, chats, socket, socketConnected } from '$lib/stores';
 import {
 	GENERATION_LOST_MESSAGE,
 	clearSpinningToolCalls
@@ -290,12 +290,21 @@ export function rememberArtifacts(id: string, files: any[]) {
 	chatArtifactLists.update((current) => ({ ...current, [id]: files }));
 }
 
+export function adoptRevision(id: string, revision: number) {
+	setRevision(id, revision);
+}
+
 export function putChat(document: any, artifacts: any[] | null = null) {
 	if (!document?.id) return null;
 	const id = document.id;
 	const revision = revisionFrom(document);
 	const existing = entries.get(id);
 	if (existing?.document?.chat?.history) {
+		if (revision < existing.revision) {
+			existing.touched = Date.now();
+			if (artifacts) rememberArtifacts(id, artifacts);
+			return existing;
+		}
 		// One history object for the life of the entry. The screen renders it.
 		const history = existing.document.chat.history;
 		const messages = history.messages || (history.messages = {});
@@ -303,6 +312,7 @@ export function putChat(document: any, artifacts: any[] | null = null) {
 		const liveId = liveMessageIdFor(id);
 		const localLive = messages[liveId];
 		const remoteLive = remoteMessages[liveId];
+		const newer = revision > existing.revision;
 		if (revision >= existing.revision) {
 			existing.revision = revision;
 			existing.document.meta = { ...(document.meta || {}), revision };
@@ -316,6 +326,18 @@ export function putChat(document: any, artifacts: any[] | null = null) {
 			messages[messageId] = remote;
 		}
 		if (localLive && messages[liveId]?.done !== true) messages[liveId] = localLive;
+		if (newer) {
+			const keep = new Set<string>();
+			if (liveId && messages[liveId]?.done !== true) {
+				keep.add(liveId);
+				const parent = messages[liveId]?.parentId;
+				if (parent) keep.add(parent);
+			}
+			for (const messageId of Object.keys(messages)) {
+				if (messageId in remoteMessages || keep.has(messageId)) continue;
+				delete messages[messageId];
+			}
+		}
 		if (!isLive(id) && id !== openId && document?.chat?.history?.currentId) {
 			history.currentId = document.chat.history.currentId;
 		} else if (!history.currentId) {
@@ -833,6 +855,40 @@ export async function preloadRecent(token: string, organizationId: string) {
 export async function refreshRecent(token: string) {
 	if (!token || !recentOrganizationId) return;
 	await preloadRecent(token, recentOrganizationId);
+}
+
+async function refreshSidebar(token: string) {
+	try {
+		const latest = await getChatList(token, 1);
+		if (!Array.isArray(latest)) return;
+		const existing = get(chats) ?? [];
+		if (!existing.length) {
+			chats.set(latest);
+			return;
+		}
+		const existingIds = new Set(existing.map((row) => row.id));
+		const newcomers = latest.filter((row) => row?.id && !existingIds.has(row.id));
+		const latestById = Object.fromEntries(latest.map((row) => [row.id, row]));
+		const merged = [
+			...newcomers,
+			...existing.map((row) => (latestById[row.id] ? { ...row, ...latestById[row.id] } : row))
+		];
+		merged.sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0));
+		chats.set(merged);
+	} catch (error) {
+		console.error(error);
+	}
+}
+
+async function refreshCachedArtifacts(token: string) {
+	await Promise.all([...entries.keys()].map((id) => refreshArtifacts(token, id).catch(() => null)));
+}
+
+/** Sidebar, recents, and artifact lists missed while the socket was down. */
+export async function onSocketReconnect(token: string) {
+	if (!token) return;
+	await refreshRecent(token);
+	await Promise.all([refreshSidebar(token), refreshCachedArtifacts(token)]);
 }
 
 export function cachedArtifacts(id: string) {
