@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -66,6 +67,11 @@ def run_exec(body: dict) -> dict:
             text=True,
             timeout=int(body.get("timeout") or 600),
         )
+        print(
+            f"exec exit={proc.returncode} cmd={cmd!r}",
+            file=sys.stderr,
+            flush=True,
+        )
         return {
             "exit_code": proc.returncode,
             "stdout": proc.stdout,
@@ -111,11 +117,13 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def log_message(self, fmt: str, *args) -> None:
-        return
+        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.flush()
 
 
 def main() -> None:
     WORKSPACE.mkdir(parents=True, exist_ok=True)
+    print(f"runtime listening on {PORT} workspace={WORKSPACE}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
 
