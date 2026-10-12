@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - dev
+      # Temporary: publish weather-skills-chat-sandbox:latest for warm-pool testing.
+      - k8s-sandboxes
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
@@ -35,6 +37,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
+        if: github.ref_name != 'k8s-sandboxes'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -47,6 +50,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
+        if: github.ref_name != 'k8s-sandboxes'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -71,6 +75,7 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_name == 'k8s-sandboxes' }}
 
       - name: Build and push tool runner
         uses: docker/build-push-action@v6
@@ -108,6 +113,9 @@ jobs:
           elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "main builds images only; prod deploys from semver tags"
+          elif [[ "${GITHUB_REF_NAME}" == "k8s-sandboxes" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "k8s-sandboxes publishes sandbox:latest only"
           else
             echo "unexpected ref ${GITHUB_REF}" >&2
             exit 1
