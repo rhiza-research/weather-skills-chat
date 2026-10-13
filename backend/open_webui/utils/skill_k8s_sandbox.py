@@ -39,6 +39,9 @@ _proxy_url: Optional[str] = None
 _forward_urls: dict[tuple[str, int], str] = {}
 _children: list[subprocess.Popen] = []
 _bind_token: Optional[str] = None
+_READY_CACHE_TTL = 15.0
+_ready_cache: dict[str, tuple[float, dict]] = {}
+_starts: dict[str, asyncio.Task] = {}
 
 
 def _env(name: str, default: str = "") -> str:
@@ -237,6 +240,8 @@ async def _k8s(
     method: str, path: str, body: Optional[dict] = None, timeout: int = 30
 ) -> dict:
     base, ctx, headers = _api_root()
+    if method.upper() == "PATCH":
+        headers = {**headers, "Content-Type": "application/merge-patch+json"}
     connector = aiohttp.TCPConnector(ssl=ctx)
     async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
         async with session.request(
@@ -314,6 +319,7 @@ async def delete_claim(chat_id: str) -> None:
 
 
 WAITING_STATUS = "Waiting on weather skills runner"
+WAITING_ACTION = "weather_skills_runner"
 
 
 def _claim_ready(claim: dict) -> bool:
@@ -331,7 +337,7 @@ def runner_needs_wait(claim: Optional[dict]) -> bool:
 async def _emit_waiting(emitter, done: bool) -> None:
     if not emitter:
         return
-    data = {"description": WAITING_STATUS, "done": done}
+    data = {"action": WAITING_ACTION, "description": WAITING_STATUS, "done": done}
     if done:
         data["hidden"] = True
     await emitter({"type": "status", "data": data})
@@ -542,21 +548,97 @@ def _installed_packs() -> list[Path]:
     )
 
 
+def _cached_runner(chat_id: str) -> Optional[dict]:
+    hit = _ready_cache.get(chat_id)
+    if not hit:
+        return None
+    stamp, info = hit
+    if time.monotonic() - stamp > _READY_CACHE_TTL:
+        _ready_cache.pop(chat_id, None)
+        return None
+    return info
+
+
+def _store_runner(chat_id: str, info: dict) -> None:
+    _ready_cache[chat_id] = (time.monotonic(), info)
+
+
+def _drop_runner(chat_id: str) -> None:
+    _ready_cache.pop(chat_id, None)
+    task = _starts.get(chat_id)
+    if task is not None and task.done():
+        _starts.pop(chat_id, None)
+
+
+def _pack_names(paths: list[Path] | None = None) -> set[str]:
+    return {path.name for path in (paths if paths is not None else _installed_packs())}
+
+
+def _missing_packs(have: set[str]) -> list[Path]:
+    return [path for path in _installed_packs() if path.name not in have]
+
+
 async def _annotate_pod(pod: dict, updates: dict) -> None:
     name = (pod.get("metadata") or {}).get("name")
     if not name:
         return
-    anns = dict((pod.get("metadata") or {}).get("annotations") or {})
-    anns.update(updates)
     try:
         await _k8s(
             "PATCH",
             f"/api/v1/namespaces/{_ns()}/pods/{quote(name)}",
-            {"metadata": {"annotations": anns}},
+            {"metadata": {"annotations": updates}},
         )
         pod.setdefault("metadata", {}).setdefault("annotations", {}).update(updates)
     except Exception:
-        log.debug("annotate pod failed", exc_info=True)
+        log.warning("annotate pod failed name=%s keys=%s", name, list(updates), exc_info=True)
+
+
+def _runner_info(pod: dict, pod_name: Optional[str] = None) -> dict:
+    name = pod_name or (pod.get("metadata") or {}).get("name")
+    return {
+        "pod": pod,
+        "pod_name": name,
+        "pod_ip": (pod.get("status") or {}).get("podIP"),
+    }
+
+
+async def _listed_packs(info: dict) -> Optional[set[str]]:
+    base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
+    try:
+        body = await _http_json("GET", f"{base}/packs")
+    except RuntimeError as exc:
+        if "404" not in str(exc):
+            raise
+        listing = await _http_json(
+            "POST",
+            f"{base}/exec",
+            json_body={
+                "cmd": ["ls", "-1", _runner_packs_root()],
+                "cwd": "/",
+                "timeout": 10,
+            },
+            timeout=15,
+        )
+        if int(listing.get("exit_code", 1)) != 0:
+            return set()
+        return {
+            line.strip()
+            for line in (listing.get("stdout") or "").splitlines()
+            if line.strip() and not line.strip().startswith(".")
+        }
+    return {str(name) for name in (body.get("packs") or []) if name}
+
+
+async def _packs_ready_on_runner(pod: dict, info: Optional[dict] = None) -> bool:
+    anns = (pod.get("metadata") or {}).get("annotations") or {}
+    if anns.get(PACKS_ANN) == "ready":
+        return True
+    if info is None:
+        info = _runner_info(pod)
+    if not info.get("pod_ip"):
+        return False
+    have = await _listed_packs(info) or set()
+    return _pack_names().issubset(have)
 
 
 async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
@@ -565,15 +647,6 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
     dest = f"{_runner_packs_root()}/{pack.name}"
     base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
     started = time.monotonic()
-    probe = await _http_json(
-        "POST",
-        f"{base}/exec",
-        json_body={"cmd": ["test", "-d", dest], "cwd": "/", "timeout": 10},
-        timeout=15,
-    )
-    if int(probe.get("exit_code", 1)) == 0:
-        log.info("skill pack already on runner dest=%s", dest)
-        return dest
     archive = base64.b64encode(_tar_pack(pack)).decode()
     packed = time.monotonic()
     result = await _http_json(
@@ -583,10 +656,11 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
         timeout=180,
     )
     log.info(
-        "skill pack pushed dest=%s pack=%.2fs upload=%.2fs",
+        "skill pack pushed dest=%s pack=%.2fs upload=%.2fs skipped=%s",
         dest,
         packed - started,
         time.monotonic() - packed,
+        bool(result.get("skipped")),
     )
     if result.get("ok") is False:
         raise RuntimeError(result.get("error") or "unpack failed")
@@ -594,13 +668,17 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
 
 
 async def _ensure_packs_on_runner(info: dict) -> None:
-    packs = _installed_packs()
+    have = await _listed_packs(info) or set()
+    missing = _missing_packs(have)
+    if not missing:
+        log.info("skill packs already on runner n=%s", len(have))
+        return
     started = time.monotonic()
-    for pack in packs:
-        await _ensure_pack_on_runner(info, pack)
+    await asyncio.gather(*[_ensure_pack_on_runner(info, pack) for pack in missing])
     log.info(
-        "skill packs ready n=%s elapsed=%.2fs",
-        len(packs),
+        "skill packs ready n=%s missing=%s elapsed=%.2fs",
+        len(_installed_packs()),
+        len(missing),
         time.monotonic() - started,
     )
 
@@ -611,21 +689,40 @@ def _k8s_runner_path_on() -> bool:
     return backend == "k8s" and enabled
 
 
-async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
-    """Wait for a runner pod before tool cards are shown. No-op if the path is off."""
-    if not _k8s_runner_path_on():
-        return
-    if not chat_id or chat_id == "local":
-        return
-    await ensure_runner(str(chat_id), emitter=emitter)
+def _start_in_flight(chat_id: str) -> bool:
+    task = _starts.get(chat_id)
+    return task is not None and not task.done()
 
 
-async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
-    claim = await get_claim(chat_id)
-    waiting = runner_needs_wait(claim)
-    if waiting:
-        await _emit_waiting(emitter, False)
+def start_runner(chat_id: str) -> asyncio.Task:
+    """Kick the one start for this chat. Does not wait. Safe to call again.
+
+    Reuses an in-flight start, or a start that just finished while the ready
+    cache is still warm. After the runner dies (idle stop) the cache expires
+    and the next call starts again.
+    """
+    with _lock:
+        task = _starts.get(chat_id)
+        if task is not None and not task.done():
+            return task
+        if (
+            task is not None
+            and not task.cancelled()
+            and task.exception() is None
+            and _cached_runner(chat_id) is not None
+        ):
+            return task
+        task = asyncio.create_task(_run_start(chat_id), name=f"runner-start-{chat_id}")
+        _starts[chat_id] = task
+        return task
+
+
+async def _run_start(chat_id: str) -> dict:
+    cached = _cached_runner(chat_id)
+    if cached:
+        return cached
     try:
+        claim = await get_claim(chat_id)
         if claim is None:
             claim = await create_claim(chat_id)
         elif claim.get("metadata", {}).get("deletionTimestamp"):
@@ -647,30 +744,61 @@ async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
             raise RuntimeError("tool runner has no pod IP")
         await verify_runtime(pod_ip, pod_name, pod)
         info = {"claim": claim, "pod": pod, "pod_ip": pod_ip, "pod_name": pod_name}
-        anns = (pod.get("metadata") or {}).get("annotations") or {}
-        if anns.get(PACKS_ANN) != "ready":
+        if not await _packs_ready_on_runner(pod, info):
             await _ensure_packs_on_runner(info)
             await _annotate_pod(pod, {PACKS_ANN: "ready"})
+        _store_runner(chat_id, info)
         return info
+    except Exception:
+        _drop_runner(chat_id)
+        raise
+
+
+async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
+    """Wait on runner status before tool cards. Starts the runner if needed."""
+    if not _k8s_runner_path_on():
+        return
+    if not chat_id or chat_id == "local":
+        return
+    chat_id = str(chat_id)
+    task = start_runner(chat_id)
+    if (await runner_status(chat_id)).get("state") == "ready":
+        return
+    await _emit_waiting(emitter, False)
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=180)
     finally:
-        if waiting:
-            await _emit_waiting(emitter, True)
+        await _emit_waiting(emitter, True)
+
+
+async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
+    """Wait for the one start and return the runner. Does not own waiting UI."""
+    return await asyncio.shield(start_runner(chat_id))
 
 
 async def runner_status(chat_id: str) -> dict:
+    """Read readiness. Does not start the runner or wait on the start task."""
+    name = claim_name(chat_id)
+    cached = _cached_runner(chat_id)
+    if cached:
+        return {"state": "ready", "claim": name}
     claim = await get_claim(chat_id)
     if not claim:
+        if _start_in_flight(chat_id):
+            return {"state": "starting", "claim": name}
         return {"state": "absent"}
     if not _claim_ready(claim):
-        return {"state": "starting", "claim": claim_name(chat_id)}
+        return {"state": "starting", "claim": name}
     try:
         pod = await get_pod(_pod_ref(claim))
     except Exception:
-        return {"state": "starting", "claim": claim_name(chat_id)}
-    anns = (pod.get("metadata") or {}).get("annotations") or {}
-    if anns.get(PACKS_ANN) != "ready":
-        return {"state": "starting", "claim": claim_name(chat_id)}
-    return {"state": "ready", "claim": claim_name(chat_id)}
+        return {"state": "starting", "claim": name}
+    try:
+        if await _packs_ready_on_runner(pod):
+            return {"state": "ready", "claim": name}
+    except Exception:
+        log.debug("runner pack listing failed", exc_info=True)
+    return {"state": "starting", "claim": name}
 
 
 async def runner_metrics(chat_id: str) -> dict:

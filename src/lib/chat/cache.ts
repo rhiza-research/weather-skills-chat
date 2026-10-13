@@ -759,6 +759,15 @@ function writeCachedStream(event: any, token: string) {
 	if (type === 'status') {
 		if (message.done === true) return false;
 		if (data?.action === 'generation_heartbeat') return false;
+		const current = message.statusHistory?.[0];
+		// Keep the runner wait on screen until that wait itself finishes.
+		if (
+			current?.action === 'weather_skills_runner' &&
+			current?.done === false &&
+			data?.action !== 'weather_skills_runner'
+		) {
+			return false;
+		}
 		// Only the latest status is shown, and only the latest is saved.
 		message.statusHistory = [data];
 		return true;

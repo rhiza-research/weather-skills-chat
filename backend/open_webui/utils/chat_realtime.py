@@ -1,4 +1,4 @@
-"""Websocket fan-out for sidebar rows, artifact lists, and chat versions.
+"""Websocket fan-out for sidebar rows, artifact lists, runner samples, and chat versions.
 
 Streamed reply parts (status, usage, sources, files) are batched here. They
 do not bump the revision watchers compare, and they do not emit
@@ -28,6 +28,7 @@ log.setLevel(SRC_LOG_LEVELS["SOCKET"])
 
 STATUS_FLUSH_SECONDS = 2.0
 ARTIFACT_DEBOUNCE_SECONDS = 0.4
+RUNNER_SAMPLE_SECONDS = 1.5
 # The client caches at most 16 chats plus the one on screen. Each id costs
 # an access check, so a socket cannot ask for more than this.
 MAX_WATCHED_CHATS = 20
@@ -60,6 +61,7 @@ else:
 _pending_updates: dict[tuple[str, str], dict] = {}
 _update_tasks: dict[tuple[str, str], asyncio.Task] = {}
 _artifact_tasks: dict[str, asyncio.Task] = {}
+_runner_tasks: dict[str, asyncio.Task] = {}
 # The server's event loop. Chat writes run in worker threads, and the
 # broadcasts they schedule must still run on this loop.
 _main_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -180,6 +182,13 @@ def watcher_session_ids(chat_id: str | None) -> list[str]:
     if not chat_id:
         return []
     return list(WATCH_INDEX.get(chat_id) or [])
+
+
+def active_session_ids(chat_id: str | None) -> list[str]:
+    """Sessions that have this chat on screen."""
+    if not chat_id:
+        return []
+    return list(ACTIVE_INDEX.get(chat_id) or [])
 
 
 def _access_row(chat_id: str):
@@ -383,6 +392,77 @@ async def recheck_watches(user_id: str | None = None) -> None:
                 log.debug("chat evict failed", exc_info=True)
 
 
+async def emit_chat_runner(chat_id: str, payload: dict) -> None:
+    chat = _access_row(chat_id)
+    if chat is None:
+        return
+    body = {**payload, "id": chat_id}
+    seen = set()
+    for sid in list(WATCH_INDEX.get(chat_id) or []) + list(USER_POOL.get(chat.user_id) or []):
+        if sid in seen:
+            continue
+        seen.add(sid)
+        try:
+            await _emit_if_allowed(sid, chat, "chat:runner", body)
+        except Exception:
+            log.debug("chat:runner failed", exc_info=True)
+
+
+def schedule_runner_metrics(chat_id: str) -> None:
+    """Sample the open chat's runner and push status plus metrics while it is on screen."""
+    from open_webui.env import tool_runner_enabled
+
+    if not chat_id or chat_id == "local" or not tool_runner_enabled():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        if not _hand_to_main_loop(schedule_runner_metrics, chat_id):
+            log.debug("no event loop for runner metrics %s", chat_id)
+        return
+    existing = _runner_tasks.get(chat_id)
+    if existing and not existing.done():
+        return
+
+    async def _run():
+        from open_webui.env import tool_runner_enabled as still_enabled
+        from open_webui.utils.skill_k8s_sandbox import (
+            runner_metrics,
+            runner_status,
+            start_runner,
+        )
+
+        try:
+            while active_session_ids(chat_id):
+                if not still_enabled():
+                    break
+                try:
+                    status = await runner_status(chat_id)
+                    state = status.get("state") or "absent"
+                    if state == "absent":
+                        start_runner(chat_id)
+                        status = await runner_status(chat_id)
+                        state = status.get("state") or "starting"
+                    if state == "absent":
+                        state = "starting"
+                    payload = {"id": chat_id, "state": state, "metrics": None}
+                    if state == "ready":
+                        try:
+                            payload["metrics"] = await runner_metrics(chat_id)
+                        except Exception:
+                            log.debug("runner metrics failed", exc_info=True)
+                    await emit_chat_runner(chat_id, payload)
+                except Exception:
+                    log.debug("runner sample failed", exc_info=True)
+                await asyncio.sleep(RUNNER_SAMPLE_SECONDS)
+        finally:
+            _runner_tasks.pop(chat_id, None)
+            if active_session_ids(chat_id) and still_enabled():
+                schedule_runner_metrics(chat_id)
+
+    _runner_tasks[chat_id] = loop.create_task(_run())
+
+
 async def emit_chat_artifacts(chat_id: str, files: list) -> None:
     chat = _access_row(chat_id)
     if chat is None:
@@ -554,4 +634,6 @@ def register() -> None:
                 allowed.append(chat_id)
         active_id = active if isinstance(active, str) and active in allowed else None
         set_watch(sid, user.id, allowed, active_id)
+        if active_id:
+            schedule_runner_metrics(active_id)
         return {"ids": allowed, "active": active_id}

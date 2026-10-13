@@ -562,6 +562,57 @@ class TestEmitterAndRecheck(_NoBackgroundPublish, AbstractPostgresTest):
         finally:
             chat_realtime.clear_watch("sid-owner")
 
+    def test_an_open_chat_pushes_runner_samples_until_it_leaves_the_screen(
+        self, monkeypatch
+    ):
+        from open_webui.utils import chat_realtime
+
+        samples = []
+
+        async def fake_status(_chat_id):
+            return {"state": "ready"}
+
+        async def fake_metrics(_chat_id):
+            return {
+                "cpu": {"usage_usec": 1_000_000},
+                "memory_bytes": 4096,
+                "cpu_limit": 3,
+            }
+
+        async def fake_emit(_chat_id, payload):
+            samples.append(payload)
+
+        monkeypatch.setattr(chat_realtime, "RUNNER_SAMPLE_SECONDS", 0.02)
+        monkeypatch.setattr("open_webui.env.tool_runner_enabled", lambda: True)
+        monkeypatch.setattr(
+            "open_webui.utils.skill_k8s_sandbox.runner_status", fake_status
+        )
+        monkeypatch.setattr(
+            "open_webui.utils.skill_k8s_sandbox.runner_metrics", fake_metrics
+        )
+        monkeypatch.setattr(chat_realtime, "emit_chat_runner", fake_emit)
+        chat_realtime._runner_tasks.clear()
+
+        async def run():
+            chat_realtime.set_watch("sid-1", "owner", [self.chat.id], self.chat.id)
+            chat_realtime.schedule_runner_metrics(self.chat.id)
+            await asyncio.sleep(0.08)
+            assert samples
+            assert samples[0]["state"] == "ready"
+            assert samples[0]["metrics"]["memory_bytes"] == 4096
+            chat_realtime.clear_watch("sid-1")
+            n = len(samples)
+            await asyncio.sleep(0.08)
+            assert len(samples) == n
+
+        try:
+            asyncio.run(run())
+        finally:
+            chat_realtime.clear_watch("sid-1")
+            for task in list(chat_realtime._runner_tasks.values()):
+                task.cancel()
+            chat_realtime._runner_tasks.clear()
+
 
 class TestStreamedPartsAreSaved(AbstractPostgresTest):
     def test_the_emitter_saves_usage_sources_runs_files_and_the_latest_status(self):

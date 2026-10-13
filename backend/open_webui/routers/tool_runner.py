@@ -28,28 +28,15 @@ async def get_tool_runner(id: str, user=Depends(get_verified_user)):
     if not tool_runner_enabled():
         return {"enabled": False, "state": "off"}
     _readable(id, user)
-    from open_webui.utils.skill_k8s_sandbox import ensure_runner, runner_status
+    from open_webui.utils.chat_realtime import schedule_runner_metrics
+    from open_webui.utils.skill_k8s_sandbox import runner_status, start_runner
 
     try:
-        await ensure_runner(id)
+        start_runner(id)
+        schedule_runner_metrics(id)
         status_body = await runner_status(id)
         status_body["enabled"] = True
         return status_body
     except Exception as exc:
         log.info("tool runner start failed for %s: %s", id, exc)
         return {"enabled": True, "state": "starting", "error": str(exc)}
-
-
-@router.get("/{id}/tool-runner/metrics")
-async def get_tool_runner_metrics(id: str, user=Depends(get_verified_user)):
-    if not tool_runner_enabled():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="off")
-    _readable(id, user)
-    from open_webui.utils.skill_k8s_sandbox import runner_metrics
-
-    try:
-        return await runner_metrics(id)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc

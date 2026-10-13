@@ -99,6 +99,56 @@ export async function hideTab(page: Page) {
 	});
 }
 
+/** Append a finished turn to the open chat, as a live socket would. */
+export async function emitChatTurn(
+	page: Page,
+	chatId: string,
+	opts: {
+		userId: string;
+		assistantId: string;
+		parentId: string;
+		userContent: string;
+		assistantContent: string;
+	}
+) {
+	await expect
+		.poll(async () => page.evaluate(() => typeof (window as NotificationWindow).__wscChatEvent), {
+			timeout: 10_000
+		})
+		.toBe('function');
+	await page.evaluate(
+		({ chatId, opts }) => {
+			const emit = (window as NotificationWindow).__wscChatEvent;
+			if (!emit) throw new Error('chat event hook missing');
+			return emit({
+				chat_id: chatId,
+				message_id: opts.assistantId,
+				data: {
+					type: 'chat:turn',
+					data: {
+						user_message: {
+							id: opts.userId,
+							parentId: opts.parentId,
+							childrenIds: [opts.assistantId],
+							role: 'user',
+							content: opts.userContent
+						},
+						assistant_message: {
+							id: opts.assistantId,
+							parentId: opts.userId,
+							childrenIds: [],
+							role: 'assistant',
+							content: opts.assistantContent,
+							done: true
+						}
+					}
+				}
+			});
+		},
+		{ chatId, opts }
+	);
+}
+
 export async function emitChatCompletion(page: Page, chatId: string, title: string) {
 	await expect
 		.poll(async () => page.evaluate(() => typeof (window as NotificationWindow).__wscChatEvent), {

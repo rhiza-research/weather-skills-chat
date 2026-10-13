@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { seedChat, uploadArtifact } from '../../chats';
+import { emitChatTurn } from '../../helpers';
 
 const LINE = 'paragraph 40';
 /** One 480px panel plus markdown chrome. A lost position is thousands of pixels. */
@@ -311,7 +312,6 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 	await page.context().addCookies([
 		{ name: 'token', value: token, url: new URL(page.url()).origin }
 	]);
-
 	await page.goto(`/c/${id}`);
 	await waitForReadingLayout(page, 'img[alt="panel"]', 18);
 	await ensureSidebar(page);
@@ -349,4 +349,88 @@ test('repeated copies of one artifact image return to the same copy', async ({ p
 		releaseChat?.();
 		await page.unroute(`**/api/v1/chats/${id}`);
 	}
+});
+
+const newMessagesButton = (page: Page) => page.getByRole('button', { name: 'New messages' });
+
+function longReply(count = 150) {
+	return Array.from({ length: count }, (_, index) => {
+		const n = index + 1;
+		return `paragraph ${n} stays on this line of the reply.`;
+	}).join('\n\n');
+}
+
+function freshReply(count = 80) {
+	return Array.from({ length: count }, (_, index) => `fresh paragraph ${index + 1} arrived below.`).join(
+		'\n\n'
+	);
+}
+
+async function wheelUp(page: Page) {
+	await page.locator('#messages-container').evaluate((element) => {
+		element.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }));
+	});
+}
+
+test('scrolling up does not show New messages when nothing new arrived', async ({ page }) => {
+	const { id } = await seedChat('no new messages yet', longReply());
+	await page.goto(`/c/${id}`);
+	await expect(page.getByText(LINE, { exact: false }).first()).toBeAttached();
+	await placeLine(page, LINE, 48);
+	await page.waitForTimeout(250);
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+	await expect(newMessagesButton(page)).toHaveCount(0);
+
+	await wheelUp(page);
+	await page.waitForTimeout(200);
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+	await expect(newMessagesButton(page)).toHaveCount(0);
+});
+
+test('a short chat wheel does not show New messages', async ({ page }) => {
+	const { id } = await seedChat('short transcript', 'Already on screen.');
+	await page.goto(`/c/${id}`);
+	await expect(page.getByText('Already on screen.')).toBeVisible();
+	await expect
+		.poll(async () =>
+			page.evaluate(() => {
+				const container = document.getElementById('messages-container');
+				if (!container) return false;
+				return container.scrollHeight <= container.clientHeight + 5;
+			})
+		)
+		.toBe(true);
+	await wheelUp(page);
+	await page.waitForTimeout(200);
+	await expect(newMessagesButton(page)).toHaveCount(0);
+	expect(await distanceFromBottom(page)).toBeLessThan(24);
+});
+
+test('a reply below a held line stays put and shows New messages', async ({ page }) => {
+	const { id } = await seedChat('held line', longReply());
+	await page.goto(`/c/${id}`);
+	await expect(page.getByText(LINE, { exact: false }).first()).toBeAttached();
+	await placeLine(page, LINE, 48);
+	await page.waitForTimeout(250);
+	const before = await lineOffset(page, LINE);
+	expect(before).not.toBeNull();
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+	await expect(newMessagesButton(page)).toHaveCount(0);
+
+	await emitChatTurn(page, id, {
+		userId: 'user-2',
+		assistantId: 'assistant-2',
+		parentId: 'assistant-1',
+		userContent: 'Continue.',
+		assistantContent: freshReply()
+	});
+	await expect(page.getByText('fresh paragraph 1 arrived below.')).toBeAttached();
+	await expect(newMessagesButton(page)).toBeVisible();
+	const after = await lineOffset(page, LINE);
+	expect(Math.abs((after ?? 0) - (before ?? 0))).toBeLessThan(24);
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+
+	await newMessagesButton(page).click();
+	await expect(newMessagesButton(page)).toHaveCount(0);
+	await expect.poll(() => distanceFromBottom(page)).toBeLessThan(24);
 });

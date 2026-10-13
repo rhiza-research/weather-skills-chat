@@ -419,13 +419,13 @@
 	};
 
 	const triggerScroll = () => {
-		if (autoScroll) {
-			const element = document.getElementById('messages-container');
-			autoScroll = element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
-			setTimeout(() => {
-				scrollToBottom();
-			}, 100);
-		}
+		if (!autoScroll) return;
+		const element = document.getElementById('messages-container');
+		if (!element) return;
+		if (element.scrollHeight - element.scrollTop > element.clientHeight + 5) return;
+		requestAnimationFrame(() => {
+			if (autoScroll) scrollToBottom();
+		});
 	};
 </script>
 

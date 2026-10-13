@@ -12,13 +12,14 @@ The image is published as `ghcr.io/rhiza-research/weather-skills-chat-sandbox` f
 
 CI runs `tests/plotly_png_check.py` in this image to prove Plotly can write a PNG. `tests/test_sandbox_runtime.py` covers the HTTP helpers without Docker.
 
-The process writes to stdout (the container log): startup, each `/exec` and `/unpack`, the skill name, and the skill's own stdout/stderr. Readiness and metrics polls are logged once so they do not drown skill output.
+The process writes to stdout (the container log): startup, each `/exec` and `/unpack`, the skill name, and the skill's own stdout/stderr. Readiness, pack listings, and metrics polls are logged once so they do not drown skill output.
 
 Chat talks to a specific runner pod. It does not import this Python file.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Readiness |
+| `GET` | `/packs` | Names of skill packs already on the runner |
 | `GET` | `/metrics` | Optional process snapshot; the chat UI reads node cgroup metrics from the bind daemon |
 | `POST` | `/exec` | Run a command (`cmd`, optional `cwd`, `env`, `timeout`) and return stdout, stderr, exit code |
 | `POST` | `/unpack` | Extract a gzip tar (`dest`, `archive`) under the workspace |

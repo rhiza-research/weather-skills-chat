@@ -4,10 +4,15 @@ from unittest.mock import patch
 
 from open_webui.utils.skill_k8s_sandbox import (
     WAITING_STATUS,
+    _drop_runner,
     _emit_waiting,
+    _ready_cache,
     _installed_packs,
+    _missing_packs,
+    _pack_names,
     _runner_packs_root,
     _runner_workspace,
+    _store_runner,
     _tar_pack,
     _uv_cache_dir,
     await_runner_for_chat,
@@ -17,6 +22,8 @@ from open_webui.utils.skill_k8s_sandbox import (
     in_cluster,
     remote_script_path,
     runner_needs_wait,
+    runner_status,
+    start_runner,
     use_direct_http,
 )
 
@@ -114,7 +121,10 @@ class RemoteScriptPathTest(TestCase):
             (root / "readme.txt").write_text("x")
             with patch.dict("os.environ", {"SKILLS_DIR": str(root)}, clear=False):
                 packs = _installed_packs()
-        self.assertEqual([p.name for p in packs], ["weather-skills"])
+                self.assertEqual([p.name for p in packs], ["weather-skills"])
+                self.assertEqual(_pack_names(packs), {"weather-skills"})
+                self.assertEqual([p.name for p in _missing_packs({"weather-skills"})], [])
+                self.assertEqual([p.name for p in _missing_packs(set())], ["weather-skills"])
 
 
 class RunnerNeedsWaitTest(TestCase):
@@ -150,7 +160,11 @@ class EmitWaitingTest(IsolatedAsyncioTestCase):
         await _emit_waiting(emitter, False)
         self.assertEqual(
             events[0]["data"],
-            {"description": WAITING_STATUS, "done": False},
+            {
+                "action": "weather_skills_runner",
+                "description": WAITING_STATUS,
+                "done": False,
+            },
         )
 
     async def test_hides_when_runner_is_ready(self):
@@ -165,35 +179,87 @@ class EmitWaitingTest(IsolatedAsyncioTestCase):
 
 
 class AwaitRunnerForChatTest(IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _drop_runner("chat-1")
+
     async def test_skips_when_runner_path_is_off(self):
         with patch.dict(
             "os.environ",
             {"SKILL_SANDBOX_BACKEND": "landlock", "SKILL_K8S_SANDBOX_ENABLED": "false"},
             clear=False,
-        ), patch("open_webui.utils.skill_k8s_sandbox.ensure_runner") as ensure:
+        ), patch("open_webui.utils.skill_k8s_sandbox.start_runner") as start:
             await await_runner_for_chat("chat-1")
-            ensure.assert_not_called()
+            start.assert_not_called()
 
     async def test_skips_temporary_chat(self):
         with patch.dict(
             "os.environ",
             {"SKILL_SANDBOX_BACKEND": "k8s", "SKILL_K8S_SANDBOX_ENABLED": "true"},
             clear=False,
-        ), patch("open_webui.utils.skill_k8s_sandbox.ensure_runner") as ensure:
+        ), patch("open_webui.utils.skill_k8s_sandbox.start_runner") as start:
             await await_runner_for_chat("local")
             await await_runner_for_chat(None)
-            ensure.assert_not_called()
+            start.assert_not_called()
 
-    async def test_waits_for_saved_chat(self):
+    async def test_ready_runner_does_not_show_waiting(self):
+        events = []
+
+        async def emitter(event):
+            events.append(event)
+
+        async def already_done():
+            return {"pod_ip": "10.0.0.1"}
+
+        task = __import__("asyncio").create_task(already_done())
         with patch.dict(
             "os.environ",
             {"SKILL_SANDBOX_BACKEND": "k8s", "SKILL_K8S_SANDBOX_ENABLED": "true"},
             clear=False,
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox.ensure_runner", return_value={}
-        ) as ensure:
-            await await_runner_for_chat("chat-1", emitter="e")
-            ensure.assert_awaited_once_with("chat-1", emitter="e")
+            "open_webui.utils.skill_k8s_sandbox.start_runner", return_value=task
+        ) as start, patch(
+            "open_webui.utils.skill_k8s_sandbox.runner_status",
+            return_value={"state": "ready"},
+        ):
+            await await_runner_for_chat("chat-1", emitter=emitter)
+            start.assert_called_once_with("chat-1")
+        self.assertEqual(events, [])
+
+    async def test_shows_waiting_until_start_finishes(self):
+        import asyncio
+
+        events = []
+        finish = asyncio.Event()
+
+        async def emitter(event):
+            events.append(event)
+
+        async def body():
+            await finish.wait()
+            return {"pod_ip": "10.0.0.1"}
+
+        task = asyncio.create_task(body())
+        with patch.dict(
+            "os.environ",
+            {"SKILL_SANDBOX_BACKEND": "k8s", "SKILL_K8S_SANDBOX_ENABLED": "true"},
+            clear=False,
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.start_runner", return_value=task
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.runner_status",
+            return_value={"state": "starting"},
+        ):
+            wait = asyncio.create_task(await_runner_for_chat("chat-1", emitter=emitter))
+            for _ in range(20):
+                if events:
+                    break
+                await asyncio.sleep(0)
+            self.assertTrue(events)
+            self.assertEqual(events[0]["data"]["description"], WAITING_STATUS)
+            self.assertFalse(events[0]["data"]["done"])
+            finish.set()
+            await wait
+        self.assertTrue(events[-1]["data"]["hidden"])
 
 
 class DeleteClaimTest(IsolatedAsyncioTestCase):
@@ -203,3 +269,108 @@ class DeleteClaimTest(IsolatedAsyncioTestCase):
             side_effect=RuntimeError("k8s DELETE ... -> 404: b''"),
         ):
             await delete_claim("missing")
+
+
+class StartRunnerTest(IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def test_second_caller_shares_the_same_start(self):
+        import asyncio
+
+        gate = asyncio.Event()
+        runs = {"n": 0}
+
+        async def body(chat_id):
+            runs["n"] += 1
+            await gate.wait()
+            return {"pod_ip": "10.0.0.1"}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._run_start", side_effect=body
+        ):
+            first = start_runner("chat-1")
+            second = start_runner("chat-1")
+            self.assertIs(first, second)
+            gate.set()
+            await first
+        self.assertEqual(runs["n"], 1)
+
+    async def test_starts_again_after_the_ready_cache_expires(self):
+        runs = {"n": 0}
+
+        async def body(chat_id):
+            runs["n"] += 1
+            return {"pod_ip": "10.0.0.1"}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._run_start", side_effect=body
+        ):
+            first = start_runner("chat-1")
+            await first
+            _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
+            self.assertIs(start_runner("chat-1"), first)
+            _ready_cache.pop("chat-1", None)
+            second = start_runner("chat-1")
+            self.assertIsNot(second, first)
+            await second
+        self.assertEqual(runs["n"], 2)
+
+
+class RunnerStatusTest(IsolatedAsyncioTestCase):
+    def setUp(self):
+        _drop_runner("chat-1")
+
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def test_cache_is_ready_without_another_pack_check(self):
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim") as get_claim:
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "ready")
+        get_claim.assert_not_called()
+
+    async def test_ready_when_runner_lists_installed_packs(self):
+        claim = {
+            "status": {"ready": True, "sandbox": {"name": "runner-1"}},
+        }
+        pod = {
+            "metadata": {"name": "runner-1", "annotations": {}},
+            "status": {"podIP": "10.0.0.8"},
+        }
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim", return_value=claim
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._listed_packs",
+            return_value={"weather-skills"},
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._installed_packs",
+            return_value=[Path("/data/skills/weather-skills")],
+        ):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "ready")
+
+    async def test_starting_when_packs_are_missing(self):
+        claim = {
+            "status": {"ready": True, "sandbox": {"name": "runner-1"}},
+        }
+        pod = {
+            "metadata": {"name": "runner-1", "annotations": {}},
+            "status": {"podIP": "10.0.0.8"},
+        }
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim", return_value=claim
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._listed_packs",
+            return_value=set(),
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._installed_packs",
+            return_value=[Path("/data/skills/weather-skills")],
+        ):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "starting")

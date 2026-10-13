@@ -403,25 +403,21 @@
 					: 'max-w-[58rem]'} w-full"
 			>
 				<div class="relative">
-					{#if autoScroll === false && history?.currentId}
+					{#if newMessagesBelow && history?.currentId}
 						<div
 							class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 						>
 							<button
-								class="bg-white border border-gray-100 dark:border-none dark:bg-white/20 rounded-full pointer-events-auto flex items-center gap-1.5 {newMessagesBelow
-									? 'px-3 py-1.5'
-									: 'p-1.5'}"
+								class="bg-white border border-gray-100 dark:border-none dark:bg-white/20 rounded-full pointer-events-auto flex items-center gap-1.5 px-3 py-1.5"
 								on:click={() => {
 									autoScroll = true;
 									newMessagesBelow = false;
 									scrollToBottom();
 								}}
 							>
-								{#if newMessagesBelow}
-									<span class="text-xs font-medium whitespace-nowrap"
-										>{$i18n.t('New messages')}</span
-									>
-								{/if}
+								<span class="text-xs font-medium whitespace-nowrap"
+									>{$i18n.t('New messages')}</span
+								>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"

@@ -18,6 +18,7 @@
 		socket,
 		activeOrganizationId,
 		chatId,
+		chatRunner,
 		chats,
 		pinnedChats,
 		tags,
@@ -494,10 +495,15 @@
 			if (!row?.id || !Array.isArray(row.files)) return;
 			rememberArtifacts(row.id, row.files);
 		};
+		const onChatRunner = (row) => {
+			if (!row?.id) return;
+			chatRunner.set(row);
+		};
 		const onChatEvict = (row) => {
 			if (!row?.id) return;
 			dropChat(row.id);
 			chats.update((list) => (list ?? []).filter((item) => item.id !== row.id));
+			if (get(chatRunner)?.id === row.id) chatRunner.set(null);
 		};
 		if (typeof window !== 'undefined') {
 			window.__wscChatEvent = (event) => chatEventHandler(event, () => {});
@@ -510,12 +516,14 @@
 			liveSocket.off('chat:list', onChatList);
 			liveSocket.off('chat:updated', onChatUpdatedEvent);
 			liveSocket.off('chat:artifacts', onChatArtifacts);
+			liveSocket.off('chat:runner', onChatRunner);
 			liveSocket.off('chat:evict', onChatEvict);
 			if (get(user)) {
 				liveSocket.on('chat-events', chatEventHandler);
 				liveSocket.on('chat:list', onChatList);
 				liveSocket.on('chat:updated', onChatUpdatedEvent);
 				liveSocket.on('chat:artifacts', onChatArtifacts);
+				liveSocket.on('chat:runner', onChatRunner);
 				liveSocket.on('chat:evict', onChatEvict);
 				setOpenChat(get(chatId));
 			}

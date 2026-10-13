@@ -311,6 +311,13 @@ test('the live copy keeps only the latest status and appends files without repea
 	send('status', { description: 'Searching', done: false });
 	send('status', { description: 'Searched 2 sites', done: true });
 	expect(message.statusHistory).toEqual([{ description: 'Searched 2 sites', done: true }]);
+	send('status', { action: 'weather_skills_runner', description: 'Waiting on weather skills runner', done: false });
+	send('status', { description: 'Searching', done: false });
+	expect(message.statusHistory).toEqual([
+		{ action: 'weather_skills_runner', description: 'Waiting on weather skills runner', done: false }
+	]);
+	send('status', { action: 'weather_skills_runner', description: 'Waiting on weather skills runner', done: true, hidden: true });
+	expect(message.statusHistory?.[0]?.hidden).toBe(true);
 	send('files', { files: [{ url: '/a.png' }] });
 	send('files', { files: [{ url: '/a.png' }, { url: '/b.png' }] });
 	expect(message.files).toEqual([{ url: '/a.png' }, { url: '/b.png' }]);

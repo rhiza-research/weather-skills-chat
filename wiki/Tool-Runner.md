@@ -1,12 +1,12 @@
 # Tool Runner
 
-A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. It starts when the chat is opened, stays ready while the chat is in use, and stops after ten minutes idle. Temporary chats do not get a runner.
+A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. Opening a saved chat starts one runner for that chat. The top-bar status and a skill that is waiting both watch whether that runner is ready. It stays ready while the chat is in use, and stops after ten minutes idle. Coming back after it has stopped starts it again; the top bar and a waiting skill both watch that new start. Temporary chats do not get a runner.
 
 The runner is the only place skills run when it is turned on. Built-in tools and the code interpreter stay on the chat server.
 
 ## What the user sees
 
-When a k8s tool runner is on (a real runner or the local emulator), an open saved chat shows **Weather skills runner ready** or **Weather skills runner starting** on the right side of the top bar, to the left of Artifacts and the user menu. Ready means the runner is up and the installed skill packs are already on it. Packs are copied when the runner starts, not when each skill runs. A green dot pulses slowly when it is ready; a spinner shows while it starts. Small text under the status shows this chat's runner CPU and memory used of that runner's limits on the node (`0 / 3 CPU - 0 / 12 GB Memory` until the first sample, then `0.2 / 3 CPU - 0.4 / 12 GB Memory`). Click the ready status for current CPU, memory, and a **Memory, last minute** chart. That chart is one bar per sample from the last minute; a bar turns red if the runner was using disk swap. Landlock chats do not show it. It is hidden on temporary chats and when the k8s tool-runner path is off.
+When a k8s tool runner is on (a real runner or the local emulator), an open saved chat shows **Weather skills runner ready** or **Weather skills runner starting** on the right side of the top bar, to the left of Artifacts and the user menu. Ready means the runner is up and the installed skill packs are already on it. Packs are copied when the runner starts, not when each skill runs. Starting becomes ready without a refresh. A green dot pulses slowly when it is ready; a spinner shows while it starts. Small text under the status shows this chat's runner CPU and memory used of that runner's limits on the node (`0 / 3 CPU - 0 / 12 GB Memory` until the first sample, then `0.2 / 3 CPU - 0.4 / 12 GB Memory`). Those figures update while the chat is open, including in other tabs of the same chat. Click the ready status for current CPU, memory, and a **Memory, last minute** chart. That chart is one bar per sample from the last minute; a bar turns red if the runner was using disk swap. Landlock chats do not show it. It is hidden on temporary chats and when the k8s tool-runner path is off.
 
 ## Waiting
 
@@ -16,7 +16,7 @@ Each skill call that does run resets the ten-minute idle timer.
 
 ## Logs
 
-The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks and CPU/memory samples are not repeated there after the first one.
+The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks, pack listings, and CPU/memory samples are not repeated there after the first one.
 
 ## Automations
 

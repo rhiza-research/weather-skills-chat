@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { getContext, onDestroy } from 'svelte';
-	import { chatId, config, temporaryChatEnabled } from '$lib/stores';
-	import { getToolRunnerMetrics, startToolRunner } from '$lib/apis/chats';
+	import { getContext } from 'svelte';
+	import { chatId, chatRunner, config, temporaryChatEnabled } from '$lib/stores';
+	import { startToolRunner } from '$lib/apis/chats';
 
 	const i18n = getContext('i18n');
 
@@ -14,48 +14,55 @@
 	let state: 'hidden' | 'starting' | 'ready' = 'hidden';
 	let open = false;
 	let samples: Sample[] = [];
-	let poll: ReturnType<typeof setInterval> | null = null;
 	let lastCpuUsage: number | null = null;
 	let lastCpuTime: number | null = null;
 	let cpuLimit = CPU_CORES;
 	let memLimitBytes = MEM_BYTES;
 	let startedFor = '';
+	let ensuring = false;
 
 	$: enabled = Boolean($config?.features?.enable_tool_runner);
 	$: visible = enabled && !$temporaryChatEnabled && $chatId && $chatId !== 'local';
 
 	$: if (visible && $chatId && $chatId !== startedFor) {
 		startedFor = $chatId;
+		resetBand();
+		state = 'starting';
 		ensure($chatId);
 	} else if (!visible) {
 		startedFor = '';
 		state = 'hidden';
 		open = false;
 		samples = [];
-		stopPoll();
 	}
 
-	$: if (state === 'ready' && visible) {
-		startPoll();
-	} else {
-		stopPoll();
+	$: if (visible && $chatRunner?.id === $chatId) {
+		applyLive($chatRunner);
 	}
 
-	const ensure = async (id: string) => {
-		state = 'starting';
+	const resetBand = () => {
 		open = false;
 		samples = [];
 		lastCpuUsage = null;
 		lastCpuTime = null;
 		cpuLimit = CPU_CORES;
 		memLimitBytes = MEM_BYTES;
+	};
+
+	const ensure = async (id: string) => {
+		if (ensuring) return;
+		ensuring = true;
+		if (state !== 'ready') state = 'starting';
 		try {
 			const res = await startToolRunner(localStorage.token, id);
+			if (id !== $chatId) return;
 			if (res?.state === 'ready') state = 'ready';
 			else if (res?.enabled === false) state = 'hidden';
-			else state = 'starting';
+			else if (state !== 'ready') state = 'starting';
 		} catch {
-			state = 'starting';
+			if (id === $chatId && state !== 'ready') state = 'starting';
+		} finally {
+			ensuring = false;
 		}
 	};
 
@@ -75,10 +82,7 @@
 		return Math.min(cpuLimit, Math.max(0, du / 1_000_000 / dt));
 	};
 
-	const pullMetrics = async () => {
-		if (!$chatId) return;
-		const metrics = await getToolRunnerMetrics(localStorage.token, $chatId);
-		if (!metrics) return;
+	const applyMetrics = (metrics: Record<string, any>) => {
 		if (typeof metrics.cpu_limit === 'number' && metrics.cpu_limit > 0) {
 			cpuLimit = metrics.cpu_limit;
 		}
@@ -94,23 +98,19 @@
 		samples = [...samples.filter((s) => Date.now() - s.t < 60_000), next];
 	};
 
-	const startPoll = () => {
-		if (poll) return;
-		pullMetrics();
-		poll = setInterval(pullMetrics, 1500);
-	};
-
-	const stopPoll = () => {
-		if (poll) clearInterval(poll);
-		poll = null;
+	const applyLive = (row: { state?: string; metrics?: Record<string, any> | null }) => {
+		if (row.state === 'ready') state = 'ready';
+		else if (row.state === 'starting') {
+			if (state === 'ready') open = false;
+			state = 'starting';
+		}
+		if (row.metrics) applyMetrics(row.metrics);
 	};
 
 	const toggle = () => {
 		if (state !== 'ready') return;
 		open = !open;
 	};
-
-	onDestroy(stopPoll);
 
 	const fmtCpu = (n: number) => {
 		if (n >= 10) return n.toFixed(0);

@@ -89,6 +89,24 @@ class SandboxRuntimeTest(TestCase):
             finally:
                 runtime.WORKSPACE = previous
 
+    def test_list_packs_names_dirs_beside_chat(self):
+        import tempfile
+
+        previous = runtime.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = Path(tmp)
+            chat = empty / "chat"
+            chat.mkdir()
+            packs = empty / ".skill-packs"
+            (packs / "plot").mkdir(parents=True)
+            (packs / "fetch").mkdir()
+            (packs / ".hidden").mkdir()
+            runtime.WORKSPACE = chat
+            try:
+                self.assertEqual(runtime.list_packs()["packs"], ["fetch", "plot"])
+            finally:
+                runtime.WORKSPACE = previous
+
     def test_skill_label_from_script_path(self):
         self.assertEqual(
             runtime.skill_label(

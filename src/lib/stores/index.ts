@@ -23,6 +23,12 @@ export const socket: Writable<null | Socket> = writable(null);
 export const socketConnected = writable(false);
 /** Artifact file lists pushed over the socket, keyed by chat id. */
 export const chatArtifactLists = writable<Record<string, any[]>>({});
+/** Latest tool-runner status and metrics sample pushed over the socket. */
+export const chatRunner = writable<{
+	id: string;
+	state: string;
+	metrics?: Record<string, any> | null;
+} | null>(null);
 export const activeUserIds: Writable<null | string[]> = writable(null);
 export const USAGE_POOL: Writable<null | string[]> = writable(null);
 

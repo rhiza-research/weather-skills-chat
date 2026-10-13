@@ -219,6 +219,26 @@ def _unpack_roots() -> list[Path]:
     return roots
 
 
+def _packs_root() -> Path:
+    ws = WORKSPACE
+    if ws.name == "chat":
+        return ws.parent / ".skill-packs"
+    return ws / ".skill-packs"
+
+
+def list_packs() -> dict:
+    root = _packs_root()
+    if not root.is_dir():
+        return {"packs": []}
+    return {
+        "packs": sorted(
+            path.name
+            for path in root.iterdir()
+            if path.is_dir() and not path.name.startswith(".")
+        )
+    }
+
+
 def _dest_allowed(dest: Path) -> bool:
     try:
         resolved = dest.resolve()
@@ -335,6 +355,17 @@ class Handler(BaseHTTPRequestHandler):
                     f"(further metrics polls omitted)"
                 )
             self._json(200, metrics)
+            return
+        if path == "/packs":
+            packs = list_packs()
+            if path not in _seen_quiet_paths:
+                _seen_quiet_paths.add(path)
+                log(
+                    "GET /packs 200 "
+                    f"n={len(packs.get('packs') or [])} "
+                    "(further pack listings omitted)"
+                )
+            self._json(200, packs)
             return
         log(f"GET {path} 404")
         self._json(404, {"error": "not found"})

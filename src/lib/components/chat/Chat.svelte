@@ -575,11 +575,11 @@
 			}
 			if (document?.chat?.history && document.chat.history === history) {
 				// ResponseMessage keeps a clone and only refreshes when the
-				// messages object itself is replaced.
+				// messages object itself is replaced. Do not bump paintKey —
+				// that remounts every bubble and snaps the pane to the end.
 				const next = { ...history, messages: { ...history.messages } };
 				document.chat.history = next;
 				history = next;
-				paintKey += 1;
 				if (settleScroll) placeChatScroll(id);
 				else if (heldTop != null) restoreReadingPosition(heldTop);
 				else if (autoScroll) pinScrollToEnd();
@@ -1293,36 +1293,69 @@
 		if (Math.abs(delta) < 2) return true;
 		holdScrollPin();
 		container.scrollTop += delta;
+		if (scrollChatId) {
+			const placed = chatScrollFor(scrollChatId);
+			if (placed) {
+				rememberChatScroll(scrollChatId, {
+					...placed,
+					top: container.scrollTop,
+					atBottom: false
+				});
+			}
+		}
 		return true;
 	};
 
 	let pinCount = 0;
 	let tailWatch = 0;
 	const holdScrollPin = () => {
-		const element = messagesContainerElement;
 		pinCount += 1;
 		pinningScroll = true;
 		let done = false;
 		const release = () => {
 			if (done) return;
 			done = true;
-			element?.removeEventListener('scroll', release);
 			pinCount = Math.max(0, pinCount - 1);
 			pinningScroll = pinCount > 0;
 		};
-		element?.addEventListener('scroll', release);
+		// Release on the next frames only. Releasing on the same scroll event
+		// lets on:scroll treat our own placement as the reader leaving.
 		requestAnimationFrame(() => requestAnimationFrame(release));
 	};
 
-	/** Reader was at the tail, and this scroll is the pane changing size under them. */
+	/** Reader was following the tail, and this scroll is the pane growing under them. */
 	const tailHeld = (element: HTMLElement, saved: { top: number; atBottom: boolean } | null) => {
-		if (!saved?.atBottom) return false;
+		if (!autoScroll || !saved?.atBottom) return false;
 		const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
 		if (atBottom) return false;
-		const heightChanged =
-			Math.abs(element.scrollHeight - element.clientHeight - saved.top) >= 2;
-		const userMovedUp = element.scrollTop < saved.top - 2 && !heightChanged;
-		return !userMovedUp;
+		// A skill card or heartbeat that grows the transcript must not win over
+		// a reader who already moved up, even when that growth happens in the
+		// same frame as their scroll.
+		if (element.scrollTop < saved.top - 2) return false;
+		return true;
+	};
+
+	const markLeftTail = (element: HTMLElement) => {
+		autoScroll = false;
+		settleScroll = false;
+		if (!scrollChatId) return;
+		const previous = chatScrollFor(scrollChatId);
+		rememberChatScroll(scrollChatId, {
+			...(previous ?? { top: element.scrollTop, messagesCount: 20 }),
+			top: element.scrollTop,
+			atBottom: false
+		});
+	};
+
+	/** Wheel/touch is user intent. Do not wait for on:scroll — pins swallow that. */
+	const leaveTailFromUser = (event?: WheelEvent) => {
+		if (!messagesContainerElement) return;
+		const element = messagesContainerElement;
+		// Trackpads still emit wheel when the transcript fits on screen.
+		if (element.scrollHeight <= element.clientHeight + 5) return;
+		if (event && event.deltaY > 0 && autoScroll) return;
+		if (!autoScroll && !chatScrollFor(scrollChatId)?.atBottom) return;
+		markLeftTail(element);
 	};
 
 	const captureScroll = (id: string, element: HTMLElement) => {
@@ -1379,15 +1412,23 @@
 			return;
 		}
 		if (saved?.messageId) {
-			showSavedMessage(
-				element,
-				saved.messageId,
-				saved.messageOffset,
-				saved.anchorKind,
-				saved.anchorKey,
-				saved.anchorOffset,
-				saved.anchorIndex
-			);
+			if (
+				showSavedMessage(
+					element,
+					saved.messageId,
+					saved.messageOffset,
+					saved.anchorKind,
+					saved.anchorKey,
+					saved.anchorOffset,
+					saved.anchorIndex
+				)
+			) {
+				return;
+			}
+		}
+		if (typeof saved?.top === 'number') {
+			holdScrollPin();
+			element.scrollTop = saved.top;
 		}
 	};
 
@@ -1431,6 +1472,10 @@
 	const restoreReadingPosition = (top: number) => {
 		autoScroll = false;
 		holdingReadPosition = true;
+		if (scrollChatId) {
+			const saved = chatScrollFor(scrollChatId);
+			if (saved) rememberChatScroll(scrollChatId, { ...saved, top, atBottom: false });
+		}
 		const apply = () => {
 			if (!messagesContainerElement) {
 				holdingReadPosition = false;
@@ -1807,7 +1852,7 @@
 		}
 
 		if (autoScroll) {
-			scrollToBottom();
+			pinScrollToEnd();
 		} else if (choices || content || done) {
 			noteNewMessagesBelow(message?.id || '');
 		}
@@ -1820,6 +1865,7 @@
 		const type = event?.data?.type ?? null;
 		const data = event?.data?.data ?? null;
 		const message = event?.message_id ? history.messages?.[event.message_id] : null;
+		history.messages = { ...history.messages };
 		history = history;
 		if (!message) return;
 		if (type === 'status') {
@@ -2775,6 +2821,8 @@
 							bind:this={messagesContainerElement}
 							use:stickToEnd
 							style="overflow-anchor: none"
+							on:wheel|passive={leaveTailFromUser}
+							on:touchmove|passive={leaveTailFromUser}
 							on:load|capture={() => {
 								if (!settleScroll || !messagesContainerElement) return;
 								if (autoScroll) {
@@ -2796,14 +2844,32 @@
 									element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
 								const previous = chatScrollFor(scrollChatId);
 								if (tailHeld(element, previous)) {
-									autoScroll = true;
 									window.clearTimeout(scrollStopTimer);
 									pinScrollToEnd();
 									return;
 								}
-								autoScroll = atBottom;
-								if (atBottom) newMessagesBelow = false;
-								settleScroll = false;
+								if (settleScroll) {
+									// Keep re-applying the saved line while images finish.
+									// A real move off that line, or off the tail, is the reader.
+									if (
+										previous &&
+										!previous.atBottom &&
+										Math.abs(element.scrollTop - previous.top) < 8
+									) {
+										return;
+									}
+									if (previous?.atBottom && atBottom) return;
+								}
+								if (!atBottom) {
+									markLeftTail(element);
+								} else {
+									newMessagesBelow = false;
+									const scrolledToEnd =
+										!!previous &&
+										!previous.atBottom &&
+										element.scrollTop > previous.top + 2;
+									if (autoScroll || scrolledToEnd) autoScroll = true;
+								}
 								const id = scrollChatId;
 								// Opening the sidebar resizes the pane and can emit scroll
 								// without the reader moving. Keep the line they chose.
