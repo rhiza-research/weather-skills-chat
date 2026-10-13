@@ -254,5 +254,43 @@ def minimal_png_with_text(texts: dict[str, str]) -> bytes:
     return bytes(out)
 
 
+class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
+    async def test_zarr_store_downloads_as_zip(self):
+        import io
+        from unittest.mock import MagicMock
+
+        from open_webui.routers.artifacts import get_artifact_content
+
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            chat_id = "chat-zarr"
+            with (
+                patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
+                patch("open_webui.routers.artifacts._readable"),
+            ):
+                root = artifacts / chat_id
+                (root / "intermediate_results").mkdir(parents=True)
+                zarr = root / "gambia_imerg_last_week.zarr"
+                zarr.mkdir()
+                (zarr / ".zgroup").write_text("{}")
+                (zarr / "precip").mkdir()
+                (zarr / "precip" / ".zarray").write_text("{}")
+
+                resp = await get_artifact_content(
+                    chat_id, "gambia_imerg_last_week.zarr", user=MagicMock()
+                )
+                self.assertEqual(resp.media_type, "application/zip")
+                self.assertIn(
+                    "gambia_imerg_last_week.zarr.zip",
+                    resp.headers["content-disposition"],
+                )
+                chunks = [chunk async for chunk in resp.body_iterator]
+                data = b"".join(chunks)
+                with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                    members = set(zf.namelist())
+                self.assertIn("gambia_imerg_last_week.zarr/.zgroup", members)
+                self.assertIn("gambia_imerg_last_week.zarr/precip/.zarray", members)
+
+
 if __name__ == "__main__":
     unittest.main()

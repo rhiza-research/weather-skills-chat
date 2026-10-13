@@ -47,7 +47,7 @@ class LocalRuntimeMetricsTest(TestCase):
                 "env": {
                     "HOME": "/workspace/chat",
                     "WEATHER_INTERMEDIATE_DIR": "/workspace/chat/intermediate_results",
-                    "UV_CACHE_DIR": "/workspace/.uv-cache",
+                    "UV_CACHE_DIR": "/opt/uv-cache",
                     "OTHER": "keep",
                 },
             },
@@ -61,7 +61,7 @@ class LocalRuntimeMetricsTest(TestCase):
         )
         self.assertEqual(body["env"]["HOME"], root)
         self.assertEqual(body["env"]["WEATHER_INTERMEDIATE_DIR"], f"{root}/intermediate_results")
-        self.assertEqual(body["env"]["UV_CACHE_DIR"], "/data/artifacts/.uv-cache")
+        self.assertEqual(body["env"]["UV_CACHE_DIR"], "/opt/uv-cache")
         self.assertEqual(body["env"]["OTHER"], "keep")
 
 

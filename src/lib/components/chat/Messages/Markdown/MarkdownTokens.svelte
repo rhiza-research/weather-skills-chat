@@ -16,7 +16,9 @@
 	import KatexRenderer from './KatexRenderer.svelte';
 	import AlertRenderer, { alertComponent } from './AlertRenderer.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
+	import ActivityLine from '$lib/components/chat/Messages/ActivityLine.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import { decodeEntities } from '$lib/utils/entities';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
 
 	import Source from './Source.svelte';
@@ -30,9 +32,90 @@
 	export let attributes = {};
 
 	export let save = false;
+	export let groupActivity = false;
+	export let status = null;
 
 	export let onTaskClick: Function = () => {};
 	export let onSourceClick: Function = () => {};
+
+	const ACTIVITY_TYPES = new Set(['reasoning', 'tool_calls', 'code_interpreter']);
+
+	const isActivityDetails = (token: any) =>
+		token?.type === 'details' && ACTIVITY_TYPES.has(token?.attributes?.type);
+
+	const isPadding = (token: any) =>
+		token?.type === 'space' ||
+		((token?.type === 'paragraph' || token?.type === 'text' || token?.type === 'html') &&
+			!String(token.text ?? token.raw ?? '').trim());
+
+	const groupActivityTokens = (list: any[]) => {
+		const out: any[] = [];
+		let batch: any[] = [];
+		const flush = () => {
+			if (!batch.length) return;
+			out.push({ type: 'activity_group', items: batch, raw: '' });
+			batch = [];
+		};
+		for (const token of list ?? []) {
+			if (isActivityDetails(token)) batch.push(token);
+			else if (batch.length && isPadding(token)) continue;
+			else {
+				flush();
+				out.push(token);
+			}
+		}
+		flush();
+		return out;
+	};
+
+	const unwrapJSON = (value: any): any => {
+		if (typeof value !== 'string') return value;
+		const trimmed = value.trim();
+		if (!trimmed) return value;
+		try {
+			return unwrapJSON(JSON.parse(trimmed));
+		} catch {
+			return value;
+		}
+	};
+
+	const toolFailed = (item: any) => {
+		const parsed = unwrapJSON(decodeEntities(item?.attributes?.result ?? ''));
+		if (!parsed || typeof parsed !== 'object') return false;
+		if (parsed.ok === false) return true;
+		return parsed.exit_code !== undefined && parsed.exit_code !== null && parsed.exit_code !== 0;
+	};
+
+	const hasDataImage = (item: any) => {
+		const files = unwrapJSON(decodeEntities(item?.attributes?.files ?? ''));
+		return Array.isArray(files) && files.some((file) => typeof file === 'string' && file.startsWith('data:image/'));
+	};
+
+	const isTranscriptOutput = (item: any) => {
+		if (item?.attributes?.done !== 'true' || toolFailed(item)) return false;
+		const type = item?.attributes?.type;
+		const name = item?.attributes?.name;
+		if (type === 'code_interpreter') return true;
+		if (type === 'tool_calls' && (name === 'display_image' || name === 'execute_code')) return true;
+		return type === 'tool_calls' && hasDataImage(item);
+	};
+
+	const inActivityDropdown = (item: any) => {
+		const type = item?.attributes?.type;
+		const name = item?.attributes?.name;
+		if (type === 'code_interpreter') return false;
+		if (name === 'execute_code') return false;
+		return true;
+	};
+
+	$: displayTokens = (groupActivity ? groupActivityTokens(tokens) : tokens) as any[];
+	$: lastActivityIdx = (() => {
+		let idx = -1;
+		for (let i = 0; i < displayTokens.length; i++) {
+			if (displayTokens[i]?.type === 'activity_group') idx = i;
+		}
+		return idx;
+	})();
 
 	const headerComponent = (depth: number) => {
 		return 'h' + depth;
@@ -40,6 +123,9 @@
 
 	const tokenKey = (token: Token, tokenIdx: number) => {
 		const attrs = (token as any)?.attributes;
+		if ((token as any)?.type === 'activity_group') {
+			return `activity-${tokenIdx}`;
+		}
 		if (token?.type === 'details' && attrs?.id) {
 			return `details-${attrs.id}`;
 		}
@@ -87,7 +173,7 @@
 </script>
 
 <!-- {JSON.stringify(tokens)} -->
-{#each tokens as token, tokenIdx (tokenKey(token, tokenIdx))}
+{#each displayTokens as token, tokenIdx (tokenKey(token, tokenIdx))}
 	{#if token.type === 'hr'}
 		<hr class=" border-gray-100 dark:border-gray-850" />
 	{:else if token.type === 'heading'}
@@ -259,6 +345,54 @@
 				{/each}
 			</ul>
 		{/if}
+	{:else if token.type === 'activity_group'}
+		<ActivityLine items={token.items} status={tokenIdx === lastActivityIdx ? status : null}>
+			{#each token.items as item, itemIdx}
+				{#if inActivityDropdown(item)}
+					<Collapsible
+						title={item.summary}
+						open={$settings?.expandDetails ?? false}
+						attributes={item?.attributes}
+						showResultMedia={false}
+						className="w-full space-y-1"
+						dir="auto"
+					>
+						<div class="mb-1.5" slot="content">
+							<svelte:self
+								id={`${id}-${tokenIdx}-${itemIdx}-d`}
+								tokens={marked.lexer(item.text ?? '')}
+								attributes={item?.attributes}
+								{onTaskClick}
+								{onSourceClick}
+							/>
+						</div>
+					</Collapsible>
+				{/if}
+			{/each}
+		</ActivityLine>
+		{#each token.items as item, itemIdx}
+			{#if isTranscriptOutput(item)}
+				<Collapsible
+					title={item.summary}
+					open={item?.attributes?.name === 'execute_code' ||
+						item?.attributes?.type === 'code_interpreter'}
+					attributes={item?.attributes}
+					showTitle={item?.attributes?.name !== 'display_image' && !hasDataImage(item)}
+					className="w-full space-y-1"
+					dir="auto"
+				>
+					<div class="mb-1.5" slot="content">
+						<svelte:self
+							id={`${id}-${tokenIdx}-${itemIdx}-out`}
+							tokens={marked.lexer(item.text ?? '')}
+							attributes={item?.attributes}
+							{onTaskClick}
+							{onSourceClick}
+						/>
+					</div>
+				</Collapsible>
+			{/if}
+		{/each}
 	{:else if token.type === 'details'}
 		<Collapsible
 			title={token.summary}

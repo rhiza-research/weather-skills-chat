@@ -1107,7 +1107,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "to a short phrase the user will see instead of the function "
                         'name, such as "Checking the most recent available date for '
                         'IMERG" or "Grouping the data into weekly bins". Omit '
-                        "`display` to show the function name."
+                        "`display` to show the function name. When you call several "
+                        "tools in one turn, also set optional `activity` on one of "
+                        "those calls to a short phrase for the whole batch, such as "
+                        '"Fetching IMERG and clipping to Kenya".'
                     )
                 if hints:
                     combined = "\n\n".join(hints)

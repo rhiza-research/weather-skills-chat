@@ -213,6 +213,18 @@
 					>
 						{$i18n.t('Download')}
 					</button>
+				{:else if file.kind === 'zarr'}
+					<button
+						type="button"
+						class="underline"
+						on:click={() =>
+							downloadFile(
+								file.path,
+								node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
+							)}
+					>
+						{$i18n.t('Download')}
+					</button>
 				{:else if file.kind === 'zarr_view' && !file.missing_zarr}
 					<button
 						type="button"

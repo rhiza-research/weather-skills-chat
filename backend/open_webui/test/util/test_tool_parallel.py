@@ -1,4 +1,5 @@
 from open_webui.utils.tool_parallel import (
+    ACTIVITY_PARAM,
     DEPENDS_ON_PARAM,
     DISPLAY_PARAM,
     execution_waves,
@@ -27,6 +28,7 @@ def test_inject_depends_on_spec_is_idempotent():
     inject_depends_on_spec(spec)
     assert DEPENDS_ON_PARAM in spec["parameters"]["properties"]
     assert DISPLAY_PARAM in spec["parameters"]["properties"]
+    assert ACTIVITY_PARAM in spec["parameters"]["properties"]
 
 
 def test_strip_display_removes_phrase_and_keeps_args():
@@ -34,6 +36,7 @@ def test_strip_display_removes_phrase_and_keeps_args():
         {
             "argv": ["--out", "a.zarr"],
             "display": "Grouping the data into weekly bins",
+            "activity": "Fetching IMERG and clipping to Kenya",
         }
     )
     assert params == {"argv": ["--out", "a.zarr"]}

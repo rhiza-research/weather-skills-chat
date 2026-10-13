@@ -54,6 +54,8 @@
 
 	export let disabled = false;
 	export let hide = false;
+	export let showResultMedia = true;
+	export let showTitle = true;
 
 	const collapsibleId = uuidv4();
 
@@ -342,7 +344,7 @@
 	}
 
 	$: displayImageRequestKey =
-		displayImagePath && $chatId && attributes?.done === 'true'
+		showResultMedia && displayImagePath && $chatId && attributes?.done === 'true'
 			? `${$chatId}::${displayImagePath}`
 			: '';
 
@@ -446,7 +448,7 @@
 </script>
 
 <div {id} class={className}>
-	{#if title !== null}
+	{#if showTitle && title !== null}
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
@@ -524,7 +526,7 @@
 				</div>
 			</div>
 		</div>
-	{:else}
+	{:else if title === null}
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
@@ -582,7 +584,7 @@
 				</div>
 			{/if}
 
-			{#if attributes?.done === 'true'}
+			{#if showResultMedia && attributes?.done === 'true'}
 				{#if displayImageSrc}
 					<Image
 						id={`${collapsibleId}-tool-calls-${attributes?.id}-display-image`}

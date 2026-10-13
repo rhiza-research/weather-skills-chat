@@ -452,13 +452,18 @@ def _pod_runner_port(pod: Optional[dict] = None) -> int:
     return _runner_port()
 
 
+# Baked into the runner image (sandbox/runtime/Dockerfile). /workspace is an
+# emptyDir, so a cache under it would hide the prewarmed wheels.
+RUNNER_UV_CACHE_DIR = "/opt/uv-cache"
+
+
 def _runner_workspace(chat_id: str) -> str:
-    # JuiceFS late-bind dest. /workspace is the runner emptyDir (uv cache).
+    # JuiceFS late-bind dest. /workspace is the runner emptyDir.
     return _env("SKILL_K8S_RUNNER_WORKSPACE", "/workspace/chat").rstrip("/") or "/workspace/chat"
 
 
 def _uv_cache_dir(workspace: str) -> str:
-    return str(Path(workspace).parent / ".uv-cache")
+    return _env("SKILL_K8S_UV_CACHE_DIR", RUNNER_UV_CACHE_DIR) or RUNNER_UV_CACHE_DIR
 
 
 def _runner_packs_root() -> str:

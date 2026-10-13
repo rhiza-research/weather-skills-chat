@@ -4,13 +4,15 @@ A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. T
 
 The runner is the only place skills run when it is turned on. Built-in tools and the code interpreter stay on the chat server.
 
+The runner image already holds the Python packages the Weather Skills catalog skills declare. The first skill on a new runner reuses that cache instead of downloading those packages. A skill that needs something else still downloads it on first use.
+
 ## What the user sees
 
 When a k8s tool runner is on (a real runner or the local emulator), an open saved chat shows **Weather skills runner paused**, **Weather skills runner starting**, or **Weather skills runner ready** on the right side of the top bar, to the left of Artifacts and the user menu. Paused means this chat has no runner yet, or the last one has stopped. Sending a message moves it from paused to starting. Ready means the runner is up and the installed skill packs are already on it. Packs are copied when the runner starts, not when each skill runs. Starting becomes ready without a refresh. A green dot pulses slowly when it is ready; a spinner shows while it starts; a gray dot shows when it is paused. Small text under the starting or ready status shows this chat's runner CPU and memory used of that runner's limits on the node (`0 / 3 CPU - 0 / 12 GB Memory` until the first sample, then `0.2 / 3 CPU - 0.4 / 12 GB Memory`). Those figures update while the chat is open, including in other tabs of the same chat. Click the ready status for current CPU, memory, and a **Memory, last minute** chart. That chart is one bar per sample from the last minute; a bar turns red if the runner was using disk swap. Landlock chats do not show it. It is hidden on temporary chats and when the k8s tool-runner path is off.
 
 ## Waiting
 
-If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. Tool cards do not appear while the runner is paused or still starting. When it is ready, thinking ends and the tool call shows in the same update. A skill that cannot start in time fails.
+If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. Skill calls are not listed while the runner is paused or still starting. When it is ready, that same line updates to the skill that is running. A skill that cannot start in time fails.
 
 Each skill call that does run resets the ten-minute idle timer.
 

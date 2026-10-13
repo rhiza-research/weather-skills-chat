@@ -20,6 +20,8 @@
 
 	export let onSourceClick = () => {};
 	export let onTaskClick = () => {};
+	export let groupActivity = true;
+	export let status = null;
 
 	let tokens = [];
 
@@ -42,6 +44,8 @@
 		{tokens}
 		{id}
 		{save}
+		{groupActivity}
+		{status}
 		{onTaskClick}
 		{onSourceClick}
 		on:update={(e) => {

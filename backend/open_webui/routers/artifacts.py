@@ -63,6 +63,23 @@ async def get_artifact_content(
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if is_zarr_store(target) or target.is_dir():
+        try:
+            data = pack_sandbox_zip(chat_id, [path])
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        name = target.name.rstrip("/") or "artifacts"
+        if not name.endswith(".zip"):
+            name = f"{name}.zip"
+        return StreamingResponse(
+            io.BytesIO(data),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
     if not target.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND

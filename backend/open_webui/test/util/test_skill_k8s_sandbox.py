@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from open_webui.utils.skill_k8s_sandbox import (
     PACKS_ANN,
+    RUNNER_UV_CACHE_DIR,
     WAITING_STATUS,
     _drop_runner,
     _emit_waiting,
@@ -72,7 +73,12 @@ class TransportTest(TestCase):
                 _runner_workspace("21f8fc6d-f50a-4875-8c8d-bade664d2054"),
                 "/workspace/chat",
             )
-            self.assertEqual(_uv_cache_dir("/workspace/chat"), "/workspace/.uv-cache")
+            self.assertEqual(_uv_cache_dir("/workspace/chat"), RUNNER_UV_CACHE_DIR)
+            self.assertEqual(RUNNER_UV_CACHE_DIR, "/opt/uv-cache")
+
+    def test_runner_uv_cache_override(self):
+        with patch.dict("os.environ", {"SKILL_K8S_UV_CACHE_DIR": "/tmp/uv-cache"}, clear=False):
+            self.assertEqual(_uv_cache_dir("/workspace/chat"), "/tmp/uv-cache")
 
 
 class RemoteScriptPathTest(TestCase):

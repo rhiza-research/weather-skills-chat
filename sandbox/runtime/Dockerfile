@@ -4,7 +4,7 @@ FROM python:3.12-slim-bookworm
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python \
-    UV_CACHE_DIR=/tmp/uv-cache \
+    UV_CACHE_DIR=/opt/uv-cache \
     WORKSPACE=/workspace \
     RUNTIME_PORT=8888 \
     PATH="/root/.local/bin:${PATH}"
@@ -37,15 +37,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-RUN uv python install 3.11 3.12
-
 COPY sandbox_runtime.py /usr/local/bin/sandbox_runtime.py
+COPY prewarm_uv_cache.py /opt/sandbox/prewarm_uv_cache.py
 
 RUN useradd --uid 1000 --create-home --shell /bin/bash runner \
-    && mkdir -p /workspace /opt/uv-python \
-    && chown -R 1000:1000 /workspace /opt/uv-python
+    && mkdir -p /workspace /opt/uv-python /opt/uv-cache \
+    && chown -R 1000:1000 /workspace /opt/uv-python /opt/uv-cache /opt/sandbox
 
 USER 1000
 WORKDIR /workspace
+
+RUN uv python install 3.11 3.12
+
+# /workspace is an emptyDir at runtime. Keep the skill-package cache on
+# /opt/uv-cache so chat's UV_CACHE_DIR matches this image layer.
+ARG PREWARM=true
+RUN if [ "$PREWARM" = "true" ]; then python3 /opt/sandbox/prewarm_uv_cache.py; fi
+
 EXPOSE 8888
 CMD ["python3", "-u", "/usr/local/bin/sandbox_runtime.py"]

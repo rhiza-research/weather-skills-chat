@@ -138,6 +138,10 @@
 	let model = null;
 	$: model = $models.find((m) => m.id === message.model);
 
+	$: latestStatus = (
+		message?.statusHistory ?? [...(message?.status ? [message.status] : [])]
+	).at(-1) ?? null;
+
 	let edit = false;
 	let editedContent = '';
 	let editTextAreaElement: HTMLTextAreaElement;
@@ -694,6 +698,7 @@
 										{history}
 										content={message.content}
 										sources={message.sources}
+										status={latestStatus}
 										floatingButtons={message?.done && !readOnly}
 										save={!readOnly}
 										{model}
@@ -759,7 +764,12 @@
 									{@const status = (
 										message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]
 									).at(-1)}
-									{#if !status?.hidden}
+									{#if !status?.hidden &&
+										!(
+											String(message?.content ?? '').includes('<details') &&
+											(status?.action === 'waiting_response' ||
+												status?.action === 'weather_skills_runner')
+										)}
 										<div class="status-description flex items-center gap-2 py-0.5">
 											{#if status?.done === false}
 												<div class="">

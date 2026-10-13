@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 DEPENDS_ON_PARAM = "depends_on"
 DISPLAY_PARAM = "display"
+ACTIVITY_PARAM = "activity"
 
 DEPENDS_ON_SCHEMA = {
     "type": "array",
@@ -29,6 +30,15 @@ DISPLAY_SCHEMA = {
     ),
 }
 
+ACTIVITY_SCHEMA = {
+    "type": "string",
+    "description": (
+        "Optional. When several tools run in the same turn, a short phrase for "
+        'the whole batch, such as "Fetching IMERG and clipping to Kenya". '
+        "Set it on one of the calls. Each call should still set `display`."
+    ),
+}
+
 
 def _ensure_parameter_properties(spec: dict | None) -> dict:
     spec = spec if isinstance(spec, dict) else {}
@@ -42,11 +52,12 @@ def _ensure_parameter_properties(spec: dict | None) -> dict:
 
 
 def inject_depends_on_spec(spec: dict | None) -> dict:
-    """Add reserved depends_on and display parameters to a function spec."""
+    """Add reserved depends_on, display, and activity parameters to a function spec."""
     spec = spec if isinstance(spec, dict) else {}
     props = _ensure_parameter_properties(spec)
     props.setdefault(DEPENDS_ON_PARAM, dict(DEPENDS_ON_SCHEMA))
     props.setdefault(DISPLAY_PARAM, dict(DISPLAY_SCHEMA))
+    props.setdefault(ACTIVITY_PARAM, dict(ACTIVITY_SCHEMA))
     return spec
 
 
@@ -72,9 +83,10 @@ def strip_depends_on(params: dict | None) -> tuple[dict, list[str]]:
 
 
 def strip_display(params: dict | None) -> dict:
-    """Drop the reserved display phrase before a tool function runs."""
+    """Drop reserved display and activity phrases before a tool function runs."""
     cleaned = dict(params or {})
     cleaned.pop(DISPLAY_PARAM, None)
+    cleaned.pop(ACTIVITY_PARAM, None)
     return cleaned
 
 

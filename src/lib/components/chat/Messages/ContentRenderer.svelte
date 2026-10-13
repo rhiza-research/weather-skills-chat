@@ -19,6 +19,7 @@
 
 	export let onSourceClick = () => {};
 	export let onTaskClick = () => {};
+	export let status = null;
 
 	export let onAddMessages = () => {};
 
@@ -122,6 +123,7 @@
 		{content}
 		{model}
 		{save}
+		{status}
 		sourceIds={(sources ?? []).reduce((acc, s) => {
 			let ids = [];
 			s.document.forEach((document, index) => {

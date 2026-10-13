@@ -7,6 +7,7 @@ The image is published as `ghcr.io/rhiza-research/weather-skills-chat-sandbox` f
 ## What is in the image
 
 - `uv` and CPython 3.11 / 3.12, so a skill can `uv run --script`
+- A uv package cache at `/opt/uv-cache`, filled at image build from the Weather Skills catalog on `main`. Chat sets `UV_CACHE_DIR` to that same path. `/workspace` is an emptyDir on the cluster, so the cache cannot live there.
 - Chromium and the shared libraries Kaleido 1+ needs for Plotly `write_image`
 - `sandbox_runtime.py`, an HTTP server on port 8888
 
@@ -30,4 +31,10 @@ This runtime is a stand-in until we switch the pod to `sandboxd`. Bind/unbind of
 
 ```bash
 docker build -t weather-skills-chat-sandbox ./sandbox/runtime
+```
+
+The build clones the Weather Skills catalog on `main` and `uv export --script` / `uv pip install`s each skill script so wheels land in `/opt/uv-cache`. `PREWARM=false` skips that for a faster local image that still talks the runtime protocol.
+
+```bash
+docker build --build-arg PREWARM=false -t weather-skills-chat-sandbox ./sandbox/runtime
 ```

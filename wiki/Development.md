@@ -29,7 +29,7 @@ Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, 
 | `landlock` | Linux with Landlock | Chat only |
 | `emulator` | Exercise the [[Tool Runner]] UI and path with no cluster | Chat plus the emulator |
 
-The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
+The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools and the same cached skill packages. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
 
 To run the emulator by hand instead of Compose, `uv run --script sandbox/emulator/emulator.py` and point the backend at `http://127.0.0.1:18080`.
 
