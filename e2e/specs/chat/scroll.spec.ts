@@ -434,3 +434,30 @@ test('a reply below a held line stays put and shows New messages', async ({ page
 	await expect(newMessagesButton(page)).toHaveCount(0);
 	await expect.poll(() => distanceFromBottom(page)).toBeLessThan(24);
 });
+
+test('scrolling to the bottom clears New messages', async ({ page }) => {
+	const { id } = await seedChat('scroll clears new messages', longReply());
+	await page.goto(`/c/${id}`);
+	await expect(page.getByText(LINE, { exact: false }).first()).toBeAttached();
+	await placeLine(page, LINE, 48);
+	await page.waitForTimeout(250);
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+	await expect(newMessagesButton(page)).toHaveCount(0);
+
+	await emitChatTurn(page, id, {
+		userId: 'user-2',
+		assistantId: 'assistant-2',
+		parentId: 'assistant-1',
+		userContent: 'Continue.',
+		assistantContent: freshReply()
+	});
+	await expect(page.getByText('fresh paragraph 1 arrived below.')).toBeAttached();
+	await expect(newMessagesButton(page)).toBeVisible();
+	expect(await distanceFromBottom(page)).toBeGreaterThan(80);
+
+	await page.locator('#messages-container').evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	await expect(newMessagesButton(page)).toHaveCount(0);
+	await expect.poll(() => distanceFromBottom(page)).toBeLessThan(24);
+});

@@ -39,7 +39,6 @@ _proxy_url: Optional[str] = None
 _forward_urls: dict[tuple[str, int], str] = {}
 _children: list[subprocess.Popen] = []
 _bind_token: Optional[str] = None
-_READY_CACHE_TTL = 15.0
 _ready_cache: dict[str, tuple[float, dict]] = {}
 _starts: dict[str, asyncio.Task] = {}
 
@@ -322,6 +321,13 @@ WAITING_STATUS = "Waiting on weather skills runner"
 WAITING_ACTION = "weather_skills_runner"
 
 
+def public_runner_state(state: Optional[str]) -> str:
+    """Map internal runner_status to the top-bar / websocket state."""
+    if state in ("ready", "starting"):
+        return state
+    return "paused"
+
+
 def _claim_ready(claim: dict) -> bool:
     for cond in (claim.get("status") or {}).get("conditions") or []:
         if cond.get("type") in ("Ready", "SandboxReady") and cond.get("status") == "True":
@@ -549,13 +555,20 @@ def _installed_packs() -> list[Path]:
 
 
 def _cached_runner(chat_id: str) -> Optional[dict]:
+    """Return the last good runner for this chat.
+
+    Kept for the claim idle lifetime and refreshed on use, so an open chat
+    does not re-list packs or re-bind. Dropped when the runner fails or the
+    idle timer runs out with no use.
+    """
     hit = _ready_cache.get(chat_id)
     if not hit:
         return None
     stamp, info = hit
-    if time.monotonic() - stamp > _READY_CACHE_TTL:
+    if time.monotonic() - stamp > float(_ttl_seconds()):
         _ready_cache.pop(chat_id, None)
         return None
+    _ready_cache[chat_id] = (time.monotonic(), info)
     return info
 
 
@@ -568,6 +581,16 @@ def _drop_runner(chat_id: str) -> None:
     task = _starts.get(chat_id)
     if task is not None and task.done():
         _starts.pop(chat_id, None)
+
+
+async def _replace_broken_runner(chat_id: str, *, emitter=None) -> dict:
+    """Forget a runner we can no longer reach and start another."""
+    _drop_runner(chat_id)
+    try:
+        await delete_claim(chat_id)
+    except Exception:
+        log.debug("delete claim after broken runner failed", exc_info=True)
+    return await ensure_runner(chat_id, emitter=emitter)
 
 
 def _pack_names(paths: list[Path] | None = None) -> set[str]:
@@ -697,8 +720,8 @@ def _start_in_flight(chat_id: str) -> bool:
 def start_runner(chat_id: str) -> asyncio.Task:
     """Kick the one start for this chat. Does not wait. Safe to call again.
 
-    Reuses an in-flight start, or a start that just finished while the ready
-    cache is still warm. After the runner dies (idle stop) the cache expires
+    Reuses an in-flight start, or a start that finished while this chat's
+    runner is still remembered as ready. After idle stop the cache expires
     and the next call starts again.
     """
     with _lock:
@@ -754,21 +777,32 @@ async def _run_start(chat_id: str) -> dict:
         raise
 
 
-async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
-    """Wait on runner status before tool cards. Starts the runner if needed."""
-    if not _k8s_runner_path_on():
-        return
+def runner_ready(chat_id: Optional[str]) -> bool:
+    """True when a skill can run without waiting. Cache only — no k8s /packs probe."""
     if not chat_id or chat_id == "local":
+        return True
+    if not _k8s_runner_path_on():
+        return True
+    return _cached_runner(str(chat_id)) is not None
+
+
+async def emit_runner_waiting(emitter, done: bool) -> None:
+    await _emit_waiting(emitter, done)
+
+
+async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
+    """Wait until this chat's runner is ready enough to run a skill.
+
+    Does not probe the runner. That probe (claim + packs) was delaying every
+    tool card, including when the runner was already up. Leaves the waiting
+    line up so the caller can paint tool cards first, then hide it.
+    """
+    if runner_ready(chat_id):
         return
     chat_id = str(chat_id)
     task = start_runner(chat_id)
-    if (await runner_status(chat_id)).get("state") == "ready":
-        return
     await _emit_waiting(emitter, False)
-    try:
-        await asyncio.wait_for(asyncio.shield(task), timeout=180)
-    finally:
-        await _emit_waiting(emitter, True)
+    await asyncio.wait_for(asyncio.shield(task), timeout=180)
 
 
 async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
@@ -777,7 +811,11 @@ async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
 
 
 async def runner_status(chat_id: str) -> dict:
-    """Read readiness. Does not start the runner or wait on the start task."""
+    """Read readiness. Does not start the runner or wait on the start task.
+
+    A ready result is remembered so later status and tool calls do not list
+    packs again. Packs are listed only when the pod is not already marked ready.
+    """
     name = claim_name(chat_id)
     cached = _cached_runner(chat_id)
     if cached:
@@ -795,6 +833,17 @@ async def runner_status(chat_id: str) -> dict:
         return {"state": "starting", "claim": name}
     try:
         if await _packs_ready_on_runner(pod):
+            pod_ip = (pod.get("status") or {}).get("podIP")
+            if pod_ip:
+                _store_runner(
+                    chat_id,
+                    {
+                        "claim": claim,
+                        "pod": pod,
+                        "pod_ip": pod_ip,
+                        "pod_name": _pod_ref(claim),
+                    },
+                )
             return {"state": "ready", "claim": name}
     except Exception:
         log.debug("runner pack listing failed", exc_info=True)
@@ -802,21 +851,25 @@ async def runner_status(chat_id: str) -> dict:
 
 
 async def runner_metrics(chat_id: str) -> dict:
-    claim = await get_claim(chat_id)
-    if not claim or not _claim_ready(claim):
-        raise RuntimeError("tool runner is not ready")
-    pod_name = _pod_ref(claim)
-    pod = await get_pod(pod_name)
-    uid = (pod.get("metadata") or {}).get("uid")
-    if not uid:
-        raise RuntimeError("tool runner pod has no uid")
-    base = await _bind_base(pod)
-    headers = {"Authorization": f"Bearer {await bind_token()}"}
-    return await _http_json(
-        "GET",
-        f"{base}/metrics?pod_uid={quote(uid)}",
-        headers=headers,
-    )
+    try:
+        claim = await get_claim(chat_id)
+        if not claim or not _claim_ready(claim):
+            raise RuntimeError("tool runner is not ready")
+        pod_name = _pod_ref(claim)
+        pod = await get_pod(pod_name)
+        uid = (pod.get("metadata") or {}).get("uid")
+        if not uid:
+            raise RuntimeError("tool runner pod has no uid")
+        base = await _bind_base(pod)
+        headers = {"Authorization": f"Bearer {await bind_token()}"}
+        return await _http_json(
+            "GET",
+            f"{base}/metrics?pod_uid={quote(uid)}",
+            headers=headers,
+        )
+    except Exception:
+        _drop_runner(chat_id)
+        raise
 
 
 async def exec_on_runner(
@@ -866,9 +919,16 @@ async def run_skill_on_runner(
     }
     runner_env.update(env)
     exec_started = time.monotonic()
-    result = await exec_on_runner(
-        chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
-    )
+    try:
+        result = await exec_on_runner(
+            chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+        )
+    except Exception:
+        log.info("tool runner unreachable chat=%s, replacing", chat_id, exc_info=True)
+        info = await _replace_broken_runner(chat_id, emitter=emitter)
+        result = await exec_on_runner(
+            chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+        )
     log.info(
         "skill exec done chat=%s script=%s elapsed=%.2fs exit=%s",
         chat_id,

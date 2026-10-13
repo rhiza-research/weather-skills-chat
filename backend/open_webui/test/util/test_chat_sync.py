@@ -613,6 +613,53 @@ class TestEmitterAndRecheck(_NoBackgroundPublish, AbstractPostgresTest):
                 task.cancel()
             chat_realtime._runner_tasks.clear()
 
+    def test_an_open_chat_does_not_start_an_absent_runner(self, monkeypatch):
+        from open_webui.utils import chat_realtime
+
+        samples = []
+        starts = []
+
+        async def fake_status(_chat_id):
+            return {"state": "absent"}
+
+        async def fake_emit(_chat_id, payload):
+            samples.append(payload)
+
+        def fake_start(chat_id):
+            starts.append(chat_id)
+
+        monkeypatch.setattr(chat_realtime, "RUNNER_SAMPLE_SECONDS", 0.02)
+        monkeypatch.setattr("open_webui.env.tool_runner_enabled", lambda: True)
+        monkeypatch.setattr(
+            "open_webui.utils.skill_k8s_sandbox.runner_status", fake_status
+        )
+        monkeypatch.setattr(
+            "open_webui.utils.skill_k8s_sandbox.start_runner", fake_start
+        )
+        monkeypatch.setattr(chat_realtime, "emit_chat_runner", fake_emit)
+        chat_realtime._runner_tasks.clear()
+
+        async def run():
+            chat_realtime.set_watch("sid-1", "owner", [self.chat.id], self.chat.id)
+            chat_realtime.schedule_runner_metrics(self.chat.id)
+            for _ in range(50):
+                if samples:
+                    break
+                await asyncio.sleep(0.02)
+            assert samples
+            assert samples[0]["state"] == "paused"
+            assert starts == []
+            chat_realtime.clear_watch("sid-1")
+
+        try:
+            asyncio.run(run())
+        finally:
+            chat_realtime.clear_watch("sid-1")
+            tasks = list(chat_realtime._runner_tasks.values())
+            chat_realtime._runner_tasks.clear()
+            for task in tasks:
+                task.cancel()
+
 
 class TestStreamedPartsAreSaved(AbstractPostgresTest):
     def test_the_emitter_saves_usage_sources_runs_files_and_the_latest_status(self):

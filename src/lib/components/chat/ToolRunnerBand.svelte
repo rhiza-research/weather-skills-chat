@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import { chatId, chatRunner, config, temporaryChatEnabled } from '$lib/stores';
-	import { startToolRunner } from '$lib/apis/chats';
+	import { getToolRunner } from '$lib/apis/chats';
 
 	const i18n = getContext('i18n');
 
@@ -10,8 +10,9 @@
 	const MEM_BYTES = MEM_GIB * 1024 ** 3;
 
 	type Sample = { t: number; cpu: number; memory: number; swap: boolean };
+	type BandState = 'hidden' | 'paused' | 'starting' | 'ready';
 
-	let state: 'hidden' | 'starting' | 'ready' = 'hidden';
+	let state: BandState = 'hidden';
 	let open = false;
 	let samples: Sample[] = [];
 	let lastCpuUsage: number | null = null;
@@ -27,8 +28,8 @@
 	$: if (visible && $chatId && $chatId !== startedFor) {
 		startedFor = $chatId;
 		resetBand();
-		state = 'starting';
-		ensure($chatId);
+		state = 'paused';
+		readStatus($chatId);
 	} else if (!visible) {
 		startedFor = '';
 		state = 'hidden';
@@ -49,18 +50,25 @@
 		memLimitBytes = MEM_BYTES;
 	};
 
-	const ensure = async (id: string) => {
+	const readStatus = async (id: string) => {
 		if (ensuring) return;
 		ensuring = true;
-		if (state !== 'ready') state = 'starting';
 		try {
-			const res = await startToolRunner(localStorage.token, id);
+			const res = await getToolRunner(localStorage.token, id);
 			if (id !== $chatId) return;
-			if (res?.state === 'ready') state = 'ready';
-			else if (res?.enabled === false) state = 'hidden';
-			else if (state !== 'ready') state = 'starting';
+			if (res?.enabled === false) {
+				state = 'hidden';
+				return;
+			}
+			if (
+				(state === 'starting' || state === 'ready') &&
+				(res?.state === 'paused' || res?.state === 'absent')
+			) {
+				return;
+			}
+			applyLive(res);
 		} catch {
-			if (id === $chatId && state !== 'ready') state = 'starting';
+			if (id === $chatId && state === 'hidden') state = 'paused';
 		} finally {
 			ensuring = false;
 		}
@@ -103,6 +111,11 @@
 		else if (row.state === 'starting') {
 			if (state === 'ready') open = false;
 			state = 'starting';
+		} else if (row.state === 'paused' || row.state === 'absent') {
+			if (state === 'ready') open = false;
+			state = 'paused';
+		} else if (row.state === 'off') {
+			state = 'hidden';
 		}
 		if (row.metrics) applyMetrics(row.metrics);
 	};
@@ -133,7 +146,9 @@
 	$: statusLabel =
 		state === 'ready'
 			? $i18n.t('Weather skills runner ready')
-			: $i18n.t('Weather skills runner starting');
+			: state === 'paused'
+				? $i18n.t('Weather skills runner paused')
+				: $i18n.t('Weather skills runner starting');
 	$: cpuPct = latest && cpuLimit ? Math.min(100, (latest.cpu / cpuLimit) * 100) : 0;
 	$: memPct = latest && memLimitBytes ? Math.min(100, (latest.memory / memLimitBytes) * 100) : 0;
 	$: inSwap = Boolean(latest?.swap);
@@ -155,6 +170,9 @@
 				<span
 					class="inline-block size-2.5 shrink-0 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"
 				></span>
+			{:else if state === 'paused'}
+				<span class="inline-block size-2.5 shrink-0 rounded-full bg-gray-400 dark:bg-gray-500"
+				></span>
 			{:else}
 				<span class="tool-runner-dot inline-block size-2.5 shrink-0 rounded-full bg-emerald-500"
 				></span>
@@ -163,8 +181,11 @@
 				<span class="text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap"
 					>{statusLabel}</span
 				>
-				<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">{resources}</span
-				>
+				{#if state !== 'paused'}
+					<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+						>{resources}</span
+					>
+				{/if}
 			</div>
 		</button>
 		{#if open && state === 'ready'}

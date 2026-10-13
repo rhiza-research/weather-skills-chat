@@ -7,7 +7,7 @@ Chats, the chat list, and each chat's files update on their own while the app is
 - **Messages.** A message sent in one tab appears in every other open tab of the same chat, and the reply streams there as it is written.
 - **The chat list.** A chat moves to the top of Today when a message is sent or edited in it, or when it is pinned, archived, moved to a folder, or shared. New chats appear, and deleted chats disappear, in every open tab.
 - **Files.** The file list next to a chat updates when a skill or an upload adds or changes files. See [[Chat Artifacts]].
-- **Tool runner.** Opening a saved chat starts its [[Tool Runner]] when that path is on. Other tabs of the same chat see the same ready or starting status in the top bar, and the same CPU and memory while that chat is open. A skill that waits for a runner pod shows **Waiting on weather skills runner** on the assistant message. Tool calls and their elapsed time appear after the runner is ready. That wait status does not stay up while the skill itself is installing or running.
+- **Tool runner.** Opening a saved chat shows its [[Tool Runner]] status when that path is on — paused if none is running, or starting or ready if one already is. Sending a message starts a runner if that chat had none. Other tabs of the same chat see the same status in the top bar, and the same CPU and memory while a runner is up. If a skill is called while the runner is paused or starting, the assistant keeps a waiting line (**Waiting for model…** or **Waiting on weather skills runner**) until the runner is ready; the tool call is not shown yet. If the runner dies while the chat is open, the next skill starts a new one and the top bar goes back to starting, then ready. That wait status does not stay up while the skill itself is installing or running.
 - **Shared chats.** Members of an organization see these updates for chats shared with it, and a deleted chat leaves their open pages. Who can read a chat, and what happens when it stops being shared, is described on [[Organizations]].
 
 ## Switching chats
@@ -16,7 +16,7 @@ After sign-in, the app keeps the chats used in the past week in the browser, a f
 
 ## Reading position
 
-Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up — including when a skill finishes — the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
+Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up — including when a skill finishes — the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Scrolling back to the newest message also clears that button. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
 
 ## Changes from two places at once
 

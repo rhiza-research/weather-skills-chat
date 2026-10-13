@@ -1153,9 +1153,21 @@ export const deleteAllChats = async (token: string) => {
 	return res;
 };
 
-export const startToolRunner = async (token: string, chatId: string) => {
+export const getToolRunner = async (token: string, chatId: string) => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner`, {
 		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) return { enabled: false, state: 'off' };
+	return res.json();
+};
+
+export const startToolRunner = async (token: string, chatId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner`, {
+		method: 'POST',
 		headers: {
 			Accept: 'application/json',
 			authorization: `Bearer ${token}`

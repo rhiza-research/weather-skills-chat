@@ -427,9 +427,9 @@ def schedule_runner_metrics(chat_id: str) -> None:
     async def _run():
         from open_webui.env import tool_runner_enabled as still_enabled
         from open_webui.utils.skill_k8s_sandbox import (
+            public_runner_state,
             runner_metrics,
             runner_status,
-            start_runner,
         )
 
         try:
@@ -438,13 +438,7 @@ def schedule_runner_metrics(chat_id: str) -> None:
                     break
                 try:
                     status = await runner_status(chat_id)
-                    state = status.get("state") or "absent"
-                    if state == "absent":
-                        start_runner(chat_id)
-                        status = await runner_status(chat_id)
-                        state = status.get("state") or "starting"
-                    if state == "absent":
-                        state = "starting"
+                    state = public_runner_state(status.get("state"))
                     payload = {"id": chat_id, "state": state, "metrics": None}
                     if state == "ready":
                         try:

@@ -3,6 +3,7 @@ from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import patch
 
 from open_webui.utils.skill_k8s_sandbox import (
+    PACKS_ANN,
     WAITING_STATUS,
     _drop_runner,
     _emit_waiting,
@@ -21,8 +22,12 @@ from open_webui.utils.skill_k8s_sandbox import (
     emulator_enabled,
     in_cluster,
     remote_script_path,
+    public_runner_state,
     runner_needs_wait,
+    runner_metrics,
+    runner_ready,
     runner_status,
+    run_skill_on_runner,
     start_runner,
     use_direct_http,
 )
@@ -207,23 +212,19 @@ class AwaitRunnerForChatTest(IsolatedAsyncioTestCase):
         async def emitter(event):
             events.append(event)
 
-        async def already_done():
-            return {"pod_ip": "10.0.0.1"}
-
-        task = __import__("asyncio").create_task(already_done())
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
         with patch.dict(
             "os.environ",
             {"SKILL_SANDBOX_BACKEND": "k8s", "SKILL_K8S_SANDBOX_ENABLED": "true"},
             clear=False,
-        ), patch(
-            "open_webui.utils.skill_k8s_sandbox.start_runner", return_value=task
-        ) as start, patch(
-            "open_webui.utils.skill_k8s_sandbox.runner_status",
-            return_value={"state": "ready"},
-        ):
+        ), patch("open_webui.utils.skill_k8s_sandbox.start_runner") as start, patch(
+            "open_webui.utils.skill_k8s_sandbox.runner_status"
+        ) as status:
             await await_runner_for_chat("chat-1", emitter=emitter)
-            start.assert_called_once_with("chat-1")
+            start.assert_not_called()
+            status.assert_not_called()
         self.assertEqual(events, [])
+        self.assertTrue(runner_ready("chat-1"))
 
     async def test_shows_waiting_until_start_finishes(self):
         import asyncio
@@ -246,9 +247,8 @@ class AwaitRunnerForChatTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.start_runner", return_value=task
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox.runner_status",
-            return_value={"state": "starting"},
-        ):
+            "open_webui.utils.skill_k8s_sandbox.runner_status"
+        ) as status:
             wait = asyncio.create_task(await_runner_for_chat("chat-1", emitter=emitter))
             for _ in range(20):
                 if events:
@@ -257,9 +257,10 @@ class AwaitRunnerForChatTest(IsolatedAsyncioTestCase):
             self.assertTrue(events)
             self.assertEqual(events[0]["data"]["description"], WAITING_STATUS)
             self.assertFalse(events[0]["data"]["done"])
+            status.assert_not_called()
             finish.set()
             await wait
-        self.assertTrue(events[-1]["data"]["hidden"])
+        self.assertFalse(events[-1]["data"]["done"])
 
 
 class DeleteClaimTest(IsolatedAsyncioTestCase):
@@ -316,6 +317,24 @@ class StartRunnerTest(IsolatedAsyncioTestCase):
             await second
         self.assertEqual(runs["n"], 2)
 
+    async def test_does_not_start_again_while_the_runner_is_still_remembered(self):
+        clock = {"t": 1000.0}
+
+        async def body(chat_id):
+            return {"pod_ip": "10.0.0.1"}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.time.monotonic",
+            side_effect=lambda: clock["t"],
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._run_start", side_effect=body
+        ):
+            first = start_runner("chat-1")
+            await first
+            _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
+            clock["t"] += 20.0
+            self.assertIs(start_runner("chat-1"), first)
+
 
 class RunnerStatusTest(IsolatedAsyncioTestCase):
     def setUp(self):
@@ -352,6 +371,30 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ):
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "ready")
+        self.assertIsNotNone(_ready_cache.get("chat-1"))
+
+    async def test_pod_marked_ready_does_not_list_packs(self):
+        claim = {
+            "status": {"ready": True, "sandbox": {"name": "runner-1"}},
+        }
+        pod = {
+            "metadata": {
+                "name": "runner-1",
+                "annotations": {PACKS_ANN: "ready"},
+            },
+            "status": {"podIP": "10.0.0.8"},
+        }
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim", return_value=claim
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._listed_packs"
+        ) as listed:
+            status = await runner_status("chat-1")
+        listed.assert_not_called()
+        self.assertEqual(status["state"], "ready")
+        self.assertIsNotNone(_ready_cache.get("chat-1"))
 
     async def test_starting_when_packs_are_missing(self):
         claim = {
@@ -374,3 +417,89 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ):
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "starting")
+
+
+class PublicRunnerStateTest(TestCase):
+    def test_maps_absent_to_paused(self):
+        self.assertEqual(public_runner_state("absent"), "paused")
+        self.assertEqual(public_runner_state(None), "paused")
+
+    def test_keeps_starting_and_ready(self):
+        self.assertEqual(public_runner_state("starting"), "starting")
+        self.assertEqual(public_runner_state("ready"), "ready")
+
+
+class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def test_a_lost_exec_starts_a_new_runner(self):
+        infos = [
+            {"pod_ip": "10.0.0.1", "pod_name": "old"},
+            {"pod_ip": "10.0.0.2", "pod_name": "new"},
+        ]
+        execs = []
+
+        async def ensure(chat_id, *, emitter=None):
+            info = infos.pop(0)
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            execs.append(kwargs.get("info"))
+            if len(execs) == 1:
+                raise RuntimeError("POST http://10.0.0.1:8888/exec -> 502")
+            return {"exit_code": 0, "stdout": "ok", "stderr": ""}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.ensure_runner", side_effect=ensure
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.exec_on_runner", side_effect=exec_on
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim"
+        ) as delete, patch(
+            "open_webui.utils.skill_k8s_sandbox.remote_script_path",
+            return_value="/workspace/.skill-packs/x/script.py",
+        ):
+            result = await run_skill_on_runner(
+                chat_id="chat-1",
+                skill_dir=Path("/data/skills/x"),
+                script_path=Path("/data/skills/x/script.py"),
+                args=[],
+                env={},
+                timeout=30,
+            )
+        self.assertTrue(result["ok"])
+        delete.assert_awaited()
+        self.assertEqual(len(execs), 2)
+        self.assertEqual(execs[1]["pod_ip"], "10.0.0.2")
+
+    async def test_failed_metrics_forget_a_ready_runner(self):
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim",
+            side_effect=RuntimeError("404"),
+        ):
+            with self.assertRaises(RuntimeError):
+                await runner_metrics("chat-1")
+        self.assertIsNone(_ready_cache.get("chat-1"))
+
+    async def test_start_after_drop_is_a_new_runner(self):
+        runs = {"n": 0}
+
+        async def body(chat_id):
+            runs["n"] += 1
+            info = {"pod_ip": f"10.0.0.{runs['n']}"}
+            _store_runner(chat_id, info)
+            return info
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._run_start", side_effect=body
+        ):
+            first = start_runner("chat-1")
+            await first
+            _drop_runner("chat-1")
+            second = start_runner("chat-1")
+            self.assertIsNot(second, first)
+            await second
+        self.assertEqual(runs["n"], 2)

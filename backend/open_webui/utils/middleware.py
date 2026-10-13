@@ -2226,14 +2226,15 @@ async def process_chat_response(
                                         ) or delta.get("reasoning")
                                         value = delta.get("content")
                                         if (
-                                            delta_tool_calls
-                                            or reasoning_content
-                                            or (value is not None and value != "")
+                                            not delta_tool_calls
+                                            and (
+                                                reasoning_content
+                                                or (value is not None and value != "")
+                                            )
                                         ):
                                             await heartbeat.mark_activity()
 
                                         if delta_tool_calls:
-                                            close_open_reasoning_block(content_blocks)
                                             for delta_tool_call in delta_tool_calls:
                                                 tool_call_index = delta_tool_call.get(
                                                     "index"
@@ -2385,31 +2386,27 @@ async def process_chat_response(
                                                     )
                                                 )
 
+                                            data = {
+                                                "content": serialize_content_blocks(
+                                                    content_blocks
+                                                ),
+                                            }
                                             if ENABLE_REALTIME_CHAT_SAVE:
                                                 await asyncio.to_thread(
                                                     Chats.upsert_message_to_chat_by_id_and_message_id,
                                                     metadata["chat_id"],
                                                     metadata["message_id"],
-                                                    {
-                                                        "content": serialize_content_blocks(
-                                                            content_blocks
-                                                        ),
-                                                    },
+                                                    data,
                                                     bump_revision=False,
                                                 )
-                                            else:
-                                                data = {
-                                                    "content": serialize_content_blocks(
-                                                        content_blocks
-                                                    ),
-                                                }
 
-                                        await event_emitter(
-                                            {
-                                                "type": "chat:completion",
-                                                "data": data,
-                                            }
-                                        )
+                                        if reasoning_content or value:
+                                            await event_emitter(
+                                                {
+                                                    "type": "chat:completion",
+                                                    "data": data,
+                                                }
+                                            )
                             except Exception as e:
                                 done = "data: [DONE]" in line
                                 if done:
@@ -2458,7 +2455,9 @@ async def process_chat_response(
                                 events_seen=stream_events_seen,
                             )
                     finally:
-                        await heartbeat.stop(clear=True)
+                        # Keep "Waiting for model…" up until tool cards (or the
+                        # runner wait) replace it. Clearing here is the empty gap.
+                        await heartbeat.stop(clear=not response_tool_calls)
 
                 await stream_body_handler(response)
                 close_open_reasoning_block(content_blocks)
@@ -2487,6 +2486,30 @@ async def process_chat_response(
                         depends_list.append(deps)
 
                     close_open_reasoning_block(content_blocks)
+                    hide_runner_wait = None
+                    try:
+                        from open_webui.utils.skill_k8s_sandbox import (
+                            await_runner_for_chat,
+                            emit_runner_waiting,
+                            runner_ready,
+                        )
+
+                        hide_runner_wait = emit_runner_waiting
+                        if not runner_ready(metadata.get("chat_id")):
+                            await await_runner_for_chat(
+                                metadata.get("chat_id"), event_emitter
+                            )
+                    except Exception:
+                        log.info("tool runner wait failed", exc_info=True)
+
+                    content_blocks.append(
+                        {
+                            "type": "tool_calls",
+                            "content": response_tool_calls,
+                            "started_at": time.time(),
+                            "tool_timing": {},
+                        }
+                    )
                     if event_emitter:
                         await event_emitter(
                             {
@@ -2497,35 +2520,12 @@ async def process_chat_response(
                             }
                         )
                         try:
-                            from open_webui.utils.skill_k8s_sandbox import (
-                                await_runner_for_chat,
-                            )
-
-                            await await_runner_for_chat(
-                                metadata.get("chat_id"), event_emitter
-                            )
+                            if hide_runner_wait:
+                                await hide_runner_wait(event_emitter, True)
                         except Exception:
-                            log.info(
-                                "tool runner wait before tools failed", exc_info=True
-                            )
-
-                    content_blocks.append(
-                        {
-                            "type": "tool_calls",
-                            "content": response_tool_calls,
-                            "started_at": time.time(),
-                            "tool_timing": {},
-                        }
-                    )
-
-                    await event_emitter(
-                        {
-                            "type": "chat:completion",
-                            "data": {
-                                "content": serialize_content_blocks(content_blocks),
-                            },
-                        }
-                    )
+                            pass
+                    if waiting_heartbeat is not None:
+                        await waiting_heartbeat.stop(clear=True)
 
                     tools = metadata.get("tools", {})
 
