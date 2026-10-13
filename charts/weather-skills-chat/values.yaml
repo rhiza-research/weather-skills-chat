@@ -126,6 +126,19 @@ skillVenvs:
 database:
   url: ""
 
+# Sets REDIS_URL. This chart does not install Redis. The MCP endpoint's one-time artifact link
+# claims each nonce in this store with GETDEL; when this is empty, the endpoint refuses that link.
+# Open WebUI also stores its persistent configuration here when this is set.
+redis:
+  url: ""
+
+mcp:
+  # Sets MCP_OAUTH_ALLOWED_REDIRECT_URIS: redirect URIs an MCP client may use besides loopback http
+  # addresses. Each entry is an exact URL or a prefix ending in "*". Empty allows only loopback http.
+  # A prefix matches any path that starts with it, including sibling paths: "https://host/cb*"
+  # also matches "https://host/cb-other".
+  oauthAllowedRedirectUris: []
+
 langfuse:
   enabled: false
   host: ""
@@ -215,6 +228,12 @@ ollama:
 
 webui:
   name: Weather Skills
+  # The address clients use to reach this service, with no trailing slash. The MCP endpoint's
+  # resource identifier is this address with /mcp appended, and its built-in authorization
+  # server's issuer is this address. Must be https unless the host is a loopback name; otherwise
+  # the application does not start. Empty omits the env var, and the application then uses its
+  # own default or the value saved in the admin settings. The endpoint reads it at startup, so a
+  # value changed later in the admin settings takes effect only after a restart.
   url: ""
   # Shown to users on error screens / failed responses. Empty uses the
   # backend default (help@weather-skills.org).

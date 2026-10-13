@@ -7,6 +7,7 @@
 - [[Usage and Spending Caps]]
 - [[Invitations]]
 - [[Automations]]
+- [[MCP Endpoint]]
 - [[Secrets]]
 - [[Preferences]]
 - [[Live Chat Updates]]

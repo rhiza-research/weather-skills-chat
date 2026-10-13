@@ -134,6 +134,14 @@ spec:
             - name: WEBUI_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.mcp.oauthAllowedRedirectUris }}
+            - name: MCP_OAUTH_ALLOWED_REDIRECT_URIS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- with .Values.redis.url }}
+            - name: REDIS_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.emailTool.smtpHost }}
             - name: EMAIL_TOOL_SMTP_HOST
               value: {{ . | quote }}
