@@ -1,7 +1,9 @@
-# Local HTTP/2 front door for the app container.
+# Local HTTP/2 front door. ./run-compose.sh --testing starts this as `caddy`.
+# Standalone (defaults to the host-published app port):
 #   docker run -d --name weather-skills-h2 --restart unless-stopped \
 #     -p 3443:443 \
 #     -v "$PWD/Caddyfile.local-h2:/etc/caddy/Caddyfile:ro" \
+#     -e CADDY_UPSTREAM=host.docker.internal:3000 \
 #     caddy:2-alpine
 #
 # Brotli is served by the app when a .br sibling exists.
@@ -13,8 +15,14 @@
 	}
 }
 
+http://localhost {
+	redir https://localhost:{$CADDY_HTTPS_PORT:3443}{uri} permanent
+}
+
 https://localhost {
 	tls internal
 	encode gzip
-	reverse_proxy host.docker.internal:3000
+	reverse_proxy {$CADDY_UPSTREAM:host.docker.internal:3000} {
+		flush_interval -1
+	}
 }

@@ -1,0 +1,103 @@
+"""Start the real sandbox runtime with process-level /metrics.
+
+The pod runtime reads Linux cgroups. This wrapper is only for the laptop
+emulator: same /health and /exec, but CPU and RSS come from this process.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import resource
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+RUNTIME = HERE.parent / "runtime" / "sandbox_runtime.py"
+
+
+def collect_metrics() -> dict:
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    cpu_usec = (usage.ru_utime + usage.ru_stime) * 1_000_000
+    statm = Path("/proc/self/statm")
+    memory_bytes = 0
+    if statm.is_file():
+        parts = statm.read_text().split()
+        if len(parts) >= 2 and parts[1].isdigit():
+            memory_bytes = int(parts[1]) * os.sysconf("SC_PAGE_SIZE")
+    if not memory_bytes:
+        try:
+            out = subprocess.check_output(
+                ["ps", "-o", "rss=", "-p", str(os.getpid())],
+                text=True,
+            )
+            memory_bytes = int(out.strip().split()[0]) * 1024
+        except (OSError, ValueError, IndexError):
+            rss = usage.ru_maxrss
+            memory_bytes = rss if sys.platform == "darwin" else rss * 1024
+    return {
+        "timestamp": time.time(),
+        "cpu": {"usage_usec": cpu_usec},
+        "memory_bytes": memory_bytes,
+    }
+
+
+CHAT_PREFIX = "/workspace/chat"
+UV_CACHE_PREFIX = "/workspace/.uv-cache"
+
+
+def map_workspace_path(value: str, workspace: str | None = None) -> str:
+    """Chat sends /workspace/chat; the emulator's real dir is WORKSPACE."""
+    root = workspace if workspace is not None else os.environ.get("WORKSPACE", "/workspace")
+    if value == CHAT_PREFIX:
+        return root
+    if value.startswith(CHAT_PREFIX + "/"):
+        return root + value[len(CHAT_PREFIX) :]
+    cache_root = str(Path(root).parent / ".uv-cache")
+    if value == UV_CACHE_PREFIX:
+        return cache_root
+    if value.startswith(UV_CACHE_PREFIX + "/"):
+        return cache_root + value[len(UV_CACHE_PREFIX) :]
+    return value
+
+
+def remap_exec_body(body: dict, workspace: str | None = None) -> dict:
+    out = dict(body)
+    cwd = out.get("cwd")
+    if isinstance(cwd, str):
+        out["cwd"] = map_workspace_path(cwd, workspace)
+    cmd = out.get("cmd")
+    if isinstance(cmd, list):
+        out["cmd"] = [
+            map_workspace_path(part, workspace) if isinstance(part, str) else part
+            for part in cmd
+        ]
+    extra = out.get("env")
+    if isinstance(extra, dict):
+        out["env"] = {
+            key: map_workspace_path(val, workspace) if isinstance(val, str) else val
+            for key, val in extra.items()
+        }
+    return out
+
+
+def main() -> None:
+    spec = importlib.util.spec_from_file_location("sandbox_runtime", RUNTIME)
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    runtime.collect_metrics = collect_metrics
+    orig_exec = runtime.run_exec
+
+    def run_exec(body: dict) -> dict:
+        return orig_exec(remap_exec_body(body))
+
+    runtime.run_exec = run_exec
+    runtime.main()
+
+
+if __name__ == "__main__":
+    if not RUNTIME.is_file():
+        raise SystemExit(f"missing {RUNTIME}")
+    main()

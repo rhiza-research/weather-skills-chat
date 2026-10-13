@@ -19,12 +19,43 @@ Without `DATA_DIR`, the backend keeps its data in `backend/data`. In development
 
 Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, turn confinement off with its setting on [[Skill Packs]] so skills can run in chats.
 
+## Isolation (local)
+
+`./run-compose.sh --isolation=MODE` sets the skill-isolation variables and starts any extra service that mode needs. What those settings do is on [[Skill Packs]] and [[Tool Runner]]. The [[Tool Runner]] status in the top bar appears only for `--isolation=emulator` (and for a real k8s runner in a cluster).
+
+| `--isolation=` | When to use | What starts |
+|-|-|-|
+| `off` (default) | Usual on a Mac, or any host without Landlock | Chat only |
+| `landlock` | Linux with Landlock | Chat only |
+| `emulator` | Exercise the [[Tool Runner]] UI and path with no cluster | Chat plus the emulator |
+
+The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
+
+To run the emulator by hand instead of Compose, `uv run --script sandbox/emulator/emulator.py` and point the backend at `http://127.0.0.1:18080`.
+
+A real cluster is not a local Compose mode. Staging uses `sandbox.isolation=k8s` on [[Deployment]].
+
 ## Running the app in Docker
 
-`./run-compose.sh` starts the app in Docker with Docker Compose. The app listens on port 3000, or on `OPEN_WEBUI_PORT`. Settings are read from a `.env` file in the repository root; `.env.example` lists the ones the local stack uses.
+Copy `.env.example` to `.env` once and put secrets and machine settings there (session key, image name, data volume, mail). Isolation and HTTP/2 are flags, not `.env` values.
+
+`--testing` starts Caddy so the browser uses HTTP/2 at `https://localhost:3443` (or `CADDY_HTTPS_PORT`). Use `https://`, not `http://`, on that port. `http://localhost` redirects there. Live chat on that port needs the Caddy local certificate in the system keychain (Always Trust); otherwise the page can load and the websocket cannot. Without `--testing`, open the app on port 3000 (or `OPEN_WEBUI_PORT`).
+
+If a container named `weather-skills-chat` or `weather-skills-h2` was started by hand, remove it first so Compose can reuse the names. The data volume `weather-skills-chat-data` stays.
+
+```bash
+docker rm -f weather-skills-chat weather-skills-h2
+./run-compose.sh --testing --isolation=emulator -q --build
+```
+
+`-q` skips the confirmation prompt. Leave off `--build` when the image is already current.
 
 | Option | Effect |
 |-|-|
+| `--testing` | Start Caddy for HTTP/2 |
+| `--isolation=off` | Skills on the chat server, no Landlock (default) |
+| `--isolation=landlock` | Skills on the chat server with Landlock |
+| `--isolation=emulator` | k8s tool-runner path plus the local emulator |
 | `--build` | Builds the image from the checkout before starting |
 | `--webui[port=PORT]` | Serves the app on `PORT` in place of `OPEN_WEBUI_PORT` |
 | `--ollama` | Also starts an Ollama container, connects the app to it, and turns the Ollama API on |
@@ -34,19 +65,23 @@ Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, 
 
 The app needs a model provider: an OpenAI-compatible provider set with `OPENAI_API_BASE_URL` and `OPENAI_API_KEY`, or Ollama with `--ollama`. With neither, the app keeps its default OpenAI connection to `https://api.openai.com/v1` with no key, which an admin replaces in the admin settings.
 
-Compose passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, and `SKILL_SANDLOCK` to the app only when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
+`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, and the built-in email variables when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
 
 | Env var | Default | Effect |
 |-|-|-|
 | `WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui` | Name of the image the stack builds and runs |
 | `WEBUI_DOCKER_TAG` | `main` | Tag of that image |
 | `WEBUI_CONTAINER_NAME` | `open-webui` | Name of the app's container |
+| `WEBUI_DATA_VOLUME` | `weather-skills-chat-data` | Docker volume mounted at the app's data directory |
+| `CADDY_HTTPS_PORT` | `3443` | Host port for Caddy when `--testing` is on |
 
 `.env.example` sets these to names of their own, so a local build does not replace an image or collide with a container of another stack on the same Docker host.
 
 ## Tests
 
 `docker compose --profile suite run --rm --build test` runs the backend test suite in a container built from the app image with the development packages added. It needs no database server and no access to Docker from inside the container.
+
+CI also builds the tool runner image and writes a Plotly PNG in it, so a skill that renders a figure can use the browser in that image.
 
 ## Browser tests
 

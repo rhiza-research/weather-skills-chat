@@ -35,13 +35,15 @@ When two packs offer a skill with the same name, the model runs the one with the
 
 ## When a skill runs
 
-The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
+The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. When a [[Tool Runner]] is on, the skill runs there instead of on the chat server. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
 
 Each skill brings its own Python dependencies, which `uv` installs the first time they are needed and reuses afterward.
 
 ## Confinement
 
 On Linux servers, the app can confine each skill run in a chat with Landlock. A confined skill can read only system files, its own pack, and its dependencies, and can write only to the chat's files, temporary files, and its dependency cache. Network access is not restricted. If the server cannot confine a skill while confinement is on, the skill does not run.
+
+When a [[Tool Runner]] is on, Landlock is not used for that skill. The runner itself is the isolation.
 
 ## Skill environments
 
@@ -51,8 +53,10 @@ When confinement is on, dependencies are kept in an environment per chat, on the
 
 | Env var | Default | Effect |
 |-|-|-|
-| `SKILL_SANDLOCK` | `true` | Confine skill runs in chats |
-| `SKILL_LANDLOCK_BACKEND` | `auto` | How confinement is applied: `auto` picks the best method the server supports; `sandlock` and `landlock_only` force one |
+| `SKILL_SANDLOCK` | `true` | Confine skill runs in chats on the chat server |
+| `SKILL_LANDLOCK_BACKEND` | `auto` | Which Landlock method to use when confinement is on: `auto` picks the best the server supports; `sandlock` and `landlock_only` force one |
+
+The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confinement off. `auto`, `sandlock`, and `landlock_only` confine on the chat server. `k8s` sends skills to a [[Tool Runner]] instead.
 | `SKILL_RUN_TIMEOUT` | `600` | How long, in seconds, a skill may run before it is stopped |
 | `SKILL_VENV_ROOT` | `/var/skill-venvs` | Volume for per-chat skill environments; used only when it exists and the app can write to it |
 | `SKILL_VENV_MAX_BYTES` | `0` | Space, in bytes, that per-chat environments may use; `0` means 85% of the volume |

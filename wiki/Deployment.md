@@ -8,6 +8,8 @@ The image is published as `ghcr.io/rhiza-research/weather-skills-chat` for `linu
 
 The image includes Python and the `git` and `uv` tools that [[Skill Packs]] need. The speech, embedding, and tokenizer models are built into the image outside the data directory, so mounting a data volume does not hide them.
 
+A second image, `ghcr.io/rhiza-research/weather-skills-chat-sandbox`, is the [[Tool Runner]]. It is published from the same workflow with the same tags.
+
 | Env var | Default | Effect |
 |-|-|-|
 | `MODEL_CACHE_DIR` | `/app/backend/cache` in the image; `backend/cache` in a source checkout | Where the app loads the built-in models from |
@@ -29,7 +31,7 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `image.tag` selects the app version. By default it follows the chart's `appVersion`.
 - By default the app runs as one replica, with SQLite stored on a persistent volume.
 - SQLite supports one app process only: one replica, and `UVICORN_WORKERS` left at 1. Running more needs Postgres, or two processes can erase each other's changes to the same chat.
-- `sandbox.skillSandlock` is off by default, which turns off the skill confinement described on [[Skill Packs]].
+- `sandbox.isolation` chooses how skills are isolated: `off` (the default), `auto` or `sandlock` or `landlock_only` for confinement on the chat server (see [[Skill Packs]]), or `k8s` for a [[Tool Runner]]. Staging can set `k8s`. The runner pool can be checked with the staging probe before chat is switched.
 - `skillVenvs.enabled` gives each pod its own volume for skill environments, and `skillVenvs.maxBytes` sets how much of it skills may use. See [[Skill Packs]].
 - `langfuse.enabled` turns [[Tracing]] on or off.
 

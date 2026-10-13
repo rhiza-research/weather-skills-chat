@@ -272,6 +272,35 @@ USER_CACHES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Chat-scoped uv environments on a dynamically provisioned local SSD PVC.
 # Package layers symlink into USER_CACHES_DIR. Disabled when the mount is absent.
+# landlock (default) or k8s. k8s runs skills in a per-chat tool-runner pod.
+SKILL_SANDBOX_BACKEND = os.getenv("SKILL_SANDBOX_BACKEND", "landlock").strip().lower()
+SKILL_K8S_SANDBOX_ENABLED = os.getenv("SKILL_K8S_SANDBOX_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+SKILL_K8S_SANDBOX_NAMESPACE = os.getenv(
+    "SKILL_K8S_SANDBOX_NAMESPACE", "weather-skills-sandbox-staging"
+).strip()
+SKILL_K8S_SANDBOX_POOL = os.getenv(
+    "SKILL_K8S_SANDBOX_POOL", "weather-skills-standard-runner"
+).strip()
+SKILL_K8S_SANDBOX_API_GROUP = os.getenv(
+    "SKILL_K8S_SANDBOX_API_GROUP", "extensions.agents.x-k8s.io"
+).strip()
+SKILL_K8S_SANDBOX_API_VERSION = os.getenv(
+    "SKILL_K8S_SANDBOX_API_VERSION", "v1beta1"
+).strip()
+SKILL_K8S_BIND_TOKEN = os.getenv("SKILL_K8S_BIND_TOKEN", "").strip()
+SKILL_K8S_BIND_PORT = int(os.getenv("SKILL_K8S_BIND_PORT", "9090") or "9090")
+SKILL_K8S_RUNNER_PORT = int(os.getenv("SKILL_K8S_RUNNER_PORT", "8888") or "8888")
+SKILL_K8S_TTL_SECONDS = int(os.getenv("SKILL_K8S_TTL_SECONDS", "600") or "600")
+SKILL_K8S_QUOTA_GIB = int(os.getenv("SKILL_K8S_QUOTA_GIB", "200") or "200")
+
+
+def tool_runner_enabled() -> bool:
+    return SKILL_SANDBOX_BACKEND == "k8s" and SKILL_K8S_SANDBOX_ENABLED
+
 SKILL_VENV_ROOT = Path(os.getenv("SKILL_VENV_ROOT", "/var/skill-venvs"))
 # 0 / unset → ~85% of the filesystem that holds SKILL_VENV_ROOT.
 _skill_venv_max = os.getenv("SKILL_VENV_MAX_BYTES", "").strip()

@@ -1,5 +1,6 @@
 - [[Home]]
 - [[Skill Packs]]
+- [[Tool Runner]]
 - [[Chat Artifacts]]
 - [[Built-in Tools]]
 - [[Organizations]]

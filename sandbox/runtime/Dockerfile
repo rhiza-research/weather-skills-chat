@@ -10,7 +10,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Kaleido 1+ (Plotly write_image) needs a system Chromium plus these libs.
 # https://github.com/plotly/Kaleido/issues/379
-ENV BROWSER_PATH=/usr/bin/chromium
+# Non-root + gVisor cannot use Chromium's own sandbox.
+ENV BROWSER_PATH=/usr/bin/chromium \
+    CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-dev-shm-usage"
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \

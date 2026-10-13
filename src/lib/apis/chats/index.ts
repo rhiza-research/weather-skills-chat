@@ -1153,6 +1153,30 @@ export const deleteAllChats = async (token: string) => {
 	return res;
 };
 
+export const startToolRunner = async (token: string, chatId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) return { enabled: false, state: 'off' };
+	return res.json();
+};
+
+export const getToolRunnerMetrics = async (token: string, chatId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner/metrics`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) return null;
+	return res.json();
+};
+
 export const archiveAllChats = async (token: string) => {
 	let error = null;
 

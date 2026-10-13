@@ -2487,6 +2487,28 @@ async def process_chat_response(
                         depends_list.append(deps)
 
                     close_open_reasoning_block(content_blocks)
+                    if event_emitter:
+                        await event_emitter(
+                            {
+                                "type": "chat:completion",
+                                "data": {
+                                    "content": serialize_content_blocks(content_blocks),
+                                },
+                            }
+                        )
+                        try:
+                            from open_webui.utils.skill_k8s_sandbox import (
+                                await_runner_for_chat,
+                            )
+
+                            await await_runner_for_chat(
+                                metadata.get("chat_id"), event_emitter
+                            )
+                        except Exception:
+                            log.info(
+                                "tool runner wait before tools failed", exc_info=True
+                            )
+
                     content_blocks.append(
                         {
                             "type": "tool_calls",

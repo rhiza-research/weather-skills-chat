@@ -70,6 +70,8 @@ show_loading() {
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
+    echo "  --testing                  Start Caddy so the browser uses HTTP/2 on CADDY_HTTPS_PORT (3443)."
+    echo "  --isolation=MODE           Skill isolation: off, landlock, or emulator (default: off)."
     echo "  --ollama                   Run an Ollama container and connect the web UI to it."
     echo "  --enable-gpu[count=COUNT]  Enable GPU support with the specified count (requires --ollama)."
     echo "  --enable-api[port=PORT]    Enable API and expose it on the specified port (requires --ollama)."
@@ -83,6 +85,9 @@ usage() {
     echo ""
     echo "Examples:"
     echo "  $0 --drop"
+    echo "  $0 --testing --isolation=off"
+    echo "  $0 --testing --isolation=emulator"
+    echo "  $0 --testing --isolation=emulator --build"
     echo "  $0 --ollama"
     echo "  $0 --ollama --enable-gpu[count=1]"
     echo "  $0 --ollama --enable-gpu[count=all]"
@@ -98,6 +103,20 @@ usage() {
     echo "In this case the gpu detected is: $(get_gpu_driver)"
 }
 
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+if [[ -f "$ROOT/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$ROOT/.env"
+    set +a
+fi
+# Run mode belongs on the command line, not in .env.
+unset COMPOSE_MODE COMPOSE_PROFILES \
+    SKILL_SANDLOCK SKILL_SANDBOX_BACKEND \
+    SKILL_K8S_SANDBOX_ENABLED SKILL_K8S_EMULATOR \
+    SKILL_K8S_BIND_TOKEN SKILL_K8S_APISERVER
+cd "$ROOT"
+
 # Default values
 gpu_count=1
 api_port=11435
@@ -107,6 +126,8 @@ headless=false
 build_image=false
 kill_compose=false
 enable_playwright=false
+enable_testing=false
+isolation=off
 enable_ollama=false
 enable_gpu=false
 enable_api=false
@@ -149,6 +170,24 @@ while [[ $# -gt 0 ]]; do
         --playwright)
             enable_playwright=true
             ;;
+        --testing)
+            enable_testing=true
+            ;;
+        --isolation=*)
+            isolation="${key#--isolation=}"
+            ;;
+        --isolation)
+            shift
+            isolation="${1:-}"
+            if [[ -z $isolation ]]; then
+                echo -e "${RED}${BOLD}--isolation needs off, landlock, or emulator.${NC}" >&2
+                exit 1
+            fi
+            ;;
+        --isolation*)
+            isolation=$(extract_value "$key")
+            isolation=${isolation:-off}
+            ;;
         --drop)
             kill_compose=true
             ;;
@@ -187,12 +226,62 @@ if [[ $enable_ollama != true ]]; then
     fi
 fi
 
+compose_profiles=()
+if [[ $enable_testing == true ]]; then
+    compose_profiles+=(testing)
+    if [[ -z ${WEBUI_URL:-} ]]; then
+        export WEBUI_URL="https://localhost:${CADDY_HTTPS_PORT:-3443}"
+    fi
+fi
+
+case "$isolation" in
+    off)
+        export SKILL_SANDLOCK=false
+        export SKILL_SANDBOX_BACKEND=landlock
+        export SKILL_K8S_SANDBOX_ENABLED=false
+        export SKILL_K8S_EMULATOR=false
+        ;;
+    landlock)
+        export SKILL_SANDLOCK=true
+        export SKILL_SANDBOX_BACKEND=landlock
+        export SKILL_K8S_SANDBOX_ENABLED=false
+        export SKILL_K8S_EMULATOR=false
+        ;;
+    emulator)
+        export SKILL_SANDLOCK=false
+        export SKILL_SANDBOX_BACKEND=k8s
+        export SKILL_K8S_SANDBOX_ENABLED=true
+        export SKILL_K8S_EMULATOR=true
+        export SKILL_K8S_BIND_TOKEN=dev
+        export SKILL_K8S_APISERVER=http://emulator:18080
+        compose_profiles+=(emulator)
+        ;;
+    *)
+        echo -e "${RED}${BOLD}Unknown --isolation=$isolation (use off, landlock, or emulator).${NC}" >&2
+        exit 1
+        ;;
+esac
+
+if [[ ${#compose_profiles[@]} -gt 0 ]]; then
+    export COMPOSE_PROFILES
+    COMPOSE_PROFILES=$(IFS=,; echo "${compose_profiles[*]}")
+fi
+
+profile_args=()
+for profile in testing emulator; do
+    profile_args+=(--profile "$profile")
+done
+
 if [[ $kill_compose == true ]]; then
-    docker compose down --remove-orphans
+    docker compose "${profile_args[@]}" down --remove-orphans
     echo -e "${GREEN}${BOLD}Compose project dropped successfully.${NC}"
     exit
 else
-    DEFAULT_COMPOSE_COMMAND="docker compose -f docker-compose.yaml"
+    DEFAULT_COMPOSE_COMMAND="docker compose"
+    for profile in "${compose_profiles[@]}"; do
+        DEFAULT_COMPOSE_COMMAND+=" --profile $profile"
+    done
+    DEFAULT_COMPOSE_COMMAND+=" -f docker-compose.yaml"
     if [[ $enable_ollama == true ]]; then
         DEFAULT_COMPOSE_COMMAND+=" -f docker-compose.ollama.yaml"
     fi
@@ -244,6 +333,9 @@ echo -e "   ${GREEN}${BOLD}WebAPI Port:${NC} ${OLLAMA_WEBAPI_PORT:-Not Enabled}"
 echo -e "   ${GREEN}${BOLD}Data Folder:${NC} ${data_dir:-Using ollama volume}"
 echo -e "   ${GREEN}${BOLD}WebUI Port:${NC} ${OPEN_WEBUI_PORT:-OPEN_WEBUI_PORT from .env, or 3000}"
 echo -e "   ${GREEN}${BOLD}Playwright:${NC} ${enable_playwright:-false}"
+echo -e "   ${GREEN}${BOLD}Testing (HTTP/2):${NC} $enable_testing"
+echo -e "   ${GREEN}${BOLD}Isolation:${NC} $isolation"
+echo -e "   ${GREEN}${BOLD}Profiles:${NC} ${COMPOSE_PROFILES:-none}"
 echo
 
 if [[ $headless == true ]]; then

@@ -494,11 +494,10 @@
 					{:else if attributes?.type === 'tool_calls'}
 						<span class="text-sm font-medium text-gray-700 dark:text-gray-200">
 							{#if toolLabelIsCustom}
-								{toolCallLabel}{attributes?.done === 'true' && toolElapsedLabel
-									? ` (${toolElapsedLabel})`
-									: attributes?.done === 'true'
-										? ''
-										: '…'}
+								{toolCallLabel}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}{attributes?.done ===
+								'true'
+									? ''
+									: '…'}
 							{:else if attributes?.done === 'true'}
 								{attributes.name}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}
 							{:else}

@@ -32,7 +32,7 @@ A run starts on schedule, or when someone presses Run.
 1. A scheduled run acts as the automation's owner. A manual run acts as the person who pressed Run.
 2. The run checks that this person may use the model and is under the spending limits on [[Usage and Spending Caps]]. If not, no chat is created.
 3. The run creates a new chat for that person in the automation's organization, with the automation's visibility. The chat is titled with the automation's name and the date. When the automation is shared, every member sees the new chat appear.
-4. The prompt is sent with the automation's tools and features. No one is present to answer follow-up questions from the model.
+4. The prompt is sent with the automation's tools and features. Skills in that run use the chat's [[Tool Runner]] when runners are on. No one is present to answer follow-up questions from the model.
 5. The run is recorded with its outcome and a link to its chat.
 
 A manual run opens its chat right away, so the person who pressed Run can watch the reply arrive. Each automation keeps a history of its recent runs, with links to their chats.

@@ -77,6 +77,24 @@ Kubernetes Secret created out-of-band (must contain WEBUI_SECRET_KEY).
 {{- required "secretName is required: create a Kubernetes Secret externally and set secretName to its name." .Values.secretName }}
 {{- end }}
 
+{{/*
+sandbox.isolation is the only skill-isolation switch.
+off | auto | sandlock | landlock_only | k8s
+*/}}
+{{- define "weather-skills-chat.isolation" -}}
+{{- if hasKey .Values.sandbox "skillSandlock" }}
+{{- fail "sandbox.skillSandlock was replaced by sandbox.isolation (off, auto, sandlock, landlock_only, or k8s)" }}
+{{- end }}
+{{- if hasKey .Values.sandbox "backend" }}
+{{- fail "sandbox.backend was replaced by sandbox.isolation (off, auto, sandlock, landlock_only, or k8s)" }}
+{{- end }}
+{{- $iso := .Values.sandbox.isolation | default "off" }}
+{{- if not (has $iso (list "off" "auto" "sandlock" "landlock_only" "k8s")) }}
+{{- fail "sandbox.isolation must be off, auto, sandlock, landlock_only, or k8s" }}
+{{- end }}
+{{- $iso }}
+{{- end }}
+
 {{- define "weather-skills-chat.sharedDataMountPath" -}}
 {{- if .Values.sandbox.juicefs.enabled }}
 {{- .Values.sandbox.juicefs.mountPath }}

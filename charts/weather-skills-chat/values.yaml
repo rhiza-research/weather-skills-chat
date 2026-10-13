@@ -140,8 +140,13 @@ sandbox:
   # Empty → app default {DATA_DIR}/uploads (local Storage provider).
   # When sandbox.gcs.enabled, defaults to {mountPath}/uploads on the FUSE mount.
   uploadDir: ""
-  # Landlock confinement for skill subprocesses; requires host Landlock (not GKE pods).
-  skillSandlock: false
+  # How chat skills are isolated. One value — not combined with anything else.
+  #   off            — no confinement
+  #   auto           — Landlock on the chat pod; prefer sandlock, else landlock_only
+  #   sandlock       — force sandlock
+  #   landlock_only  — Landlock syscalls only (no sandlock)
+  #   k8s            — per-chat tool runner
+  isolation: "off"
   # Shared GCS FUSE mount for artifacts + skills + user_caches.
   # When enabled, defaults subdirs under mountPath unless overridden above.
   gcs:
@@ -164,6 +169,17 @@ sandbox:
     enabled: false
     pvcName: ""
     mountPath: /mnt/gcs-data
+  # Used only when isolation is k8s.
+  k8s:
+    namespace: weather-skills-sandbox-staging
+    pool: weather-skills-standard-runner
+    apiGroup: extensions.agents.x-k8s.io
+    apiVersion: v1beta1
+    bindPort: 9090
+    runnerPort: 8888
+    ttlSeconds: 600
+    quotaGiB: 200
+    bindTokenSecretKey: TOOL_RUNNER_BIND_TOKEN
 
 # Vector DB. Use "pgvector" when DATABASE_URL points at Postgres with the vector extension.
 vectorDb: ""

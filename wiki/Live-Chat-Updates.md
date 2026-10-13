@@ -7,6 +7,7 @@ Chats, the chat list, and each chat's files update on their own while the app is
 - **Messages.** A message sent in one tab appears in every other open tab of the same chat, and the reply streams there as it is written.
 - **The chat list.** A chat moves to the top of Today when a message is sent or edited in it, or when it is pinned, archived, moved to a folder, or shared. New chats appear, and deleted chats disappear, in every open tab.
 - **Files.** The file list next to a chat updates when a skill or an upload adds or changes files. See [[Chat Artifacts]].
+- **Tool runner.** Opening a saved chat starts its [[Tool Runner]] when that path is on. Other tabs of the same chat see the same ready or starting status in the top bar. A skill that waits for a runner pod shows **Waiting on weather skills runner** on the assistant message. Tool calls and their elapsed time appear after the runner is ready. That wait status does not stay up while the skill itself is installing or running.
 - **Shared chats.** Members of an organization see these updates for chats shared with it, and a deleted chat leaves their open pages. Who can read a chat, and what happens when it stops being shared, is described on [[Organizations]].
 
 ## Switching chats

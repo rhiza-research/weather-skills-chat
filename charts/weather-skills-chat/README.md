@@ -168,6 +168,8 @@ vectorDb: pgvector
 
 The chart sets the dir env vars under `/mnt/gcs-data` and annotates the pod with `gke-gcsfuse/volumes: "true"`. Uploads use the local storage provider on `{mountPath}/uploads`.
 
+`sandbox.isolation` is the only skill-isolation switch: `off` (default), `auto`, `sandlock`, `landlock_only`, or `k8s`. Landlock-only is `isolation: landlock_only`. A tool runner is `isolation: k8s` plus `TOOL_RUNNER_BIND_TOKEN` in the Secret. See the wiki pages Skill Packs and Tool Runner.
+
 ## OpenAI-compatible API (Anthropic, OpenAI, …)
 
 ```yaml

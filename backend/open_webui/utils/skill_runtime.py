@@ -18,6 +18,7 @@ from open_webui.env import (
     SKILL_VENV_ROOT,
     USER_CACHES_DIR,
     UV_CACHE_DIR,
+    tool_runner_enabled,
 )
 from open_webui.utils.artifacts import chat_sandbox, intermediate_results_dir
 from open_webui.utils.skill_venvs import (
@@ -278,6 +279,46 @@ async def run_skill(
     landlock_backend: str | None = None
     user_cache: Path | None = None
     chat_venv_root: Path | None = None
+    if use_chat_sandbox and tool_runner_enabled():
+        from open_webui.utils.skill_k8s_sandbox import run_skill_on_runner
+
+        emitter = None
+        try:
+            from open_webui.socket.main import get_event_emitter
+
+            emitter = get_event_emitter(__metadata__ or {})
+        except Exception:
+            log.debug("tool runner status emitter unavailable", exc_info=True)
+        try:
+            result = await run_skill_on_runner(
+                chat_id=str(chat_id),
+                skill_dir=skill_path,
+                script_path=script_path,
+                args=args,
+                env={name: value for name, value in used_secrets.items()},
+                timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_SEC,
+                emitter=emitter,
+            )
+        except Exception as e:
+            return _redact_skill_result(
+                _error_result(
+                    f"Tool runner failed: {e}",
+                    script=script_path.name,
+                    cwd=str(cwd),
+                    argv=args,
+                    tool_runner=True,
+                ),
+                used_secrets,
+            )
+        if used_secrets:
+            result["env_secrets"] = list(used_secrets.keys())
+        try:
+            from open_webui.utils.chat_realtime import schedule_artifacts
+
+            schedule_artifacts(str(chat_id))
+        except Exception:
+            log.debug("artifact notify after skill failed", exc_info=True)
+        return _redact_skill_result(result, used_secrets)
     if use_chat_sandbox and SKILL_SANDLOCK:
         from open_webui.utils.skill_sandlock import (
             default_readable_paths,

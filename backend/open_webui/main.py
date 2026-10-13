@@ -76,6 +76,7 @@ from open_webui.routers import (
     invitations,
     automations,
     artifacts,
+    tool_runner,
     secrets,
     preferences,
     skills,
@@ -374,6 +375,7 @@ from open_webui.env import (
     OFFLINE_MODE,
     ENABLE_OTEL,
     EXTERNAL_PWA_MANIFEST_URL,
+    tool_runner_enabled,
 )
 
 
@@ -1086,6 +1088,7 @@ app.include_router(
     automations.router, prefix="/api/v1/automations", tags=["automations"]
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
+app.include_router(tool_runner.router, prefix="/api/v1/chats", tags=["tool-runner"])
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
 app.include_router(
     preferences.router, prefix="/api/v1/preferences", tags=["preferences"]
@@ -1602,6 +1605,7 @@ async def get_user_config(user=Depends(get_verified_user)):
             "enable_admin_chat_access": ENABLE_ADMIN_CHAT_ACCESS,
             "enable_google_drive_integration": app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION,
             "enable_onedrive_integration": app.state.config.ENABLE_ONEDRIVE_INTEGRATION,
+            "enable_tool_runner": tool_runner_enabled(),
         },
         "default_models": app.state.config.DEFAULT_MODELS,
         "default_prompt_suggestions": app.state.config.DEFAULT_PROMPT_SUGGESTIONS,
