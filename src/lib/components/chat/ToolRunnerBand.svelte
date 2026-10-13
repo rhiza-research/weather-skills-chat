@@ -17,6 +17,8 @@
 	let poll: ReturnType<typeof setInterval> | null = null;
 	let lastCpuUsage: number | null = null;
 	let lastCpuTime: number | null = null;
+	let cpuLimit = CPU_CORES;
+	let memLimitBytes = MEM_BYTES;
 	let startedFor = '';
 
 	$: enabled = Boolean($config?.features?.enable_tool_runner);
@@ -45,6 +47,8 @@
 		samples = [];
 		lastCpuUsage = null;
 		lastCpuTime = null;
+		cpuLimit = CPU_CORES;
+		memLimitBytes = MEM_BYTES;
 		try {
 			const res = await startToolRunner(localStorage.token, id);
 			if (res?.state === 'ready') state = 'ready';
@@ -68,13 +72,19 @@
 		lastCpuUsage = usage;
 		lastCpuTime = now;
 		if (dt <= 0) return 0;
-		return Math.min(CPU_CORES, Math.max(0, du / 1_000_000 / dt));
+		return Math.min(cpuLimit, Math.max(0, du / 1_000_000 / dt));
 	};
 
 	const pullMetrics = async () => {
 		if (!$chatId) return;
 		const metrics = await getToolRunnerMetrics(localStorage.token, $chatId);
 		if (!metrics) return;
+		if (typeof metrics.cpu_limit === 'number' && metrics.cpu_limit > 0) {
+			cpuLimit = metrics.cpu_limit;
+		}
+		if (typeof metrics.memory_limit_bytes === 'number' && metrics.memory_limit_bytes > 0) {
+			memLimitBytes = metrics.memory_limit_bytes;
+		}
 		const next: Sample = {
 			t: Date.now(),
 			cpu: cpuCores(metrics),
@@ -116,15 +126,16 @@
 	};
 
 	$: latest = samples[samples.length - 1];
+	$: memLimitGb = memLimitBytes / 1024 ** 3;
 	$: resources = latest
-		? `${fmtCpu(latest.cpu)} / ${CPU_CORES} CPU - ${fmtMemGib(latest.memory)} / ${MEM_GIB} GB Memory`
-		: `0 / ${CPU_CORES} CPU - 0 / ${MEM_GIB} GB Memory`;
+		? `${fmtCpu(latest.cpu)} / ${fmtCpu(cpuLimit)} CPU - ${fmtMemGib(latest.memory)} / ${fmtMemGib(memLimitBytes)} GB Memory`
+		: `0 / ${fmtCpu(cpuLimit)} CPU - 0 / ${fmtMemGib(memLimitBytes)} GB Memory`;
 	$: statusLabel =
 		state === 'ready'
 			? $i18n.t('Weather skills runner ready')
 			: $i18n.t('Weather skills runner starting');
-	$: cpuPct = latest ? Math.min(100, (latest.cpu / CPU_CORES) * 100) : 0;
-	$: memPct = latest ? Math.min(100, (latest.memory / MEM_BYTES) * 100) : 0;
+	$: cpuPct = latest && cpuLimit ? Math.min(100, (latest.cpu / cpuLimit) * 100) : 0;
+	$: memPct = latest && memLimitBytes ? Math.min(100, (latest.memory / memLimitBytes) * 100) : 0;
 	$: inSwap = Boolean(latest?.swap);
 </script>
 
@@ -161,14 +172,14 @@
 				class="absolute right-0 top-full mt-1 z-40 w-64 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
 			>
 				<div class="mb-1 text-gray-500">
-					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)} / {CPU_CORES}
+					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)} / {fmtCpu(cpuLimit)}
 					{$i18n.t('cores')})
 				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
 				</div>
 				<div class="mt-2 mb-1 text-gray-500">
-					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)} / {MEM_GIB} GB)
+					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)} / {fmtMemGib(memLimitBytes)} GB)
 				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div
@@ -181,7 +192,7 @@
 					{#each samples as s}
 						<div
 							class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-sky-400'}"
-							style="height: {Math.max(8, (s.memory / MEM_BYTES) * 100)}%"
+							style="height: {Math.max(8, (s.memory / memLimitBytes) * 100)}%"
 							title="{fmtMemGib(s.memory)} GB{s.swap ? ` · ${$i18n.t('swap')}` : ''}"
 						></div>
 					{/each}

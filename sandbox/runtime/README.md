@@ -19,7 +19,7 @@ Chat talks to a specific runner pod. It does not import this Python file.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Readiness |
-| `GET` | `/metrics` | CPU, memory, and swap for the UI |
+| `GET` | `/metrics` | Optional process snapshot; the chat UI reads node cgroup metrics from the bind daemon |
 | `POST` | `/exec` | Run a command (`cmd`, optional `cwd`, `env`, `timeout`) and return stdout, stderr, exit code |
 | `POST` | `/unpack` | Extract a gzip tar (`dest`, `archive`) under the workspace |
 

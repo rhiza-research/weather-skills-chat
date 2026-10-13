@@ -5,6 +5,7 @@ from unittest.mock import patch
 from open_webui.utils.skill_k8s_sandbox import (
     WAITING_STATUS,
     _emit_waiting,
+    _installed_packs,
     _runner_packs_root,
     _runner_workspace,
     _tar_pack,
@@ -102,6 +103,18 @@ class RemoteScriptPathTest(TestCase):
         names = tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz").getnames()
         self.assertIn("pack/scripts/run.py", names)
         self.assertFalse(any("__pycache__" in name for name in names))
+
+    def test_installed_packs_are_top_level_dirs(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "weather-skills").mkdir()
+            (root / ".hidden").mkdir()
+            (root / "readme.txt").write_text("x")
+            with patch.dict("os.environ", {"SKILLS_DIR": str(root)}, clear=False):
+                packs = _installed_packs()
+        self.assertEqual([p.name for p in packs], ["weather-skills"])
 
 
 class RunnerNeedsWaitTest(TestCase):

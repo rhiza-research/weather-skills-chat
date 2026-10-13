@@ -58,6 +58,37 @@ class SandboxRuntimeTest(TestCase):
         result = runtime.run_unpack({"dest": "/tmp/nope", "archive": ""})
         self.assertFalse(result["ok"])
 
+    def test_unpack_allows_packs_beside_chat_workspace(self):
+        import base64
+        import io
+        import tarfile
+        import tempfile
+
+        previous = runtime.WORKSPACE
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = Path(tmp)
+            chat = empty / "chat"
+            chat.mkdir()
+            runtime.WORKSPACE = chat
+            try:
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    info = tarfile.TarInfo(name="pack/hello.txt")
+                    data = b"hi\n"
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+                dest = empty / ".skill-packs" / "pack"
+                result = runtime.run_unpack(
+                    {
+                        "dest": str(dest),
+                        "archive": base64.b64encode(buf.getvalue()).decode(),
+                    }
+                )
+                self.assertTrue(result.get("ok"), result)
+                self.assertEqual((dest / "hello.txt").read_text(), "hi\n")
+            finally:
+                runtime.WORKSPACE = previous
+
     def test_skill_label_from_script_path(self):
         self.assertEqual(
             runtime.skill_label(

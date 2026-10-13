@@ -21,6 +21,7 @@ Then start the backend with:
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -41,6 +42,19 @@ RUNNER_PORT0 = int(os.environ.get("SKILL_K8S_EMULATOR_RUNNER_PORT", "18888"))
 NS = os.environ.get("SKILL_K8S_SANDBOX_NAMESPACE", "weather-skills-sandbox-staging")
 API_GROUP = os.environ.get("SKILL_K8S_SANDBOX_API_GROUP", "extensions.agents.x-k8s.io")
 API_VERSION = os.environ.get("SKILL_K8S_SANDBOX_API_VERSION", "v1beta1")
+
+
+_local_runtime = None
+
+
+def _process_metrics() -> dict:
+    global _local_runtime
+    if _local_runtime is None:
+        spec = importlib.util.spec_from_file_location("local_runtime", HERE / "local_runtime.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _local_runtime = module
+    return _local_runtime.collect_metrics()
 
 
 def _host() -> str:
@@ -362,6 +376,19 @@ class BindHandler(BaseHTTPRequestHandler):
 
     def _auth(self) -> bool:
         return self.headers.get("Authorization") == f"Bearer {TOKEN}"
+
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
+            _json(self, 200, {"ok": True})
+            return
+        if parsed.path == "/metrics":
+            if not self._auth():
+                _json(self, 401, {"error": "unauthorized"})
+                return
+            _json(self, 200, _process_metrics())
+            return
+        _json(self, 404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
         if not self._auth():

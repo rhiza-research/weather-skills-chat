@@ -210,15 +210,35 @@ def collect_metrics() -> dict:
     return metrics
 
 
+def _unpack_roots() -> list[Path]:
+    ws = WORKSPACE.resolve()
+    roots = [ws]
+    # Helm sets WORKSPACE=/workspace/chat (JuiceFS). Packs live on the emptyDir parent.
+    if ws.name == "chat":
+        roots.append(ws.parent)
+    return roots
+
+
+def _dest_allowed(dest: Path) -> bool:
+    try:
+        resolved = dest.resolve()
+    except OSError:
+        return False
+    for root in _unpack_roots():
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def run_unpack(body: dict) -> dict:
     dest = Path(body.get("dest") or "")
     raw = body.get("archive") or ""
     started = time.monotonic()
     log(f"unpack start dest={dest} archive_b64_bytes={len(raw)}")
-    try:
-        resolved = dest.resolve()
-        resolved.relative_to(WORKSPACE.resolve())
-    except (OSError, ValueError):
+    if not dest.as_posix() or not _dest_allowed(dest):
         log(f"unpack reject dest={dest} error=invalid dest")
         return {"ok": False, "error": "invalid dest"}
     if dest.exists():

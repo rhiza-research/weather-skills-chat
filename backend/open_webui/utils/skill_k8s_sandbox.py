@@ -529,6 +529,36 @@ def _tar_pack(pack_root: Path) -> bytes:
     return buf.getvalue()
 
 
+PACKS_ANN = "weather-skills.io/packs"
+BOUND_ANN = "weather-skills.io/bound"
+
+
+def _installed_packs() -> list[Path]:
+    root = _skills_dir()
+    if not root.is_dir():
+        return []
+    return sorted(
+        path for path in root.iterdir() if path.is_dir() and not path.name.startswith(".")
+    )
+
+
+async def _annotate_pod(pod: dict, updates: dict) -> None:
+    name = (pod.get("metadata") or {}).get("name")
+    if not name:
+        return
+    anns = dict((pod.get("metadata") or {}).get("annotations") or {})
+    anns.update(updates)
+    try:
+        await _k8s(
+            "PATCH",
+            f"/api/v1/namespaces/{_ns()}/pods/{quote(name)}",
+            {"metadata": {"annotations": anns}},
+        )
+        pod.setdefault("metadata", {}).setdefault("annotations", {}).update(updates)
+    except Exception:
+        log.debug("annotate pod failed", exc_info=True)
+
+
 async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
     """Put the pack on the runner emptyDir. JuiceFS copytree of many files is slow."""
     pack = _pack_root(skill_dir)
@@ -561,6 +591,18 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
     if result.get("ok") is False:
         raise RuntimeError(result.get("error") or "unpack failed")
     return dest
+
+
+async def _ensure_packs_on_runner(info: dict) -> None:
+    packs = _installed_packs()
+    started = time.monotonic()
+    for pack in packs:
+        await _ensure_pack_on_runner(info, pack)
+    log.info(
+        "skill packs ready n=%s elapsed=%.2fs",
+        len(packs),
+        time.monotonic() - started,
+    )
 
 
 def _k8s_runner_path_on() -> bool:
@@ -597,23 +639,19 @@ async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
         pod_name = _pod_ref(claim)
         pod = await get_pod(pod_name)
         annotations = (pod.get("metadata") or {}).get("annotations") or {}
-        if annotations.get("weather-skills.io/bound") != chat_id:
+        if annotations.get(BOUND_ANN) != chat_id:
             await bind_workspace(chat_id, pod)
-            try:
-                anns = dict(annotations)
-                anns["weather-skills.io/bound"] = chat_id
-                await _k8s(
-                    "PATCH",
-                    f"/api/v1/namespaces/{_ns()}/pods/{quote(pod_name)}",
-                    {"metadata": {"annotations": anns}},
-                )
-            except Exception:
-                log.debug("annotate bound pod failed", exc_info=True)
+            await _annotate_pod(pod, {BOUND_ANN: chat_id})
         pod_ip = (pod.get("status") or {}).get("podIP")
         if not pod_ip:
             raise RuntimeError("tool runner has no pod IP")
         await verify_runtime(pod_ip, pod_name, pod)
-        return {"claim": claim, "pod": pod, "pod_ip": pod_ip, "pod_name": pod_name}
+        info = {"claim": claim, "pod": pod, "pod_ip": pod_ip, "pod_name": pod_name}
+        anns = (pod.get("metadata") or {}).get("annotations") or {}
+        if anns.get(PACKS_ANN) != "ready":
+            await _ensure_packs_on_runner(info)
+            await _annotate_pod(pod, {PACKS_ANN: "ready"})
+        return info
     finally:
         if waiting:
             await _emit_waiting(emitter, True)
@@ -623,9 +661,16 @@ async def runner_status(chat_id: str) -> dict:
     claim = await get_claim(chat_id)
     if not claim:
         return {"state": "absent"}
-    if _claim_ready(claim):
-        return {"state": "ready", "claim": claim_name(chat_id)}
-    return {"state": "starting", "claim": claim_name(chat_id)}
+    if not _claim_ready(claim):
+        return {"state": "starting", "claim": claim_name(chat_id)}
+    try:
+        pod = await get_pod(_pod_ref(claim))
+    except Exception:
+        return {"state": "starting", "claim": claim_name(chat_id)}
+    anns = (pod.get("metadata") or {}).get("annotations") or {}
+    if anns.get(PACKS_ANN) != "ready":
+        return {"state": "starting", "claim": claim_name(chat_id)}
+    return {"state": "ready", "claim": claim_name(chat_id)}
 
 
 async def runner_metrics(chat_id: str) -> dict:
@@ -634,9 +679,16 @@ async def runner_metrics(chat_id: str) -> dict:
         raise RuntimeError("tool runner is not ready")
     pod_name = _pod_ref(claim)
     pod = await get_pod(pod_name)
-    pod_ip = (pod.get("status") or {}).get("podIP")
-    base = await _runner_base(pod_ip, pod_name, pod)
-    return await _http_json("GET", f"{base}/metrics")
+    uid = (pod.get("metadata") or {}).get("uid")
+    if not uid:
+        raise RuntimeError("tool runner pod has no uid")
+    base = await _bind_base(pod)
+    headers = {"Authorization": f"Bearer {await bind_token()}"}
+    return await _http_json(
+        "GET",
+        f"{base}/metrics?pod_uid={quote(uid)}",
+        headers=headers,
+    )
 
 
 async def exec_on_runner(
@@ -671,13 +723,6 @@ async def run_skill_on_runner(
     emitter=None,
 ) -> dict:
     info = await ensure_runner(chat_id, emitter=emitter)
-    pack_started = time.monotonic()
-    await _ensure_pack_on_runner(info, skill_dir)
-    log.info(
-        "skill pack ready chat=%s elapsed=%.2fs",
-        chat_id,
-        time.monotonic() - pack_started,
-    )
     workspace = _runner_workspace(chat_id)
     remote_script = remote_script_path(skill_dir, script_path)
     argv = ["uv", "run", "--script", remote_script, *args]
