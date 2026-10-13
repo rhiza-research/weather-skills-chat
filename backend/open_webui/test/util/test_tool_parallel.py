@@ -7,6 +7,7 @@ from open_webui.utils.tool_parallel import (
     parse_depends_on,
     strip_depends_on,
     strip_display,
+    with_implicit_depends_on,
 )
 
 
@@ -85,3 +86,20 @@ def test_cycle_falls_back_to_one_wave():
         [["two"], ["one"]],
     )
     assert waves == [[0, 1]]
+
+
+def test_display_image_waits_for_sibling_skills():
+    names = ["plot", "display_image", "clip"]
+    deps = with_implicit_depends_on(names, [[], [], []])
+    assert deps[1] == ["plot", "clip"]
+    assert deps[0] == []
+    assert deps[2] == []
+    waves = execution_waves(["a", "b", "c"], names, deps)
+    assert waves == [[0, 2], [1]]
+
+
+def test_display_image_alone_stays_one_wave():
+    names = ["display_image"]
+    deps = with_implicit_depends_on(names, [[]])
+    assert deps == [[]]
+    assert execution_waves(["a"], names, deps) == [[0]]

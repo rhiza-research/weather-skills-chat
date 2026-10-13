@@ -14,7 +14,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | `list_artifacts` | List the chat's files. |
 | `create_folder` | Create a folder in the chat's files. |
 | `copy_intermediate_result` | Copy a file or folder between the chat's files and its intermediate results folder, which skills use to pass data from one step to the next. |
-| `display_image` | Show an image from the chat's files in the conversation. |
+| `display_image` | Show an image from the chat's files in the conversation. If a skill in the same turn writes that image, the display waits for the skill. |
 | `list_email_recipients` | List the addresses the model may email. |
 | `send_email` | Email a message, with files from the chat attached. |
 

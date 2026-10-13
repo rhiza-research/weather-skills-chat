@@ -6,6 +6,7 @@ import logging
 import mimetypes
 import os
 import re
+import time
 from uuid import uuid4
 import smtplib
 from email.message import EmailMessage
@@ -587,6 +588,8 @@ LIST_ARTIFACTS_SPEC = {
 
 
 DISPLAY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+DISPLAY_IMAGE_WAIT_S = 6.0
+DISPLAY_IMAGE_POLL_S = 0.25
 DISPLAY_IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -594,6 +597,51 @@ DISPLAY_IMAGE_TYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 }
+
+
+def looks_like_display_image(data: bytes, suffix: str) -> bool:
+    if not data:
+        return False
+    kind = (suffix or "").lower()
+    if kind == ".png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if kind in (".jpg", ".jpeg"):
+        return data.startswith(b"\xff\xd8\xff")
+    if kind == ".gif":
+        return data.startswith((b"GIF87a", b"GIF89a"))
+    if kind == ".webp":
+        return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    return False
+
+
+def refresh_sandbox_lookup(path: Path) -> None:
+    """Bust FUSE/JuiceFS negative dentry cache so a just-written file is visible."""
+    try:
+        os.listdir(path.parent)
+    except OSError:
+        pass
+
+
+async def wait_for_sandbox_image(
+    target: Path,
+    suffix: str,
+    *,
+    timeout_s: float = DISPLAY_IMAGE_WAIT_S,
+    interval_s: float = DISPLAY_IMAGE_POLL_S,
+) -> Optional[bytes]:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        refresh_sandbox_lookup(target)
+        try:
+            if target.is_file():
+                data = target.read_bytes()
+                if looks_like_display_image(data, suffix):
+                    return data
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            return None
+        await asyncio.sleep(interval_s)
 
 
 async def display_image(
@@ -625,9 +673,6 @@ async def display_image(
     except Exception as e:
         return f"Invalid path: {e}"
 
-    if not target.is_file():
-        return f"Image not found: `{rel}`"
-
     mime = DISPLAY_IMAGE_TYPES.get(target.suffix.lower())
     if not mime:
         return (
@@ -635,14 +680,17 @@ async def display_image(
             f"file (got `{target.suffix or 'no extension'}`)."
         )
 
-    size = target.stat().st_size
-    if size > DISPLAY_IMAGE_MAX_BYTES:
+    data = await wait_for_sandbox_image(target, target.suffix)
+    if data is None:
+        return f"Image not found: `{rel}`"
+
+    if len(data) > DISPLAY_IMAGE_MAX_BYTES:
         return (
             f"Image `{rel}` is too large to display inline "
-            f"({size} bytes; max {DISPLAY_IMAGE_MAX_BYTES})."
+            f"({len(data)} bytes; max {DISPLAY_IMAGE_MAX_BYTES})."
         )
 
-    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    encoded = base64.b64encode(data).decode("ascii")
     data_url = f"data:{mime};base64,{encoded}"
     note = f"Showing `{rel}`."
     if INTERMEDIATE_RESULTS_DIRNAME in Path(rel).parts:
@@ -655,8 +703,10 @@ DISPLAY_IMAGE_SPEC = {
     "description": (
         "Display a PNG (or jpeg/gif/webp) from the current chat sandbox inline "
         "in the chat. Pass a relative path such as `plot.png` or "
-        "`intermediate_results/step.png`. Show each image either with this tool "
-        "or with a relative markdown link such as `![map](plots/map.png)` or "
+        "`intermediate_results/step.png`. This call waits for other tools in "
+        "the same turn, so you do not need `depends_on` when a skill just "
+        "wrote the file. Show each image either with this tool or with a "
+        "relative markdown link such as `![map](plots/map.png)` or "
         "`[map](plots/map.png)`. Do not do both for the same image."
     ),
     "parameters": {

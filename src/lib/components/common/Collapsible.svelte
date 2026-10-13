@@ -319,19 +319,30 @@
 	let displayImageLoadedKey = '';
 
 	async function loadDisplayImageOnce(cid: string, path: string, requestKey: string) {
-		try {
-			const res = await fetch(getArtifactContentUrl(cid, path), {
-				headers: { authorization: `Bearer ${localStorage.token}` }
-			});
-			if (!res.ok) throw new Error(`artifact fetch failed: ${res.status}`);
-			const blob = await res.blob();
-			if (requestKey !== displayImageLoadedKey) return;
-			if (displayImageSrc.startsWith('blob:')) {
-				URL.revokeObjectURL(displayImageSrc);
+		const delays = [0, 400, 800, 1600];
+		for (const delay of delays) {
+			if (delay) {
+				await new Promise((resolve) => setTimeout(resolve, delay));
 			}
-			displayImageSrc = URL.createObjectURL(blob);
-		} catch (err) {
-			console.error('display_image load failed', err);
+			if (requestKey !== displayImageLoadedKey) return;
+			try {
+				const res = await fetch(getArtifactContentUrl(cid, path), {
+					headers: { authorization: `Bearer ${localStorage.token}` }
+				});
+				if (!res.ok) continue;
+				const type = (res.headers.get('content-type') || '').split(';')[0].trim();
+				if (!type.startsWith('image/')) continue;
+				const blob = await res.blob();
+				if (blob.size < 24) continue;
+				if (requestKey !== displayImageLoadedKey) return;
+				if (displayImageSrc.startsWith('blob:')) {
+					URL.revokeObjectURL(displayImageSrc);
+				}
+				displayImageSrc = URL.createObjectURL(blob);
+				return;
+			} catch (err) {
+				console.error('display_image load failed', err);
+			}
 		}
 	}
 

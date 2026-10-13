@@ -39,6 +39,9 @@ ACTIVITY_SCHEMA = {
     ),
 }
 
+# These tools read files other same-turn calls may still be writing.
+SERIAL_AFTER_SIBLINGS = frozenset({"display_image"})
+
 
 def _ensure_parameter_properties(spec: dict | None) -> dict:
     spec = spec if isinstance(spec, dict) else {}
@@ -88,6 +91,29 @@ def strip_display(params: dict | None) -> dict:
     cleaned.pop(DISPLAY_PARAM, None)
     cleaned.pop(ACTIVITY_PARAM, None)
     return cleaned
+
+
+def with_implicit_depends_on(
+    names: list[str], depends_on: list[list[str]]
+) -> list[list[str]]:
+    """Make file-readers wait for other same-turn tools.
+
+    ``display_image`` needs the file on disk. The model often omits
+    ``depends_on``, so those calls would run in parallel with the skill
+    that writes the image.
+    """
+    if len(names) != len(depends_on):
+        raise ValueError("names and depends_on must be the same length")
+    siblings = [name for name in names if name and name not in SERIAL_AFTER_SIBLINGS]
+    out: list[list[str]] = []
+    for i, name in enumerate(names):
+        deps = list(depends_on[i])
+        if name in SERIAL_AFTER_SIBLINGS:
+            for sib in siblings:
+                if sib not in deps:
+                    deps.append(sib)
+        out.append(deps)
+    return out
 
 
 def execution_waves(
