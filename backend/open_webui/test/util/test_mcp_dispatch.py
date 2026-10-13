@@ -44,8 +44,8 @@ CATALOG = {TOOL_NAME: {"spec": TOOL_SPEC, "callable": _callable}}
 class LibraryDispatchTest(unittest.TestCase):
     """Listing and calling go through the FastMCP client into the middleware.
 
-    The server has no auth provider and the caller is stubbed. Authentication is tested with the
-    auth implementation that supplies the provider.
+    The server has no auth provider and the caller is stubbed. Authentication is tested in
+    test_mcp_unauthenticated.py.
     """
 
     def setUp(self):

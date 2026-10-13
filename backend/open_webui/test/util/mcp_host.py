@@ -14,6 +14,27 @@ from starlette.testclient import TestClient
 
 INTERFACE_BODY = "<!doctype html><title>the web interface</title>"
 
+# The service address the endpoint tests configure. https, because the MCP SDK refuses a plain
+# http issuer unless its host is a loopback name.
+SERVICE_URL = "https://chat.example"
+
+
+@contextmanager
+def service_configured(base_url=SERVICE_URL):
+    """Set WEBUI_URL, which the endpoint reads, then restore it.
+
+    unittest.mock cannot patch it: it reads the target's __dict__, and PersistentConfig raises
+    TypeError for __dict__.
+    """
+    from open_webui.config import WEBUI_URL
+
+    previous = WEBUI_URL.value
+    WEBUI_URL.value = base_url
+    try:
+        yield
+    finally:
+        WEBUI_URL.value = previous
+
 
 class InterfaceStandIn:
     """Answers any path with an HTML 200, like the frontend's fallback route.
