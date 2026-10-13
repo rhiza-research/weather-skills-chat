@@ -550,15 +550,6 @@ PACKS_ANN = "weather-skills.io/packs"
 BOUND_ANN = "weather-skills.io/bound"
 
 
-def _installed_packs() -> list[Path]:
-    root = _skills_dir()
-    if not root.is_dir():
-        return []
-    return sorted(
-        path for path in root.iterdir() if path.is_dir() and not path.name.startswith(".")
-    )
-
-
 def _cached_runner(chat_id: str) -> Optional[dict]:
     """Return the last good runner for this chat.
 
@@ -598,12 +589,89 @@ async def _replace_broken_runner(chat_id: str, *, emitter=None) -> dict:
     return await ensure_runner(chat_id, emitter=emitter)
 
 
-def _pack_names(paths: list[Path] | None = None) -> set[str]:
-    return {path.name for path in (paths if paths is not None else _installed_packs())}
+def _pack_names(paths: list[Path]) -> set[str]:
+    return {path.name for path in paths}
 
 
-def _missing_packs(have: set[str]) -> list[Path]:
-    return [path for path in _installed_packs() if path.name not in have]
+def _missing_packs(have: set[str], packs: list[Path]) -> list[Path]:
+    return [path for path in packs if path.name not in have]
+
+
+def _tool_skill_dir(tool) -> str:
+    meta = getattr(tool, "meta", None)
+    if meta is None:
+        return ""
+    manifest = getattr(meta, "manifest", None)
+    if manifest is None and isinstance(meta, dict):
+        manifest = meta.get("manifest")
+    if not isinstance(manifest, dict):
+        return ""
+    raw = manifest.get("skill_dir")
+    return str(raw) if raw else ""
+
+
+def _latest_skill_packs(records: list[dict], catalog: list) -> list[Path]:
+    """Pack directory for each active skill, keeping only its newest version."""
+    from open_webui.utils.skill_version import prefer_incoming_tool_version
+
+    best: dict[str, dict] = {}
+    for record in records:
+        if record.get("enabled") is False:
+            continue
+        name = record.get("skill_name")
+        if not name:
+            continue
+        current = best.get(name)
+        if current is None or prefer_incoming_tool_version(
+            record.get("version"), current.get("version")
+        ):
+            best[name] = record
+    by_id = {tool.id: tool for tool in catalog}
+    packs: dict[str, Path] = {}
+    for record in best.values():
+        tool = by_id.get(record["id"])
+        if tool is None:
+            continue
+        raw = _tool_skill_dir(tool)
+        if not raw:
+            continue
+        pack = _pack_root(Path(raw))
+        if pack.is_dir():
+            packs[pack.name] = pack
+    return [packs[name] for name in sorted(packs)]
+
+
+def _packs_for_chat(chat_id: str) -> list[Path]:
+    """Pack checkouts to put on this chat's runner.
+
+    One directory per skill name: the copy the chat can use, at the newest
+    version. Other checkouts of the same skill stay on the chat server.
+    """
+    from open_webui.models.chats import Chats
+    from open_webui.models.tools import Tools
+    from open_webui.models.users import Users
+    from open_webui.utils.tools import accessible_skill_records
+
+    chat = Chats.get_chat_by_id(chat_id)
+    if chat is None or not chat.user_id:
+        log.warning("skill packs skipped, chat missing id=%s", chat_id)
+        return []
+    user = Users.get_user_by_id(chat.user_id)
+    if user is None:
+        log.warning("skill packs skipped, user missing chat=%s", chat_id)
+        return []
+    catalog = Tools.get_tool_catalog()
+    records = accessible_skill_records(
+        user, organization_id=chat.organization_id, catalog=catalog
+    )
+    packs = _latest_skill_packs(records, catalog)
+    log.info(
+        "skill packs for chat=%s skills=%s packs=%s",
+        chat_id,
+        len({r.get("skill_name") for r in records if r.get("skill_name")}),
+        [path.name for path in packs],
+    )
+    return packs
 
 
 async def _annotate_pod(pod: dict, updates: dict) -> None:
@@ -657,7 +725,9 @@ async def _listed_packs(info: dict) -> Optional[set[str]]:
     return {str(name) for name in (body.get("packs") or []) if name}
 
 
-async def _packs_ready_on_runner(pod: dict, info: Optional[dict] = None) -> bool:
+async def _packs_ready_on_runner(
+    pod: dict, chat_id: str, info: Optional[dict] = None
+) -> bool:
     anns = (pod.get("metadata") or {}).get("annotations") or {}
     if anns.get(PACKS_ANN) == "ready":
         return True
@@ -666,7 +736,7 @@ async def _packs_ready_on_runner(pod: dict, info: Optional[dict] = None) -> bool
     if not info.get("pod_ip"):
         return False
     have = await _listed_packs(info) or set()
-    return _pack_names().issubset(have)
+    return _pack_names(_packs_for_chat(chat_id)).issubset(have)
 
 
 async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
@@ -695,9 +765,10 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
     return dest
 
 
-async def _ensure_packs_on_runner(info: dict) -> None:
+async def _ensure_packs_on_runner(info: dict, chat_id: str) -> None:
+    wanted = _packs_for_chat(chat_id)
     have = await _listed_packs(info) or set()
-    missing = _missing_packs(have)
+    missing = _missing_packs(have, wanted)
     if not missing:
         log.info("skill packs already on runner n=%s", len(have))
         return
@@ -705,7 +776,7 @@ async def _ensure_packs_on_runner(info: dict) -> None:
     await asyncio.gather(*[_ensure_pack_on_runner(info, pack) for pack in missing])
     log.info(
         "skill packs ready n=%s missing=%s elapsed=%.2fs",
-        len(_installed_packs()),
+        len(wanted),
         len(missing),
         time.monotonic() - started,
     )
@@ -772,8 +843,8 @@ async def _run_start(chat_id: str) -> dict:
             raise RuntimeError("tool runner has no pod IP")
         await verify_runtime(pod_ip, pod_name, pod)
         info = {"claim": claim, "pod": pod, "pod_ip": pod_ip, "pod_name": pod_name}
-        if not await _packs_ready_on_runner(pod, info):
-            await _ensure_packs_on_runner(info)
+        if not await _packs_ready_on_runner(pod, chat_id, info):
+            await _ensure_packs_on_runner(info, chat_id)
             await _annotate_pod(pod, {PACKS_ANN: "ready"})
         _store_runner(chat_id, info)
         return info
@@ -837,7 +908,7 @@ async def runner_status(chat_id: str) -> dict:
     except Exception:
         return {"state": "starting", "claim": name}
     try:
-        if await _packs_ready_on_runner(pod):
+        if await _packs_ready_on_runner(pod, chat_id):
             pod_ip = (pod.get("status") or {}).get("podIP")
             if pod_ip:
                 _store_runner(

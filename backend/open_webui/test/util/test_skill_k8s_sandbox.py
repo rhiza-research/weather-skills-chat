@@ -9,9 +9,9 @@ from open_webui.utils.skill_k8s_sandbox import (
     _drop_runner,
     _emit_waiting,
     _ready_cache,
-    _installed_packs,
     _missing_packs,
     _pack_names,
+    _latest_skill_packs,
     _runner_packs_root,
     _runner_workspace,
     _store_runner,
@@ -122,20 +122,59 @@ class RemoteScriptPathTest(TestCase):
         self.assertIn("pack/scripts/run.py", names)
         self.assertFalse(any("__pycache__" in name for name in names))
 
-    def test_installed_packs_are_top_level_dirs(self):
+    def test_missing_packs_ignores_ones_already_present(self):
+        wanted = [Path("/data/skills/weather-skills"), Path("/data/skills/plotting")]
+        self.assertEqual(_pack_names(wanted), {"weather-skills", "plotting"})
+        self.assertEqual(
+            [p.name for p in _missing_packs({"weather-skills"}, wanted)],
+            ["plotting"],
+        )
+        self.assertEqual(
+            [p.name for p in _missing_packs({"weather-skills", "plotting"}, wanted)],
+            [],
+        )
+
+    def test_latest_skill_packs_keeps_the_newest_version(self):
         import tempfile
+        from types import SimpleNamespace
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "weather-skills").mkdir()
-            (root / ".hidden").mkdir()
-            (root / "readme.txt").write_text("x")
+            old_skill = root / "plotting-old" / "skills" / "plot"
+            new_skill = root / "plotting-new" / "skills" / "plot"
+            old_skill.mkdir(parents=True)
+            new_skill.mkdir(parents=True)
+            old = SimpleNamespace(
+                id="plot-old",
+                meta=SimpleNamespace(manifest={"skill_dir": str(old_skill)}),
+            )
+            new = SimpleNamespace(
+                id="plot-new",
+                meta=SimpleNamespace(manifest={"skill_dir": str(new_skill)}),
+            )
+            records = [
+                {
+                    "id": "plot-old",
+                    "skill_name": "plot",
+                    "version": "0.1.0",
+                    "enabled": True,
+                },
+                {
+                    "id": "plot-new",
+                    "skill_name": "plot",
+                    "version": "0.2.0",
+                    "enabled": True,
+                },
+                {
+                    "id": "plot-off",
+                    "skill_name": "plot",
+                    "version": "9.0.0",
+                    "enabled": False,
+                },
+            ]
             with patch.dict("os.environ", {"SKILLS_DIR": str(root)}, clear=False):
-                packs = _installed_packs()
-                self.assertEqual([p.name for p in packs], ["weather-skills"])
-                self.assertEqual(_pack_names(packs), {"weather-skills"})
-                self.assertEqual([p.name for p in _missing_packs({"weather-skills"})], [])
-                self.assertEqual([p.name for p in _missing_packs(set())], ["weather-skills"])
+                packs = _latest_skill_packs(records, [old, new])
+        self.assertEqual([p.name for p in packs], ["plotting-new"])
 
 
 class RunnerNeedsWaitTest(TestCase):
@@ -372,7 +411,7 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value={"weather-skills"},
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox._installed_packs",
+            "open_webui.utils.skill_k8s_sandbox._packs_for_chat",
             return_value=[Path("/data/skills/weather-skills")],
         ):
             status = await runner_status("chat-1")
@@ -418,7 +457,7 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value=set(),
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox._installed_packs",
+            "open_webui.utils.skill_k8s_sandbox._packs_for_chat",
             return_value=[Path("/data/skills/weather-skills")],
         ):
             status = await runner_status("chat-1")
