@@ -2,6 +2,7 @@
 FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     UV_CACHE_DIR=/tmp/uv-cache \
     WORKSPACE=/workspace \
@@ -47,4 +48,4 @@ RUN useradd --uid 1000 --create-home --shell /bin/bash runner \
 USER 1000
 WORKDIR /workspace
 EXPOSE 8888
-CMD ["python3", "/usr/local/bin/sandbox_runtime.py"]
+CMD ["python3", "-u", "/usr/local/bin/sandbox_runtime.py"]

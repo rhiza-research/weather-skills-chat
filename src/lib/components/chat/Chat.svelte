@@ -153,6 +153,7 @@
 	let controlPaneComponent;
 
 	let autoScroll = true;
+	let holdingReadPosition = false;
 	let newMessagesBelow = false;
 	let heardBelowId = '';
 	let processing = '';
@@ -565,6 +566,7 @@
 		stopDocumentWatch = onDocument((id, document) => {
 			if (!document || id !== get(chatId)) return;
 			const heldTop = autoScroll ? null : messagesContainerElement?.scrollTop ?? 0;
+			if (heldTop != null) autoScroll = false;
 			// Opening a chat fetches it into the cache and notifies here. That is
 			// not a new response — settleScroll is still true — so do not mark
 			// unseen or play a sound.
@@ -1427,12 +1429,23 @@
 	};
 
 	const restoreReadingPosition = (top: number) => {
-		const element = messagesContainerElement;
-		if (!element || autoScroll) return;
+		autoScroll = false;
+		holdingReadPosition = true;
 		const apply = () => {
-			if (!messagesContainerElement || autoScroll) return;
+			if (!messagesContainerElement) {
+				holdingReadPosition = false;
+				return;
+			}
+			autoScroll = false;
 			holdScrollPin();
 			messagesContainerElement.scrollTop = top;
+			requestAnimationFrame(() => {
+				autoScroll = false;
+				if (messagesContainerElement) messagesContainerElement.scrollTop = top;
+				requestAnimationFrame(() => {
+					holdingReadPosition = false;
+				});
+			});
 		};
 		void tick().then(apply);
 	};
@@ -1468,7 +1481,7 @@
 					schedule();
 					return;
 				}
-				if (autoScroll && !newMessagesBelow) pinScrollToEnd();
+				if (autoScroll && !newMessagesBelow && !holdingReadPosition) pinScrollToEnd();
 				else if (settleScroll) placeSavedScroll(node);
 			});
 		};
@@ -1812,7 +1825,7 @@
 		if (type === 'status') {
 			if (data?.action === GENERATION_HEARTBEAT_ACTION) return;
 			if (data?.done) bumpArtifactsSoon();
-			if (autoScroll) scrollToBottom();
+			if (autoScroll) pinScrollToEnd();
 			return;
 		}
 		if (type === 'chat:completion') {
@@ -1828,7 +1841,7 @@
 		) {
 			bumpArtifactsSoon();
 		}
-		if (autoScroll) scrollToBottom();
+		if (autoScroll) pinScrollToEnd();
 		else noteNewMessagesBelow(message.id);
 	};
 
@@ -2771,7 +2784,13 @@
 								placeSavedScroll(messagesContainerElement);
 							}}
 							on:scroll={() => {
-								if (pinningScroll || !messagesContainerElement || !scrollChatId) return;
+								if (
+									holdingReadPosition ||
+									pinningScroll ||
+									!messagesContainerElement ||
+									!scrollChatId
+								)
+									return;
 								const element = messagesContainerElement;
 								const atBottom =
 									element.scrollHeight - element.scrollTop <= element.clientHeight + 5;

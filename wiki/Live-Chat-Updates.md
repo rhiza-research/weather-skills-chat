@@ -16,7 +16,7 @@ After sign-in, the app keeps the chats used in the past week in the browser, a f
 
 ## Reading position
 
-Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up, the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
+Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up — including when a skill finishes — the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
 
 ## Changes from two places at once
 

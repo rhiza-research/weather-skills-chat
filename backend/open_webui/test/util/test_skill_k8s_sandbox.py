@@ -5,7 +5,9 @@ from unittest.mock import patch
 from open_webui.utils.skill_k8s_sandbox import (
     WAITING_STATUS,
     _emit_waiting,
+    _runner_packs_root,
     _runner_workspace,
+    _tar_pack,
     _uv_cache_dir,
     await_runner_for_chat,
     claim_name,
@@ -68,7 +70,7 @@ class RemoteScriptPathTest(TestCase):
                 Path("/data/skills/probe-skill/scripts/probe_skill.py"),
             )
         self.assertEqual(
-            path, "/workspace/chat/.skill-packs/probe-skill/scripts/probe_skill.py"
+            path, "/workspace/.skill-packs/probe-skill/scripts/probe_skill.py"
         )
 
     def test_nested_skill_dir(self):
@@ -78,8 +80,28 @@ class RemoteScriptPathTest(TestCase):
                 Path("/data/skills/pack/skills/inner/scripts/main.py"),
             )
         self.assertEqual(
-            path, "/workspace/chat/.skill-packs/pack/skills/inner/scripts/main.py"
+            path, "/workspace/.skill-packs/pack/skills/inner/scripts/main.py"
         )
+
+    def test_packs_live_beside_the_chat_workspace(self):
+        self.assertEqual(_runner_packs_root(), "/workspace/.skill-packs")
+
+    def test_tar_pack_skips_cache_dirs(self):
+        import io
+        import tarfile
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "pack"
+            (root / "scripts").mkdir(parents=True)
+            (root / "scripts" / "run.py").write_text("print(1)\n")
+            cache = root / "__pycache__"
+            cache.mkdir()
+            (cache / "run.pyc").write_text("x")
+            archive = _tar_pack(root)
+        names = tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz").getnames()
+        self.assertIn("pack/scripts/run.py", names)
+        self.assertFalse(any("__pycache__" in name for name in names))
 
 
 class RunnerNeedsWaitTest(TestCase):

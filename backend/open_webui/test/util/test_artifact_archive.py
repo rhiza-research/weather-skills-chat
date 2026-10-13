@@ -13,6 +13,7 @@ from unittest.mock import patch
 from open_webui.utils.artifacts import (
     copy_sandbox,
     copy_upload_into_chat_sandbox,
+    create_folder,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
@@ -29,6 +30,24 @@ class NormalizePathTest(unittest.TestCase):
             normalize_sandbox_relpath("../secret")
         with self.assertRaises(ValueError):
             normalize_sandbox_relpath("foo/../../secret")
+
+
+class CreateFolderTest(unittest.TestCase):
+    def test_new_subfolders_are_group_writable(self):
+        import stat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                result = create_folder("chat-1", "plots/weekly")
+                weekly = artifacts / "chat-1" / "plots" / "weekly"
+                plots = weekly.parent
+                self.assertTrue(result["created"])
+                self.assertTrue(weekly.is_dir())
+                for path in (weekly, plots):
+                    mode = stat.S_IMODE(path.stat().st_mode)
+                    self.assertTrue(mode & stat.S_IWGRP, f"{path} not group-writable: {oct(mode)}")
+                    self.assertTrue(mode & stat.S_ISGID, f"{path} missing setgid: {oct(mode)}")
 
 
 class CopySandboxTest(unittest.TestCase):

@@ -35,12 +35,14 @@ class LocalRuntimeMetricsTest(TestCase):
         metrics = local_runtime.collect_metrics()
         self.assertGreater(metrics["memory_bytes"], 0)
         self.assertGreaterEqual(metrics["cpu"]["usage_usec"], 0)
+        self.assertEqual(metrics["cpu_limit"], 3.0)
+        self.assertGreater(metrics["memory_limit_bytes"], 0)
 
     def test_maps_workspace_paths_to_emulator_dir(self):
         root = "/data/artifacts/chat-1"
         body = local_runtime.remap_exec_body(
             {
-                "cmd": ["uv", "run", "--script", "/workspace/chat/.skill-packs/x/scripts/x.py"],
+                "cmd": ["uv", "run", "--script", "/workspace/.skill-packs/x/scripts/x.py"],
                 "cwd": "/workspace/chat",
                 "env": {
                     "HOME": "/workspace/chat",
@@ -53,6 +55,10 @@ class LocalRuntimeMetricsTest(TestCase):
         )
         self.assertEqual(body["cwd"], root)
         self.assertEqual(body["cmd"][-1], f"{root}/.skill-packs/x/scripts/x.py")
+        self.assertEqual(
+            local_runtime.map_workspace_path("/workspace/.skill-packs/x", workspace=root),
+            f"{root}/.skill-packs/x",
+        )
         self.assertEqual(body["env"]["HOME"], root)
         self.assertEqual(body["env"]["WEATHER_INTERMEDIATE_DIR"], f"{root}/intermediate_results")
         self.assertEqual(body["env"]["UV_CACHE_DIR"], "/data/artifacts/.uv-cache")

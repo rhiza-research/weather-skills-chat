@@ -41,11 +41,16 @@ def collect_metrics() -> dict:
         "timestamp": time.time(),
         "cpu": {"usage_usec": cpu_usec},
         "memory_bytes": memory_bytes,
+        "cpu_limit": float(os.environ.get("SKILL_RUNNER_CPU_LIMIT", "3")),
+        "memory_limit_bytes": int(
+            float(os.environ.get("SKILL_RUNNER_MEMORY_LIMIT_GIB", "12")) * 1024**3
+        ),
     }
 
 
 CHAT_PREFIX = "/workspace/chat"
 UV_CACHE_PREFIX = "/workspace/.uv-cache"
+PACKS_PREFIX = "/workspace/.skill-packs"
 
 
 def map_workspace_path(value: str, workspace: str | None = None) -> str:
@@ -60,6 +65,11 @@ def map_workspace_path(value: str, workspace: str | None = None) -> str:
         return cache_root
     if value.startswith(UV_CACHE_PREFIX + "/"):
         return cache_root + value[len(UV_CACHE_PREFIX) :]
+    packs_root = str(Path(root) / ".skill-packs")
+    if value == PACKS_PREFIX:
+        return packs_root
+    if value.startswith(PACKS_PREFIX + "/"):
+        return packs_root + value[len(PACKS_PREFIX) :]
     return value
 
 
@@ -89,11 +99,20 @@ def main() -> None:
     spec.loader.exec_module(runtime)
     runtime.collect_metrics = collect_metrics
     orig_exec = runtime.run_exec
+    orig_unpack = runtime.run_unpack
 
     def run_exec(body: dict) -> dict:
         return orig_exec(remap_exec_body(body))
 
+    def run_unpack(body: dict) -> dict:
+        out = dict(body)
+        dest = out.get("dest")
+        if isinstance(dest, str):
+            out["dest"] = map_workspace_path(dest)
+        return orig_unpack(out)
+
     runtime.run_exec = run_exec
+    runtime.run_unpack = run_unpack
     runtime.main()
 
 

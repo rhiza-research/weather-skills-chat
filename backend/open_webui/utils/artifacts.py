@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import os
 import shutil
 import tarfile
 import time
@@ -13,14 +14,36 @@ log = logging.getLogger(__name__)
 
 ZARR_MARKERS = (".zgroup", ".zarray", "zarr.json")
 INTERMEDIATE_RESULTS_DIRNAME = "intermediate_results"
+# setgid + ug+rwx so new children inherit this group and stay group-writable.
+SANDBOX_DIR_MODE = 0o2775
+
+
+def make_sandbox_dir(path: Path, root: Path) -> Path:
+    """Create a folder that inherits the chat's group and stays group-writable."""
+    previous = os.umask(0o002)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    finally:
+        os.umask(previous)
+    root = root.resolve()
+    cursor = path.resolve()
+    while True:
+        try:
+            os.chmod(cursor, SANDBOX_DIR_MODE)
+        except OSError:
+            log.debug("could not chmod %s", cursor, exc_info=True)
+        if cursor == root or root not in cursor.parents:
+            break
+        cursor = cursor.parent
+    return path
 
 
 def chat_sandbox(chat_id: str) -> Path:
     t0 = time.perf_counter()
     root = (ARTIFACTS_DIR / chat_id).resolve()
     existed = root.exists()
-    root.mkdir(parents=True, exist_ok=True)
-    (root / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
+    make_sandbox_dir(root, root)
+    make_sandbox_dir(root / INTERMEDIATE_RESULTS_DIRNAME, root)
     log_timing(
         "juicefs.chat_sandbox",
         time.perf_counter() - t0,
@@ -95,7 +118,7 @@ def copy_intermediate_result(
     if not src.exists():
         raise FileNotFoundError(f"Source not found: {rel}")
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    make_sandbox_dir(dest.parent, root)
     if dest.exists():
         if dest.is_dir():
             shutil.rmtree(dest)
@@ -104,6 +127,11 @@ def copy_intermediate_result(
 
     if src.is_dir():
         shutil.copytree(src, dest)
+        for dirpath, _dirnames, _filenames in os.walk(dest):
+            try:
+                os.chmod(dirpath, SANDBOX_DIR_MODE)
+            except OSError:
+                pass
         kind = "directory"
     else:
         shutil.copy2(src, dest)
@@ -155,7 +183,7 @@ def create_folder(chat_id: str, path: str) -> dict:
         )
 
     created = not target.exists()
-    target.mkdir(parents=True, exist_ok=True)
+    make_sandbox_dir(target, root)
     rel_out = target.relative_to(root).as_posix()
     return {
         "ok": True,
@@ -586,11 +614,19 @@ def _copy_sandbox_entry(src: Path, dest: Path) -> None:
         return
     if src.is_dir():
         dest.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(dest, SANDBOX_DIR_MODE)
+        except OSError:
+            pass
         for child in src.iterdir():
             _copy_sandbox_entry(child, dest / child.name)
         return
     if src.is_file():
         dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(dest.parent, SANDBOX_DIR_MODE)
+        except OSError:
+            pass
         dest.write_bytes(src.read_bytes())
 
 
@@ -623,7 +659,7 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
                     src_chat_id,
                     dest_chat_id,
                 )
-        (dest / INTERMEDIATE_RESULTS_DIRNAME).mkdir(parents=True, exist_ok=True)
+        make_sandbox_dir(dest / INTERMEDIATE_RESULTS_DIRNAME, dest)
     log_timing(
         "juicefs.copy_sandbox",
         time.perf_counter() - t0,
@@ -641,7 +677,7 @@ def delete_sandbox(chat_id: str) -> None:
 def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
     t0 = time.perf_counter()
     target = resolve_in_sandbox(chat_id, relpath)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    make_sandbox_dir(target.parent, chat_sandbox(chat_id))
     target.write_bytes(data)
     log_timing(
         "juicefs.write_bytes",
@@ -801,14 +837,14 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
             name = _safe_tar_member_name(member.name)
             dest = resolve_in_sandbox(chat_id, name)
             if member.isdir():
-                dest.mkdir(parents=True, exist_ok=True)
+                make_sandbox_dir(dest, chat_sandbox(chat_id))
                 continue
             if not member.isfile():
                 continue
             handle = tar.extractfile(member)
             if handle is None:
                 continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
+            make_sandbox_dir(dest.parent, chat_sandbox(chat_id))
             payload = handle.read()
             payload = sanitize_output_artifact_bytes(name, payload)
             dest.write_bytes(payload)
@@ -818,6 +854,6 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
 
 def write_json(chat_id: str, relpath: str, payload: dict) -> Path:
     target = resolve_in_sandbox(chat_id, relpath)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    make_sandbox_dir(target.parent, chat_sandbox(chat_id))
     target.write_text(json.dumps(payload, indent=2))
     return target

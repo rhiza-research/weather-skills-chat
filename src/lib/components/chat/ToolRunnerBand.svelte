@@ -109,15 +109,16 @@
 
 	const fmtMemGib = (bytes: number) => {
 		const gb = bytes / 1024 ** 3;
+		if (gb <= 0) return '0';
 		if (gb >= 10) return gb.toFixed(0);
 		if (gb >= 1) return gb.toFixed(1);
-		return Math.max(0, gb).toFixed(2);
+		return gb.toFixed(2);
 	};
 
 	$: latest = samples[samples.length - 1];
 	$: resources = latest
-		? `${fmtCpu(latest.cpu)} CPU - ${fmtMemGib(latest.memory)} GB Memory`
-		: `${CPU_CORES} CPU - ${MEM_GIB} GB Memory`;
+		? `${fmtCpu(latest.cpu)} / ${CPU_CORES} CPU - ${fmtMemGib(latest.memory)} / ${MEM_GIB} GB Memory`
+		: `0 / ${CPU_CORES} CPU - 0 / ${MEM_GIB} GB Memory`;
 	$: statusLabel =
 		state === 'ready'
 			? $i18n.t('Weather skills runner ready')
@@ -159,11 +160,16 @@
 			<div
 				class="absolute right-0 top-full mt-1 z-40 w-64 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
 			>
-				<div class="mb-1 text-gray-500">{$i18n.t('CPU')} ({CPU_CORES} {$i18n.t('cores')})</div>
+				<div class="mb-1 text-gray-500">
+					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)} / {CPU_CORES}
+					{$i18n.t('cores')})
+				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
 				</div>
-				<div class="mt-2 mb-1 text-gray-500">{$i18n.t('Memory')} ({MEM_GIB} GB)</div>
+				<div class="mt-2 mb-1 text-gray-500">
+					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)} / {MEM_GIB} GB)
+				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div
 						class="h-2 rounded {inSwap ? 'bg-red-500' : 'bg-sky-500'}"

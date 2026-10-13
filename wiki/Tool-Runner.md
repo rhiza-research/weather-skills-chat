@@ -6,7 +6,7 @@ The runner is the only place skills run when it is turned on. Built-in tools and
 
 ## What the user sees
 
-When a k8s tool runner is on (a real runner or the local emulator), an open saved chat shows **Weather skills runner ready** or **Weather skills runner starting** on the right side of the top bar, to the left of Artifacts and the user menu. A green dot pulses slowly when it is ready; a spinner shows while it starts. Small text under the status shows this chat's CPU and memory (`3 CPU - 12 GB Memory` until the first sample). Click the ready status for current CPU (of three cores), memory (of twelve gigabytes), and a **Memory, last minute** chart. That chart is one bar per sample from the last minute; a bar turns red if the runner was using disk swap. Landlock chats do not show it. It is hidden on temporary chats and when the k8s tool-runner path is off.
+When a k8s tool runner is on (a real runner or the local emulator), an open saved chat shows **Weather skills runner ready** or **Weather skills runner starting** on the right side of the top bar, to the left of Artifacts and the user menu. A green dot pulses slowly when it is ready; a spinner shows while it starts. Small text under the status shows this chat's CPU and memory used of the runner's limits (`0 / 3 CPU - 0 / 12 GB Memory` until the first sample, then `0.2 / 3 CPU - 0.4 / 12 GB Memory`). Click the ready status for current CPU (of three cores), memory (of twelve gigabytes), and a **Memory, last minute** chart. That chart is one bar per sample from the last minute; a bar turns red if the runner was using disk swap. Landlock chats do not show it. It is hidden on temporary chats and when the k8s tool-runner path is off.
 
 ## Waiting
 
@@ -14,13 +14,17 @@ If a skill is called before the runner is ready — the first open, after the te
 
 Each skill call that does run resets the ten-minute idle timer.
 
+## Logs
+
+The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks and CPU/memory samples are not repeated there after the first one.
+
 ## Automations
 
 An automation that calls a skill uses the same runner for that chat.
 
 ## Disk space
 
-Each chat's files have a two-hundred-gigabyte ceiling so one chat cannot fill the shared store. A skill that hits the ceiling fails with a write error. Deleting a chat drops the runner. The chat's files are removed as on [[Chat Artifacts]].
+Each chat's files have a two-hundred-gigabyte ceiling so one chat cannot fill the shared store. A skill can write files and folders anywhere under that chat's space, including nested folders created in the chat (for example with `create_folder`). See [[Chat Artifacts]]. A skill that hits the ceiling fails with a write error. Deleting a chat drops the runner. The chat's files are removed as on [[Chat Artifacts]].
 
 ## Settings
 
@@ -32,7 +36,7 @@ Each chat's files have a two-hundred-gigabyte ceiling so one chat cannot fill th
 | `SKILL_K8S_TTL_SECONDS` | `600` | Idle time, in seconds, before a runner stops |
 | `SKILL_K8S_QUOTA_GIB` | `200` | Ceiling, in gibibytes, for one chat's files |
 
-The Helm chart sets these when `sandbox.isolation` is `k8s`. The default is `off`, so confinement stays on the chat server unless an admin chooses otherwise. See [[Skill Packs]] and [[Deployment]].
+The Helm chart sets these when `sandbox.isolation` is `k8s`. Staging uses that. Production still confines skills on the chat server. The chart default is `off`. See [[Skill Packs]] and [[Deployment]].
 
 On a laptop, `sandbox/emulator/emulator.py` speaks the same claim, bind, exec, and metrics APIs with no cluster and no isolation. The top-bar status shows CPU and memory of the local process. See [[Development]].
 

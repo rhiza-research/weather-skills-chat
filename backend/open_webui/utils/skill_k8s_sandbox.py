@@ -11,13 +11,14 @@ from __future__ import annotations
 import asyncio
 import atexit
 import base64
+import io
 import json
 import logging
 import os
 import re
-import shutil
 import ssl
 import subprocess
+import tarfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -448,6 +449,10 @@ def _uv_cache_dir(workspace: str) -> str:
     return str(Path(workspace).parent / ".uv-cache")
 
 
+def _runner_packs_root() -> str:
+    return str(Path(_runner_workspace("")).parent / ".skill-packs")
+
+
 async def _runner_base(
     pod_ip: str, pod_name: Optional[str] = None, pod: Optional[dict] = None
 ) -> str:
@@ -499,51 +504,63 @@ def _pack_root(skill_dir: Path) -> Path:
 
 def remote_script_path(skill_dir: Path, script_path: Path) -> str:
     pack = _pack_root(skill_dir)
-    root = _runner_workspace("")
+    root = _runner_packs_root()
     try:
         rel = Path(skill_dir).resolve().relative_to(pack)
         mid = "" if str(rel) in (".", "") else f"/{rel.as_posix()}"
-        return f"{root}/.skill-packs/{pack.name}{mid}/scripts/{script_path.name}"
+        return f"{root}/{pack.name}{mid}/scripts/{script_path.name}"
     except Exception:
-        return f"{root}/.skill-packs/{Path(skill_dir).name}/scripts/{script_path.name}"
+        return f"{root}/{Path(skill_dir).name}/scripts/{script_path.name}"
 
 
-def _copy_pack(chat_id: str, skill_dir: Path) -> Path:
-    """Copy the skill's pack into the chat artifacts so the runner can see it."""
-    dest_root = _artifacts_dir() / chat_id / ".skill-packs"
-    dest_root.mkdir(parents=True, exist_ok=True)
-    pack_root = _pack_root(skill_dir)
-    dest = dest_root / pack_root.name
-    if dest.exists():
+_SKIP_PACK_PARTS = {"__pycache__", ".git", ".venv", ".uv-cache", ".mypy_cache"}
+
+
+def _tar_pack(pack_root: Path) -> bytes:
+    buf = io.BytesIO()
+
+    def skip(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        if any(part in _SKIP_PACK_PARTS for part in Path(info.name).parts):
+            return None
+        return info
+
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        tar.add(pack_root, arcname=pack_root.name, filter=skip)
+    return buf.getvalue()
+
+
+async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
+    """Put the pack on the runner emptyDir. JuiceFS copytree of many files is slow."""
+    pack = _pack_root(skill_dir)
+    dest = f"{_runner_packs_root()}/{pack.name}"
+    base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
+    started = time.monotonic()
+    probe = await _http_json(
+        "POST",
+        f"{base}/exec",
+        json_body={"cmd": ["test", "-d", dest], "cwd": "/", "timeout": 10},
+        timeout=15,
+    )
+    if int(probe.get("exit_code", 1)) == 0:
+        log.info("skill pack already on runner dest=%s", dest)
         return dest
-    shutil.copytree(pack_root, dest, dirs_exist_ok=True)
+    archive = base64.b64encode(_tar_pack(pack)).decode()
+    packed = time.monotonic()
+    result = await _http_json(
+        "POST",
+        f"{base}/unpack",
+        json_body={"dest": dest, "archive": archive},
+        timeout=180,
+    )
+    log.info(
+        "skill pack pushed dest=%s pack=%.2fs upload=%.2fs",
+        dest,
+        packed - started,
+        time.monotonic() - packed,
+    )
+    if result.get("ok") is False:
+        raise RuntimeError(result.get("error") or "unpack failed")
     return dest
-
-
-def _sync_pack_to_workspace(dest: Path, pod_name: str) -> None:
-    """Laptop path: chat's ARTIFACTS_DIR is not JuiceFS, so push into the bound workspace."""
-    if use_direct_http():
-        return
-    remote_dir = f"{_runner_workspace('')}/.skill-packs"
-    subprocess.run(
-        [*_kubectl(), "-n", _ns(), "exec", pod_name, "--", "mkdir", "-p", remote_dir],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    subprocess.run(
-        [
-            *_kubectl(),
-            "-n",
-            _ns(),
-            "cp",
-            str(dest),
-            f"{_ns()}/{pod_name}:{remote_dir}/{dest.name}",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
 
 
 def _k8s_runner_path_on() -> bool:
@@ -629,8 +646,10 @@ async def exec_on_runner(
     cwd: Optional[str] = None,
     env: Optional[dict[str, str]] = None,
     timeout: int = 600,
+    info: Optional[dict] = None,
 ) -> dict:
-    info = await ensure_runner(chat_id)
+    if info is None:
+        info = await ensure_runner(chat_id)
     body = {"cmd": argv, "cwd": cwd or _runner_workspace(chat_id), "env": env or {}}
     base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
     return await _http_json(
@@ -652,8 +671,13 @@ async def run_skill_on_runner(
     emitter=None,
 ) -> dict:
     info = await ensure_runner(chat_id, emitter=emitter)
-    dest = _copy_pack(chat_id, skill_dir)
-    _sync_pack_to_workspace(dest, info["pod_name"])
+    pack_started = time.monotonic()
+    await _ensure_pack_on_runner(info, skill_dir)
+    log.info(
+        "skill pack ready chat=%s elapsed=%.2fs",
+        chat_id,
+        time.monotonic() - pack_started,
+    )
     workspace = _runner_workspace(chat_id)
     remote_script = remote_script_path(skill_dir, script_path)
     argv = ["uv", "run", "--script", remote_script, *args]
@@ -668,8 +692,16 @@ async def run_skill_on_runner(
         "INTERMEDIATE_RESULTS_DIR": f"{workspace}/intermediate_results",
     }
     runner_env.update(env)
+    exec_started = time.monotonic()
     result = await exec_on_runner(
-        chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout
+        chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+    )
+    log.info(
+        "skill exec done chat=%s script=%s elapsed=%.2fs exit=%s",
+        chat_id,
+        script_path.name,
+        time.monotonic() - exec_started,
+        result.get("exit_code"),
     )
     return {
         "ok": int(result.get("exit_code", 1)) == 0,
