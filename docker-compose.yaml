@@ -14,6 +14,8 @@ services:
       - open-webui:/app/backend/data
     ports:
       - ${OPEN_WEBUI_PORT-3000}:8080
+    # Runs an init process that reaps killed skill subprocesses so they do not remain as zombies.
+    init: true
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
@@ -27,6 +29,7 @@ services:
       - EMAIL_TOOL_SMTP_PASSWORD
       - EMAIL_TOOL_SMTP_USE_TLS
       - EMAIL_TOOL_FROM_EMAIL
+      - REDIS_URL
       - SKILL_SANDLOCK
       - SKILL_SANDBOX_BACKEND
       - SKILL_K8S_SANDBOX_ENABLED
