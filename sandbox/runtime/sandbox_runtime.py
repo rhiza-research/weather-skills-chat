@@ -52,6 +52,18 @@ def _fmt_cmd(cmd: list[str]) -> str:
     return text if len(text) <= 500 else text[:500] + "…"
 
 
+def _lower_child_priority() -> None:
+    """Give the HTTP runtime a better chance to answer /health under load.
+
+    The process is non-root and has no CAP_SYS_NICE, so it cannot raise its
+    own priority. Children can still be niced down.
+    """
+    try:
+        os.nice(10)
+    except OSError:
+        pass
+
+
 def _collect_and_log(proc: subprocess.Popen, timeout: int) -> tuple[str, str]:
     out_chunks: list[str] = []
     err_chunks: list[str] = []
@@ -301,6 +313,7 @@ def run_exec(body: dict) -> dict:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            preexec_fn=_lower_child_priority,
         )
         stdout, stderr = _collect_and_log(proc, timeout)
         elapsed = time.monotonic() - started

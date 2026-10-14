@@ -1,4 +1,4 @@
-"""Per-chat tool runner on GKE Agent Sandbox (claim, bind, exec, metrics).
+"""Per-chat tool runner on GKE Agent Sandbox (claim, bind, own, exec, metrics).
 
 In-cluster (the chat pod) talks to the API with the service-account token and
 reaches the bind daemon / runner over the pod network. From a laptop the same
@@ -81,6 +81,15 @@ def _runner_port() -> int:
 
 def _ttl_seconds() -> int:
     return _int_env("SKILL_K8S_TTL_SECONDS", 600)
+
+
+# Past the skill's own exec HTTP wait (timeout + 15s) and a controller tick.
+RUNNER_HOLD_BUFFER_SEC = 60
+
+
+def runner_hold_seconds(timeout: int) -> int:
+    """How long a skill run must keep the claim alive from now."""
+    return max(_ttl_seconds(), int(timeout) + RUNNER_HOLD_BUFFER_SEC)
 
 
 def _quota_gib() -> int:
@@ -235,24 +244,39 @@ def _api_root() -> tuple[str, ssl.SSLContext | bool, dict[str, str]]:
     )
 
 
+def _http_failure(method: str, url: str, timeout: int, exc: BaseException) -> RuntimeError:
+    """aiohttp TimeoutError and ServerDisconnectedError have empty str()."""
+    if isinstance(exc, TimeoutError):
+        return RuntimeError(f"{method} {url} timed out after {timeout}s")
+    detail = str(exc).strip() or type(exc).__name__
+    return RuntimeError(f"{method} {url} failed: {detail}")
+
+
 async def _k8s(
     method: str, path: str, body: Optional[dict] = None, timeout: int = 30
 ) -> dict:
     base, ctx, headers = _api_root()
+    url = f"{base}{path}"
     if method.upper() == "PATCH":
         headers = {**headers, "Content-Type": "application/merge-patch+json"}
     connector = aiohttp.TCPConnector(ssl=ctx)
-    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        async with session.request(
-            method,
-            f"{base}{path}",
-            json=body,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            raw = await resp.read()
-            if resp.status >= 400:
-                raise RuntimeError(f"k8s {method} {path} -> {resp.status}: {raw[:400]!r}")
-            return json.loads(raw) if raw else {}
+    try:
+        async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
+            async with session.request(
+                method,
+                url,
+                json=body,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                raw = await resp.read()
+                if resp.status >= 400:
+                    raise RuntimeError(f"k8s {method} {path} -> {resp.status}: {raw[:400]!r}")
+                return json.loads(raw) if raw else {}
+    except (TimeoutError, aiohttp.ClientError) as exc:
+        raise _http_failure(method, url, timeout, exc) from exc
+
+
+
 
 
 def _crd(kind_plural: str, name: Optional[str] = None) -> str:
@@ -294,9 +318,10 @@ async def create_claim(chat_id: str) -> dict:
     return await _k8s("POST", _crd("sandboxclaims"), body)
 
 
-async def extend_claim_ttl(claim: dict) -> dict:
+async def extend_claim_ttl(claim: dict, seconds: Optional[int] = None) -> dict:
     name = claim["metadata"]["name"]
-    shutdown = datetime.now(timezone.utc) + timedelta(seconds=_ttl_seconds())
+    hold = _ttl_seconds() if seconds is None else max(1, int(seconds))
+    shutdown = datetime.now(timezone.utc) + timedelta(seconds=hold)
     claim = dict(claim)
     spec = dict(claim.get("spec") or {})
     lifecycle = dict(spec.get("lifecycle") or {})
@@ -306,6 +331,17 @@ async def extend_claim_ttl(claim: dict) -> dict:
     spec.pop("shutdownTime", None)
     claim["spec"] = spec
     return await _k8s("PUT", _crd("sandboxclaims", name), claim)
+
+
+async def hold_runner_for_skill(chat_id: str, timeout: int) -> None:
+    """Bump claim shutdown so a cached runner cannot idle-stop mid-skill."""
+    try:
+        claim = await get_claim(chat_id)
+        if not claim or claim.get("metadata", {}).get("deletionTimestamp"):
+            return
+        await extend_claim_ttl(claim, seconds=runner_hold_seconds(timeout))
+    except Exception:
+        log.debug("extend runner hold failed", exc_info=True)
 
 
 async def delete_claim(chat_id: str) -> None:
@@ -319,6 +355,8 @@ async def delete_claim(chat_id: str) -> None:
 
 WAITING_STATUS = "Waiting on weather skills runner"
 WAITING_ACTION = "weather_skills_runner"
+RUNNER_DIED_MESSAGE = "Runner died while running skills, please try again"
+RUNTIME_PROBE_TIMEOUT_SEC = 2
 
 
 def public_runner_state(state: Optional[str]) -> str:
@@ -378,23 +416,26 @@ async def _http_json(
     headers: Optional[dict] = None,
     timeout: int = 30,
 ) -> dict:
-    async with aiohttp.ClientSession() as session:
-        async with session.request(
-            method,
-            url,
-            json=json_body,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            raw = await resp.read()
-            if resp.status >= 400:
-                raise RuntimeError(f"{method} {url} -> {resp.status}: {raw[:300]!r}")
-            if not raw:
-                return {}
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return {"raw": raw.decode("utf-8", errors="replace")}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.request(
+                method,
+                url,
+                json=json_body,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                raw = await resp.read()
+                if resp.status >= 400:
+                    raise RuntimeError(f"{method} {url} -> {resp.status}: {raw[:300]!r}")
+                if not raw:
+                    return {}
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    return {"raw": raw.decode("utf-8", errors="replace")}
+    except (TimeoutError, aiohttp.ClientError) as exc:
+        raise _http_failure(method, url, timeout, exc) from exc
 
 
 async def bind_token() -> str:
@@ -480,6 +521,29 @@ async def _runner_base(
     return _port_forward(name, port)
 
 
+async def own_workspace(
+    chat_id: str,
+    pod: dict,
+    paths: Optional[list[str]] = None,
+    trees: Optional[list[str]] = None,
+) -> None:
+    """Ask the bind daemon to chown/chmod specific files (`paths`) or walked trees."""
+    if not paths and not trees:
+        return
+    base = await _bind_base(pod)
+    headers = {"Authorization": f"Bearer {await bind_token()}"}
+    await _http_json(
+        "POST",
+        f"{base}/own",
+        json_body={
+            "chat_id": chat_id,
+            "paths": list(paths or []),
+            "trees": list(trees or []),
+        },
+        headers=headers,
+    )
+
+
 async def bind_workspace(chat_id: str, pod: dict) -> None:
     uid = (pod.get("metadata") or {}).get("uid")
     if not uid:
@@ -492,6 +556,7 @@ async def bind_workspace(chat_id: str, pod: dict) -> None:
         json_body={"chat_id": chat_id, "capacity_gib": _quota_gib()},
         headers=headers,
     )
+    await own_workspace(chat_id, pod, paths=["intermediate_results"])
     await _http_json(
         "POST",
         f"{base}/bind",
@@ -548,6 +613,7 @@ def _tar_pack(pack_root: Path) -> bytes:
 
 PACKS_ANN = "weather-skills.io/packs"
 BOUND_ANN = "weather-skills.io/bound"
+SAFE_TO_EVICT_ANN = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 
 
 def _cached_runner(chat_id: str) -> Optional[dict]:
@@ -579,14 +645,53 @@ def _drop_runner(chat_id: str) -> None:
         _starts.pop(chat_id, None)
 
 
-async def _replace_broken_runner(chat_id: str, *, emitter=None) -> dict:
-    """Forget a runner we can no longer reach and start another."""
-    _drop_runner(chat_id)
+async def _runtime_reachable(info: Optional[dict]) -> bool:
+    """True when the runner process answers /health."""
+    if not info or not info.get("pod_ip"):
+        return False
+    try:
+        base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
+        await _http_json("GET", f"{base}/health", timeout=RUNTIME_PROBE_TIMEOUT_SEC)
+        return True
+    except Exception:
+        return False
+
+
+async def _claim_runtime_reachable(claim: dict) -> bool:
+    """True if this claim is still starting, or its runner answers /health."""
+    if not _claim_ready(claim):
+        return True
+    try:
+        pod = await get_pod(_pod_ref(claim))
+    except Exception:
+        return False
+    pod_ip = (pod.get("status") or {}).get("podIP")
+    if not pod_ip:
+        return False
+    return await _runtime_reachable(
+        {"pod_ip": pod_ip, "pod_name": _pod_ref(claim), "pod": pod}
+    )
+
+
+async def _adopt_or_replace_claim(chat_id: str) -> dict:
+    """Keep a live claim, or drop a dead one and take a new runner."""
+    claim = await get_claim(chat_id)
+    if claim is None:
+        return await create_claim(chat_id)
+    if claim.get("metadata", {}).get("deletionTimestamp"):
+        raise RuntimeError("tool runner is shutting down")
+    if await _claim_runtime_reachable(claim):
+        try:
+            return await extend_claim_ttl(claim)
+        except Exception:
+            log.debug("extend ttl failed", exc_info=True)
+            return claim
+    log.info("replacing dead runner claim chat=%s", chat_id)
     try:
         await delete_claim(chat_id)
     except Exception:
-        log.debug("delete claim after broken runner failed", exc_info=True)
-    return await ensure_runner(chat_id, emitter=emitter)
+        log.debug("delete dead runner claim failed", exc_info=True)
+    return await create_claim(chat_id)
 
 
 def _pack_names(paths: list[Path]) -> set[str]:
@@ -687,6 +792,13 @@ async def _annotate_pod(pod: dict, updates: dict) -> None:
         pod.setdefault("metadata", {}).setdefault("annotations", {}).update(updates)
     except Exception:
         log.warning("annotate pod failed name=%s keys=%s", name, list(updates), exc_info=True)
+
+
+def _runner_log_name(info: Optional[dict]) -> str:
+    """Pod name for chat-side skill logs. Falls back to pod IP."""
+    if not info:
+        return "?"
+    return info.get("pod_name") or info.get("pod_ip") or "?"
 
 
 def _runner_info(pod: dict, pod_name: Optional[str] = None) -> dict:
@@ -818,26 +930,23 @@ def start_runner(chat_id: str) -> asyncio.Task:
 
 async def _run_start(chat_id: str) -> dict:
     cached = _cached_runner(chat_id)
-    if cached:
+    if cached and await _runtime_reachable(cached):
         return cached
+    if cached:
+        _drop_runner(chat_id)
     try:
-        claim = await get_claim(chat_id)
-        if claim is None:
-            claim = await create_claim(chat_id)
-        elif claim.get("metadata", {}).get("deletionTimestamp"):
-            raise RuntimeError("tool runner is shutting down")
-        else:
-            try:
-                claim = await extend_claim_ttl(claim)
-            except Exception:
-                log.debug("extend ttl failed", exc_info=True)
+        claim = await _adopt_or_replace_claim(chat_id)
         claim = await wait_ready(chat_id)
         pod_name = _pod_ref(claim)
         pod = await get_pod(pod_name)
         annotations = (pod.get("metadata") or {}).get("annotations") or {}
         if annotations.get(BOUND_ANN) != chat_id:
             await bind_workspace(chat_id, pod)
-            await _annotate_pod(pod, {BOUND_ANN: chat_id})
+            await _annotate_pod(
+                pod, {BOUND_ANN: chat_id, SAFE_TO_EVICT_ANN: "false"}
+            )
+        elif annotations.get(SAFE_TO_EVICT_ANN) != "false":
+            await _annotate_pod(pod, {SAFE_TO_EVICT_ANN: "false"})
         pod_ip = (pod.get("status") or {}).get("podIP")
         if not pod_ip:
             raise RuntimeError("tool runner has no pod IP")
@@ -883,6 +992,11 @@ async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
 
 async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
     """Wait for the one start and return the runner. Does not own waiting UI."""
+    cached = _cached_runner(chat_id)
+    if cached and await _runtime_reachable(cached):
+        return cached
+    if cached:
+        _drop_runner(chat_id)
     return await asyncio.shield(start_runner(chat_id))
 
 
@@ -895,31 +1009,33 @@ async def runner_status(chat_id: str) -> dict:
     name = claim_name(chat_id)
     cached = _cached_runner(chat_id)
     if cached:
-        return {"state": "ready", "claim": name}
+        if await _runtime_reachable(cached):
+            return {"state": "ready", "claim": name}
+        _drop_runner(chat_id)
+    if _start_in_flight(chat_id):
+        return {"state": "starting", "claim": name}
     claim = await get_claim(chat_id)
-    if not claim:
-        if _start_in_flight(chat_id):
-            return {"state": "starting", "claim": name}
+    if not claim or claim.get("metadata", {}).get("deletionTimestamp"):
         return {"state": "absent"}
     if not _claim_ready(claim):
         return {"state": "starting", "claim": name}
     try:
         pod = await get_pod(_pod_ref(claim))
     except Exception:
-        return {"state": "starting", "claim": name}
+        return {"state": "absent"}
+    pod_ip = (pod.get("status") or {}).get("podIP")
+    info = {
+        "claim": claim,
+        "pod": pod,
+        "pod_ip": pod_ip,
+        "pod_name": _pod_ref(claim),
+    }
+    if not await _runtime_reachable(info):
+        return {"state": "absent"}
     try:
         if await _packs_ready_on_runner(pod, chat_id):
-            pod_ip = (pod.get("status") or {}).get("podIP")
             if pod_ip:
-                _store_runner(
-                    chat_id,
-                    {
-                        "claim": claim,
-                        "pod": pod,
-                        "pod_ip": pod_ip,
-                        "pod_name": _pod_ref(claim),
-                    },
-                )
+                _store_runner(chat_id, info)
             return {"state": "ready", "claim": name}
     except Exception:
         log.debug("runner pack listing failed", exc_info=True)
@@ -980,6 +1096,7 @@ async def run_skill_on_runner(
     emitter=None,
 ) -> dict:
     info = await ensure_runner(chat_id, emitter=emitter)
+    await hold_runner_for_skill(chat_id, timeout)
     workspace = _runner_workspace(chat_id)
     remote_script = remote_script_path(skill_dir, script_path)
     argv = ["uv", "run", "--script", remote_script, *args]
@@ -995,20 +1112,41 @@ async def run_skill_on_runner(
     }
     runner_env.update(env)
     exec_started = time.monotonic()
+    log.info(
+        "skill exec start chat=%s script=%s runner=%s",
+        chat_id,
+        script_path.name,
+        _runner_log_name(info),
+    )
     try:
         result = await exec_on_runner(
             chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
         )
     except Exception:
-        log.info("tool runner unreachable chat=%s, replacing", chat_id, exc_info=True)
-        info = await _replace_broken_runner(chat_id, emitter=emitter)
-        result = await exec_on_runner(
-            chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+        log.info(
+            "tool runner unreachable chat=%s runner=%s",
+            chat_id,
+            _runner_log_name(info),
+            exc_info=True,
         )
+        _drop_runner(chat_id)
+        return {
+            "ok": False,
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": RUNNER_DIED_MESSAGE,
+            "script": script_path.name,
+            "cwd": workspace,
+            "argv": args,
+            "sandlock": False,
+            "landlock_backend": None,
+            "tool_runner": True,
+        }
     log.info(
-        "skill exec done chat=%s script=%s elapsed=%.2fs exit=%s",
+        "skill exec done chat=%s script=%s runner=%s elapsed=%.2fs exit=%s",
         chat_id,
         script_path.name,
+        _runner_log_name(info),
         time.monotonic() - exec_started,
         result.get("exit_code"),
     )

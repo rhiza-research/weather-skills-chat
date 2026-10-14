@@ -1,6 +1,6 @@
 # Tool Runner
 
-A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. The top-bar status shows **Weather skills runner paused** when that chat has no runner, or **Weather skills runner starting** / **Weather skills runner ready** if one is already starting or ready. Sending a message starts a runner if none is running. It stays ready while the chat is in use, and stops after ten minutes idle. Sending again after it has stopped starts it again. If that runner dies while the chat is open, the next skill starts a new one and the top bar goes back to starting, then ready. Temporary chats do not get a runner.
+A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. The top-bar status shows **Weather skills runner paused** when that chat has no runner, or **Weather skills runner starting** / **Weather skills runner ready** if one is already starting or ready. Sending a message starts a runner if none is running. It stays ready while the chat is in use, and stops after ten minutes idle. Sending again after it has stopped starts it again. A runner that is in use for a chat stays on its machine; unused spare runners can be moved when the pool shrinks. If the runner dies while a skill is running, that skill fails with **Runner died while running skills, please try again**, the top bar goes paused, and the next skill starts a new runner. If it dies while idle, the top bar goes paused and the next skill starts a new runner. Temporary chats do not get a runner.
 
 The runner is the only place skills run when it is turned on. Built-in tools and the code interpreter stay on the chat server.
 
@@ -14,11 +14,11 @@ When a k8s tool runner is on (a real runner or the local emulator), an open save
 
 If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. Skill calls are not listed while the runner is paused or still starting. When it is ready, that same line updates to the skill that is running. A skill that cannot start in time fails.
 
-Each skill call that does run resets the ten-minute idle timer.
+A running skill keeps the runner for at least that skill's run timeout (see [[Skill Packs]]), even if the runner was already ready. After the last skill, the runner still stops after ten minutes idle.
 
 ## Logs
 
-The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks, pack listings, and CPU/memory samples are not repeated there after the first one.
+The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks, pack listings, and CPU/memory samples are not repeated there after the first one. The chat server log names the chat and the runner pod for each skill call, including when a dead runner is dropped and the next skill starts a replacement.
 
 ## Automations
 
@@ -38,7 +38,7 @@ Each chat's files have a two-hundred-gigabyte ceiling so one chat cannot fill th
 | `SKILL_K8S_TTL_SECONDS` | `600` | Idle time, in seconds, before a runner stops |
 | `SKILL_K8S_QUOTA_GIB` | `200` | Ceiling, in gibibytes, for one chat's files |
 
-The Helm chart sets these when `sandbox.isolation` is `k8s`. Staging uses that. Production still confines skills on the chat server. The chart default is `off`. See [[Skill Packs]] and [[Deployment]].
+The Helm chart sets these when `sandbox.isolation` is `k8s`. Staging and production both use that. The chart default is `off`. See [[Skill Packs]] and [[Deployment]].
 
 On a laptop, `sandbox/emulator/emulator.py` speaks the same claim, bind, exec, and metrics APIs with no cluster and no isolation. The top-bar status shows CPU and memory of the local process. See [[Development]].
 

@@ -232,5 +232,35 @@ class RunSkillEnvSecretsTest(unittest.TestCase):
             self.assertNotIn("ran", result.get("stdout") or "")
 
 
+class ToolRunnerFailedMessageTest(unittest.IsolatedAsyncioTestCase):
+    async def test_empty_timeout_is_not_a_blank_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp)
+            scripts = skill / "scripts"
+            scripts.mkdir()
+            (scripts / "hello.py").write_text("print('hi')\n", encoding="utf-8")
+
+            async def boom(**_kwargs):
+                raise TimeoutError()
+
+            with (
+                patch(
+                    "open_webui.utils.skill_runtime.tool_runner_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "open_webui.utils.skill_k8s_sandbox.run_skill_on_runner",
+                    side_effect=boom,
+                ),
+            ):
+                result = await run_skill(
+                    skill,
+                    script="hello.py",
+                    __metadata__={"chat_id": "chat-err"},
+                )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stderr"], "Tool runner failed: TimeoutError")
+
+
 if __name__ == "__main__":
     unittest.main()

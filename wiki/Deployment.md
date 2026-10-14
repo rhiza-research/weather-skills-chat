@@ -31,9 +31,11 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `image.tag` selects the app version. By default it follows the chart's `appVersion`.
 - By default the app runs as one replica, with SQLite stored on a persistent volume.
 - SQLite supports one app process only: one replica, and `UVICORN_WORKERS` left at 1. Running more needs Postgres, or two processes can erase each other's changes to the same chat.
-- `sandbox.isolation` chooses how skills are isolated: `off` (the default), `auto` or `sandlock` or `landlock_only` for confinement on the chat server (see [[Skill Packs]]), or `k8s` for a [[Tool Runner]]. Staging is `k8s`. Production still confines skills on the chat server.
+- `sandbox.isolation` chooses how skills are isolated: `off` (the default), `auto` or `sandlock` or `landlock_only` for confinement on the chat server (see [[Skill Packs]]), or `k8s` for a [[Tool Runner]]. Staging and production both use `k8s`.
 - `skillVenvs.enabled` gives each pod its own volume for skill environments, and `skillVenvs.maxBytes` sets how much of it skills may use. See [[Skill Packs]].
 - `langfuse.enabled` turns [[Tracing]] on or off.
+
+Chat and [[Tool Runner]] container logs go to Cloud Logging in the cluster project.
 
 ## How settings are read
 

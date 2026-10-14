@@ -17,6 +17,20 @@ class SandboxRuntimeTest(TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertIn("ok", result["stdout"])
 
+    def test_exec_nices_the_child(self):
+        import subprocess
+        from unittest.mock import patch
+
+        real = subprocess.Popen
+
+        def spawn(*args, **kwargs):
+            self.assertIs(kwargs.get("preexec_fn"), runtime._lower_child_priority)
+            return real(*args, **kwargs)
+
+        with patch.object(runtime.subprocess, "Popen", side_effect=spawn):
+            result = runtime.run_exec({"cmd": ["echo", "ok"], "cwd": ".", "timeout": 5})
+        self.assertEqual(result["exit_code"], 0)
+
     def test_metrics_are_a_snapshot(self):
         metrics = runtime.collect_metrics()
         self.assertIn("timestamp", metrics)

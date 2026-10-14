@@ -300,9 +300,16 @@ async def run_skill(
                 emitter=emitter,
             )
         except Exception as e:
+            detail = str(e).strip() or type(e).__name__
+            log.exception(
+                "tool runner failed chat=%s script=%s error=%r",
+                chat_id,
+                script_path.name,
+                e,
+            )
             return _redact_skill_result(
                 _error_result(
-                    f"Tool runner failed: {e}",
+                    f"Tool runner failed: {detail}",
                     script=script_path.name,
                     cwd=str(cwd),
                     argv=args,

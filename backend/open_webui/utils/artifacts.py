@@ -15,7 +15,36 @@ log = logging.getLogger(__name__)
 ZARR_MARKERS = (".zgroup", ".zarray", "zarr.json")
 INTERMEDIATE_RESULTS_DIRNAME = "intermediate_results"
 # setgid + ug+rwx so new children inherit this group and stay group-writable.
+# Owner matches the tool-runner uid so skills can write files the chat created.
 SANDBOX_DIR_MODE = 0o2775
+SANDBOX_FILE_MODE = 0o664
+SANDBOX_OWNER_UID = 1000
+SANDBOX_OWNER_GID = 1000
+
+
+def own_sandbox_path(path: Path) -> None:
+    """Chown/chmod one inode so the runner can read and write it."""
+    if path.is_symlink() or not path.exists():
+        return
+    try:
+        os.chown(path, SANDBOX_OWNER_UID, SANDBOX_OWNER_GID)
+    except OSError:
+        log.debug("could not chown %s", path, exc_info=True)
+    mode = SANDBOX_DIR_MODE if path.is_dir() else SANDBOX_FILE_MODE
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        log.debug("could not chmod %s", path, exc_info=True)
+
+
+def own_sandbox_tree(path: Path) -> None:
+    """Chown/chmod a file or a directory and everything under it."""
+    if path.is_symlink() or not path.exists():
+        return
+    own_sandbox_path(path)
+    if path.is_dir():
+        for child in path.iterdir():
+            own_sandbox_tree(child)
 
 
 def make_sandbox_dir(path: Path, root: Path) -> Path:
@@ -28,10 +57,7 @@ def make_sandbox_dir(path: Path, root: Path) -> Path:
     root = root.resolve()
     cursor = path.resolve()
     while True:
-        try:
-            os.chmod(cursor, SANDBOX_DIR_MODE)
-        except OSError:
-            log.debug("could not chmod %s", cursor, exc_info=True)
+        own_sandbox_path(cursor)
         if cursor == root or root not in cursor.parents:
             break
         cursor = cursor.parent
@@ -127,14 +153,11 @@ def copy_intermediate_result(
 
     if src.is_dir():
         shutil.copytree(src, dest)
-        for dirpath, _dirnames, _filenames in os.walk(dest):
-            try:
-                os.chmod(dirpath, SANDBOX_DIR_MODE)
-            except OSError:
-                pass
+        own_sandbox_tree(dest)
         kind = "directory"
     else:
         shutil.copy2(src, dest)
+        own_sandbox_path(dest)
         kind = "file"
 
     src_label = (
@@ -614,20 +637,15 @@ def _copy_sandbox_entry(src: Path, dest: Path) -> None:
         return
     if src.is_dir():
         dest.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(dest, SANDBOX_DIR_MODE)
-        except OSError:
-            pass
+        own_sandbox_path(dest)
         for child in src.iterdir():
             _copy_sandbox_entry(child, dest / child.name)
         return
     if src.is_file():
         dest.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(dest.parent, SANDBOX_DIR_MODE)
-        except OSError:
-            pass
+        own_sandbox_path(dest.parent)
         dest.write_bytes(src.read_bytes())
+        own_sandbox_path(dest)
 
 
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
@@ -679,6 +697,7 @@ def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:
     target = resolve_in_sandbox(chat_id, relpath)
     make_sandbox_dir(target.parent, chat_sandbox(chat_id))
     target.write_bytes(data)
+    own_sandbox_path(target)
     log_timing(
         "juicefs.write_bytes",
         time.perf_counter() - t0,
@@ -848,6 +867,7 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
             payload = handle.read()
             payload = sanitize_output_artifact_bytes(name, payload)
             dest.write_bytes(payload)
+            own_sandbox_path(dest)
             written.append(name)
     return written
 
@@ -856,4 +876,5 @@ def write_json(chat_id: str, relpath: str, payload: dict) -> Path:
     target = resolve_in_sandbox(chat_id, relpath)
     make_sandbox_dir(target.parent, chat_sandbox(chat_id))
     target.write_text(json.dumps(payload, indent=2))
+    own_sandbox_path(target)
     return target

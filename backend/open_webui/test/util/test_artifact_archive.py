@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.artifacts import (
+    SANDBOX_FILE_MODE,
+    SANDBOX_OWNER_UID,
     copy_sandbox,
     copy_upload_into_chat_sandbox,
     create_folder,
@@ -18,6 +20,8 @@ from open_webui.utils.artifacts import (
     normalize_sandbox_relpath,
     pack_sandbox_archive,
     pack_sandbox_zip,
+    write_bytes,
+    write_json,
 )
 
 
@@ -224,6 +228,35 @@ class CopyUploadIntoSandboxTest(unittest.TestCase):
                 dest = artifacts / "chat-up" / "notes.csv"
                 self.assertTrue(dest.is_file())
                 self.assertEqual(dest.read_bytes(), b"a,b\n")
+
+
+class SandboxWriterOwnTest(unittest.TestCase):
+    def test_write_bytes_is_group_writable(self):
+        import stat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                dest = write_bytes("chat-1", "notes.csv", b"a,b\n")
+                mode = stat.S_IMODE(dest.stat().st_mode)
+                self.assertTrue(mode & stat.S_IWGRP, f"not group-writable: {oct(mode)}")
+                self.assertEqual(mode, SANDBOX_FILE_MODE)
+
+    def test_writers_chown_to_runner_uid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.os.chown"
+            ) as chown:
+                write_bytes("chat-1", "notes.csv", b"a")
+                write_json("chat-1", "view.zarrview.json", {"ok": True})
+                create_folder("chat-1", "plots/weekly")
+        owned = {Path(call.args[0]) for call in chown.call_args_list}
+        uids = {call.args[1] for call in chown.call_args_list}
+        self.assertTrue(any(path.name == "notes.csv" for path in owned))
+        self.assertTrue(any(path.name == "view.zarrview.json" for path in owned))
+        self.assertTrue(any(path.name == "weekly" for path in owned))
+        self.assertEqual(uids, {SANDBOX_OWNER_UID})
 
 
 def json_bytes(payload: dict) -> bytes:

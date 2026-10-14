@@ -56,7 +56,7 @@ When confinement is on, dependencies are kept in an environment per chat, on the
 | `SKILL_SANDLOCK` | `true` | Confine skill runs in chats on the chat server |
 | `SKILL_LANDLOCK_BACKEND` | `auto` | Which Landlock method to use when confinement is on: `auto` picks the best the server supports; `sandlock` and `landlock_only` force one |
 
-The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confinement off. `auto`, `sandlock`, and `landlock_only` confine on the chat server. `k8s` sends skills to a [[Tool Runner]] instead. Staging is `k8s`. Production still confines on the chat server.
+The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confinement off. `auto`, `sandlock`, and `landlock_only` confine on the chat server. `k8s` sends skills to a [[Tool Runner]] instead. Staging and production both use `k8s`. See [[Deployment]].
 | `SKILL_RUN_TIMEOUT` | `600` | How long, in seconds, a skill may run before it is stopped |
 | `SKILL_VENV_ROOT` | `/var/skill-venvs` | Volume for per-chat skill environments; used only when it exists and the app can write to it |
 | `SKILL_VENV_MAX_BYTES` | `0` | Space, in bytes, that per-chat environments may use; `0` means 85% of the volume |

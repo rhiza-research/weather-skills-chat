@@ -6,7 +6,7 @@
 """Local stand-in for the GKE Agent Sandbox API + bind daemon + runner.
 
 No gVisor, no JuiceFS, no isolation. Chat talks to this the same way it talks
-to the cluster: SandboxClaim on a fake apiserver, bind on :9090, exec on the
+to the cluster: SandboxClaim on a fake apiserver, bind/own on :9090, exec on the
 per-chat runtime. The runner cwd is the chat's artifacts directory.
 
     uv run --script sandbox/emulator/emulator.py
@@ -396,7 +396,7 @@ class BindHandler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         body = _read(self)
-        if path in ("/bind", "/quota", "/unbind"):
+        if path in ("/bind", "/quota", "/unbind", "/own"):
             if path == "/bind":
                 _workspace(body.get("chat_id") or "")
             _json(self, 200, {"ok": True})

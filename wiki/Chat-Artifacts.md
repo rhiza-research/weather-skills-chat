@@ -17,7 +17,7 @@ Images and Zarr stores made by skills carry their provenance: the chain of skill
 ## Downloading and uploading
 
 - Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A Zarr store is downloaded as a zip of that store.
-- The chat's owner can upload a single file, or a tar archive that is unpacked into the chat's files. Uploaded files replace existing files with the same name. An archive that tries to write outside the chat's files is refused.
+- The chat's owner can upload a single file, or a tar archive that is unpacked into the chat's files. Uploaded files replace existing files with the same name. An archive that tries to write outside the chat's files is refused. Files and folders the chat server creates or uploads stay writable by skills.
 - When a tar archive is unpacked into the chat, provenance is removed from the images and Zarr stores in it.
 
 Archive downloads and archive uploads have a size limit, and so do the files the model copies into running code on [[Built-in Tools]].

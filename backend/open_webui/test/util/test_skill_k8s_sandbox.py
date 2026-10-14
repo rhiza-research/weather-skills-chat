@@ -1,11 +1,15 @@
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from open_webui.utils.skill_k8s_sandbox import (
     PACKS_ANN,
+    RUNNER_HOLD_BUFFER_SEC,
     RUNNER_UV_CACHE_DIR,
     WAITING_STATUS,
+    _runner_log_name,
+    _http_failure,
+    _http_json,
     _drop_runner,
     _emit_waiting,
     _ready_cache,
@@ -18,12 +22,17 @@ from open_webui.utils.skill_k8s_sandbox import (
     _tar_pack,
     _uv_cache_dir,
     await_runner_for_chat,
+    bind_workspace,
     claim_name,
     delete_claim,
     emulator_enabled,
+    extend_claim_ttl,
+    hold_runner_for_skill,
     in_cluster,
     remote_script_path,
     public_runner_state,
+    RUNNER_DIED_MESSAGE,
+    runner_hold_seconds,
     runner_needs_wait,
     runner_metrics,
     runner_ready,
@@ -34,6 +43,20 @@ from open_webui.utils.skill_k8s_sandbox import (
 )
 
 
+class RunnerLogNameTest(TestCase):
+    def test_prefers_pod_name(self):
+        self.assertEqual(
+            _runner_log_name({"pod_name": "weather-skills-standard-runner-abc", "pod_ip": "10.0.0.1"}),
+            "weather-skills-standard-runner-abc",
+        )
+
+    def test_falls_back_to_pod_ip(self):
+        self.assertEqual(_runner_log_name({"pod_ip": "10.0.0.1"}), "10.0.0.1")
+
+    def test_unknown_when_missing(self):
+        self.assertEqual(_runner_log_name({}), "?")
+
+
 class ClaimNameTest(TestCase):
     def test_strips_unsafe_characters(self):
         self.assertEqual(claim_name("abc_def"), "runner-abc-def")
@@ -42,6 +65,55 @@ class ClaimNameTest(TestCase):
         name = claim_name("x" * 80)
         self.assertLessEqual(len(name), 63)
         self.assertTrue(name.startswith("runner-"))
+
+
+class HttpFailureTest(TestCase):
+    def test_empty_timeout_names_the_request(self):
+        err = _http_failure("POST", "http://10.0.0.1:8888/exec", 30, TimeoutError())
+        self.assertEqual(str(err), "POST http://10.0.0.1:8888/exec timed out after 30s")
+
+    def test_empty_client_error_uses_type_name(self):
+        class BlankDisconnect(Exception):
+            def __str__(self):
+                return ""
+
+        err = _http_failure(
+            "GET", "http://10.0.0.1:8888/health", 30, BlankDisconnect()
+        )
+        self.assertIn("BlankDisconnect", str(err))
+        self.assertIn("/health", str(err))
+
+
+class HttpJsonTimeoutTest(IsolatedAsyncioTestCase):
+    async def test_timeout_becomes_runtime_error_with_url(self):
+        class Boom:
+            async def __aenter__(self):
+                raise TimeoutError()
+
+            async def __aexit__(self, *args):
+                return False
+
+        class Session:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            def request(self, *args, **kwargs):
+                return Boom()
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.aiohttp.ClientSession", Session
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                await _http_json("POST", "http://10.0.0.1:8888/exec", timeout=30)
+        self.assertEqual(
+            str(ctx.exception), "POST http://10.0.0.1:8888/exec timed out after 30s"
+        )
 
 
 class TransportTest(TestCase):
@@ -390,10 +462,29 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
 
     async def test_cache_is_ready_without_another_pack_check(self):
         _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
-        with patch("open_webui.utils.skill_k8s_sandbox.get_claim") as get_claim:
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim") as get_claim, patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "ready")
         get_claim.assert_not_called()
+
+    async def test_dead_cached_runner_is_paused(self):
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable",
+            new_callable=AsyncMock,
+            return_value=False,
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "absent")
+        self.assertIsNone(_ready_cache.get("chat-1"))
 
     async def test_ready_when_runner_lists_installed_packs(self):
         claim = {
@@ -407,6 +498,10 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
             "open_webui.utils.skill_k8s_sandbox.get_claim", return_value=claim
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable",
+            new_callable=AsyncMock,
+            return_value=True,
         ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value={"weather-skills"},
@@ -434,6 +529,10 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
         ), patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs"
         ) as listed:
             status = await runner_status("chat-1")
@@ -453,6 +552,10 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
             "open_webui.utils.skill_k8s_sandbox.get_claim", return_value=claim
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable",
+            new_callable=AsyncMock,
+            return_value=True,
         ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value=set(),
@@ -474,27 +577,127 @@ class PublicRunnerStateTest(TestCase):
         self.assertEqual(public_runner_state("ready"), "ready")
 
 
+class RunnerHoldTest(TestCase):
+    def test_short_skill_keeps_the_idle_ttl(self):
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._ttl_seconds", return_value=600
+        ):
+            self.assertEqual(runner_hold_seconds(30), 600)
+
+    def test_long_skill_holds_past_its_timeout(self):
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._ttl_seconds", return_value=600
+        ):
+            self.assertEqual(
+                runner_hold_seconds(600), 600 + RUNNER_HOLD_BUFFER_SEC
+            )
+            self.assertEqual(
+                runner_hold_seconds(900), 900 + RUNNER_HOLD_BUFFER_SEC
+            )
+
+
+class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
+    async def test_cached_runner_still_extends_the_claim(self):
+        claim = {
+            "metadata": {"name": "runner-chat-1"},
+            "spec": {"lifecycle": {"shutdownTime": "2026-10-14T19:26:05Z"}},
+        }
+        holds = []
+
+        async def get(chat_id):
+            return claim
+
+        async def extend(body, seconds=None):
+            holds.append(seconds)
+            return body
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._ttl_seconds", return_value=600
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_claim", side_effect=get
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.extend_claim_ttl", side_effect=extend
+        ):
+            await hold_runner_for_skill("chat-1", 600)
+        self.assertEqual(holds, [600 + RUNNER_HOLD_BUFFER_SEC])
+
+    async def test_run_skill_holds_even_when_the_runner_is_already_ready(self):
+        holds = []
+
+        async def ensure(chat_id, *, emitter=None):
+            info = {"pod_ip": "10.0.0.1", "pod_name": "ready"}
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            return {"exit_code": 0, "stdout": "ok", "stderr": ""}
+
+        async def hold(chat_id, timeout):
+            holds.append(timeout)
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.ensure_runner", side_effect=ensure
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.exec_on_runner", side_effect=exec_on
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.hold_runner_for_skill", side_effect=hold
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.remote_script_path",
+            return_value="/workspace/.skill-packs/x/script.py",
+        ):
+            await run_skill_on_runner(
+                chat_id="chat-1",
+                skill_dir=Path("/data/skills/x"),
+                script_path=Path("/data/skills/x/script.py"),
+                args=[],
+                env={},
+                timeout=600,
+            )
+        _drop_runner("chat-1")
+        self.assertEqual(holds, [600])
+
+    async def test_extend_claim_ttl_uses_the_requested_hold(self):
+        puts = []
+
+        async def k8s(method, path, body=None, timeout=30):
+            puts.append((method, path, body))
+            return body or {}
+
+        claim = {
+            "metadata": {"name": "runner-chat-1"},
+            "spec": {"lifecycle": {}},
+        }
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._k8s", side_effect=k8s
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.datetime"
+        ) as dt:
+            from datetime import datetime, timezone
+
+            dt.now.return_value = datetime(2026, 10, 14, 19, 16, 5, tzinfo=timezone.utc)
+            await extend_claim_ttl(claim, seconds=660)
+        self.assertEqual(puts[0][0], "PUT")
+        self.assertEqual(
+            puts[0][2]["spec"]["lifecycle"]["shutdownTime"],
+            "2026-10-14T19:27:05Z",
+        )
+
+
 class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
     def tearDown(self):
         _drop_runner("chat-1")
 
-    async def test_a_lost_exec_starts_a_new_runner(self):
-        infos = [
-            {"pod_ip": "10.0.0.1", "pod_name": "old"},
-            {"pod_ip": "10.0.0.2", "pod_name": "new"},
-        ]
+    async def test_a_lost_exec_tells_the_user_to_retry(self):
+        info = {"pod_ip": "10.0.0.1", "pod_name": "old"}
         execs = []
 
         async def ensure(chat_id, *, emitter=None):
-            info = infos.pop(0)
             _store_runner(chat_id, info)
             return info
 
         async def exec_on(chat_id, argv, **kwargs):
             execs.append(kwargs.get("info"))
-            if len(execs) == 1:
-                raise RuntimeError("POST http://10.0.0.1:8888/exec -> 502")
-            return {"exit_code": 0, "stdout": "ok", "stderr": ""}
+            raise RuntimeError("POST http://10.0.0.1:8888/exec -> 502")
 
         with patch(
             "open_webui.utils.skill_k8s_sandbox.ensure_runner", side_effect=ensure
@@ -505,7 +708,9 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
         ) as delete, patch(
             "open_webui.utils.skill_k8s_sandbox.remote_script_path",
             return_value="/workspace/.skill-packs/x/script.py",
-        ):
+        ), self.assertLogs(
+            "open_webui.utils.skill_k8s_sandbox", level="INFO"
+        ) as logs:
             result = await run_skill_on_runner(
                 chat_id="chat-1",
                 skill_dir=Path("/data/skills/x"),
@@ -514,10 +719,15 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
                 env={},
                 timeout=30,
             )
-        self.assertTrue(result["ok"])
-        delete.assert_awaited()
-        self.assertEqual(len(execs), 2)
-        self.assertEqual(execs[1]["pod_ip"], "10.0.0.2")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
+        delete.assert_not_awaited()
+        self.assertEqual(len(execs), 1)
+        self.assertIsNone(_ready_cache.get("chat-1"))
+        text = "\n".join(logs.output)
+        self.assertIn("skill exec start chat=chat-1 script=script.py runner=old", text)
+        self.assertIn("tool runner unreachable chat=chat-1 runner=old", text)
+        self.assertNotIn("skill exec retry", text)
 
     async def test_failed_metrics_forget_a_ready_runner(self):
         _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
@@ -548,3 +758,70 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
             self.assertIsNot(second, first)
             await second
         self.assertEqual(runs["n"], 2)
+
+
+class BindWorkspaceTest(IsolatedAsyncioTestCase):
+    async def test_owns_intermediate_results_folder_then_binds(self):
+        calls = []
+
+        async def http(method, url, **kwargs):
+            calls.append((method, url, kwargs.get("json_body")))
+            return {"ok": True}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._bind_base",
+            new_callable=AsyncMock,
+            return_value="http://10.0.0.9:9090",
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.bind_token",
+            new_callable=AsyncMock,
+            return_value="tok",
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._quota_gib",
+            return_value=200,
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._http_json",
+            side_effect=http,
+        ):
+            await bind_workspace("chat-1", {"metadata": {"uid": "pod-uid"}})
+
+        paths = [url.rsplit("/", 1)[-1] for _method, url, _body in calls]
+        self.assertEqual(paths, ["quota", "own", "bind"])
+        self.assertEqual(calls[1][2]["chat_id"], "chat-1")
+        self.assertEqual(calls[1][2]["paths"], ["intermediate_results"])
+        self.assertEqual(calls[1][2]["trees"], [])
+        self.assertEqual(calls[2][2], {"chat_id": "chat-1", "pod_uid": "pod-uid"})
+
+    async def test_own_workspace_can_walk_trees(self):
+        from open_webui.utils.skill_k8s_sandbox import own_workspace
+
+        calls = []
+
+        async def http(method, url, **kwargs):
+            calls.append((url, kwargs.get("json_body")))
+            return {"ok": True}
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._bind_base",
+            new_callable=AsyncMock,
+            return_value="http://10.0.0.9:9090",
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.bind_token",
+            new_callable=AsyncMock,
+            return_value="tok",
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._http_json",
+            side_effect=http,
+        ):
+            await own_workspace(
+                "chat-1",
+                {"metadata": {"uid": "pod-uid"}},
+                paths=["notes.csv"],
+                trees=["plots"],
+            )
+            await own_workspace("chat-1", {"metadata": {"uid": "pod-uid"}})
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0][0].endswith("/own"))
+        self.assertEqual(calls[0][1]["paths"], ["notes.csv"])
+        self.assertEqual(calls[0][1]["trees"], ["plots"])
