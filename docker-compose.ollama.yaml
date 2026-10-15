@@ -13,7 +13,9 @@ services:
       - ollama
     environment:
       # Points the application at the ollama service in this file.
-      - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - 'OLLAMA_BASE_URLS=http://ollama:11434'
+      # The Ollama server used for document embeddings when that engine is chosen.
+      - 'RAG_OLLAMA_BASE_URL=http://ollama:11434'
       # The application default is off, and this file exists to bring the stack up using Ollama.
       - 'ENABLE_OLLAMA_API=true'
 

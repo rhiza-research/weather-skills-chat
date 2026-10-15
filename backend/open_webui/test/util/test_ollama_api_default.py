@@ -1,11 +1,13 @@
 """ENABLE_OLLAMA_API is off unless the environment turns it on."""
 
+import asyncio
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 
@@ -53,3 +55,53 @@ class OllamaApiDefaultTest(unittest.TestCase):
 
     def test_false_is_off(self):
         self.assertFalse(ollama_api_enabled("false"))
+
+
+class NoOllamaAddressTest(unittest.TestCase):
+    """OLLAMA_BASE_URLS defaults to no address, with the API on or off."""
+
+    def _request(self, enabled: bool):
+        app = SimpleNamespace(
+            state=SimpleNamespace(
+                config=SimpleNamespace(
+                    ENABLE_OLLAMA_API=enabled,
+                    OLLAMA_BASE_URLS=[],
+                    OLLAMA_API_CONFIGS={},
+                ),
+                OLLAMA_MODELS=None,
+            )
+        )
+        return SimpleNamespace(app=app)
+
+    def test_model_list_is_empty(self):
+        from open_webui.routers import ollama
+
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                request = self._request(enabled)
+                models = asyncio.run(ollama.get_all_models(request))
+                self.assertEqual(models, {"models": []})
+                self.assertEqual(request.app.state.OLLAMA_MODELS, {})
+
+    def test_loaded_models_are_empty(self):
+        from open_webui.routers import ollama
+
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                result = asyncio.run(
+                    ollama.get_ollama_loaded_models(self._request(enabled), user=None)
+                )
+                self.assertEqual(result, {})
+
+    def test_version_reports_no_server(self):
+        from fastapi import HTTPException
+
+        from open_webui.routers import ollama
+
+        self.assertEqual(
+            asyncio.run(ollama.get_ollama_versions(self._request(False))),
+            {"version": False},
+        )
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(ollama.get_ollama_versions(self._request(True)))
+        self.assertEqual(raised.exception.status_code, 500)

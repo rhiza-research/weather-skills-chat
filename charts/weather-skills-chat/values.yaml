@@ -192,6 +192,7 @@ storage:
 
 # OpenAI-compatible API connection (Anthropic, OpenAI, etc.).
 # Set apiBaseUrl and put the matching API key in the Secret as OPENAI_API_KEY.
+# The chart passes them to the app as OPENAI_API_BASE_URLS and OPENAI_API_KEYS.
 openai:
   enabled: true
   apiBaseUrl: ""

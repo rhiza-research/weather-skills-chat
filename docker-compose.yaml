@@ -2,8 +2,6 @@ services:
   open-webui:
     build:
       context: .
-      args:
-        OLLAMA_BASE_URL: '/ollama'
       dockerfile: Dockerfile
     # Image and container name are overridable. A local build tags the image name, which would
     # retag an image used by another stack on the same Docker daemon, and a fixed container name
@@ -17,8 +15,8 @@ services:
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
-      - OPENAI_API_BASE_URL
-      - OPENAI_API_KEY
+      - OPENAI_API_BASE_URLS
+      - OPENAI_API_KEYS
       - WEBUI_SECRET_KEY
       - WEBUI_URL
       - EMAIL_TOOL_SMTP_HOST
