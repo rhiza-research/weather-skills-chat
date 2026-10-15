@@ -17,6 +17,8 @@ An admin installs a pack from its `https://` git address and a branch, tag, or c
 
 An organization can install the same address and branch only once. To get newer code, update the pack.
 
+A deployment can also list public packs in `SKILL_PACKS`. On every start, before it answers requests, the app installs each listed pack that the platform organization does not already have at that address and branch, owned by the first admin account described on [[Deployment]]. A pack that is already installed is not fetched again, and only whether it starts on or off is set from the variable. A pack taken out of the variable stays installed. If a pack cannot be installed, or the variable lists an address and branch twice, the app does not start.
+
 ## Managing a pack
 
 - Update fetches the latest code for the pack's branch, or switches it to another branch, tag, or commit. Skills that were added appear as tools, and skills that were removed disappear.
@@ -60,5 +62,6 @@ When confinement is on, dependencies are kept in an environment per chat, on the
 | `UV_CACHE_DIR` | `<DATA_DIR>/uv-cache` | Dependency cache when confinement is off |
 | `USER_CACHES_DIR` | `<DATA_DIR>/user_caches` | Per-user dependency caches when confinement is on and there is no per-chat volume |
 | `SKILL_PACK_COPY_WORKERS` | The number of CPUs | How many files are copied at once when a pack is installed or updated |
+| `SKILL_PACKS` | not set | Public packs to install on start, as a JSON array of objects, each with a `git_url`, and optionally a `ref` (default `main`) and `enabled_by_default` (default `true`) |
 
 The server needs `git` to install packs and `uv` to run skills.

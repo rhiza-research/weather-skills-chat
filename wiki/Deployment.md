@@ -71,6 +71,15 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 | `BOOTSTRAP_ADMIN_EMAIL` | empty | First admin's email |
 | `BOOTSTRAP_ADMIN_PASSWORD` | empty | First admin's password |
 | `BOOTSTRAP_ADMIN_NAME` | `admin` | First admin's display name |
+| `BOOTSTRAP_ADMIN_API_KEY` | not set | API key of the `BOOTSTRAP_ADMIN_EMAIL` account: `sk-` followed by more characters, with no spaces. The app sets it on every start, replacing a key made in the app. The app does not start when `ENABLE_API_KEY` is off or another account already has the key. |
+
+## Catalog from the environment
+
+On every start, before it answers requests, the app can create public catalog models and install public skill packs, owned by the `BOOTSTRAP_ADMIN_EMAIL` account. The catalog is described on [[Organizations]], and skill packs from the environment on [[Skill Packs]]. When `CATALOG_MODELS` or `SKILL_PACKS` lists anything, or `BOOTSTRAP_ADMIN_API_KEY` is set, that account must exist and be an owner or admin of the platform organization. Otherwise, or when anything they ask for fails, the app does not start.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `CATALOG_MODELS` | not set | Public models, as a JSON array of model objects, each with `id`, `name`, `base_model_id`, `meta`, and `params`, and optionally `access_control`, `is_active`, and `enabled_by_default`. Each `id` must be non-empty and listed once. A model whose `id` already exists is overwritten from the variable on every start, so changes made to it in the app last only until the next start. A model taken out of the variable is left as it is. |
 
 ## Sign-in
 
