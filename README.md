@@ -47,7 +47,7 @@ cp .env.example .env
 - **`--ollama`** also starts an Ollama container and connects the app to it.
 - **`--build`** rebuilds the image from this checkout before starting.
 
-Add a model in the admin settings, or set `OPENAI_API_BASE_URL` and `OPENAI_API_KEY` in `.env`.
+Add a model in the admin settings, or set `OPENAI_API_BASE_URLS` and `OPENAI_API_KEYS` in `.env`.
 
 To work on the UI and API without Docker, start `npm run dev` and `backend/dev.sh` as described on [Development](https://github.com/rhiza-research/weather-skills-chat/wiki/Development).
 
