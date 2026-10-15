@@ -71,13 +71,13 @@ The app reaches models through OpenAI-compatible providers and Ollama servers, w
 |-|-|-|
 | `ENABLE_OLLAMA_API` | `false` | Connects the app to Ollama servers. When it is off, the app does not look for an Ollama server. |
 | `OPENAI_API_BASE_URLS` | `https://api.openai.com/v1` | Addresses of the OpenAI-compatible connections, separated by `;`. Alias: `OPENAI_API_BASE_URL`. |
-| `OPENAI_API_KEYS` | one connection with no key | Keys of those connections, in the same order, separated by `;`. When the addresses and the keys are both set, they must have the same number of entries. Alias: `OPENAI_API_KEY`. |
+| `OPENAI_API_KEYS` | one connection with no key | Keys of those connections, in the same order, separated by `;`. Alias: `OPENAI_API_KEY`. |
 | `OPENAI_API_CONFIGS` | empty | Settings of each OpenAI-compatible connection, as a JSON object keyed by connection number, such as `{"0": {"model_call_tracing": "openrouter"}}`. Model-call tracing is described on [[Tracing]]. |
 | `OLLAMA_BASE_URLS` | empty | Addresses of the Ollama servers, separated by `;`. With none set, the app connects to no Ollama server even when `ENABLE_OLLAMA_API` is on. A trailing `/` is removed from each address. Alias: `OLLAMA_BASE_URL`. |
 | `OLLAMA_API_CONFIGS` | empty | Settings of each Ollama connection, as a JSON object keyed by connection number |
 | `TOOL_SERVER_CONNECTIONS` | empty | Tool servers, as a JSON array of objects, each with a `url` and the `path` of its OpenAPI description |
 
-`OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, and `OLLAMA_BASE_URLS` are read the same way from their own variable and from their alias: the value is split at `;` and spaces around each entry are removed. A key may be empty, which means a connection with no key; an empty `OPENAI_API_KEYS` value means no key for every address. An address may not be empty, so an empty address value, a stray `;` in an address list, or an Ollama address of only `/` stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
+`OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, and `OLLAMA_BASE_URLS` are read the same way from their own variable and from their alias: the value is split at `;` and spaces around each entry are removed. A key may be empty, which means a connection with no key; an empty `OPENAI_API_KEYS` value means no key for every address. Otherwise, when both the addresses and the keys are set, they must have the same number of entries. An address may not be empty, so an empty address value, a stray `;` in an address list, or an Ollama address of only `/` stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
 
 The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` by default. In a chart deployment the chart therefore decides whether the Ollama API is on, and turning it on or off in the admin settings has no effect.
 
