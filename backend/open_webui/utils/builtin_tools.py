@@ -913,7 +913,13 @@ async def read_artifact(
             path=rel, __user__=__user__, __metadata__=__metadata__
         )
         if isinstance(shown, list) and shown:
-            shown = [f"The user approved reading `{rel}`.", *shown[1:]]
+            shown = [
+                (
+                    f"The user approved reading `{rel}`. "
+                    "The image is attached as a vision input after this tool result."
+                ),
+                *shown[1:],
+            ]
         return shown
 
     if __request__ is None:

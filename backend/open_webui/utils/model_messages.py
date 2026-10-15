@@ -134,10 +134,23 @@ def deepcopy_messages(messages: list[dict]) -> list[dict]:
     return deepcopy(messages or [])
 
 
-def read_artifact_image_urls(content_blocks: list[dict] | None) -> list[str]:
+def _latest_tool_calls_block(content_blocks: list[dict] | None) -> dict | None:
+    for block in reversed(content_blocks or []):
+        if block.get("type") == "tool_calls":
+            return block
+    return None
+
+
+def read_artifact_image_urls(
+    content_blocks: list[dict] | None, *, latest_only: bool = False
+) -> list[str]:
     """Data-URL images from approved ``read_artifact`` tool results."""
+    blocks = content_blocks or []
+    if latest_only:
+        latest = _latest_tool_calls_block(blocks)
+        blocks = [latest] if latest else []
     urls: list[str] = []
-    for block in content_blocks or []:
+    for block in blocks:
         if block.get("type") != "tool_calls":
             continue
         names = {
@@ -159,37 +172,38 @@ def read_artifact_image_urls(content_blocks: list[dict] | None) -> list[str]:
 def attach_read_artifact_images(
     messages: list[dict] | None, content_blocks: list[dict] | None
 ) -> list[dict]:
-    """Put approved ``read_artifact`` images on the last user message.
+    """Append approved ``read_artifact`` images after the latest tool wave.
 
-    Tool messages are text-only, so vision models only see pixels if they
-    appear as ``image_url`` parts on a user message — the same shape as a
-    chat-bar image attachment.
+    Tool messages are text-only. Splicing pixels onto an earlier user turn
+    does not work: the model has already read that turn and will not go
+    back. A new user message after the tool results is the same vision
+    shape as a chat-bar image, and models do look at it.
+
+    Only the just-finished tool wave is used. Replaying an earlier
+    read_artifact snapshot after a later ``plot`` makes the model think
+    the file never changed.
     """
-    messages = messages or []
-    urls = read_artifact_image_urls(content_blocks)
+    messages = list(messages or [])
+    urls = []
+    seen = set()
+    for url in read_artifact_image_urls(content_blocks, latest_only=True):
+        if url not in seen:
+            urls.append(url)
+            seen.add(url)
     if not urls:
         return messages
-    for message in reversed(messages):
-        if message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            parts: list[dict] = [{"type": "text", "text": content}]
-        elif isinstance(content, list):
-            parts = [item for item in content if isinstance(item, dict)]
-        else:
-            parts = [{"type": "text", "text": str(content or "")}]
-        existing = {
-            (part.get("image_url") or {}).get("url")
-            for part in parts
-            if part.get("type") == "image_url"
+    parts: list[dict] = [
+        {
+            "type": "text",
+            "text": (
+                "The image from the approved read_artifact call is attached. "
+                "Use it as your view of that file."
+            ),
         }
-        for url in urls:
-            if url not in existing:
-                parts.append({"type": "image_url", "image_url": {"url": url}})
-                existing.add(url)
-        message["content"] = parts
-        break
+    ]
+    for url in urls:
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    messages.append({"role": "user", "content": parts})
     return messages
 
 

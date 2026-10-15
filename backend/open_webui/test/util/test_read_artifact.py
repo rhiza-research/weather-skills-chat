@@ -40,10 +40,21 @@ class ReadArtifactImageUrlsTest(unittest.TestCase):
             read_artifact_image_urls(blocks), ["data:image/png;base64,read"]
         )
 
-    def test_attaches_to_last_user_message(self):
+    def test_appends_image_after_tool_results(self):
         messages = [
-            {"role": "system", "content": "sys"},
             {"role": "user", "content": "Look at photo.png"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "c2",
+                        "type": "function",
+                        "function": {"name": "read_artifact", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "c2", "content": "approved"},
         ]
         blocks = [
             {
@@ -57,12 +68,51 @@ class ReadArtifactImageUrlsTest(unittest.TestCase):
                 ],
             }
         ]
-        attach_read_artifact_images(messages, blocks)
-        content = messages[1]["content"]
-        self.assertEqual(content[0], {"type": "text", "text": "Look at photo.png"})
+        out = attach_read_artifact_images(messages, blocks)
+        self.assertEqual(out[0]["content"], "Look at photo.png")
+        self.assertEqual(out[-1]["role"], "user")
+        content = out[-1]["content"]
+        self.assertEqual(content[0]["type"], "text")
+        self.assertIn("read_artifact", content[0]["text"])
         self.assertEqual(
             content[1],
             {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+        )
+
+    def test_does_not_replay_image_after_later_tool_wave(self):
+        messages = [
+            {"role": "user", "content": "fix the plot"},
+            {"role": "assistant", "content": None, "tool_calls": []},
+            {"role": "tool", "tool_call_id": "c2", "content": "approved"},
+            {"role": "assistant", "content": None, "tool_calls": []},
+            {"role": "tool", "tool_call_id": "p1", "content": "plotted"},
+        ]
+        blocks = [
+            {
+                "type": "tool_calls",
+                "content": [{"id": "c2", "function": {"name": "read_artifact"}}],
+                "results": [
+                    {
+                        "tool_call_id": "c2",
+                        "files": ["data:image/png;base64,stale"],
+                    }
+                ],
+            },
+            {"type": "text", "content": ""},
+            {
+                "type": "tool_calls",
+                "content": [{"id": "p1", "function": {"name": "plot"}}],
+                "results": [{"tool_call_id": "p1", "content": "plotted"}],
+            },
+        ]
+        out = attach_read_artifact_images(messages, blocks)
+        self.assertEqual(out, messages)
+        self.assertFalse(
+            any(
+                isinstance(m.get("content"), list)
+                and any(part.get("type") == "image_url" for part in m["content"])
+                for m in out
+            )
         )
 
 
@@ -163,7 +213,10 @@ class ReadArtifactToolTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 out,
                 [
-                    "The user approved reading `photo.png`.",
+                    (
+                        "The user approved reading `photo.png`. "
+                        "The image is attached as a vision input after this tool result."
+                    ),
                     "data:image/png;base64,fromdisk",
                 ],
             )

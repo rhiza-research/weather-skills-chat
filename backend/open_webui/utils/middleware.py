@@ -2734,8 +2734,12 @@ async def process_chat_response(
                             deepcopy_messages,
                         )
 
-                        attach_read_artifact_images(
-                            form_data["messages"], content_blocks
+                        followup_messages = attach_read_artifact_images(
+                            [
+                                *deepcopy_messages(form_data["messages"]),
+                                *convert_content_blocks_to_messages(content_blocks),
+                            ],
+                            content_blocks,
                         )
 
                         await waiting_heartbeat.start()
@@ -2752,10 +2756,7 @@ async def process_chat_response(
                                 "model": model_id,
                                 "stream": True,
                                 "tools": form_data["tools"],
-                                "messages": [
-                                    *deepcopy_messages(form_data["messages"]),
-                                    *convert_content_blocks_to_messages(content_blocks),
-                                ],
+                                "messages": followup_messages,
                                 "metadata": {
                                     "chat_id": metadata.get("chat_id"),
                                     "message_id": metadata.get("message_id"),
