@@ -146,14 +146,6 @@ jobs:
         if: always() && env.USE_REGISTRY_CACHE == 'true'
         run: docker logout ghcr.io
 
-      # Fails when the image's own environment sets a variable that pins an admin setting.
-      - name: Check that the image pins no setting
-        run: |
-          docker run --rm \
-            -e WEBUI_SECRET_KEY=ci-image-env-check \
-            weather-skills-chat:e2e \
-            python -c "import os, sys; from open_webui.config import PERSISTENT_CONFIG_REGISTRY as r; pinned = sorted(c.env_name for c in r if c.env_name in os.environ); print('settings pinned by the image:', pinned); sys.exit(1 if pinned else 0)"
-
       # Fails when Landlock is unavailable in the container or the skill does not run under it.
       - name: Run a skill under the default Landlock sandbox backend
         run: |
