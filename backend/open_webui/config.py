@@ -934,6 +934,9 @@ OPENAI_API_KEYS_ENV, OPENAI_API_KEYS = env_list_or_alias(
 OPENAI_API_BASE_URLS_ENV, OPENAI_API_BASE_URLS = env_list_or_alias(
     "OPENAI_API_BASE_URLS", "OPENAI_API_BASE_URL"
 )
+# An empty or blank key value means no key for every address.
+if OPENAI_API_KEYS == [""] and OPENAI_API_BASE_URLS is not None:
+    OPENAI_API_KEYS = [""] * len(OPENAI_API_BASE_URLS)
 if (
     OPENAI_API_KEYS is not None
     and OPENAI_API_BASE_URLS is not None
