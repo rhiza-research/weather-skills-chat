@@ -379,6 +379,23 @@ class EnvSettingsTest(unittest.TestCase):
                     probe = _probe(["OPENAI_API_KEYS"], {name: value}, self.db_path)
                     self.assertEqual(probe["OPENAI_API_KEYS"]["value"], expected)
 
+    def test_empty_key_value_means_no_key_for_every_address(self):
+        for addresses, expected in (
+            ("https://a.example/v1", [""]),
+            ("https://a.example/v1;https://b.example/v1", ["", ""]),
+        ):
+            for value in ("", "  "):
+                with self.subTest(addresses=addresses, value=value):
+                    probe = _probe(
+                        ["OPENAI_API_KEYS", "OPENAI_API_BASE_URLS"],
+                        {"OPENAI_API_KEY": value, "OPENAI_API_BASE_URL": addresses},
+                        self.db_path,
+                    )
+                    self.assertEqual(probe["OPENAI_API_KEYS"]["value"], expected)
+                    self.assertEqual(
+                        len(probe["OPENAI_API_BASE_URLS"]["value"]), len(expected)
+                    )
+
     def test_invalid_plural_next_to_a_valid_alias_stops_startup(self):
         for plural, alias in ADDRESS_NAMES.items():
             with self.subTest(name=plural):
