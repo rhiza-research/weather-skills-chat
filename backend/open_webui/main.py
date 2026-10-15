@@ -564,9 +564,11 @@ async def lifespan(app: FastAPI):
     if RESET_CONFIG_ON_START:
         reset_config()
 
-    from open_webui.utils.bootstrap import bootstrap_admin_user
+    from open_webui.utils.bootstrap import bootstrap_admin_user, provision_from_env
 
     bootstrap_admin_user()
+    # Before yield, so a failure stops startup and requests wait for it.
+    await asyncio.to_thread(provision_from_env, app.state.TOOLS)
 
     if LICENSE_KEY:
         get_license_data(app, LICENSE_KEY)
