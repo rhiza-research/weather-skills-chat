@@ -59,7 +59,7 @@ It costs about 0.2% of one CPU core when the server is idle, and adds no delay t
 
 ## How settings are read
 
-Each setting is read from one environment variable, the one named on these pages. When that variable is set, the app uses its value on every start, and changes made in the admin settings are ignored. For a text setting, an empty value counts as set. When the variable is not set, the admin settings control the setting: the app uses the value last saved there, or the built-in default when nothing was saved or `ENABLE_PERSISTENT_CONFIG` is false. `ENABLE_PERSISTENT_CONFIG` is true by default. The container image sets none of these variables.
+Each setting is read from the environment variable named on these pages. A few settings also have an alias, a second variable listed beside the setting, which sets it the same way. When both names are set, the setting's own name is used and the app logs a warning. When either name is set, the app uses its value on every start, and changes made in the admin settings are ignored. For a text setting, an empty value counts as set. When the variable is not set, the admin settings control the setting: the app uses the value last saved there, or the built-in default when nothing was saved or `ENABLE_PERSISTENT_CONFIG` is false. `ENABLE_PERSISTENT_CONFIG` is true by default. The container image sets none of these variables.
 
 Settings that hold a list or a group of values take JSON. When such a variable is empty, is not valid JSON, is the wrong kind of JSON value, or has an entry of the wrong shape or with a key the setting does not have, the app does not start, and the error names the variable. A JSON value replaces the setting's default entirely; nothing from the default is kept.
 
@@ -70,14 +70,14 @@ The app reaches models through OpenAI-compatible providers and Ollama servers, w
 | Env var | Default | Effect |
 |-|-|-|
 | `ENABLE_OLLAMA_API` | `false` | Connects the app to Ollama servers. When it is off, the app does not look for an Ollama server. |
-| `OPENAI_API_BASE_URLS` | `https://api.openai.com/v1` | Addresses of the OpenAI-compatible connections, separated by `;` |
-| `OPENAI_API_KEYS` | one connection with no key | Keys of those connections, in the same order, separated by `;`. When both this and `OPENAI_API_BASE_URLS` are set, they must have the same number of entries. |
+| `OPENAI_API_BASE_URLS` | `https://api.openai.com/v1` | Addresses of the OpenAI-compatible connections, separated by `;`. Alias: `OPENAI_API_BASE_URL`, which holds one address. |
+| `OPENAI_API_KEYS` | one connection with no key | Keys of those connections, in the same order, separated by `;`. When both this and `OPENAI_API_BASE_URLS` are set, they must have the same number of entries. Alias: `OPENAI_API_KEY`, which holds one key. |
 | `OPENAI_API_CONFIGS` | empty | Settings of each OpenAI-compatible connection, as a JSON object keyed by connection number, such as `{"0": {"model_call_tracing": "openrouter"}}`. Model-call tracing is described on [[Tracing]]. |
-| `OLLAMA_BASE_URLS` | empty | Addresses of the Ollama servers, separated by `;`. With none set, the app connects to no Ollama server even when `ENABLE_OLLAMA_API` is on. A trailing `/` is removed. |
+| `OLLAMA_BASE_URLS` | empty | Addresses of the Ollama servers, separated by `;`. With none set, the app connects to no Ollama server even when `ENABLE_OLLAMA_API` is on. A trailing `/` is removed. Alias: `OLLAMA_BASE_URL`, which holds one address. |
 | `OLLAMA_API_CONFIGS` | empty | Settings of each Ollama connection, as a JSON object keyed by connection number |
 | `TOOL_SERVER_CONNECTIONS` | empty | Tool servers, as a JSON array of objects, each with a `url` and the `path` of its OpenAPI description |
 
-In the `;`-separated lists, every entry must be non-empty, so an empty value or a stray `;` stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
+In the `;`-separated lists, every entry must be non-empty, so an empty value or a stray `;` stops the app from starting. An alias's value is one entry and is not split at `;`; when it is used, an empty value also stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
 
 The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` by default. In a chart deployment the chart therefore decides whether the Ollama API is on, and turning it on or off in the admin settings has no effect.
 

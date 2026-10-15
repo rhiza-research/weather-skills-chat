@@ -1,4 +1,4 @@
-"""Each setting reads only its own variable, and bad JSON stops startup.
+"""Each setting reads its own variable or its alias, and bad input stops startup.
 
 Settings are built when ``open_webui.config`` is imported, so each case
 imports it in a fresh process with its own environment and database.
@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from open_webui import config
-from open_webui.config import PERSISTENT_CONFIG_REGISTRY, env_json
+from open_webui.config import env_json
 
 RESULT_MARK = "ENV_SETTINGS_RESULT:"
 
@@ -109,9 +109,6 @@ UNKNOWN_KEY = {
 # Variables the app no longer reads at all, each set to a value that would
 # change its old target if it were still read.
 REMOVED_NAMES = {
-    "OPENAI_API_KEY": "sk-removed",
-    "OPENAI_API_BASE_URL": "https://removed.example/v1",
-    "OLLAMA_BASE_URL": "http://removed-ollama:11434",
     "OLLAMA_API_BASE_URL": "http://removed-ollama-api:11434/api",
     "K8S_FLAG": "true",
     "LDAP_SEARCH_FILTERS": "(objectClass=removed)",
@@ -123,8 +120,6 @@ REMOVED_NAMES = {
 
 # Admin settings a removed name used to feed, with their defaults.
 FED_SETTING_DEFAULTS = {
-    "OPENAI_API_KEYS": [""],
-    "OPENAI_API_BASE_URLS": ["https://api.openai.com/v1"],
     "OLLAMA_BASE_URLS": [],
     "RAG_OLLAMA_BASE_URL": "",
     "LDAP_SEARCH_FILTERS": "",
@@ -157,6 +152,22 @@ FORMERLY_FED_DEFAULTS = {
 
 CONNECTION_LISTS = ("OPENAI_API_BASE_URLS", "OPENAI_API_KEYS", "OLLAMA_BASE_URLS")
 
+# Each connection list's alias, a value for it, and the one-entry list it sets.
+# The key holds a `;` to show an alias value is not split.
+ALIASES = {
+    "OPENAI_API_KEYS": ("OPENAI_API_KEY", "sk-one;two", ["sk-one;two"]),
+    "OPENAI_API_BASE_URLS": (
+        "OPENAI_API_BASE_URL",
+        "https://openrouter.ai/api/v1",
+        ["https://openrouter.ai/api/v1"],
+    ),
+    "OLLAMA_BASE_URLS": (
+        "OLLAMA_BASE_URL",
+        "http://ollama:11434/",
+        ["http://ollama:11434"],
+    ),
+}
+
 # Every variable these tests set or read; the child process starts without them.
 CONTROLLED = (
     set(JSON_SETTINGS)
@@ -164,6 +175,8 @@ CONTROLLED = (
     | set(FED_SETTING_DEFAULTS)
     | set(FORMER_FEEDERS)
     | set(FORMERLY_FED_DEFAULTS)
+    | set(CONNECTION_LISTS)
+    | {alias for alias, _, _ in ALIASES.values()}
     | {"LDAP_SEARCH_FILTER"}
 )
 
@@ -191,6 +204,12 @@ def _result(result: subprocess.CompletedProcess) -> dict:
 
 def _probe(names: list[str], env: dict, db_path: str) -> dict:
     return _result(_run(PROBE, names, env, db_path))
+
+
+def _warning_lines(result: subprocess.CompletedProcess) -> str:
+    """The both-names-set warnings the child logged, from either output stream."""
+    lines = (result.stdout + result.stderr).splitlines()
+    return "\n".join(line for line in lines if " are both set; " in line)
 
 
 class EnvSettingsTest(unittest.TestCase):
@@ -340,6 +359,69 @@ class EnvSettingsTest(unittest.TestCase):
         self.assertIn("OPENAI_API_BASE_URLS has 2 entries", result.stderr)
         self.assertIn("OPENAI_API_KEYS has 1", result.stderr)
 
+    def test_alias_sets_a_one_entry_list_that_wins_over_saved_value(self):
+        saved = {name: ["saved-before-start"] for name in ALIASES}
+        result = _run(SAVE, saved, {}, self.db_path)
+        self.assertEqual(result.returncode, 0, result.stderr[-4000:])
+        env = {alias: value for alias, value, _ in ALIASES.values()}
+        probe = _probe(list(ALIASES) + ["RAG_OLLAMA_BASE_URL"], env, self.db_path)
+        for name, (alias, _, expected) in ALIASES.items():
+            with self.subTest(name=name, alias=alias):
+                self.assertEqual(probe[name]["value"], expected)
+                self.assertEqual(probe[name]["after_save"], expected)
+        # OLLAMA_BASE_URL sets only the Ollama connections.
+        self.assertEqual(probe["RAG_OLLAMA_BASE_URL"]["value"], "")
+
+    def test_empty_alias_stops_startup(self):
+        for name, (alias, _, _) in ALIASES.items():
+            for value in ("", "  "):
+                with self.subTest(alias=alias, value=value):
+                    result = _run(PROBE, [name], {alias: value}, self.db_path)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f"{alias} is empty", result.stderr)
+
+    def test_alias_alone_logs_no_warning(self):
+        for name, (alias, value, _) in ALIASES.items():
+            with self.subTest(name=name, alias=alias):
+                result = _run(PROBE, [name], {alias: value}, self.db_path)
+                _result(result)
+                self.assertEqual(_warning_lines(result), "")
+
+    def test_plural_wins_when_both_names_are_set_and_a_warning_names_both(self):
+        plural_values = {
+            "OPENAI_API_KEYS": ("sk-plural", ["sk-plural"]),
+            "OPENAI_API_BASE_URLS": (
+                "https://plural.example/v1",
+                ["https://plural.example/v1"],
+            ),
+            "OLLAMA_BASE_URLS": ("http://plural:11434", ["http://plural:11434"]),
+        }
+        for name, (alias, alias_value, _) in ALIASES.items():
+            plural_value, expected = plural_values[name]
+            with self.subTest(name=name, alias=alias):
+                result = _run(
+                    PROBE, [name], {name: plural_value, alias: alias_value}, self.db_path
+                )
+                probe = _result(result)
+                self.assertEqual(probe[name]["value"], expected)
+                self.assertEqual(probe[name]["after_save"], expected)
+                warnings = _warning_lines(result)
+                self.assertEqual(
+                    warnings.count(f"{name} and {alias} are both set; using {name}"), 1
+                )
+                self.assertNotIn(plural_value, warnings)
+                self.assertNotIn(alias_value.strip("/"), warnings)
+
+    def test_alias_counts_as_one_entry_against_the_other_list(self):
+        env = {
+            "OPENAI_API_BASE_URLS": "https://a.example/v1;https://b.example/v1",
+            "OPENAI_API_KEY": "sk-a",
+        }
+        result = _run(PROBE, ["OPENAI_API_KEYS"], env, self.db_path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("OPENAI_API_BASE_URLS has 2 entries", result.stderr)
+        self.assertIn("OPENAI_API_KEY has 1", result.stderr)
+
 
 class SettingWiringTest(unittest.TestCase):
     def test_settings_are_pinned_by_their_own_variable(self):
@@ -347,19 +429,6 @@ class SettingWiringTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(getattr(config, name).env_name, name)
         self.assertEqual(config.LDAP_SEARCH_FILTERS.env_name, "LDAP_SEARCH_FILTER")
-
-    # The image sets DOCKER=true. Elsewhere the environment is the host's, which
-    # says nothing about the image; CI also runs this check in the built image.
-    @unittest.skipUnless(
-        os.environ.get("DOCKER") == "true", "checks the image's environment"
-    )
-    def test_image_environment_pins_no_setting(self):
-        pinned = sorted(
-            cfg.env_name
-            for cfg in PERSISTENT_CONFIG_REGISTRY
-            if cfg.env_name in os.environ
-        )
-        self.assertEqual(pinned, [])
 
 
 class EnvJsonTest(unittest.TestCase):

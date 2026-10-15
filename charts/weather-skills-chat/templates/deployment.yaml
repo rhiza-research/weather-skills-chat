@@ -111,7 +111,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "weather-skills-chat.secretName" . }}
                   key: {{ .Values.secretKeys.webuiSecretKey | quote }}
-            - name: OPENAI_API_KEYS
+            - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "weather-skills-chat.secretName" . }}
@@ -159,7 +159,7 @@ spec:
                   key: {{ .Values.secretKeys.emailToolSmtpPassword | quote }}
                   optional: true
             {{- with .Values.openai.apiBaseUrl }}
-            - name: OPENAI_API_BASE_URLS
+            - name: OPENAI_API_BASE_URL
               value: {{ . | quote }}
             {{- end }}
             {{- include "weather-skills-chat.optionalEnv" (dict "name" "ENABLE_WEB_SEARCH" "value" .Values.webSearch.enabled) | nindent 12 }}

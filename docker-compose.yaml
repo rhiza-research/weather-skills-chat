@@ -15,8 +15,8 @@ services:
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
-      - OPENAI_API_BASE_URLS
-      - OPENAI_API_KEYS
+      - OPENAI_API_BASE_URL
+      - OPENAI_API_KEY
       - WEBUI_SECRET_KEY
       - WEBUI_URL
       - EMAIL_TOOL_SMTP_HOST
