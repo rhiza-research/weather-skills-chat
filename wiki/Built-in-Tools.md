@@ -29,6 +29,14 @@ When the code interpreter is turned on for a chat, the model can also run Python
 
 PNG images the code prints are shown in the conversation.
 
+| Env var | Default | Effect |
+|-|-|-|
+| `CODE_INTERPRETER_JUPYTER_URL` | empty | Address of the Jupyter server |
+| `CODE_INTERPRETER_JUPYTER_AUTH` | empty | How the app signs in to the Jupyter server |
+| `CODE_INTERPRETER_JUPYTER_AUTH_TOKEN` | empty | Jupyter token |
+| `CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD` | empty | Jupyter password |
+| `CODE_INTERPRETER_JUPYTER_TIMEOUT` | `60` | Timeout, in seconds, for code run on the Jupyter server |
+
 ## Web search
 
 When an admin has set up web search and a user turns it on for a chat, the model can search the web with `web_search`. The model sends one or more queries. For each query the tool runs the search, loads the top result pages, and gives the model each page's title, address, summary, and text.
@@ -44,6 +52,7 @@ The model is told to use search to support the weather analysis rather than as a
 | `ENABLE_WEB_LOADER_SSL_VERIFICATION` | `True` | Check the certificates of the pages loaded |
 | `WEB_SEARCH_TRUST_ENV` | `False` | Load pages through the proxy configured in the server's environment |
 | `WEB_SEARCH_TOOL_DESCRIPTION` | The guidance above | What the model is told about when and how to search |
+| `WEB_SEARCH_DOMAIN_FILTER_LIST` | empty | Domains search results are limited to, as a JSON array of strings |
 
 ## Email
 

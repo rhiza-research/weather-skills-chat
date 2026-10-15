@@ -176,7 +176,7 @@ openai:
   apiBaseUrl: https://api.anthropic.com/v1
 ```
 
-Put the matching API key in the Secret as `OPENAI_API_KEY`.
+Put the matching API key in the Secret as `OPENAI_API_KEY`. The chart passes the address to the app as `OPENAI_API_BASE_URLS` and the key as `OPENAI_API_KEYS`.
 
 ## Bootstrap admin
 
