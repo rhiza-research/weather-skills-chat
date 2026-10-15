@@ -233,6 +233,25 @@ def env_list(env_name: str) -> Optional[list[str]]:
     return entries
 
 
+# The singular aliases may be deprecated in favor of the plural names later.
+def env_list_or_alias(env_name: str, alias: str) -> tuple[str, Optional[list[str]]]:
+    """Read a `;`-separated setting from its own name or from its one-value alias.
+
+    Returns the name that was used (``env_name`` when neither is set) and the
+    entries, or None when unset. Either name pins the setting. The alias holds
+    one value, which is not split. When both are set, ``env_name`` wins.
+    The warning names variables only, never their values, since these hold keys.
+    """
+    if env_name in os.environ and alias in os.environ:
+        log.warning(f"{env_name} and {alias} are both set; using {env_name}")
+    if env_name in os.environ or alias not in os.environ:
+        return env_name, env_list(env_name)
+    entry = os.environ[alias].strip()
+    if not entry:
+        raise ValueError(f"{alias} is empty; set it to one non-empty value")
+    return alias, [entry]
+
+
 def check_connection_config_indices(configs, base_urls) -> None:
     """Refuse per-connection settings for a connection that has no address."""
     if not persistent_config_env_is_set(configs.env_name):
@@ -863,12 +882,15 @@ ENABLE_OLLAMA_API = PersistentConfig(
 )
 
 # No default server: the app connects only to Ollama addresses that are set.
-OLLAMA_BASE_URLS = env_list("OLLAMA_BASE_URLS")
+OLLAMA_BASE_URLS_ENV, OLLAMA_BASE_URLS = env_list_or_alias(
+    "OLLAMA_BASE_URLS", "OLLAMA_BASE_URL"
+)
 if OLLAMA_BASE_URLS is None:
     OLLAMA_BASE_URLS = []
 OLLAMA_BASE_URLS = [url[:-1] if url.endswith("/") else url for url in OLLAMA_BASE_URLS]
+# Named by whichever variable was used, so that one pins the setting.
 OLLAMA_BASE_URLS = PersistentConfig(
-    "OLLAMA_BASE_URLS", "ollama.base_urls", OLLAMA_BASE_URLS
+    OLLAMA_BASE_URLS_ENV, "ollama.base_urls", OLLAMA_BASE_URLS
 )
 
 # Per-connection settings, keyed by the connection's position in the URL list.
@@ -903,28 +925,33 @@ ENABLE_OPENAI_API = PersistentConfig(
 )
 
 
-OPENAI_API_KEYS = env_list("OPENAI_API_KEYS")
-OPENAI_API_BASE_URLS = env_list("OPENAI_API_BASE_URLS")
+OPENAI_API_KEYS_ENV, OPENAI_API_KEYS = env_list_or_alias(
+    "OPENAI_API_KEYS", "OPENAI_API_KEY"
+)
+OPENAI_API_BASE_URLS_ENV, OPENAI_API_BASE_URLS = env_list_or_alias(
+    "OPENAI_API_BASE_URLS", "OPENAI_API_BASE_URL"
+)
 if (
     OPENAI_API_KEYS is not None
     and OPENAI_API_BASE_URLS is not None
     and len(OPENAI_API_KEYS) != len(OPENAI_API_BASE_URLS)
 ):
     raise ValueError(
-        f"OPENAI_API_BASE_URLS has {len(OPENAI_API_BASE_URLS)} entries and "
-        f"OPENAI_API_KEYS has {len(OPENAI_API_KEYS)}; they must have one key per address"
+        f"{OPENAI_API_BASE_URLS_ENV} has {len(OPENAI_API_BASE_URLS)} entries and "
+        f"{OPENAI_API_KEYS_ENV} has {len(OPENAI_API_KEYS)}; they must have one key per address"
     )
 
+# Each is named by whichever variable was used, so that one pins the setting.
 if OPENAI_API_KEYS is None:
     OPENAI_API_KEYS = [""]
 OPENAI_API_KEYS = PersistentConfig(
-    "OPENAI_API_KEYS", "openai.api_keys", OPENAI_API_KEYS
+    OPENAI_API_KEYS_ENV, "openai.api_keys", OPENAI_API_KEYS
 )
 
 if OPENAI_API_BASE_URLS is None:
     OPENAI_API_BASE_URLS = ["https://api.openai.com/v1"]
 OPENAI_API_BASE_URLS = PersistentConfig(
-    "OPENAI_API_BASE_URLS", "openai.api_base_urls", OPENAI_API_BASE_URLS
+    OPENAI_API_BASE_URLS_ENV, "openai.api_base_urls", OPENAI_API_BASE_URLS
 )
 
 OPENAI_API_CONFIGS = PersistentConfig(
