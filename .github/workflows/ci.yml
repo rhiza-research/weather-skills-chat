@@ -55,16 +55,29 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          python-version: "3.11"
+          python-version: "3.12"
           cache-dependency-glob: uv.lock
 
       - name: Install backend
         run: uv sync --frozen --no-install-project
 
+      # The app image installs pandoc and caches the tiktoken encoding at build time; the
+      # document-loader and text-splitter tests run with the network blocked and need both.
+      - name: Install pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pandoc
+
+      - name: Cache the tiktoken encoding
+        env:
+          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
+        run: uv run --frozen --no-sync python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
       - name: Run pytest
         id: pytest
         env:
           PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}/backend/open_webui
+          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
         run: |
           mkdir -p test-results
           uv run --frozen --no-sync python -m pytest backend/open_webui/test --import-mode=importlib --junitxml=test-results/pytest.xml
