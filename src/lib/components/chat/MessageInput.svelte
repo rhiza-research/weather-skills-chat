@@ -23,8 +23,7 @@
 		tools,
 		user as _user,
 		showControls,
-		TTSWorker,
-		chatId
+		TTSWorker
 	} from '$lib/stores';
 
 	import {
@@ -34,12 +33,11 @@
 		extractCurlyBraceWords
 	} from '$lib/utils';
 	import { transcribeAudio } from '$lib/apis/audio';
-	import { uploadFile } from '$lib/apis/files';
 	import { generateAutoCompletion } from '$lib/apis';
 	import { deleteFileById } from '$lib/apis/files';
 
-	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
-	import { copyFileIntoChatArtifacts, fileFromDataUrl } from '$lib/apis/artifacts';
+	import { WEBUI_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
+	import { fileFromDataUrl } from '$lib/apis/artifacts';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -50,6 +48,7 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import FileItem from '../common/FileItem.svelte';
 	import Image from '../common/Image.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	import XMark from '../icons/XMark.svelte';
 	import Headphone from '../icons/Headphone.svelte';
@@ -175,29 +174,44 @@
 		}
 	};
 
-	const copyIntoArtifacts = async (file: File) => {
-		try {
-			const path = await copyFileIntoChatArtifacts(localStorage.token, $chatId, file);
-			void path;
-			return path;
-		} catch (e) {
-			console.error('Failed to copy chat-bar file into artifacts', e);
-			return null;
-		}
-	};
+	const attachImage = async (file: File, imageUrl: string = '') => {
+		const tempItemId = uuidv4();
+		const fileItem = {
+			type: 'image',
+			url: imageUrl,
+			name: file.name,
+			size: file.size,
+			sourceFile: file,
+			awaitingApproval: true,
+			status: 'uploading',
+			itemId: tempItemId
+		};
+		files = [...files, fileItem];
 
-	const attachImage = async (file: File, imageUrl: string) => {
-		const sandboxPath = await copyIntoArtifacts(file);
-		files = [
-			...files,
-			{
-				type: 'image',
-				url: imageUrl,
-				name: file.name,
-				sandboxPath,
-				sourceFile: file
+		try {
+			let url = imageUrl;
+			if (!url) {
+				url = await new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(`${reader.result}`);
+					reader.onerror = () => reject(reader.error);
+					reader.readAsDataURL(file);
+				});
+				if ($settings?.imageCompression ?? false) {
+					const width = $settings?.imageCompressionSize?.width ?? null;
+					const height = $settings?.imageCompressionSize?.height ?? null;
+					if (width || height) {
+						url = await compressImage(url, width, height);
+					}
+				}
 			}
-		];
+			fileItem.url = url;
+			fileItem.status = 'uploaded';
+			files = files;
+		} catch (e) {
+			toast.error(`${e}`);
+			files = files.filter((item) => item?.itemId !== tempItemId);
+		}
 	};
 
 	const uploadFileHandler = async (file, fullContext: boolean = false) => {
@@ -218,6 +232,7 @@
 			size: file.size,
 			error: '',
 			itemId: tempItemId,
+			awaitingApproval: true,
 			...(fullContext ? { context: 'full' } : {})
 		};
 
@@ -227,40 +242,9 @@
 		}
 
 		files = [...files, fileItem];
-
-		try {
-			// During the file upload, file content is automatically extracted.
-			const uploadedFile = await uploadFile(localStorage.token, file);
-
-			if (uploadedFile) {
-				console.log('File upload completed:', {
-					id: uploadedFile.id,
-					name: fileItem.name,
-					collection: uploadedFile?.meta?.collection_name
-				});
-
-				if (uploadedFile.error) {
-					console.warn('File upload warning:', uploadedFile.error);
-					toast.warning(uploadedFile.error);
-				}
-
-				fileItem.status = 'uploaded';
-				fileItem.file = uploadedFile;
-				fileItem.id = uploadedFile.id;
-				fileItem.collection_name =
-					uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
-				fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
-				fileItem.sourceFile = file;
-				fileItem.sandboxPath = await copyIntoArtifacts(file);
-
-				files = files;
-			} else {
-				files = files.filter((item) => item?.itemId !== tempItemId);
-			}
-		} catch (e) {
-			toast.error(`${e}`);
-			files = files.filter((item) => item?.itemId !== tempItemId);
-		}
+		fileItem.sourceFile = file;
+		fileItem.status = 'uploaded';
+		files = files;
 	};
 
 	const inputFilesHandler = async (inputFiles) => {
@@ -296,22 +280,7 @@
 					toast.error($i18n.t('Selected model(s) do not support image inputs'));
 					return;
 				}
-				let reader = new FileReader();
-				reader.onload = async (event) => {
-					let imageUrl = event.target.result;
-
-					if ($settings?.imageCompression ?? false) {
-						const width = $settings?.imageCompressionSize?.width ?? null;
-						const height = $settings?.imageCompressionSize?.height ?? null;
-
-						if (width || height) {
-							imageUrl = await compressImage(imageUrl, width, height);
-						}
-					}
-
-					await attachImage(file, `${imageUrl}`);
-				};
-				reader.readAsDataURL(file);
+				attachImage(file);
 			} else {
 				uploadFileHandler(file);
 			}
@@ -560,11 +529,24 @@
 											{#if file.type === 'image'}
 												<div class=" relative group">
 													<div class="relative flex items-center">
-														<Image
-															src={file.url}
-															alt="input"
-															imageClassName=" size-14 rounded-xl object-cover"
-														/>
+														{#if file.url}
+															<Image
+																src={file.url}
+																alt="input"
+																imageClassName=" size-14 rounded-xl object-cover"
+															/>
+														{:else}
+															<div
+																class="size-14 rounded-xl bg-black/20 dark:bg-white/10"
+															></div>
+														{/if}
+														{#if file.status === 'uploading'}
+															<div
+																class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 text-white"
+															>
+																<Spinner className="size-5" />
+															</div>
+														{/if}
 														{#if atSelectedModel ? visionCapableModels.length === 0 : selectedModels.length !== visionCapableModels.length}
 															<Tooltip
 																className=" absolute top-1 left-1"

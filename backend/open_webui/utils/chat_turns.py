@@ -19,6 +19,60 @@ _HIDDEN_DETAILS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+_UPLOAD_NOTE_LINE = re.compile(
+    r"The user uploaded an? (?:image|file) at `[^`]+`\."
+)
+
+
+def artifact_upload_note(files) -> str:
+    """Path lines for the model; not stored in visible message text."""
+    lines = []
+    for item in files or []:
+        if not isinstance(item, dict):
+            continue
+        loc = item.get("sandboxPath") or item.get("sandbox_path") or item.get("name")
+        if not loc:
+            continue
+        awaiting = item.get("awaitingApproval") or item.get("awaiting_approval")
+        if not (awaiting or item.get("sandboxPath") or item.get("sandbox_path")):
+            continue
+        kind = "an image" if item.get("type") == "image" else "a file"
+        lines.append(f"The user uploaded {kind} at `{loc}`.")
+    return "\n".join(lines)
+
+
+def with_artifact_upload_note(content, files):
+    note = artifact_upload_note(files)
+    if not note:
+        return content
+    if isinstance(content, str):
+        if _UPLOAD_NOTE_LINE.search(content):
+            return content
+        if content.strip():
+            return f"{content}\n\n{note}"
+        return note
+    if isinstance(content, list):
+        parts = []
+        added = False
+        for part in content:
+            if (
+                not added
+                and isinstance(part, dict)
+                and part.get("type") == "text"
+            ):
+                text = part.get("text") or ""
+                if _UPLOAD_NOTE_LINE.search(text):
+                    return content
+                extra = f"{text}\n\n{note}" if text.strip() else note
+                parts.append({**part, "text": extra})
+                added = True
+            else:
+                parts.append(part)
+        if not added:
+            return [{"type": "text", "text": note}, *content]
+        return parts
+    return content
+
 
 class ChatRevisionConflict(Exception):
     def __init__(self, revision: int):
@@ -41,6 +95,8 @@ def messages_for_model(history: dict, message_id: str) -> list[dict]:
             content = message.get("content")
         if isinstance(content, str):
             content = _HIDDEN_DETAILS.sub("", content)
+        if role == "user":
+            content = with_artifact_upload_note(content, message.get("files"))
         item = {"role": role, "content": content}
         if message.get("tool_calls"):
             item["tool_calls"] = message["tool_calls"]
@@ -50,7 +106,10 @@ def messages_for_model(history: dict, message_id: str) -> list[dict]:
         images = [
             file
             for file in files
-            if isinstance(file, dict) and file.get("type") == "image" and role == "user"
+            if isinstance(file, dict)
+            and file.get("type") == "image"
+            and role == "user"
+            and not (file.get("awaiting_approval") or file.get("awaitingApproval"))
         ]
         if images and isinstance(content, str):
             item["content"] = [

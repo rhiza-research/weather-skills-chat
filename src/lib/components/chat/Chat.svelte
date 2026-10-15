@@ -11,7 +11,7 @@
 
 	import { get, type Unsubscriber, type Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
-	import { WEBUI_BASE_URL, WEBUI_API_BASE_URL } from '$lib/constants';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	import {
 		chatId,
@@ -113,7 +113,6 @@
 		getTaskIdsByChatId
 	} from '$lib/apis';
 	import { getToolSummary } from '$lib/apis/tools';
-	import { uploadFile } from '$lib/apis/files';
 	import {
 		copyFileIntoChatArtifacts,
 		fileFromDataUrl
@@ -249,6 +248,7 @@
 			return;
 		}
 		const byName = new Map(pendingArtifactFiles.map((file) => [file.name, file]));
+		const failed = [];
 		for (const item of fileItems) {
 			const file =
 				item?.sourceFile instanceof File
@@ -260,11 +260,12 @@
 			try {
 				const path = await copyFileIntoChatArtifacts(localStorage.token, destChatId, file);
 				if (path) item.sandboxPath = path;
+				else failed.push(file.name);
 			} catch (e) {
 				console.error('Failed to copy chat-bar file into artifacts', e);
+				failed.push(file.name);
 			}
 		}
-		// Any leftovers not tied to a message item (still copy by filename).
 		for (const file of pendingArtifactFiles) {
 			const already = fileItems.some(
 				(item) => item?.sandboxPath && (item.name === file.name || item.sandboxPath === file.name)
@@ -274,9 +275,17 @@
 				await copyFileIntoChatArtifacts(localStorage.token, destChatId, file);
 			} catch (e) {
 				console.error('Failed to copy chat-bar file into artifacts', e);
+				failed.push(file.name);
 			}
 		}
 		pendingArtifactFiles = [];
+		if (failed.length) {
+			toast.error(
+				$i18n.t('Failed to copy {{names}} into chat files.', {
+					names: failed.join(', ')
+				})
+			);
+		}
 	};
 
 	const loadChatForProp = async (id: string) => {
@@ -781,33 +790,10 @@
 				throw new Error('Created file is empty');
 			}
 
-			// Upload file to server
-			console.log('Uploading file to server...');
-			const uploadedFile = await uploadFile(localStorage.token, file);
-
-			if (!uploadedFile) {
-				throw new Error('Server returned null response for file upload');
-			}
-
-			console.log('File uploaded successfully:', uploadedFile);
-
-			fileItem.status = 'uploaded';
-			fileItem.file = uploadedFile;
-			fileItem.id = uploadedFile.id;
-			fileItem.size = file.size;
-			fileItem.collection_name = uploadedFile?.meta?.collection_name;
-			fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
 			fileItem.sourceFile = file;
-			try {
-				fileItem.sandboxPath = await copyFileIntoChatArtifacts(
-					localStorage.token,
-					$chatId,
-					file
-				);
-				void fileItem.sandboxPath;
-			} catch (e) {
-				console.error('Failed to copy chat-bar file into artifacts', e);
-			}
+			fileItem.size = file.size;
+			fileItem.awaitingApproval = true;
+			fileItem.status = 'uploaded';
 
 			files = files;
 			toast.success($i18n.t('File uploaded successfully'));
@@ -1955,7 +1941,7 @@
 		}
 		if (
 			files.length > 0 &&
-			files.filter((file) => file.type !== 'image' && file.status === 'uploading').length > 0
+			files.filter((file) => file.status === 'uploading').length > 0
 		) {
 			toast.error(
 				$i18n.t(`Oops! There are files still uploading. Please wait for the upload to complete.`)
@@ -2001,7 +1987,12 @@
 		const _files = JSON.parse(
 			JSON.stringify(files, (key, value) => (key === 'sourceFile' ? undefined : value))
 		);
-		chatFiles.push(..._files.filter((item) => ['doc', 'file', 'collection'].includes(item.type)));
+		chatFiles.push(
+			..._files.filter(
+				(item) =>
+					['doc', 'file', 'collection'].includes(item.type) && !item.awaitingApproval
+			)
+		);
 		chatFiles = chatFiles.filter(
 			// Remove duplicates
 			(item, index, array) =>
@@ -2112,23 +2103,10 @@
 
 		const userMessage = _history.messages[parentId];
 		await copyPendingArtifacts(_chatId, userMessage?.files || []);
-		const sandboxPaths = (userMessage?.files ?? [])
-			.map((item) => item?.sandboxPath)
-			.filter(Boolean);
-		if (sandboxPaths.length) {
-			const note =
-				sandboxPaths.length === 1
-					? `\n\n[Uploaded to artifact sandbox: \`${sandboxPaths[0]}\`]`
-					: `\n\n[Uploaded to artifact sandbox: ${sandboxPaths.map((p) => `\`${p}\``).join(', ')}]`;
-			if (!(userMessage.content || '').includes('[Uploaded to artifact sandbox:')) {
-				userMessage.content = `${userMessage.content || ''}${note}`;
-			}
-		}
 		if (userMessage && get(chatId) === _chatId && history.messages[parentId]) {
 			history.messages[parentId] = {
 				...history.messages[parentId],
-				files: userMessage.files,
-				content: userMessage.content
+				files: userMessage.files
 			};
 			history = history;
 		}
@@ -2142,7 +2120,7 @@
 					const messages = createMessagesList(_history, parentId);
 					// If there are image files, check if model is vision capable
 					const hasImages = messages.some((message) =>
-						message.files?.some((file) => file.type === 'image')
+						message.files?.some((file) => file.type === 'image' && !file.awaitingApproval)
 					);
 
 					if (hasImages && !(model.info?.meta?.capabilities?.vision ?? true)) {
@@ -2170,6 +2148,29 @@
 		);
 	};
 
+	const artifactUploadNote = (fileItems) => {
+		const lines = [];
+		for (const item of fileItems || []) {
+			if (!(item?.awaitingApproval || item?.sandboxPath)) continue;
+			const loc = item.sandboxPath || item.name;
+			if (!loc) continue;
+			lines.push(
+				item.type === 'image'
+					? `The user uploaded an image at \`${loc}\`.`
+					: `The user uploaded a file at \`${loc}\`.`
+			);
+		}
+		return lines.join('\n');
+	};
+
+	const withArtifactUploadNote = (content, fileItems) => {
+		const note = artifactUploadNote(fileItems);
+		if (!note) return content;
+		if (typeof content !== 'string') return content;
+		if (/The user uploaded an? (?:image|file) at `[^`]+`\./.test(content)) return content;
+		return content.trim() ? `${content}\n\n${note}` : note;
+	};
+
 	const sendPromptSocket = async (_history, model, responseMessageId, _chatId) => {
 		if (_chatId && _chatId !== 'local') {
 			const bound = holdHistory(_chatId, history);
@@ -2180,8 +2181,9 @@
 
 		let files = JSON.parse(JSON.stringify(chatFiles));
 		files.push(
-			...(userMessage?.files ?? []).filter((item) =>
-				['doc', 'file', 'collection'].includes(item.type)
+			...(userMessage?.files ?? []).filter(
+				(item) =>
+					['doc', 'file', 'collection'].includes(item.type) && !item.awaitingApproval
 			),
 			...(responseMessage?.files ?? []).filter((item) => ['web_search_results'].includes(item.type))
 		);
@@ -2229,16 +2231,21 @@
 				role: message.role,
 				...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
 				...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
-				...((message.files?.filter((file) => file.type === 'image').length > 0 ?? false) &&
+				...((message.files?.filter(
+					(file) => file.type === 'image' && !file.awaitingApproval
+				).length > 0 ?? false) &&
 				message.role === 'user'
 					? {
 							content: [
 								{
 									type: 'text',
-									text: message?.merged?.content ?? message.content
+									text: withArtifactUploadNote(
+										message?.merged?.content ?? message.content,
+										message.files
+									)
 								},
 								...message.files
-									.filter((file) => file.type === 'image')
+									.filter((file) => file.type === 'image' && !file.awaitingApproval)
 									.map((file) => ({
 										type: 'image_url',
 										image_url: {
@@ -2248,7 +2255,10 @@
 							]
 						}
 					: {
-							content: message?.merged?.content ?? message.content
+							content: withArtifactUploadNote(
+								message?.merged?.content ?? message.content,
+								message.role === 'user' ? message.files : undefined
+							)
 						})
 			}))
 			.filter((message) => {
@@ -2789,13 +2799,13 @@
 	inputValue={eventConfirmationInputValue}
 	on:confirm={(e) => {
 		if (e.detail) {
-			eventCallback(e.detail);
+			eventCallback?.(e.detail);
 		} else {
-			eventCallback(true);
+			eventCallback?.(true);
 		}
 	}}
 	on:cancel={() => {
-		eventCallback(false);
+		eventCallback?.(false);
 	}}
 />
 

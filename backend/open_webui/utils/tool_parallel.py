@@ -40,7 +40,7 @@ ACTIVITY_SCHEMA = {
 }
 
 # These tools read files other same-turn calls may still be writing.
-SERIAL_AFTER_SIBLINGS = frozenset({"display_image"})
+SERIAL_AFTER_SIBLINGS = frozenset({"display_image", "read_artifact"})
 
 
 def _ensure_parameter_properties(spec: dict | None) -> dict:
@@ -98,9 +98,9 @@ def with_implicit_depends_on(
 ) -> list[list[str]]:
     """Make file-readers wait for other same-turn tools.
 
-    ``display_image`` needs the file on disk. The model often omits
-    ``depends_on``, so those calls would run in parallel with the skill
-    that writes the image.
+    ``display_image`` and ``read_artifact`` need the file on disk. The
+    model often omits ``depends_on``, so those calls would run in parallel
+    with the skill that writes the file.
     """
     if len(names) != len(depends_on):
         raise ValueError("names and depends_on must be the same length")

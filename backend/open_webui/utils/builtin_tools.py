@@ -558,7 +558,7 @@ async def list_artifacts(
             lines.append(f"- `{rel}` ({kind})")
     lines.append(
         "Paths are relative to the chat sandbox (skills cwd). "
-        "Use these paths with other tools (e.g. skills, display_image, execute_code)."
+        "Use these paths with other tools (e.g. skills, read_artifact, display_image, execute_code)."
     )
     return "\n".join(lines)
 
@@ -568,7 +568,8 @@ LIST_ARTIFACTS_SPEC = {
     "description": (
         "List files and folders in the current chat artifact sandbox (skills working "
         "directory). Use when the user uploaded files, after skills write outputs, "
-        "or to discover available paths before reading/plotting/attaching them. "
+        "or to discover available paths before reading them with read_artifact "
+        "or plotting/attaching them. "
         "Optionally pass a relative folder path to list only that subtree."
     ),
     "parameters": {
@@ -596,6 +597,7 @@ DISPLAY_IMAGE_TYPES = {
     ".jpeg": "image/jpeg",
     ".gif": "image/gif",
     ".webp": "image/webp",
+    ".avif": "image/avif",
 }
 
 
@@ -611,6 +613,8 @@ def looks_like_display_image(data: bytes, suffix: str) -> bool:
         return data.startswith((b"GIF87a", b"GIF89a"))
     if kind == ".webp":
         return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    if kind == ".avif":
+        return len(data) >= 12 and data[4:8] == b"ftyp" and b"avif" in data[8:16]
     return False
 
 
@@ -707,7 +711,9 @@ DISPLAY_IMAGE_SPEC = {
         "the same turn, so you do not need `depends_on` when a skill just "
         "wrote the file. Show each image either with this tool or with a "
         "relative markdown link such as `![map](plots/map.png)` or "
-        "`[map](plots/map.png)`. Do not do both for the same image."
+        "`[map](plots/map.png)`. Do not do both for the same image. This "
+        "shows the image to the user; it does not send it to you. To read "
+        "an image yourself, use read_artifact."
     ),
     "parameters": {
         "type": "object",
@@ -715,6 +721,240 @@ DISPLAY_IMAGE_SPEC = {
             "path": {
                 "type": "string",
                 "description": "Relative path to an image file in the chat sandbox",
+            },
+        },
+        "required": ["path"],
+    },
+}
+
+
+async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
+    """Ask the user to allow sending a sandbox file to the model.
+
+    Returns None when approved, or a message to give the model when not.
+    """
+    if event_call is None:
+        return (
+            "Cannot ask the user to approve a file read in this session. "
+            "The file was not sent."
+        )
+    try:
+        result = await event_call(
+            {
+                "type": "confirmation",
+                "data": {
+                    "title": "Allow the model to read this file?",
+                    "message": (
+                        f"The model wants to read `{rel}` from this chat's files."
+                    ),
+                },
+            }
+        )
+    except Exception:
+        return (
+            "Could not ask the user to approve reading that file. "
+            "It was not sent."
+        )
+    if result is True:
+        return None
+    return "The user declined to let you read that file."
+
+
+def _content_loader(request):
+    from open_webui.retrieval.loaders.main import Loader
+
+    config = request.app.state.config
+    return Loader(
+        engine=config.CONTENT_EXTRACTION_ENGINE,
+        TIKA_SERVER_URL=config.TIKA_SERVER_URL,
+        DOCLING_SERVER_URL=config.DOCLING_SERVER_URL,
+        PDF_EXTRACT_IMAGES=config.PDF_EXTRACT_IMAGES,
+        DOCUMENT_INTELLIGENCE_ENDPOINT=config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+        DOCUMENT_INTELLIGENCE_KEY=config.DOCUMENT_INTELLIGENCE_KEY,
+        MISTRAL_OCR_API_KEY=config.MISTRAL_OCR_API_KEY,
+    )
+
+
+async def _insert_rag_for_file(
+    request, user, file_item: dict, messages: list, model_id: Optional[str]
+) -> str:
+    from open_webui.utils.middleware import (
+        chat_completion_files_handler,
+        rag_context_string,
+    )
+    from open_webui.utils.misc import get_last_user_message
+    from open_webui.utils.task import rag_template
+
+    _, flags = await chat_completion_files_handler(
+        request,
+        {
+            "model": model_id,
+            "messages": messages or [],
+            "metadata": {"files": [file_item]},
+        },
+        user,
+    )
+    context_string = rag_context_string(flags.get("sources") or [])
+    if not context_string:
+        return f"No extractable text in `{file_item.get('name')}`."
+    prompt = get_last_user_message(messages or []) or ""
+    template = getattr(request.app.state.config, "RAG_TEMPLATE", "")
+    return rag_template(template, context_string, prompt)
+
+
+async def _rag_from_artifact_file(
+    request, user, rel: str, target: Path, messages: list, model_id: Optional[str]
+) -> str:
+    from langchain_core.documents import Document
+
+    from open_webui.routers.retrieval import save_docs_to_vector_db
+    from open_webui.utils.misc import calculate_sha256_string
+
+    mime, _ = mimetypes.guess_type(target.name)
+    docs = _content_loader(request).load(target.name, mime, str(target))
+    docs = [
+        Document(
+            page_content=doc.page_content,
+            metadata={**(doc.metadata or {}), "name": rel, "source": rel},
+        )
+        for doc in docs
+    ]
+    text = " ".join(doc.page_content for doc in docs).strip()
+    if not text:
+        return f"No extractable text in `{rel}`."
+
+    config = request.app.state.config
+    if getattr(config, "BYPASS_EMBEDDING_AND_RETRIEVAL", False) or getattr(
+        config, "RAG_FULL_CONTEXT", False
+    ):
+        file_item = {
+            "type": "file",
+            "name": rel,
+            "context": "full",
+            "file": {"data": {"content": text}},
+        }
+    else:
+        digest = calculate_sha256_string(text)
+        collection_name = f"sandbox-{digest[:16]}"
+        try:
+            save_docs_to_vector_db(
+                request,
+                docs=docs,
+                collection_name=collection_name,
+                metadata={"name": rel, "hash": digest},
+                user=user,
+            )
+        except Exception:
+            pass
+        file_item = {
+            "type": "file",
+            "name": rel,
+            "id": collection_name,
+            "collection_name": collection_name,
+        }
+    return await _insert_rag_for_file(
+        request, user, file_item, messages, model_id
+    )
+
+
+async def read_artifact(
+    path: str,
+    __user__: dict = {},
+    __metadata__: dict = None,
+    __event_call__=None,
+    __request__=None,
+    __messages__: list = None,
+    __model__: dict = None,
+):
+    """Read a chat artifact from disk and send it to the model after approval."""
+    from open_webui.utils.artifacts import classify_entry, resolve_in_sandbox
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "Cannot read artifacts in a temporary chat. Save the chat first."
+
+    user = Users.get_user_by_id(__user__.get("id"))
+    chat = Chats.get_chat_by_id(chat_id)
+    if not can_read_chat(user, chat):
+        return "You do not have access to this chat."
+
+    rel = (path or "").strip().lstrip("/")
+    if not rel:
+        return "Provide a relative path to a file in the chat sandbox."
+
+    try:
+        target = resolve_in_sandbox(chat_id, rel)
+    except Exception as e:
+        return f"Invalid path: {e}"
+
+    refresh_sandbox_lookup(target)
+    if not target.exists():
+        return f"Path not found: `{rel}`"
+
+    kind = classify_entry(target)
+    if kind == "zarr":
+        return (
+            f"`{rel}` is a Zarr store. Do not send it with read_artifact; "
+            "use a skill to read or plot it."
+        )
+    if target.is_dir() or kind == "directory":
+        return (
+            f"`{rel}` is a folder. List it with list_artifacts, or pass a "
+            "file path to read_artifact."
+        )
+
+    denied = await _user_approved_artifact_read(rel, __event_call__)
+    if denied:
+        return denied
+
+    if DISPLAY_IMAGE_TYPES.get(target.suffix.lower()):
+        shown = await display_image(
+            path=rel, __user__=__user__, __metadata__=__metadata__
+        )
+        if isinstance(shown, list) and shown:
+            shown = [f"The user approved reading `{rel}`.", *shown[1:]]
+        return shown
+
+    if __request__ is None:
+        return "Request context not available; the file was not sent."
+
+    model_id = None
+    if isinstance(__model__, dict):
+        model_id = __model__.get("id")
+    try:
+        context = await _rag_from_artifact_file(
+            __request__,
+            user,
+            rel,
+            target,
+            __messages__ or [],
+            model_id,
+        )
+        return f"The user approved reading `{rel}`.\n\n{context}"
+    except Exception as e:
+        return f"Failed to read `{rel}`: {e}"
+
+
+READ_ARTIFACT_SPEC = {
+    "name": "read_artifact",
+    "description": (
+        "Read a file from the current chat artifact sandbox and send its "
+        "contents to yourself. Files in the sandbox are not in your context "
+        "until you call this. The user must approve each read in a popup. "
+        "Images are sent as images; other files are indexed and matching "
+        "text is inserted into context. Pass a relative path such as "
+        "`photo.png` or `stations.csv`. Folders and Zarr stores cannot be "
+        "read this way. "
+        "This call waits for other tools in the same turn, so you do not "
+        "need `depends_on` when a skill just wrote the file."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to a file in the chat sandbox",
             },
         },
         "required": ["path"],
@@ -1267,6 +1507,13 @@ async def list_available_tools(
         _tool_summary_line(
             "list_artifacts",
             "List files/folders in the chat artifact sandbox.",
+            kind="builtin",
+        )
+    )
+    lines.append(
+        _tool_summary_line(
+            "read_artifact",
+            "Ask the user for permission, then send a sandbox file to yourself.",
             kind="builtin",
         )
     )
@@ -1973,6 +2220,7 @@ def get_builtin_tools(extra_params: dict) -> dict:
         ),
         "create_folder": _tool(create_folder, CREATE_FOLDER_SPEC),
         "list_artifacts": _tool(list_artifacts, LIST_ARTIFACTS_SPEC),
+        "read_artifact": _tool(read_artifact, READ_ARTIFACT_SPEC),
         "display_image": _tool(display_image, DISPLAY_IMAGE_SPEC),
         "list_email_recipients": _tool(
             list_email_recipients, LIST_EMAIL_RECIPIENTS_SPEC

@@ -37,9 +37,15 @@
 		wasShown = false;
 	}
 
+	const dismiss = () => {
+		if (!show) return;
+		show = false;
+		dispatch('cancel');
+	};
+
 	const handleKeyDown = (event: KeyboardEvent) => {
 		if (event.key === 'Escape') {
-			show = false;
+			dismiss();
 		}
 
 		if (event.key === 'Enter') {
@@ -83,7 +89,7 @@
 		class=" fixed top-0 right-0 left-0 bottom-0 bg-black/60 w-full h-screen max-h-[100dvh] flex justify-center z-99999999 overflow-hidden overscroll-contain"
 		in:fade={{ duration: 10 }}
 		on:mousedown={() => {
-			show = false;
+			dismiss();
 		}}
 	>
 		<div
@@ -138,8 +144,7 @@
 					<button
 						class="bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white font-medium w-full py-2.5 rounded-lg transition"
 						on:click={() => {
-							show = false;
-							dispatch('cancel');
+							dismiss();
 						}}
 						type="button"
 					>

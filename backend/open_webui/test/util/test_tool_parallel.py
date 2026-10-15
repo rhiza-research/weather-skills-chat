@@ -98,6 +98,14 @@ def test_display_image_waits_for_sibling_skills():
     assert waves == [[0, 2], [1]]
 
 
+def test_read_artifact_waits_for_sibling_skills():
+    names = ["plot", "read_artifact"]
+    deps = with_implicit_depends_on(names, [[], []])
+    assert deps[1] == ["plot"]
+    waves = execution_waves(["a", "b"], names, deps)
+    assert waves == [[0], [1]]
+
+
 def test_display_image_alone_stays_one_wave():
     names = ["display_image"]
     deps = with_implicit_depends_on(names, [[]])

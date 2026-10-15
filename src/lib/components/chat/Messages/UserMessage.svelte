@@ -54,6 +54,13 @@
 		}
 	}
 
+	const UPLOAD_NOTE = /(?:\n\n)?The user uploaded an? (?:image|file) at `[^`]+`\./g;
+
+	const visibleUserContent = (content) =>
+		typeof content === 'string'
+			? content.replace(UPLOAD_NOTE, '').replace(/\n{3,}/g, '\n\n').trim()
+			: content;
+
 	const copyToClipboard = async (text) => {
 		const res = await _copyToClipboard(text);
 		if (res) {
@@ -63,7 +70,7 @@
 
 	const editMessageHandler = async () => {
 		edit = true;
-		editedContent = message.content;
+		editedContent = visibleUserContent(message.content);
 
 		await tick();
 
@@ -162,7 +169,7 @@
 				</div>
 			{/if}
 
-			{#if message.content !== ''}
+			{#if visibleUserContent(message.content)}
 				{#if edit === true}
 					<div class=" w-full bg-gray-50 dark:bg-gray-800 rounded-3xl px-5 py-3 mb-2">
 						<div class="max-h-96 overflow-auto">
@@ -236,8 +243,8 @@
 										}`
 									: ' w-full'}"
 							>
-								{#if message.content}
-									<Markdown id={message.id} content={message.content} />
+								{#if visibleUserContent(message.content)}
+									<Markdown id={message.id} content={visibleUserContent(message.content)} />
 								{/if}
 							</div>
 						</div>
@@ -373,7 +380,7 @@
 								<button
 									class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 									on:click={() => {
-										copyToClipboard(message.content);
+										copyToClipboard(visibleUserContent(message.content));
 									}}
 								>
 									<svg

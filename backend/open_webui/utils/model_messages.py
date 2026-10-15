@@ -134,6 +134,65 @@ def deepcopy_messages(messages: list[dict]) -> list[dict]:
     return deepcopy(messages or [])
 
 
+def read_artifact_image_urls(content_blocks: list[dict] | None) -> list[str]:
+    """Data-URL images from approved ``read_artifact`` tool results."""
+    urls: list[str] = []
+    for block in content_blocks or []:
+        if block.get("type") != "tool_calls":
+            continue
+        names = {
+            call.get("id"): (call.get("function") or {}).get("name")
+            for call in block.get("content") or []
+            if isinstance(call, dict)
+        }
+        for result in block.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            if names.get(result.get("tool_call_id")) != "read_artifact":
+                continue
+            for item in result.get("files") or []:
+                if isinstance(item, str) and item.startswith("data:image"):
+                    urls.append(item)
+    return urls
+
+
+def attach_read_artifact_images(
+    messages: list[dict] | None, content_blocks: list[dict] | None
+) -> list[dict]:
+    """Put approved ``read_artifact`` images on the last user message.
+
+    Tool messages are text-only, so vision models only see pixels if they
+    appear as ``image_url`` parts on a user message — the same shape as a
+    chat-bar image attachment.
+    """
+    messages = messages or []
+    urls = read_artifact_image_urls(content_blocks)
+    if not urls:
+        return messages
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            parts: list[dict] = [{"type": "text", "text": content}]
+        elif isinstance(content, list):
+            parts = [item for item in content if isinstance(item, dict)]
+        else:
+            parts = [{"type": "text", "text": str(content or "")}]
+        existing = {
+            (part.get("image_url") or {}).get("url")
+            for part in parts
+            if part.get("type") == "image_url"
+        }
+        for url in urls:
+            if url not in existing:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+                existing.add(url)
+        message["content"] = parts
+        break
+    return messages
+
+
 def _parse_html_attrs(attr_str: str) -> dict[str, str]:
     return dict(re.findall(r'(\w+)="([^"]*)"', attr_str or ""))
 

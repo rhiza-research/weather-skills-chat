@@ -142,12 +142,13 @@ def tool_call_files_for_display(
 ) -> Optional[list]:
     """Omit inline data URLs from serialized tool-call HTML.
 
-    display_image returns multi-hundred-KB base64 data URLs; embedding them in
-    a <details files="..."> attribute breaks markdown/HTML parsing in the UI.
+    display_image and read_artifact return multi-hundred-KB base64 data URLs;
+    embedding them in a <details files="..."> attribute breaks markdown/HTML
+    parsing in the UI.
     """
     if not tool_result_files:
         return None
-    if tool_name == "display_image":
+    if tool_name in ("display_image", "read_artifact"):
         return None
     filtered = [
         item
@@ -724,12 +725,48 @@ async def chat_image_generation_handler(
     return form_data
 
 
+def awaiting_model_approval(file: dict) -> bool:
+    return bool(file.get("awaiting_approval") or file.get("awaitingApproval"))
+
+
+def files_ready_for_model(files) -> list:
+    """Drop images and chat-bar files the user has not approved for the model."""
+    ready = []
+    for item in files or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "image":
+            continue
+        if awaiting_model_approval(item):
+            continue
+        ready.append(item)
+    return ready
+
+
+def rag_context_string(sources: list) -> str:
+    context_string = ""
+    citated_file_idx = {}
+    for source in sources or []:
+        if "document" not in source:
+            continue
+        for doc_context, doc_meta in zip(
+            source.get("document") or [], source.get("metadata") or []
+        ):
+            file_id = (doc_meta or {}).get("file_id")
+            if file_id not in citated_file_idx:
+                citated_file_idx[file_id] = len(citated_file_idx) + 1
+            context_string += (
+                f'<source id="{citated_file_idx[file_id]}">{doc_context}</source>\n'
+            )
+    return context_string.strip()
+
+
 async def chat_completion_files_handler(
     request: Request, body: dict, user: UserModel
 ) -> tuple[dict, dict[str, list]]:
     sources = []
 
-    if files := body.get("metadata", {}).get("files", None):
+    if files := files_ready_for_model(body.get("metadata", {}).get("files", None)):
         queries = []
         try:
             queries_response = await generate_queries(
@@ -1148,19 +1185,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # If context is not empty, insert it into the messages
     if len(sources) > 0:
-        context_string = ""
-        citated_file_idx = {}
-        for _, source in enumerate(sources, 1):
-            if "document" in source:
-                for doc_context, doc_meta in zip(
-                    source["document"], source["metadata"]
-                ):
-                    file_id = doc_meta.get("file_id")
-                    if file_id not in citated_file_idx:
-                        citated_file_idx[file_id] = len(citated_file_idx) + 1
-                    context_string += f'<source id="{citated_file_idx[file_id]}">{doc_context}</source>\n'
-
-        context_string = context_string.strip()
+        context_string = rag_context_string(sources)
         prompt = get_last_user_message(form_data["messages"])
 
         if prompt is None:
@@ -2704,7 +2729,14 @@ async def process_chat_response(
                     )
 
                     try:
-                        from open_webui.utils.model_messages import deepcopy_messages
+                        from open_webui.utils.model_messages import (
+                            attach_read_artifact_images,
+                            deepcopy_messages,
+                        )
+
+                        attach_read_artifact_images(
+                            form_data["messages"], content_blocks
+                        )
 
                         await waiting_heartbeat.start()
                         log_timing(
