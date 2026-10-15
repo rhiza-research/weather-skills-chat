@@ -77,7 +77,7 @@ The app reaches models through OpenAI-compatible providers and Ollama servers, w
 | `OLLAMA_API_CONFIGS` | empty | Settings of each Ollama connection, as a JSON object keyed by connection number |
 | `TOOL_SERVER_CONNECTIONS` | empty | Tool servers, as a JSON array of objects, each with a `url` and the `path` of its OpenAPI description |
 
-These three lists are read the same way from a setting's own variable and from its alias: the value is split at `;` and spaces around each entry are removed. Every entry must be non-empty, so an empty value, a stray `;`, or an Ollama address of only `/` stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
+`OPENAI_API_BASE_URLS`, `OPENAI_API_KEYS`, and `OLLAMA_BASE_URLS` are read the same way from their own variable and from their alias: the value is split at `;` and spaces around each entry are removed. A key may be empty, which means a connection with no key; an empty `OPENAI_API_KEYS` is one connection with no key. An address may not be empty, so an empty address value, a stray `;` in an address list, or an Ollama address of only `/` stops the app from starting. In the two `_CONFIGS` settings, a connection number must belong to an address the app has.
 
 The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` by default. In a chart deployment the chart therefore decides whether the Ollama API is on, and turning it on or off in the admin settings has no effect.
 
