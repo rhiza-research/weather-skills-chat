@@ -152,6 +152,12 @@ FORMERLY_FED_DEFAULTS = {
 
 CONNECTION_LISTS = ("OPENAI_API_BASE_URLS", "OPENAI_API_KEYS", "OLLAMA_BASE_URLS")
 
+# Address lists and their aliases, which refuse empty entries; keys accept them.
+ADDRESS_NAMES = {
+    "OPENAI_API_BASE_URLS": "OPENAI_API_BASE_URL",
+    "OLLAMA_BASE_URLS": "OLLAMA_BASE_URL",
+}
+
 # Each connection list's alias, a value for it, and the list it sets. Values carry
 # spaces, `;` and a trailing `/` to show an alias is parsed like the plural.
 ALIASES = {
@@ -352,13 +358,38 @@ class EnvSettingsTest(unittest.TestCase):
             ["http://ollama:11434", "http://other:11434"],
         )
 
-    def test_empty_connection_list_entry_stops_startup(self):
-        for name in CONNECTION_LISTS:
-            for value in ("", "http://a.example;", ";http://a.example"):
+    def test_empty_address_stops_startup(self):
+        for plural, alias in ADDRESS_NAMES.items():
+            for name in (plural, alias):
+                for value, message in (
+                    ("", f"{name} is empty"),
+                    ("  ", f"{name} is empty"),
+                    ("http://a.example;", f"{name} has an empty entry"),
+                    (";http://a.example", f"{name} has an empty entry"),
+                ):
+                    with self.subTest(name=name, value=value):
+                        result = _run(PROBE, [plural], {name: value}, self.db_path)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(message, result.stderr)
+
+    def test_empty_key_is_a_connection_with_no_key(self):
+        for name in ("OPENAI_API_KEYS", "OPENAI_API_KEY"):
+            for value, expected in (("", [""]), ("sk-a;", ["sk-a", ""])):
                 with self.subTest(name=name, value=value):
-                    result = _run(PROBE, [name], {name: value}, self.db_path)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(f"{name} has an empty entry", result.stderr)
+                    probe = _probe(["OPENAI_API_KEYS"], {name: value}, self.db_path)
+                    self.assertEqual(probe["OPENAI_API_KEYS"]["value"], expected)
+
+    def test_invalid_plural_next_to_a_valid_alias_stops_startup(self):
+        for plural, alias in ADDRESS_NAMES.items():
+            with self.subTest(name=plural):
+                result = _run(
+                    PROBE,
+                    [plural],
+                    {plural: "http://a.example;", alias: "http://b.example"},
+                    self.db_path,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{plural} has an empty entry", result.stderr)
 
     def test_different_counts_of_addresses_and_keys_stop_startup(self):
         env = {
@@ -383,14 +414,6 @@ class EnvSettingsTest(unittest.TestCase):
         # OLLAMA_BASE_URL sets only the Ollama connections.
         self.assertEqual(probe["RAG_OLLAMA_BASE_URL"]["value"], "")
 
-    def test_empty_alias_entry_stops_startup(self):
-        for name, (alias, _, _) in ALIASES.items():
-            for value in ("", "  ", "http://a.example;", ";http://a.example"):
-                with self.subTest(alias=alias, value=value):
-                    result = _run(PROBE, [name], {alias: value}, self.db_path)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(f"{alias} has an empty entry", result.stderr)
-
     def test_ollama_address_of_only_a_slash_stops_startup(self):
         for name in ("OLLAMA_BASE_URLS", "OLLAMA_BASE_URL"):
             for value in ("/", "http://ollama:11434;/"):
@@ -399,7 +422,9 @@ class EnvSettingsTest(unittest.TestCase):
                         PROBE, ["OLLAMA_BASE_URLS"], {name: value}, self.db_path
                     )
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(f"{name} has an empty entry", result.stderr)
+                    self.assertIn(
+                        f"{name} has an address that is only /", result.stderr
+                    )
 
     def test_env_name_is_the_variable_used(self):
         for name, (alias, value, _) in ALIASES.items():
@@ -433,6 +458,18 @@ class EnvSettingsTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(f"{configs} has settings for connection 1", result.stderr)
                 self.assertIn(f"{alias} has 1 address", result.stderr)
+
+    def test_connection_one_is_accepted_when_the_alias_holds_two_addresses(self):
+        configs = {"1": {"model_call_tracing": "openrouter"}}
+        probe = _probe(
+            ["OPENAI_API_CONFIGS"],
+            {
+                "OPENAI_API_BASE_URL": "https://a.example/v1;https://b.example/v1",
+                "OPENAI_API_CONFIGS": json.dumps(configs),
+            },
+            self.db_path,
+        )
+        self.assertEqual(probe["OPENAI_API_CONFIGS"]["value"], configs)
 
     def test_alias_alone_logs_no_warning(self):
         for name, (alias, value, _) in ALIASES.items():
@@ -488,14 +525,21 @@ class EnvSettingsTest(unittest.TestCase):
                     "OPENAI_API_BASE_URLS": "https://a.example/v1;https://b.example/v1",
                     "OPENAI_API_KEY": "sk-a",
                 },
-                ("OPENAI_API_BASE_URLS has 2 entries", "OPENAI_API_KEY has 1"),
+                ("OPENAI_API_BASE_URLS has 2 entries", "OPENAI_API_KEY has 1 entry;"),
             ),
             (
                 {
                     "OPENAI_API_BASE_URL": "https://a.example/v1",
                     "OPENAI_API_KEYS": "sk-a;sk-b",
                 },
-                ("OPENAI_API_BASE_URL has 1 entries", "OPENAI_API_KEYS has 2"),
+                ("OPENAI_API_BASE_URL has 1 entry and", "OPENAI_API_KEYS has 2 entries"),
+            ),
+            (
+                {
+                    "OPENAI_API_BASE_URL": "https://a.example/v1;https://b.example/v1",
+                    "OPENAI_API_KEY": "sk-a",
+                },
+                ("OPENAI_API_BASE_URL has 2 entries", "OPENAI_API_KEY has 1 entry;"),
             ),
         ):
             with self.subTest(set=sorted(env)):

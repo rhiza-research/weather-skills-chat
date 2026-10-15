@@ -217,24 +217,27 @@ def env_json(env_name: str, default, schema, expected: str):
     return value
 
 
-def env_list(env_name: str) -> Optional[list[str]]:
-    """Split a `;`-separated variable into its entries, or None when it is unset.
+def env_list(env_name: str, allow_empty: bool = False) -> Optional[list[str]]:
+    """Split a `;`-separated variable into trimmed entries, or None when it is unset.
 
-    An empty entry, from an empty value or a stray `;`, stops startup: it would
-    otherwise become a connection with no address or no key.
+    allow_empty: True for keys, where an empty entry is a connection with no key.
+        False for addresses, where an empty entry, from an empty value or a
+        stray `;`, stops startup because it would be a connection with no address.
     """
     if env_name not in os.environ:
         return None
     entries = [entry.strip() for entry in os.environ[env_name].split(";")]
-    if not all(entries):
-        raise ValueError(
-            f"{env_name} has an empty entry; separate non-empty values with ;"
-        )
+    if not allow_empty and not all(entries):
+        if len(entries) == 1:
+            raise ValueError(f"{env_name} is empty; set it to an address")
+        raise ValueError(f"{env_name} has an empty entry; remove the extra ;")
     return entries
 
 
 # The singular aliases may be deprecated in favor of the plural names later.
-def env_list_or_alias(env_name: str, alias: str) -> tuple[str, Optional[list[str]]]:
+def env_list_or_alias(
+    env_name: str, alias: str, allow_empty: bool = False
+) -> tuple[str, Optional[list[str]]]:
     """Read a `;`-separated setting from its own name or from its alias.
 
     Returns the name that was used (``env_name`` when neither is set) and the
@@ -245,7 +248,7 @@ def env_list_or_alias(env_name: str, alias: str) -> tuple[str, Optional[list[str
     if env_name in os.environ and alias in os.environ:
         log.warning(f"{env_name} and {alias} are both set; using {env_name}")
     used = alias if alias in os.environ and env_name not in os.environ else env_name
-    return used, env_list(used)
+    return used, env_list(used, allow_empty)
 
 
 def check_connection_config_indices(configs, base_urls) -> None:
@@ -886,9 +889,7 @@ if OLLAMA_BASE_URLS is None:
 OLLAMA_BASE_URLS = [url[:-1] if url.endswith("/") else url for url in OLLAMA_BASE_URLS]
 # Checked again after stripping, so an address of only `/` is refused too.
 if not all(OLLAMA_BASE_URLS):
-    raise ValueError(
-        f"{OLLAMA_BASE_URLS_ENV} has an empty entry; separate non-empty values with ;"
-    )
+    raise ValueError(f"{OLLAMA_BASE_URLS_ENV} has an address that is only /")
 # Named by whichever variable was used, so that one pins the setting.
 OLLAMA_BASE_URLS = PersistentConfig(
     OLLAMA_BASE_URLS_ENV, "ollama.base_urls", OLLAMA_BASE_URLS
@@ -926,8 +927,9 @@ ENABLE_OPENAI_API = PersistentConfig(
 )
 
 
+# An empty key is a connection with no key, as the admin settings save it.
 OPENAI_API_KEYS_ENV, OPENAI_API_KEYS = env_list_or_alias(
-    "OPENAI_API_KEYS", "OPENAI_API_KEY"
+    "OPENAI_API_KEYS", "OPENAI_API_KEY", allow_empty=True
 )
 OPENAI_API_BASE_URLS_ENV, OPENAI_API_BASE_URLS = env_list_or_alias(
     "OPENAI_API_BASE_URLS", "OPENAI_API_BASE_URL"
@@ -937,9 +939,13 @@ if (
     and OPENAI_API_BASE_URLS is not None
     and len(OPENAI_API_KEYS) != len(OPENAI_API_BASE_URLS)
 ):
+    def entries(count: int) -> str:
+        return f"{count} entry" if count == 1 else f"{count} entries"
+
     raise ValueError(
-        f"{OPENAI_API_BASE_URLS_ENV} has {len(OPENAI_API_BASE_URLS)} entries and "
-        f"{OPENAI_API_KEYS_ENV} has {len(OPENAI_API_KEYS)}; they must have one key per address"
+        f"{OPENAI_API_BASE_URLS_ENV} has {entries(len(OPENAI_API_BASE_URLS))} and "
+        f"{OPENAI_API_KEYS_ENV} has {entries(len(OPENAI_API_KEYS))}; "
+        "they must have one key per address"
     )
 
 # Each is named by whichever variable was used, so that one pins the setting.
