@@ -235,21 +235,17 @@ def env_list(env_name: str) -> Optional[list[str]]:
 
 # The singular aliases may be deprecated in favor of the plural names later.
 def env_list_or_alias(env_name: str, alias: str) -> tuple[str, Optional[list[str]]]:
-    """Read a `;`-separated setting from its own name or from its one-value alias.
+    """Read a `;`-separated setting from its own name or from its alias.
 
     Returns the name that was used (``env_name`` when neither is set) and the
-    entries, or None when unset. Either name pins the setting. The alias holds
-    one value, which is not split. When both are set, ``env_name`` wins.
+    entries from ``env_list``, or None when unset. Either name pins the setting
+    and is parsed the same way. When both are set, ``env_name`` wins.
     The warning names variables only, never their values, since these hold keys.
     """
     if env_name in os.environ and alias in os.environ:
         log.warning(f"{env_name} and {alias} are both set; using {env_name}")
-    if env_name in os.environ or alias not in os.environ:
-        return env_name, env_list(env_name)
-    entry = os.environ[alias].strip()
-    if not entry:
-        raise ValueError(f"{alias} is empty; set it to one non-empty value")
-    return alias, [entry]
+    used = alias if alias in os.environ and env_name not in os.environ else env_name
+    return used, env_list(used)
 
 
 def check_connection_config_indices(configs, base_urls) -> None:
@@ -888,6 +884,11 @@ OLLAMA_BASE_URLS_ENV, OLLAMA_BASE_URLS = env_list_or_alias(
 if OLLAMA_BASE_URLS is None:
     OLLAMA_BASE_URLS = []
 OLLAMA_BASE_URLS = [url[:-1] if url.endswith("/") else url for url in OLLAMA_BASE_URLS]
+# Checked again after stripping, so an address of only `/` is refused too.
+if not all(OLLAMA_BASE_URLS):
+    raise ValueError(
+        f"{OLLAMA_BASE_URLS_ENV} has an empty entry; separate non-empty values with ;"
+    )
 # Named by whichever variable was used, so that one pins the setting.
 OLLAMA_BASE_URLS = PersistentConfig(
     OLLAMA_BASE_URLS_ENV, "ollama.base_urls", OLLAMA_BASE_URLS

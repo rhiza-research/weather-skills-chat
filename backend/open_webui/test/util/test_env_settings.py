@@ -152,21 +152,32 @@ FORMERLY_FED_DEFAULTS = {
 
 CONNECTION_LISTS = ("OPENAI_API_BASE_URLS", "OPENAI_API_KEYS", "OLLAMA_BASE_URLS")
 
-# Each connection list's alias, a value for it, and the one-entry list it sets.
-# The key holds a `;` to show an alias value is not split.
+# Each connection list's alias, a value for it, and the list it sets. Values carry
+# spaces, `;` and a trailing `/` to show an alias is parsed like the plural.
 ALIASES = {
-    "OPENAI_API_KEYS": ("OPENAI_API_KEY", "sk-one;two", ["sk-one;two"]),
+    "OPENAI_API_KEYS": ("OPENAI_API_KEY", " sk-one ; sk-two ", ["sk-one", "sk-two"]),
     "OPENAI_API_BASE_URLS": (
         "OPENAI_API_BASE_URL",
-        "https://openrouter.ai/api/v1",
-        ["https://openrouter.ai/api/v1"],
+        " https://openrouter.ai/api/v1;https://api.example/v1 ",
+        ["https://openrouter.ai/api/v1", "https://api.example/v1"],
     ),
     "OLLAMA_BASE_URLS": (
         "OLLAMA_BASE_URL",
-        "http://ollama:11434/",
-        ["http://ollama:11434"],
+        "http://ollama:11434/ ; http://other:11434",
+        ["http://ollama:11434", "http://other:11434"],
     ),
 }
+
+# Prints each connection list's env_name, which is the variable that pins it.
+ENV_NAMES = f"""
+import json
+from open_webui import config
+names = {{n: getattr(config, n).env_name for n in {list(CONNECTION_LISTS)!r}}}
+print({RESULT_MARK!r} + json.dumps(names))
+"""
+
+# Imports the settings and prints nothing itself, so any value in the output was logged.
+IMPORT_ONLY = "from open_webui import config"
 
 # Every variable these tests set or read; the child process starts without them.
 CONTROLLED = (
@@ -359,7 +370,7 @@ class EnvSettingsTest(unittest.TestCase):
         self.assertIn("OPENAI_API_BASE_URLS has 2 entries", result.stderr)
         self.assertIn("OPENAI_API_KEYS has 1", result.stderr)
 
-    def test_alias_sets_a_one_entry_list_that_wins_over_saved_value(self):
+    def test_alias_is_parsed_like_the_plural_and_wins_over_saved_value(self):
         saved = {name: ["saved-before-start"] for name in ALIASES}
         result = _run(SAVE, saved, {}, self.db_path)
         self.assertEqual(result.returncode, 0, result.stderr[-4000:])
@@ -372,13 +383,56 @@ class EnvSettingsTest(unittest.TestCase):
         # OLLAMA_BASE_URL sets only the Ollama connections.
         self.assertEqual(probe["RAG_OLLAMA_BASE_URL"]["value"], "")
 
-    def test_empty_alias_stops_startup(self):
+    def test_empty_alias_entry_stops_startup(self):
         for name, (alias, _, _) in ALIASES.items():
-            for value in ("", "  "):
+            for value in ("", "  ", "http://a.example;", ";http://a.example"):
                 with self.subTest(alias=alias, value=value):
                     result = _run(PROBE, [name], {alias: value}, self.db_path)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(f"{alias} is empty", result.stderr)
+                    self.assertIn(f"{alias} has an empty entry", result.stderr)
+
+    def test_ollama_address_of_only_a_slash_stops_startup(self):
+        for name in ("OLLAMA_BASE_URLS", "OLLAMA_BASE_URL"):
+            for value in ("/", "http://ollama:11434;/"):
+                with self.subTest(name=name, value=value):
+                    result = _run(
+                        PROBE, ["OLLAMA_BASE_URLS"], {name: value}, self.db_path
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f"{name} has an empty entry", result.stderr)
+
+    def test_env_name_is_the_variable_used(self):
+        for name, (alias, value, _) in ALIASES.items():
+            for env, expected in (
+                ({}, name),
+                ({name: value}, name),
+                ({alias: value}, alias),
+                ({name: value, alias: value}, name),
+            ):
+                with self.subTest(name=name, set=sorted(env)):
+                    result = _run(ENV_NAMES, None, env, self.db_path)
+                    self.assertEqual(_result(result)[name], expected)
+
+    def test_connection_settings_number_alias_addresses_from_zero(self):
+        for configs, alias, address in (
+            ("OPENAI_API_CONFIGS", "OPENAI_API_BASE_URL", "https://a.example/v1"),
+            ("OLLAMA_API_CONFIGS", "OLLAMA_BASE_URL", "http://ollama:11434"),
+        ):
+            with self.subTest(configs=configs):
+                good = {"0": {"enable": True}}
+                probe = _probe(
+                    [configs], {alias: address, configs: json.dumps(good)}, self.db_path
+                )
+                self.assertEqual(probe[configs]["value"], good)
+                result = _run(
+                    PROBE,
+                    [configs],
+                    {alias: address, configs: json.dumps({"1": {}})},
+                    self.db_path,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{configs} has settings for connection 1", result.stderr)
+                self.assertIn(f"{alias} has 1 address", result.stderr)
 
     def test_alias_alone_logs_no_warning(self):
         for name, (alias, value, _) in ALIASES.items():
@@ -405,22 +459,50 @@ class EnvSettingsTest(unittest.TestCase):
                 probe = _result(result)
                 self.assertEqual(probe[name]["value"], expected)
                 self.assertEqual(probe[name]["after_save"], expected)
-                warnings = _warning_lines(result)
                 self.assertEqual(
-                    warnings.count(f"{name} and {alias} are both set; using {name}"), 1
+                    _warning_lines(result).count(
+                        f"{name} and {alias} are both set; using {name}"
+                    ),
+                    1,
                 )
-                self.assertNotIn(plural_value, warnings)
-                self.assertNotIn(alias_value.strip("/"), warnings)
 
-    def test_alias_counts_as_one_entry_against_the_other_list(self):
-        env = {
-            "OPENAI_API_BASE_URLS": "https://a.example/v1;https://b.example/v1",
-            "OPENAI_API_KEY": "sk-a",
-        }
-        result = _run(PROBE, ["OPENAI_API_KEYS"], env, self.db_path)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("OPENAI_API_BASE_URLS has 2 entries", result.stderr)
-        self.assertIn("OPENAI_API_KEY has 1", result.stderr)
+    def test_no_value_appears_in_the_output_when_both_names_are_set(self):
+        env = {"OPENAI_API_KEYS": "sk-plural-a;sk-plural-b"}
+        env["OPENAI_API_BASE_URLS"] = "https://plural-a.example/v1;https://plural-b.example/v1"
+        env["OLLAMA_BASE_URLS"] = "http://plural-ollama:11434"
+        for _, (alias, value, _) in ALIASES.items():
+            env[alias] = value
+        result = _run(IMPORT_ONLY, None, env, self.db_path)
+        self.assertEqual(result.returncode, 0, result.stderr[-4000:])
+        output = result.stdout + result.stderr
+        self.assertEqual(output.count(" are both set; "), 3)
+        for variable, raw in env.items():
+            for entry in [raw] + [part.strip() for part in raw.split(";")]:
+                with self.subTest(variable=variable, entry=entry):
+                    self.assertNotIn(entry.rstrip("/"), output)
+
+    def test_alias_entries_are_counted_against_the_other_list(self):
+        for env, used in (
+            (
+                {
+                    "OPENAI_API_BASE_URLS": "https://a.example/v1;https://b.example/v1",
+                    "OPENAI_API_KEY": "sk-a",
+                },
+                ("OPENAI_API_BASE_URLS has 2 entries", "OPENAI_API_KEY has 1"),
+            ),
+            (
+                {
+                    "OPENAI_API_BASE_URL": "https://a.example/v1",
+                    "OPENAI_API_KEYS": "sk-a;sk-b",
+                },
+                ("OPENAI_API_BASE_URL has 1 entries", "OPENAI_API_KEYS has 2"),
+            ),
+        ):
+            with self.subTest(set=sorted(env)):
+                result = _run(PROBE, ["OPENAI_API_KEYS"], env, self.db_path)
+                self.assertNotEqual(result.returncode, 0)
+                for fragment in used:
+                    self.assertIn(fragment, result.stderr)
 
 
 class SettingWiringTest(unittest.TestCase):
