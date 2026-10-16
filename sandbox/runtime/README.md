@@ -13,7 +13,7 @@ The image is published as `ghcr.io/rhiza-research/weather-skills-chat-sandbox` f
 
 CI runs `tests/plotly_png_check.py` in this image to prove Plotly can write a PNG. `tests/test_sandbox_runtime.py` covers the HTTP helpers without Docker.
 
-The process writes to stdout (the container log): startup, each `/exec` and `/unpack`, the skill name, and the skill's own stdout/stderr. Readiness, pack listings, and metrics polls are logged once so they do not drown skill output.
+The process writes routine lines to stdout: startup, each `/exec` and `/unpack`, the skill name, and the skill's own stdout/stderr. Runtime failures (unpack/tar, workspace mkdir, exec spawn, missing `uv`) go to stderr so GKE labels them ERROR. A skill that exits non-zero or times out is not a runtime failure. Readiness, pack listings, and metrics polls are logged once so they do not drown skill output.
 
 Chat talks to a specific runner pod. It does not import this Python file.
 

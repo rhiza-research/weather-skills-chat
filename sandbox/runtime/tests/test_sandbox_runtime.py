@@ -1,6 +1,8 @@
 import importlib.util
+from io import StringIO
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 
 RUNTIME = Path(__file__).resolve().parents[1] / "sandbox_runtime.py"
 SPEC = importlib.util.spec_from_file_location("sandbox_runtime", RUNTIME)
@@ -19,7 +21,6 @@ class SandboxRuntimeTest(TestCase):
 
     def test_exec_nices_the_child(self):
         import subprocess
-        from unittest.mock import patch
 
         real = subprocess.Popen
 
@@ -71,6 +72,48 @@ class SandboxRuntimeTest(TestCase):
     def test_unpack_rejects_escape(self):
         result = runtime.run_unpack({"dest": "/tmp/nope", "archive": ""})
         self.assertFalse(result["ok"])
+
+    def test_unpack_failure_goes_to_stderr(self):
+        import tempfile
+
+        previous = runtime.WORKSPACE
+        err = StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            runtime.WORKSPACE = workspace
+            try:
+                with patch.object(runtime.sys, "stderr", err), patch.object(
+                    runtime.subprocess,
+                    "run",
+                    side_effect=OSError("disk full"),
+                ):
+                    result = runtime.run_unpack(
+                        {
+                            "dest": str(workspace / "pack"),
+                            "archive": "YQ==",
+                        }
+                    )
+            finally:
+                runtime.WORKSPACE = previous
+        self.assertFalse(result["ok"])
+        self.assertIn("unpack fail", err.getvalue())
+        self.assertIn("disk full", err.getvalue())
+
+    def test_exec_runtime_failure_goes_to_stderr(self):
+        err = StringIO()
+        with patch.object(runtime.sys, "stderr", err), patch.object(
+            runtime.subprocess, "Popen", side_effect=OSError("no such file")
+        ):
+            result = runtime.run_exec({"cmd": ["uv", "run", "--script", "x.py"], "timeout": 5})
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("exec fail", err.getvalue())
+
+    def test_invalid_cmd_stays_off_stderr(self):
+        err = StringIO()
+        with patch.object(runtime.sys, "stderr", err):
+            result = runtime.run_exec({"cmd": "echo"})
+        self.assertEqual(result["exit_code"], 2)
+        self.assertEqual(err.getvalue(), "")
 
     def test_unpack_allows_packs_beside_chat_workspace(self):
         import base64

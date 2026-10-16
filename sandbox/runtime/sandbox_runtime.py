@@ -28,9 +28,18 @@ _seen_quiet_paths: set[str] = set()
 
 
 def log(message: str) -> None:
+    _write(sys.stdout, message)
+
+
+def log_error(message: str) -> None:
+    """Runtime failures. GKE labels stderr ERROR; skill output stays on stdout."""
+    _write(sys.stderr, message)
+
+
+def _write(stream, message: str) -> None:
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    sys.stdout.write(f"{ts} {message}\n")
-    sys.stdout.flush()
+    stream.write(f"{ts} {message}\n")
+    stream.flush()
 
 
 def skill_label(cmd: list[str]) -> str:
@@ -276,8 +285,8 @@ def run_unpack(body: dict) -> dict:
     if dest.exists():
         log(f"unpack skip dest={dest} already present")
         return {"ok": True, "skipped": True}
-    dest.parent.mkdir(parents=True, exist_ok=True)
     try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["tar", "-xz", "-C", str(dest.parent)],
             input=base64.b64decode(raw),
@@ -285,7 +294,9 @@ def run_unpack(body: dict) -> dict:
             capture_output=True,
         )
     except Exception as exc:
-        log(f"unpack fail dest={dest} error={exc} elapsed={time.monotonic() - started:.2f}s")
+        log_error(
+            f"unpack fail dest={dest} error={exc} elapsed={time.monotonic() - started:.2f}s"
+        )
         return {"ok": False, "error": str(exc)}
     log(f"unpack ok dest={dest} elapsed={time.monotonic() - started:.2f}s")
     return {"ok": True}
@@ -330,7 +341,9 @@ def run_exec(body: dict) -> dict:
         log(f"exec timeout skill={label} elapsed={timeout}s")
         return {"exit_code": -1, "stdout": "", "stderr": "timed out"}
     except Exception as exc:
-        log(f"exec fail skill={label} error={exc} elapsed={time.monotonic() - started:.2f}s")
+        log_error(
+            f"exec fail skill={label} error={exc} elapsed={time.monotonic() - started:.2f}s"
+        )
         return {"exit_code": 1, "stdout": "", "stderr": str(exc)}
 
 
@@ -401,7 +414,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    WORKSPACE.mkdir(parents=True, exist_ok=True)
+    try:
+        WORKSPACE.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        log_error(f"startup workspace mkdir failed path={WORKSPACE} error={exc}")
+        raise
     log(
         "startup"
         f" workspace={WORKSPACE}"
@@ -416,7 +433,7 @@ def main() -> None:
         uv = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
         log(f"startup uv={(uv.stdout or uv.stderr).strip() or 'unknown'}")
     except Exception as exc:
-        log(f"startup uv unavailable: {exc}")
+        log_error(f"startup uv unavailable: {exc}")
     log(f"listening 0.0.0.0:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 

@@ -18,7 +18,7 @@ A running skill keeps the runner for at least that skill's run timeout (see [[Sk
 
 ## Logs
 
-The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Readiness checks, pack listings, and CPU/memory samples are not repeated there after the first one. The chat server log names the chat and the runner pod for each skill call, including when a dead runner is dropped and the next skill starts a replacement.
+The runner pod's container log shows when it starts, which skill it is running, and that skill's own output. Runtime failures such as unpack or storage errors are written as errors; a skill that exits non-zero is not. Readiness checks, pack listings, and CPU/memory samples are not repeated there after the first one. The chat server log names the chat and the runner pod for each skill call, including when a dead runner is dropped and the next skill starts a replacement.
 
 ## Automations
 
