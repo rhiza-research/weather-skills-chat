@@ -65,4 +65,4 @@ The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confi
 | `USER_CACHES_DIR` | `<DATA_DIR>/user_caches` | Per-user dependency caches when confinement is on and there is no per-chat volume |
 | `SKILL_PACK_COPY_WORKERS` | The number of CPUs | How many files are copied at once when a pack is installed or updated |
 
-The server needs `git` to install packs and `uv` to run skills.
+The server needs `git` to install packs, `uv` to run skills, and Chromium so that a skill can use chromium-based rendering features.
