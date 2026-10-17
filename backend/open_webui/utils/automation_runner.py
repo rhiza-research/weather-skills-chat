@@ -14,6 +14,12 @@ from open_webui.models.usage import UsageLimitExceeded
 from open_webui.models.users import Users
 from open_webui.tasks import create_task, get_task
 from open_webui.utils.chat import generate_chat_completion as chat_completion_handler
+from open_webui.utils.langfuse_tracing import (
+    begin_chat_trace,
+    chat_trace_ended,
+    end_chat_trace,
+    message_from_completion,
+)
 from open_webui.utils.middleware import process_chat_payload, process_chat_response
 from open_webui.utils.models import check_model_access, remember_catalog_model
 from open_webui.utils.usage import check_usage_caps
@@ -152,20 +158,43 @@ async def _stream_automation_chat(
     request.state.metadata = metadata
     form_data["metadata"] = metadata
 
-    form_data, metadata, events = await process_chat_payload(
-        request, form_data, user, metadata, model
-    )
+    begin_chat_trace(user=user, metadata=metadata, form_data=form_data)
+    try:
+        form_data, metadata, events = await process_chat_payload(
+            request, form_data, user, metadata, model
+        )
 
-    response = await chat_completion_handler(request, form_data, user)
-    result = await process_chat_response(
-        request, response, form_data, user, metadata, model, events, None
-    )
+        response = await chat_completion_handler(request, form_data, user)
+        result = await process_chat_response(
+            request, response, form_data, user, metadata, model, events, None
+        )
 
-    # Streaming path schedules the tool loop as a background task — wait for it.
-    if isinstance(result, dict) and result.get("task_id"):
-        task = get_task(result["task_id"])
-        if task is not None:
-            await task
+        # Streaming path schedules the tool loop as a background task — wait for it.
+        if isinstance(result, dict) and result.get("task_id"):
+            task = get_task(result["task_id"])
+            if task is not None:
+                await task
+    except BaseException as e:
+        if chat_trace_ended():
+            log.debug(
+                "Automation run failed after its trace ended: %r", e, exc_info=True
+            )
+        end_chat_trace(
+            error="cancelled" if isinstance(e, asyncio.CancelledError) else e
+        )
+        raise
+    # The tool loop task ends the root span with its reply, and this call only
+    # clears the trace from this context. With no task awaited it ends the
+    # root unless something already did: on the non-streaming path with the
+    # model's reply, and when get_task returns None (the task finished and
+    # left the registry) with no output, since the reply is in the task.
+    end_chat_trace(
+        output=(
+            message_from_completion(result)
+            if isinstance(result, dict) and not result.get("task_id")
+            else None
+        )
+    )
 
     from open_webui.utils.chat_realtime import save_final_reply
 
