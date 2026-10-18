@@ -361,7 +361,11 @@ async def delete_claim(chat_id: str, uid: Optional[str] = None) -> None:
 
 WAITING_STATUS = "Waiting on weather skills runner"
 WAITING_ACTION = "weather_skills_runner"
-RUNNER_DIED_MESSAGE = "Tool call failed: Sandbox died, please retry"
+# Worded so the model does not blame its own call: the runner failed, not the tool.
+RUNNER_DIED_MESSAGE = (
+    "Tool call failed: Sandbox runner died for unknown reasons "
+    "(not clearly related to the tool call). Please try again."
+)
 RUNNER_OOM_MESSAGE = (
     "Tool call failed: the tool runner ran out of memory{detail}. "
     "Retry with less work at once, for example fewer skills in parallel or a "
@@ -1158,7 +1162,16 @@ async def runner_status(chat_id: str) -> dict:
     name = claim_name(chat_id)
     cached = _cached_runner(chat_id)
     if cached:
-        if await _runner_alive(cached):
+        health = await _runner_health(cached)
+        if health == HEALTH_OK:
+            return {"state": "ready", "claim": name}
+        if health == HEALTH_UNHEALTHY:
+            # The runner says it is broken (storage disconnected): delete its
+            # claim now, so a tool call still running on it fails at once
+            # instead of when it next touches its files.
+            await _delete_unhealthy_runner(chat_id, cached)
+            return {"state": "absent"}
+        if await _pod_alive(cached.get("pod_name")):
             return {"state": "ready", "claim": name}
         _drop_runner(chat_id)
     if _start_in_flight(chat_id):
@@ -1166,11 +1179,21 @@ async def runner_status(chat_id: str) -> dict:
     claim = await get_claim(chat_id)
     if not claim or claim.get("metadata", {}).get("deletionTimestamp"):
         return {"state": "absent"}
+    pod = None
+    if _pod_ref(claim):
+        try:
+            pod = await get_pod(_pod_ref(claim))
+        except Exception:
+            pod = None
     if not _claim_ready(claim):
+        # Agent Sandbox marks a claim not ready when its pod goes NotReady. A
+        # runner already bound to this chat that is not ready is broken, not
+        # starting: show paused until a new start begins.
+        annotations = ((pod or {}).get("metadata") or {}).get("annotations") or {}
+        if pod is not None and annotations.get(BOUND_ANN) == chat_id and not _pod_ready(pod):
+            return {"state": "absent"}
         return {"state": "starting", "claim": name}
-    try:
-        pod = await get_pod(_pod_ref(claim))
-    except Exception:
+    if pod is None:
         return {"state": "absent"}
     pod_ip = (pod.get("status") or {}).get("podIP")
     info = {
@@ -1179,7 +1202,11 @@ async def runner_status(chat_id: str) -> dict:
         "pod_ip": pod_ip,
         "pod_name": _pod_ref(claim),
     }
-    if not await _runner_alive(info):
+    health = await _runner_health(info)
+    if health == HEALTH_UNHEALTHY:
+        await _delete_unhealthy_runner(chat_id, info)
+        return {"state": "absent"}
+    if health == HEALTH_NO_ANSWER and not await _pod_alive(info["pod_name"]):
         return {"state": "absent"}
     try:
         if await _packs_ready_on_runner(pod, chat_id):
