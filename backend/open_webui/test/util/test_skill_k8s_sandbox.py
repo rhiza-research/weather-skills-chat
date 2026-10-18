@@ -1343,3 +1343,124 @@ class RunnerFailureGuidanceTest(TestCase):
             k8s.RUNNER_UNAVAILABLE_MESSAGE,
         ):
             self.assertNotIn("memory", message.lower())
+
+
+class SkillTimeoutTest(IsolatedAsyncioTestCase):
+    """The runner enforces the skill's timeout; the model is told it ran too long."""
+
+    _run = RunnerFaultTest._run
+
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def test_runner_timeout_says_the_skill_ran_too_long_and_keeps_output(self):
+        result, delete = await self._run(
+            _runner("old", "u1"),
+            exec_result={
+                "exit_code": -1,
+                "timed_out": True,
+                "timeout": 30,
+                "stdout": "fetched 3 of 10\n",
+                "stderr": "warning: slow\n",
+            },
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["exit_code"], -1)
+        self.assertTrue(result["stderr"].startswith("Tool call failed: the skill did not finish within its 30s timeout"))
+        self.assertIn("at most 1800s", result["stderr"])
+        self.assertIn("warning: slow", result["stderr"])
+        self.assertEqual(result["stdout"], "fetched 3 of 10")
+        self.assertNotIn("overloaded", result["stderr"])
+        delete.assert_not_awaited()
+
+    async def test_old_runner_timeout_answer_is_understood(self):
+        result, _ = await self._run(
+            _runner("old", "u1"), exec_result={"exit_code": -1, "stdout": "", "stderr": "timed out"}
+        )
+        self.assertIn("did not finish within its 30s timeout", result["stderr"])
+        self.assertNotIn("Skill stderr", result["stderr"])
+
+    async def test_chat_side_timeout_is_a_timeout_not_overloaded(self):
+        try:
+            raise TimeoutError()
+        except TimeoutError as cause:
+            error = _http_failure("POST", "http://10.0.0.1:8888/exec", 45, cause)
+            error.__cause__ = cause
+        with patch("open_webui.utils.skill_k8s_sandbox._lost_exec_message", AsyncMock()) as lost:
+            result, delete = await self._run(_runner("old", "u1"), exec_error=error, pod={"status": {}})
+        self.assertIn("did not finish within its 30s timeout", result["stderr"])
+        lost.assert_not_awaited()
+        delete.assert_not_awaited()
+
+    async def test_a_dropped_connection_is_still_judged_by_the_pod(self):
+        result, _ = await self._run(
+            _runner("old", "u1"), exec_error=RuntimeError("POST x failed: Server disconnected"), pod={"status": {}}
+        )
+        self.assertNotIn("timeout", result["stderr"])
+
+
+class ExecTimeoutSentTest(IsolatedAsyncioTestCase):
+    async def test_exec_sends_the_timeout_and_waits_a_little_longer(self):
+        from open_webui.utils.skill_k8s_sandbox import exec_on_runner
+
+        info = {"pod_ip": "10.0.0.1", "pod_name": "pod-1"}
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox._runner_base", AsyncMock(return_value="http://10.0.0.1:8888")
+        ), patch("open_webui.utils.skill_k8s_sandbox._http_json", AsyncMock(return_value={})) as http:
+            await exec_on_runner("chat-1", ["uv", "run"], cwd="/w", timeout=900, info=info)
+        self.assertEqual(http.call_args.kwargs["json_body"]["timeout"], 900)
+        self.assertGreater(http.call_args.kwargs["timeout"], 900)
+
+
+class SkillTimeoutLimitTest(TestCase):
+    def test_default_and_cap(self):
+        from open_webui.utils.skill_runtime import MAX_TIMEOUT_SEC, skill_timeout
+
+        self.assertEqual(MAX_TIMEOUT_SEC, 1800)
+        self.assertEqual(skill_timeout(None), 600)
+        self.assertEqual(skill_timeout(900), 900)
+        self.assertEqual(skill_timeout("1200"), 1200)
+        self.assertEqual(skill_timeout(99999), 1800)
+        self.assertEqual(skill_timeout(0), 600)
+        self.assertEqual(skill_timeout(-5), 600)
+        self.assertEqual(skill_timeout("soon"), 600)
+
+    def test_generated_skill_tool_takes_a_timeout(self):
+        import inspect
+
+        from open_webui.utils.skills import generate_tool_content
+
+        source = generate_tool_content(
+            method_name="run_x", skill_name="x", description="d", usage="u", skill_dir=Path("/tmp"), version="1"
+        )
+        namespace: dict = {}
+        exec(source, namespace)
+        method = namespace["Tools"].run_x
+        self.assertEqual(inspect.signature(method).parameters["timeout"].default, 600)
+        self.assertIn(":param timeout:", method.__doc__)
+        self.assertIn("at most 1800", method.__doc__)
+
+
+class RunSkillTimeoutTest(IsolatedAsyncioTestCase):
+    async def test_requested_timeout_is_capped_before_the_runner(self):
+        import tempfile
+
+        from open_webui.utils.skill_runtime import run_skill
+
+        seen = {}
+
+        async def on_runner(**kwargs):
+            seen["timeout"] = kwargs["timeout"]
+            return {"ok": True, "exit_code": 0, "stdout": "", "stderr": ""}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp)
+            (skill / "scripts").mkdir()
+            (skill / "scripts" / "main.py").write_text("print('hi')\n", encoding="utf-8")
+            with patch("open_webui.utils.skill_runtime.tool_runner_enabled", return_value=True), patch(
+                "open_webui.utils.skill_k8s_sandbox.run_skill_on_runner", side_effect=on_runner
+            ), patch("open_webui.utils.skill_runtime.chat_sandbox", return_value=skill), patch(
+                "open_webui.utils.skill_runtime.intermediate_results_dir", return_value=skill
+            ):
+                await run_skill(skill, timeout=7200, __metadata__={"chat_id": "chat-t"})
+        self.assertEqual(seen["timeout"], 1800)
