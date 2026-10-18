@@ -280,7 +280,10 @@ async def run_skill(
     user_cache: Path | None = None
     chat_venv_root: Path | None = None
     if use_chat_sandbox and tool_runner_enabled():
-        from open_webui.utils.skill_k8s_sandbox import run_skill_on_runner
+        from open_webui.utils.skill_k8s_sandbox import (
+            RunnerUnavailableError,
+            run_skill_on_runner,
+        )
 
         emitter = None
         try:
@@ -307,9 +310,11 @@ async def run_skill(
                 script_path.name,
                 e,
             )
+            # A start that ran out of time already has the model's message.
+            message = detail if isinstance(e, RunnerUnavailableError) else f"Tool runner failed: {detail}"
             return _redact_skill_result(
                 _error_result(
-                    f"Tool runner failed: {detail}",
+                    message,
                     script=script_path.name,
                     cwd=str(cwd),
                     argv=args,

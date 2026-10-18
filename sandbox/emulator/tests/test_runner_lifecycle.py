@@ -1,7 +1,8 @@
 """Runner lifecycle through the chat backend + emulator.
 
-A dead runner must go to paused, an in-flight skill must tell the user to
-retry, and a failure must not claim extra runners.
+A runner that dies mid-skill: the skill gets RUNNER_DIED_MESSAGE and the chat
+reads paused. Nothing is deleted or claimed until the next tool call, whose
+/health check replaces the dead runner with exactly one new one.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ import importlib.util
 import os
 import shutil
 import socket
-import subprocess
 import tempfile
 import threading
 import time
@@ -27,15 +27,19 @@ SPEC.loader.exec_module(emulator)
 from open_webui.utils import skill_k8s_sandbox as k8s
 from open_webui.utils.skill_k8s_sandbox import public_runner_state
 
-DIED_MESSAGE = "Runner died while running skills, please try again"
+DIED_MESSAGE = k8s.RUNNER_DIED_MESSAGE
 
 SLEEP_SCRIPT = """\
 # /// script
 # requires-python = ">=3.11"
 # dependencies = []
 # ///
+import os
 import sys
 import time
+from pathlib import Path
+# Tells the test this skill is running on the runner before it kills it.
+Path(f"sleep-started-{os.getpid()}").touch()
 time.sleep(float(sys.argv[1]) if len(sys.argv) > 1 else 60)
 print("slept")
 """
@@ -103,6 +107,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         emulator._claims.clear()
         emulator._pods.clear()
         emulator._procs.clear()
+        emulator._exit_codes.clear()
         emulator._next_port = self.runner_port
 
         self.runtime_starts = 0
@@ -126,6 +131,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
 
         k8s._ready_cache.clear()
         k8s._starts.clear()
+        k8s._start_failed_at.clear()
         self._packs_patch = patch(
             "open_webui.utils.skill_k8s_sandbox._packs_for_chat",
             return_value=[],
@@ -184,9 +190,12 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         results = [task.result() for task in tasks]
         return results[0] if len(results) == 1 else results
 
-    async def _wait_until_in_flight(self, *tasks: asyncio.Task, timeout: float = 8) -> None:
-        started = time.monotonic()
-        deadline = started + timeout
+    async def _wait_until_in_flight(
+        self, chat_id: str, *tasks: asyncio.Task, timeout: float = 30
+    ) -> None:
+        """Wait until every sleep skill has started on the runner (its marker file)."""
+        workspace = self.artifacts / chat_id
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if any(task.done() for task in tasks):
                 results = []
@@ -194,14 +203,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
                     if task.done():
                         results.append(task.result() if not task.cancelled() else "cancelled")
                 self.fail(f"skill returned before the runner was killed: {results}")
-            try:
-                listing = subprocess.check_output(["ps", "ax", "-o", "command="], text=True)
-            except OSError:
-                listing = ""
-            if "sleep.py" in listing or "die-wait" in listing:
-                return
-            # Exec is in flight once /exec has been posted; uv may not show in ps.
-            if time.monotonic() - started >= 1.0:
+            if len(list(workspace.glob("sleep-started-*"))) >= len(tasks):
                 return
             await asyncio.sleep(0.1)
         self.fail("timed out waiting for sleep skill to start on the runner")
@@ -249,7 +251,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         task = asyncio.create_task(
             self._run(chat_id, self.sleep_skill, "sleep.py", argv=["20"])
         )
-        await self._wait_until_in_flight(task)
+        await self._wait_until_in_flight(chat_id, task)
         self._kill_runtime(chat_id)
         result = await self._await_dead_skills(task)
 
@@ -259,8 +261,9 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         self.assertEqual(
             self.runtime_starts,
             starts_before_fail,
-            "dying mid-skill must not claim a replacement until the user retries",
+            "dying mid-skill must not claim a replacement until the next tool call",
         )
+        self.assertEqual(self._claim_count(), 1, "a failed tool call must not delete the claim")
         self.assertEqual(self._live_runtimes(), 0)
 
         retry = await self._run(chat_id, self.hello_skill, "hello.py")
@@ -280,7 +283,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             )
             for _ in range(3)
         ]
-        await self._wait_until_in_flight(*tasks)
+        await self._wait_until_in_flight(chat_id, *tasks)
         self._kill_runtime(chat_id)
         results = await self._await_dead_skills(*tasks)
 
@@ -295,7 +298,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             f"(starts={self.runtime_starts}, claims={self._claim_count()}, "
             f"live={self._live_runtimes()})",
         )
-        self.assertEqual(self._claim_count(), 1)
+        self.assertEqual(self._claim_count(), 1, "a failed tool call must not delete the claim")
         self.assertEqual(self._live_runtimes(), 0)
 
         retry = await self._run(chat_id, self.hello_skill, "hello.py")

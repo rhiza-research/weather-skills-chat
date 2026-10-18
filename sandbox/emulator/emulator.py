@@ -73,6 +73,9 @@ _lock = threading.Lock()
 _claims: dict[str, dict] = {}
 _pods: dict[str, dict] = {}
 _procs: dict[str, subprocess.Popen] = {}
+# Exit code of a chat's runtime after it stopped, until a new one starts:
+# lets a pod read show a terminated container, as on the cluster.
+_exit_codes: dict[str, int] = {}
 _next_port = RUNNER_PORT0
 
 
@@ -109,6 +112,7 @@ def _start_runtime(chat_id: str, port: int) -> None:
         cwd=str(workspace),
     )
     _procs[chat_id] = proc
+    _exit_codes.pop(chat_id, None)
     deadline = time.time() + 8
     import urllib.error
     import urllib.request
@@ -132,6 +136,8 @@ def _stop_runtime(chat_id: str) -> None:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+    if proc:
+        _exit_codes[chat_id] = proc.poll() if proc.poll() is not None else -9
 
 
 def _make_pod(chat_id: str, port: int) -> dict:
@@ -144,7 +150,7 @@ def _make_pod(chat_id: str, port: int) -> dict:
             "name": name,
             "namespace": NS,
             "uid": uid,
-            "labels": {"weather-skills-tool-runner": "true"},
+            "labels": {"weather-skills-tool-runner": "true", "weather-skills-chat": chat_id},
             "annotations": {},
         },
         "spec": {
@@ -169,6 +175,29 @@ def _make_pod(chat_id: str, port: int) -> dict:
     }
 
 
+def _pod_view(pod: dict) -> dict:
+    """The pod with its runner container's state, as the cluster reports it:
+    running while the runtime process lives, terminated once it has died."""
+    chat_id = ((pod.get("metadata") or {}).get("labels") or {}).get("weather-skills-chat")
+    proc = _procs.get(chat_id) if chat_id else None
+    if proc is None:
+        if chat_id not in _exit_codes:
+            return pod
+        code = _exit_codes[chat_id]
+    else:
+        code = proc.poll()
+    if code is None:
+        state = {"running": {}}
+    else:
+        state = {"terminated": {"reason": "Error", "exitCode": code}}
+    view = dict(pod)
+    view["status"] = {
+        **(pod.get("status") or {}),
+        "containerStatuses": [{"name": "runner", "ready": code is None, "state": state}],
+    }
+    return view
+
+
 def _start_delay() -> float:
     raw = os.environ.get("SKILL_K8S_EMULATOR_START_DELAY", "0").strip()
     try:
@@ -186,6 +215,7 @@ def _make_claim(chat_id: str, name: str, pod_name: str, *, ready: bool = True) -
             "namespace": NS,
             "labels": {"weather-skills-chat": chat_id},
             "finalizers": ["agent.sandbox/storage-cleanup"],
+            "uid": str(uuid.uuid4()),
         },
         "spec": {"warmPoolRef": {"name": "local"}},
         "status": {
@@ -255,7 +285,7 @@ class ApiHandler(BaseHTTPRequestHandler):
                             pod = item
                             break
                 if pod:
-                    _json(self, 200, pod)
+                    _json(self, 200, _pod_view(pod))
                     return
                 _json(self, 404, {"reason": "NotFound"})
                 return
@@ -297,6 +327,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             pod = _make_pod(chat_id, port)
             _pods[pod["metadata"]["name"]] = pod
             delay = _start_delay()
+            _exit_codes.pop(chat_id, None)
             _claims[chat_id] = _make_claim(
                 chat_id, name, pod["metadata"]["name"], ready=(delay <= 0)
             )
@@ -347,10 +378,16 @@ class ApiHandler(BaseHTTPRequestHandler):
             _json(self, 404, {"reason": "NotFound"})
             return
         name = path.rsplit("/", 1)[-1]
+        # DeleteOptions.preconditions.uid, as on the cluster: a delete aimed
+        # at an older claim must not remove its same-named replacement.
+        want_uid = ((_read(self).get("preconditions") or {}).get("uid")) or None
         with _lock:
             chat_id = None
             for cid, claim in list(_claims.items()):
                 if claim["metadata"]["name"] == name:
+                    if want_uid and claim["metadata"].get("uid") != want_uid:
+                        _json(self, 409, {"reason": "Conflict"})
+                        return
                     chat_id = cid
                     pod_name = (claim.get("status") or {}).get("sandbox", {}).get("name")
                     _claims.pop(cid)
