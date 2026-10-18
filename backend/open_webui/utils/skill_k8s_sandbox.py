@@ -423,7 +423,7 @@ async def _until(deadline: float, what: str, step):
 
 def public_runner_state(state: Optional[str]) -> str:
     """Map internal runner_status to the top-bar / websocket state."""
-    if state in ("ready", "starting"):
+    if state in ("ready", "starting", "degraded"):
         return state
     return "paused"
 
@@ -1154,8 +1154,37 @@ async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
         await _emit_waiting(emitter, True)
 
 
+# A Ready runner that has not answered /health for this long reads degraded
+# (stuck, or very busy). Display only: nothing is deleted for it.
+DEGRADED_AFTER_NO_ANSWER_SEC = 30.0
+_no_answer_since: dict[str, float] = {}
+
+
+def _ready_or_degraded(chat_id: str, health: str) -> str:
+    if health == HEALTH_OK:
+        _no_answer_since.pop(chat_id, None)
+        return "ready"
+    since = _no_answer_since.setdefault(chat_id, time.monotonic())
+    return "degraded" if time.monotonic() - since >= DEGRADED_AFTER_NO_ANSWER_SEC else "ready"
+
+
+async def _pod_or_none(name: Optional[str]) -> Optional[dict]:
+    if not name:
+        return None
+    try:
+        return await get_pod(name)
+    except Exception:
+        return None
+
+
 async def runner_status(chat_id: str) -> dict:
-    """Read readiness. Does not start the runner or wait on the start task.
+    """Read the runner's state for the top bar. Read only: starts and deletes nothing.
+
+    ready: answering /health (or Ready and only briefly silent).
+    degraded: answers /health with an error (503), its bound pod is NotReady,
+      or Ready but silent for DEGRADED_AFTER_NO_ANSWER_SEC.
+    starting: a start is in flight, or a claimed runner is not bound yet.
+    absent (paused): no claim, or the claim is being deleted.
 
     A ready result is remembered so later status and tool calls do not list
     packs again. Packs are listed only when the pod is not already marked ready.
@@ -1165,33 +1194,31 @@ async def runner_status(chat_id: str) -> dict:
     if cached:
         health = await _runner_health(cached)
         if health == HEALTH_OK:
+            _no_answer_since.pop(chat_id, None)
             return {"state": "ready", "claim": name}
         if health == HEALTH_UNHEALTHY:
-            # Read only: deleting a broken runner is the in-flight watcher's
-            # or the next tool call's job, not the status check's.
+            # Replacing it is the in-flight watcher's or the next tool call's job.
             _drop_runner(chat_id)
-            return {"state": "absent"}
-        if await _pod_alive(cached.get("pod_name")):
-            return {"state": "ready", "claim": name}
+            return {"state": "degraded", "claim": name}
+        pod = await _pod_or_none(cached.get("pod_name"))
+        if pod is not None and _pod_ready(pod):
+            return {"state": _ready_or_degraded(chat_id, health), "claim": name}
         _drop_runner(chat_id)
     if _start_in_flight(chat_id):
         return {"state": "starting", "claim": name}
     claim = await get_claim(chat_id)
     if not claim or claim.get("metadata", {}).get("deletionTimestamp"):
+        _no_answer_since.pop(chat_id, None)
         return {"state": "absent"}
-    pod = None
-    if _pod_ref(claim):
-        try:
-            pod = await get_pod(_pod_ref(claim))
-        except Exception:
-            pod = None
+    pod = await _pod_or_none(_pod_ref(claim))
+    annotations = ((pod or {}).get("metadata") or {}).get("annotations") or {}
+    bound = pod is not None and annotations.get(BOUND_ANN) == chat_id
+    if bound and not _pod_ready(pod):
+        # Agent Sandbox marks the claim not ready along with its pod, so check
+        # the pod first: a bound runner that is not ready is broken. An unbound
+        # one falls through and reads starting below.
+        return {"state": "degraded", "claim": name}
     if not _claim_ready(claim):
-        # Agent Sandbox marks a claim not ready when its pod goes NotReady. A
-        # runner already bound to this chat that is not ready is broken, not
-        # starting: show paused until a new start begins.
-        annotations = ((pod or {}).get("metadata") or {}).get("annotations") or {}
-        if pod is not None and annotations.get(BOUND_ANN) == chat_id and not _pod_ready(pod):
-            return {"state": "absent"}
         return {"state": "starting", "claim": name}
     if pod is None:
         return {"state": "absent"}
@@ -1204,9 +1231,12 @@ async def runner_status(chat_id: str) -> dict:
     }
     health = await _runner_health(info)
     if health == HEALTH_UNHEALTHY:
-        return {"state": "absent"}
-    if health == HEALTH_NO_ANSWER and not await _pod_alive(info["pod_name"]):
-        return {"state": "absent"}
+        return {"state": "degraded", "claim": name}
+    if health == HEALTH_NO_ANSWER:
+        if bound:
+            return {"state": _ready_or_degraded(chat_id, health), "claim": name}
+        return {"state": "starting", "claim": name}
+    _no_answer_since.pop(chat_id, None)
     try:
         if await _packs_ready_on_runner(pod, chat_id):
             if pod_ip:
