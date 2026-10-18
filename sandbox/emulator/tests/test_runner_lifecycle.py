@@ -1,8 +1,8 @@
 """Runner lifecycle through the chat backend + emulator.
 
-A runner that dies mid-skill: the skill gets RUNNER_DIED_MESSAGE, the runner's
-claim is deleted (the chat reads paused), and nothing else is claimed until
-the next tool call, which claims exactly one new runner.
+A runner that dies mid-skill: the skill gets RUNNER_DIED_MESSAGE and the chat
+reads paused. Nothing is deleted or claimed until the next tool call, whose
+/health check replaces the dead runner with exactly one new one.
 """
 
 from __future__ import annotations
@@ -107,6 +107,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         emulator._claims.clear()
         emulator._pods.clear()
         emulator._procs.clear()
+        emulator._exit_codes.clear()
         emulator._next_port = self.runner_port
 
         self.runtime_starts = 0
@@ -262,7 +263,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             starts_before_fail,
             "dying mid-skill must not claim a replacement until the next tool call",
         )
-        self.assertEqual(self._claim_count(), 0, "the dead runner's claim must be deleted")
+        self.assertEqual(self._claim_count(), 1, "a failed tool call must not delete the claim")
         self.assertEqual(self._live_runtimes(), 0)
 
         retry = await self._run(chat_id, self.hello_skill, "hello.py")
@@ -297,7 +298,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             f"(starts={self.runtime_starts}, claims={self._claim_count()}, "
             f"live={self._live_runtimes()})",
         )
-        self.assertEqual(self._claim_count(), 0, "the dead runner's claim must be deleted")
+        self.assertEqual(self._claim_count(), 1, "a failed tool call must not delete the claim")
         self.assertEqual(self._live_runtimes(), 0)
 
         retry = await self._run(chat_id, self.hello_skill, "hello.py")
