@@ -550,7 +550,7 @@ def _pod_runner_port(pod: Optional[dict] = None) -> int:
     return _runner_port()
 
 
-# Baked into the runner image (sandbox/runtime/Dockerfile). /workspace is an
+# Baked into the runner image (rhiza-research/infrastructure images/sandbox-runner). /workspace is an
 # emptyDir, so a cache under it would hide the prewarmed wheels.
 RUNNER_UV_CACHE_DIR = "/opt/uv-cache"
 

@@ -60,28 +60,6 @@ jobs:
             USE_OLLAMA=false
             BUILD_HASH=${{ github.sha }}
 
-      - name: Docker metadata (tool runner)
-        id: meta-sandbox
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/rhiza-research/weather-skills-chat-sandbox
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{raw}}
-            type=semver,pattern={{version}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push tool runner
-        uses: docker/build-push-action@v6
-        with:
-          context: ./sandbox/runtime
-          file: ./sandbox/runtime/Dockerfile
-          push: true
-          tags: ${{ steps.meta-sandbox.outputs.tags }}
-          labels: ${{ steps.meta-sandbox.outputs.labels }}
-          platforms: linux/amd64
-
       # staging: every push to dev, image tag sha-<short>.
       # prod: only semver tags that point at a commit on main; image tag is that tag.
       # Pushes to main still build GHCR images (main / sha- / latest) but do not
