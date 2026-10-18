@@ -1119,16 +1119,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     if (tool.get("spec") or {}).get("name")
                 ]
                 if tool_names:
-                    shown = ", ".join(f"`{n}`" for n in tool_names[:40])
-                    more = (
-                        f" (+{len(tool_names) - 40} more)"
-                        if len(tool_names) > 40
-                        else ""
-                    )
+                    shown = ", ".join(f"`{n}`" for n in tool_names)
                     hints.append(
                         "Tools/skills enabled for this chat: "
                         + shown
-                        + more
                         + ". If the user asks what you can use, call "
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
