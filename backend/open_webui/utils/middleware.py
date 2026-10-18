@@ -1150,6 +1150,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "those calls to a short phrase for the whole batch, such as "
                         '"Fetching IMERG and clipping to Kenya".'
                     )
+                    from open_webui.env import tool_runner_enabled
+
+                    if tool_runner_enabled():
+                        from open_webui.utils.skill_k8s_sandbox import (
+                            RUNNER_FAILURE_GUIDANCE,
+                        )
+
+                        hints.append(RUNNER_FAILURE_GUIDANCE)
                 if hints:
                     combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []

@@ -1325,3 +1325,21 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
 class PublicDegradedStateTest(TestCase):
     def test_degraded_is_passed_through(self):
         self.assertEqual(public_runner_state("degraded"), "degraded")
+
+
+class RunnerFailureGuidanceTest(TestCase):
+    def test_guidance_quotes_the_out_of_memory_message(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.assertIn('"the tool runner ran out of memory"', k8s.RUNNER_FAILURE_GUIDANCE)
+        self.assertIn("the tool runner ran out of memory", k8s.RUNNER_OOM_MESSAGE)
+
+    def test_only_the_out_of_memory_message_mentions_memory(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        for message in (
+            k8s.RUNNER_DIED_MESSAGE,
+            k8s.RUNNER_UNREACHABLE_MESSAGE,
+            k8s.RUNNER_UNAVAILABLE_MESSAGE,
+        ):
+            self.assertNotIn("memory", message.lower())
