@@ -1,6 +1,5 @@
 # Tool runner
 
-Two pieces live here:
+- [`emulator/`](emulator/) — a laptop stand-in for the claim / bind / exec APIs. No isolation. Compose runs it on the runner image.
 
-- [`runtime/`](runtime/) — the image that runs inside a GKE Agent Sandbox pod (`sandbox_runtime.py`, Dockerfile, image tests).
-- [`emulator/`](emulator/) — a laptop stand-in for the claim / bind / exec APIs. No isolation. Compose runs it on the runtime image.
+The image that runs inside a GKE Agent Sandbox pod (`sandbox_runtime.py`, Dockerfile, image tests) is in [rhiza-research/infrastructure](https://github.com/rhiza-research/infrastructure) under `images/sandbox-runner`.

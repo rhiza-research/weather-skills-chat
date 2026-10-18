@@ -8,7 +8,7 @@ The image is published as `ghcr.io/rhiza-research/weather-skills-chat` for `linu
 
 The image includes Python and the `git` and `uv` tools that [[Skill Packs]] need. The speech, embedding, and tokenizer models are built into the image outside the data directory, so mounting a data volume does not hide them.
 
-A second image, `ghcr.io/rhiza-research/weather-skills-chat-sandbox`, is the [[Tool Runner]]. It is published from the same workflow with the same tags. That image includes a cache of the Python packages the Weather Skills catalog skills declare, so a new runner does not download those packages on the first skill.
+The [[Tool Runner]] image, `ghcr.io/rhiza-research/weather-skills-sandbox-runner`, is built and published from the infrastructure repository, not from this one. That image includes a cache of the Python packages the Weather Skills catalog skills declare, so a new runner does not download those packages on the first skill.
 
 | Env var | Default | Effect |
 |-|-|-|
