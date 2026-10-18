@@ -219,7 +219,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             timeout=30,
         )
 
-    async def test_idle_death_goes_paused_then_next_skill_claims_one_runner(self):
+    async def test_idle_death_goes_degraded_then_paused_then_next_skill_claims_one_runner(self):
         chat_id = "idle-death"
         await k8s.ensure_runner(chat_id)
         self.assertEqual(await self._public_state(chat_id), "ready")
@@ -229,10 +229,14 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         self._kill_runtime(chat_id)
         self.assertEqual(
             await self._public_state(chat_id),
-            "paused",
-            "an idle dead runner must read as paused, not still ready",
+            "degraded",
+            "an idle dead runner whose claim is still there must read degraded, not ready",
         )
         self.assertEqual(self._live_runtimes(), 0)
+
+        # The cluster controller releases a bound runner that stays not ready.
+        await k8s.delete_claim(chat_id)
+        self.assertEqual(await self._public_state(chat_id), "paused")
 
         result = await self._run(chat_id, self.hello_skill, "hello.py")
         self.assertTrue(result.get("ok"), result)
@@ -243,7 +247,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         new_uid = next(iter(emulator._pods.values()))["metadata"]["uid"]
         self.assertNotEqual(new_uid, first_uid)
 
-    async def test_one_in_flight_death_pauses_and_tells_the_user_to_retry(self):
+    async def test_one_in_flight_death_reads_degraded_and_tells_the_user_to_retry(self):
         chat_id = "one-in-flight"
         await k8s.ensure_runner(chat_id)
         starts_before_fail = self.runtime_starts
@@ -257,7 +261,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
 
         self.assertFalse(result.get("ok"), result)
         self.assertEqual(result.get("stderr"), DIED_MESSAGE)
-        self.assertEqual(await self._public_state(chat_id), "paused")
+        self.assertEqual(await self._public_state(chat_id), "degraded")
         self.assertEqual(
             self.runtime_starts,
             starts_before_fail,
@@ -290,7 +294,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         for result in results:
             self.assertFalse(result.get("ok"), result)
             self.assertEqual(result.get("stderr"), DIED_MESSAGE)
-        self.assertEqual(await self._public_state(chat_id), "paused")
+        self.assertEqual(await self._public_state(chat_id), "degraded")
         self.assertEqual(
             self.runtime_starts,
             starts_before_fail,

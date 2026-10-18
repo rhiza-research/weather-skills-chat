@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
@@ -463,27 +464,27 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
     async def test_cache_is_ready_without_another_pack_check(self):
         _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
         with patch("open_webui.utils.skill_k8s_sandbox.get_claim") as get_claim, patch(
-            "open_webui.utils.skill_k8s_sandbox._runner_alive",
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value="ok",
         ):
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "ready")
         get_claim.assert_not_called()
 
-    async def test_dead_cached_runner_is_paused(self):
+    async def test_cached_runner_answering_503_reads_degraded(self):
         _store_runner("chat-1", {"pod_ip": "10.0.0.1"})
         with patch(
-            "open_webui.utils.skill_k8s_sandbox._runner_alive",
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
             new_callable=AsyncMock,
-            return_value=False,
+            return_value="unhealthy",
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_claim",
             new_callable=AsyncMock,
             return_value=None,
         ):
             status = await runner_status("chat-1")
-        self.assertEqual(status["state"], "absent")
+        self.assertEqual(status["state"], "degraded")
         self.assertIsNone(_ready_cache.get("chat-1"))
 
     async def test_ready_when_runner_lists_installed_packs(self):
@@ -499,9 +500,9 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox._runner_alive",
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value="ok",
         ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value={"weather-skills"},
@@ -529,9 +530,9 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox._runner_alive",
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value="ok",
         ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs"
         ) as listed:
@@ -553,9 +554,9 @@ class RunnerStatusTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", return_value=pod
         ), patch(
-            "open_webui.utils.skill_k8s_sandbox._runner_alive",
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value="ok",
         ), patch(
             "open_webui.utils.skill_k8s_sandbox._listed_packs",
             return_value=set(),
@@ -1107,3 +1108,220 @@ class RunnerHealthTest(IsolatedAsyncioTestCase):
     async def test_connection_error_is_no_answer(self):
         error = RuntimeError("GET http://10.0.0.1:8888/health failed: Connection reset by peer")
         self.assertEqual(await self._health(error), "no_answer")
+
+
+class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
+    """The top-bar status is read-only: a broken runner reads degraded, nothing is deleted."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        k8s._no_answer_since.clear()
+
+    def tearDown(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        _drop_runner("chat-1")
+        k8s._no_answer_since.clear()
+
+    def _claim(self, ready: bool) -> dict:
+        return {
+            "metadata": {"name": "runner-chat-1", "uid": "u1"},
+            "status": {
+                "sandbox": {"name": "pod-1"},
+                "conditions": [{"type": "Ready", "status": "True" if ready else "False"}],
+            },
+        }
+
+    def _pod(self, *, ready: bool, bound: bool) -> dict:
+        annotations = {"weather-skills.io/bound": "chat-1"} if bound else {}
+        return {
+            "metadata": {"name": "pod-1", "annotations": annotations},
+            "status": {
+                "phase": "Running",
+                "podIP": "10.0.0.1",
+                "conditions": [{"type": "Ready", "status": "True" if ready else "False"}],
+            },
+        }
+
+    async def test_cached_runner_answering_503_reads_degraded_without_deleting(self):
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1", "pod_name": "pod-1", "claim": {"metadata": {"uid": "u1"}}})
+        with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="unhealthy")), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ) as delete:
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "degraded")
+        delete.assert_not_awaited()
+        self.assertIsNone(_ready_cache.get("chat-1"))
+
+    async def test_slow_cached_runner_on_a_ready_pod_stays_ready(self):
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1", "pod_name": "pod-1", "claim": {"metadata": {"uid": "u1"}}})
+        with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="no_answer")), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=True, bound=True))
+        ), patch("open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()) as delete:
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "ready")
+        delete.assert_not_awaited()
+
+    async def test_ready_claim_whose_runner_answers_503_reads_degraded_without_deleting(self):
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(True))), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=True, bound=True))
+        ), patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="unhealthy")), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ) as delete:
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "degraded")
+        delete.assert_not_awaited()
+
+    async def test_bound_runner_that_went_not_ready_reads_degraded(self):
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(False))), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=False, bound=True))
+        ):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "degraded")
+
+    async def test_unbound_runner_that_is_not_ready_yet_reads_starting(self):
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(False))), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=False, bound=False))
+        ):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "starting")
+
+    async def test_slow_answer_on_a_not_ready_bound_pod_reads_degraded_and_never_deletes(self):
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(True))), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=False, bound=True))
+        ), patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="no_answer")), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ) as delete:
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "degraded")
+        delete.assert_not_awaited()
+
+    async def test_claim_being_deleted_reads_paused(self):
+        deleting = {"metadata": {"name": "runner-chat-1", "uid": "u1", "deletionTimestamp": "2026-10-18T06:00:00Z"}}
+        with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=deleting)):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "absent")
+
+    async def test_ready_runner_silent_past_30s_reads_degraded(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        clock = {"t": 100.0}
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1", "pod_name": "pod-1", "claim": {"metadata": {"uid": "u1"}}})
+        with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="no_answer")), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=True, bound=True))
+        ), patch("open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()) as delete, patch.object(
+            k8s.time, "monotonic", side_effect=lambda: clock["t"]
+        ):
+            first = await runner_status("chat-1")
+            clock["t"] = 129.0
+            still = await runner_status("chat-1")
+            clock["t"] = 131.0
+            later = await runner_status("chat-1")
+        self.assertEqual(first["state"], "ready")
+        self.assertEqual(still["state"], "ready")
+        self.assertEqual(later["state"], "degraded")
+        delete.assert_not_awaited()
+
+    async def test_an_answer_clears_the_silence_timer(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        k8s._no_answer_since["chat-1"] = 0.0
+        _store_runner("chat-1", {"pod_ip": "10.0.0.1", "pod_name": "pod-1", "claim": {"metadata": {"uid": "u1"}}})
+        with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="ok")):
+            status = await runner_status("chat-1")
+        self.assertEqual(status["state"], "ready")
+        self.assertNotIn("chat-1", k8s._no_answer_since)
+
+
+class InFlightWatcherTest(IsolatedAsyncioTestCase):
+    """While tool calls run, an explicit 503 from the runner deletes its claim at once."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.k8s = k8s
+        self._interval = k8s.RUNNER_WATCH_SECONDS
+        k8s.RUNNER_WATCH_SECONDS = 0.01
+        k8s._watchers.clear()
+
+    def tearDown(self):
+        self.k8s.RUNNER_WATCH_SECONDS = self._interval
+        self.k8s._watchers.clear()
+        _drop_runner("chat-1")
+
+    async def _run_calls(self, health, n=1, exec_seconds=None):
+        info = _runner("old", "u1")
+        deleted = asyncio.Event()
+
+        async def ensure(chat_id, *, emitter=None):
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            if exec_seconds is not None:
+                await asyncio.sleep(exec_seconds)
+                return {"exit_code": 0, "stdout": "done", "stderr": ""}
+            await asyncio.wait_for(deleted.wait(), timeout=5)
+            raise RuntimeError("POST http://10.0.0.1:8888/exec failed: Connection reset by peer")
+
+        async def delete_claim(chat_id, uid=None):
+            deleted.set()
+
+        deleting_pod = {"metadata": {"deletionTimestamp": "2026-10-18T06:00:00Z"}, "status": {"phase": "Running"}}
+        k = "open_webui.utils.skill_k8s_sandbox"
+        with patch(f"{k}.ensure_runner", side_effect=ensure), patch(
+            f"{k}.exec_on_runner", side_effect=exec_on
+        ), patch(f"{k}.hold_runner_for_skill", AsyncMock()), patch(
+            f"{k}._runner_health", AsyncMock(side_effect=health)
+        ), patch(f"{k}.get_pod", AsyncMock(return_value=deleting_pod)), patch(
+            f"{k}.delete_claim", AsyncMock(side_effect=delete_claim)
+        ) as delete, patch(
+            f"{k}.remote_script_path", return_value="/workspace/.skill-packs/x/script.py"
+        ):
+            calls = [
+                asyncio.create_task(
+                    run_skill_on_runner(
+                        chat_id="chat-1",
+                        skill_dir=Path("/data/skills/x"),
+                        script_path=Path("/data/skills/x/script.py"),
+                        args=[],
+                        env={},
+                        timeout=30,
+                    )
+                )
+                for _ in range(n)
+            ]
+            await asyncio.sleep(0)
+            watchers_during = len(self.k8s._watchers)
+            results = await asyncio.gather(*calls)
+        return results, delete, watchers_during
+
+    async def test_a_503_mid_call_deletes_the_claim_and_fails_the_calls_now(self):
+        results, delete, _ = await self._run_calls(
+            ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1
+        )
+        delete.assert_awaited_once_with("chat-1", uid="u1")
+        self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
+        self.assertEqual(self.k8s._watchers, {})
+
+    async def test_slow_answers_never_delete(self):
+        results, delete, _ = await self._run_calls(
+            lambda *a, **k: "no_answer", n=1, exec_seconds=0.1
+        )
+        delete.assert_not_awaited()
+        self.assertTrue(results[0]["ok"])
+
+    async def test_parallel_calls_share_one_watcher_that_stops_after_the_last(self):
+        results, delete, watchers_during = await self._run_calls(
+            lambda *a, **k: "ok", n=3, exec_seconds=0.1
+        )
+        self.assertEqual(watchers_during, 1)
+        self.assertEqual(self.k8s._watchers, {})
+        delete.assert_not_awaited()
+        self.assertTrue(all(r["ok"] for r in results))
+
+
+class PublicDegradedStateTest(TestCase):
+    def test_degraded_is_passed_through(self):
+        self.assertEqual(public_runner_state("degraded"), "degraded")
