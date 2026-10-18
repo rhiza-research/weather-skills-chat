@@ -688,7 +688,7 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
         _drop_runner("chat-1")
 
     async def test_a_lost_exec_tells_the_user_to_retry(self):
-        info = {"pod_ip": "10.0.0.1", "pod_name": "old"}
+        info = {"pod_ip": "10.0.0.1", "pod_name": "old", "claim": {"metadata": {"uid": "claim-old"}}}
         execs = []
 
         async def ensure(chat_id, *, emitter=None):
@@ -706,6 +706,9 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
         ), patch(
             "open_webui.utils.skill_k8s_sandbox.delete_claim"
         ) as delete, patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod",
+            side_effect=RuntimeError("404"),
+        ), patch(
             "open_webui.utils.skill_k8s_sandbox.remote_script_path",
             return_value="/workspace/.skill-packs/x/script.py",
         ), self.assertLogs(
@@ -721,7 +724,8 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
             )
         self.assertFalse(result["ok"])
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        delete.assert_not_awaited()
+        # The dead runner is deleted, and only that claim (by uid).
+        delete.assert_awaited_once_with("chat-1", uid="claim-old")
         self.assertEqual(len(execs), 1)
         self.assertIsNone(_ready_cache.get("chat-1"))
         text = "\n".join(logs.output)
@@ -825,3 +829,197 @@ class BindWorkspaceTest(IsolatedAsyncioTestCase):
         self.assertTrue(calls[0][0].endswith("/own"))
         self.assertEqual(calls[0][1]["paths"], ["notes.csv"])
         self.assertEqual(calls[0][1]["trees"], ["plots"])
+
+
+def _runner(pod_name: str, uid: str) -> dict:
+    return {"pod_ip": "10.0.0.1", "pod_name": pod_name, "claim": {"metadata": {"uid": uid}}}
+
+
+class RunnerFaultTest(IsolatedAsyncioTestCase):
+    """A tool call that fails because of the runner replaces it with a clear error."""
+
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def _run(self, info, *, exec_result=None, exec_error=None, pod=None, healthy=True):
+        async def ensure(chat_id, *, emitter=None):
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            if exec_error:
+                raise exec_error
+            return exec_result
+
+        pod_mock = AsyncMock(return_value=pod) if pod is not None else AsyncMock(side_effect=RuntimeError("404"))
+        with patch("open_webui.utils.skill_k8s_sandbox.ensure_runner", side_effect=ensure), patch(
+            "open_webui.utils.skill_k8s_sandbox.exec_on_runner", side_effect=exec_on
+        ), patch("open_webui.utils.skill_k8s_sandbox.hold_runner_for_skill", AsyncMock()), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", pod_mock
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox._runtime_reachable", AsyncMock(return_value=healthy)
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ) as delete, patch(
+            "open_webui.utils.skill_k8s_sandbox.remote_script_path",
+            return_value="/workspace/.skill-packs/x/script.py",
+        ):
+            result = await run_skill_on_runner(
+                chat_id="chat-1",
+                skill_dir=Path("/data/skills/x"),
+                script_path=Path("/data/skills/x/script.py"),
+                args=[],
+                env={},
+                timeout=30,
+            )
+        return result, delete
+
+    async def test_oom_killed_runner_says_it_ran_out_of_memory(self):
+        pod = {"status": {"containerStatuses": [{"lastState": {"terminated": {"reason": "OOMKilled"}}}]}}
+        result, delete = await self._run(
+            _runner("old", "u1"), exec_error=RuntimeError("connection reset"), pod=pod
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("ran out of memory (OOMKilled)", result["stderr"])
+        self.assertTrue(result["stderr"].startswith("Tool call failed:"))
+        delete.assert_awaited_once_with("chat-1", uid="u1")
+
+    async def test_memory_eviction_says_it_ran_out_of_memory(self):
+        pod = {"status": {"reason": "Evicted", "message": "The node was low on resource: memory."}}
+        result, _ = await self._run(_runner("old", "u1"), exec_error=RuntimeError("reset"), pod=pod)
+        self.assertIn("ran out of memory (evicted: The node was low on resource: memory.)", result["stderr"])
+
+    async def test_failed_skill_on_an_unhealthy_runner_replaces_it(self):
+        result, delete = await self._run(
+            _runner("old", "u1"),
+            exec_result={"exit_code": 1, "stderr": "Transport endpoint is not connected"},
+            healthy=False,
+        )
+        self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
+        delete.assert_awaited_once_with("chat-1", uid="u1")
+        self.assertIsNone(_ready_cache.get("chat-1"))
+
+    async def test_failed_skill_on_a_healthy_runner_is_the_skills_failure(self):
+        result, delete = await self._run(
+            _runner("old", "u1"),
+            exec_result={"exit_code": 2, "stdout": "", "stderr": "bad argument"},
+            healthy=True,
+        )
+        self.assertEqual(result["stderr"], "bad argument")
+        self.assertEqual(result["exit_code"], 2)
+        delete.assert_not_awaited()
+        self.assertIsNotNone(_ready_cache.get("chat-1"))
+
+    async def test_a_late_failure_keeps_a_newer_runner(self):
+        from open_webui.utils.skill_k8s_sandbox import _replace_failed_runner
+
+        _store_runner("chat-1", _runner("new", "u2"))
+        with patch("open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(side_effect=RuntimeError("404"))), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ) as delete:
+            message = await _replace_failed_runner("chat-1", _runner("old", "u1"))
+        self.assertEqual(message, RUNNER_DIED_MESSAGE)
+        self.assertEqual(_ready_cache["chat-1"][1]["pod_name"], "new")
+        delete.assert_awaited_once_with("chat-1", uid="u1")
+
+
+class DeleteClaimPreconditionTest(IsolatedAsyncioTestCase):
+    async def test_uid_is_sent_as_a_precondition(self):
+        with patch("open_webui.utils.skill_k8s_sandbox._k8s", AsyncMock(return_value={})) as k8s:
+            await delete_claim("chat-1", uid="u1")
+        body = k8s.await_args.args[2]
+        self.assertEqual(body["preconditions"], {"uid": "u1"})
+
+    async def test_a_newer_claim_is_left_alone(self):
+        conflict = RuntimeError("k8s DELETE ... -> 409: Precondition failed: UID in precondition")
+        with patch("open_webui.utils.skill_k8s_sandbox._k8s", AsyncMock(side_effect=conflict)):
+            await delete_claim("chat-1", uid="u1")
+
+
+class StartPhaseTest(IsolatedAsyncioTestCase):
+    """Claimed, bound, and packs unpacked; each step backs off inside one time limit."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.k8s = k8s
+        k8s._starts.clear()
+        k8s._start_failed_at.clear()
+        _drop_runner("chat-1")
+        self.claim = {"metadata": {"uid": "u1"}, "status": {"ready": True, "sandbox": {"name": "pod-1"}}}
+        self.pod = {"metadata": {"annotations": {}}, "status": {"podIP": "10.0.0.1"}}
+
+    def tearDown(self):
+        self.k8s._starts.clear()
+        self.k8s._start_failed_at.clear()
+        _drop_runner("chat-1")
+
+    def _patches(self, *, bind, timeout=60, get_claim=None, create=None):
+        k = "open_webui.utils.skill_k8s_sandbox"
+        return [
+            patch(f"{k}._start_timeout_seconds", return_value=timeout),
+            patch(f"{k}.get_claim", get_claim or AsyncMock(return_value=None)),
+            patch(f"{k}.create_claim", create or AsyncMock(return_value=self.claim)),
+            patch(f"{k}.wait_ready", AsyncMock(return_value=self.claim)),
+            patch(f"{k}.get_pod", AsyncMock(return_value=self.pod)),
+            patch(f"{k}.bind_workspace", bind),
+            patch(f"{k}._annotate_pod", AsyncMock()),
+            patch(f"{k}.verify_runtime", AsyncMock(return_value={})),
+            patch(f"{k}._packs_ready_on_runner", AsyncMock(return_value=True)),
+        ]
+
+    async def _start(self, patches):
+        for p in patches:
+            p.start()
+        try:
+            return await self.k8s._run_start("chat-1")
+        finally:
+            for p in reversed(patches):
+                p.stop()
+
+    async def test_bind_backs_off_until_the_daemon_answers(self):
+        bind = AsyncMock(side_effect=[RuntimeError("connection refused"), RuntimeError("connection refused"), None])
+        info = await self._start(self._patches(bind=bind))
+        self.assertEqual(bind.await_count, 3)
+        self.assertEqual(info["pod_name"], "pod-1")
+        self.assertIsNotNone(_ready_cache.get("chat-1"))
+
+    async def test_gives_up_with_one_clear_error_after_the_time_limit(self):
+        from open_webui.utils.skill_k8s_sandbox import RUNNER_UNAVAILABLE_MESSAGE, RunnerUnavailableError
+
+        bind = AsyncMock(side_effect=RuntimeError("connection refused"))
+        with self.assertRaises(RunnerUnavailableError) as ctx:
+            await self._start(self._patches(bind=bind, timeout=1))
+        self.assertEqual(str(ctx.exception), RUNNER_UNAVAILABLE_MESSAGE)
+        self.assertIsNone(_ready_cache.get("chat-1"))
+
+    async def test_waits_for_the_old_claim_to_go_before_claiming(self):
+        deleting = {"metadata": {"uid": "u0", "deletionTimestamp": "2026-10-18T00:00:00Z"}}
+        get_claim = AsyncMock(side_effect=[deleting, deleting, None])
+        create = AsyncMock(return_value=self.claim)
+        await self._start(self._patches(bind=AsyncMock(), get_claim=get_claim, create=create))
+        self.assertEqual(get_claim.await_count, 3)
+        create.assert_awaited_once()
+
+    async def test_a_start_that_just_failed_is_reused(self):
+        from open_webui.utils.skill_k8s_sandbox import RunnerUnavailableError
+
+        calls = []
+
+        async def failing(chat_id):
+            calls.append(chat_id)
+            self.k8s._start_failed_at[chat_id] = __import__("time").monotonic()
+            raise RunnerUnavailableError()
+
+        with patch("open_webui.utils.skill_k8s_sandbox._run_start", side_effect=failing):
+            first = start_runner("chat-1")
+            with self.assertRaises(RunnerUnavailableError):
+                await first
+            self.assertIs(start_runner("chat-1"), first)
+            self.k8s._start_failed_at["chat-1"] -= 60
+            second = start_runner("chat-1")
+            self.assertIsNot(second, first)
+            with self.assertRaises(RunnerUnavailableError):
+                await second
+        self.assertEqual(len(calls), 2)
+

@@ -1,6 +1,6 @@
 # Tool Runner
 
-A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. The top-bar status shows **Weather skills runner paused** when that chat has no runner, or **Weather skills runner starting** / **Weather skills runner ready** if one is already starting or ready. Sending a message starts a runner if none is running. It stays ready while the chat is in use, and stops after ten minutes idle. Sending again after it has stopped starts it again. A runner that is in use for a chat stays on its machine; unused spare runners can be moved when the pool shrinks. If the runner dies while a skill is running, that skill fails with **Runner died while running skills, please try again**, the top bar goes paused, and the next skill starts a new runner. If it dies while idle, the top bar goes paused and the next skill starts a new runner. Temporary chats do not get a runner.
+A tool runner is an isolated place where [[Skill Packs]] run for a saved chat. The top-bar status shows **Weather skills runner paused** when that chat has no runner, or **Weather skills runner starting** / **Weather skills runner ready** if one is already starting or ready. Sending a message starts a runner if none is running. It stays ready while the chat is in use, and stops after ten minutes idle. Sending again after it has stopped starts it again. A runner that is in use for a chat stays on its machine; unused spare runners can be moved when the pool shrinks. If the runner dies while a skill is running, or its connection to the chat's files breaks, that skill fails with an error telling the model the sandbox died and to retry. If the runner ran out of memory, the error says so and suggests doing less at once. Either way that runner is removed, the top bar goes paused, and the next skill waits for a new runner. If a runner dies or loses its files between skills, the next skill waits for a new runner instead of failing. Temporary chats do not get a runner.
 
 The runner is the only place skills run when it is turned on. Built-in tools and the code interpreter stay on the chat server.
 
@@ -12,7 +12,7 @@ When a k8s tool runner is on (a real runner or the local emulator), an open save
 
 ## Waiting
 
-If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. Skill calls are not listed while the runner is paused or still starting. When it is ready, that same line updates to the skill that is running. A skill that cannot start in time fails.
+If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, after a runner died, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. A runner is ready once it is claimed for the chat, the chat's files are connected to it, and the organization's skills are copied onto it. Each of those steps is tried again while waiting, up to a time limit (`SKILL_K8S_START_TIMEOUT_SECONDS`). Skill calls are not listed while the runner is paused or still starting. When it is ready, that same line updates to the skill that is running. If no runner is ready within the limit, the skill fails with an error asking to try again.
 
 A running skill keeps the runner for at least that skill's run timeout (see [[Skill Packs]]), even if the runner was already ready. After the last skill, the runner still stops after ten minutes idle.
 
@@ -36,6 +36,7 @@ Each chat's files have a two-hundred-gigabyte ceiling so one chat cannot fill th
 | `SKILL_K8S_SANDBOX_ENABLED` | `false` | Turns the tool-runner path on when the backend is `k8s` |
 | `SKILL_K8S_EMULATOR` | unset | When true, chat talks to the local emulator instead of a cluster. No isolation. |
 | `SKILL_K8S_TTL_SECONDS` | `600` | Idle time, in seconds, before a runner stops |
+| `SKILL_K8S_START_TIMEOUT_SECONDS` | `180` | Time limit, in seconds, for getting a runner ready before a skill fails |
 | `SKILL_K8S_QUOTA_GIB` | `200` | Ceiling, in gibibytes, for one chat's files |
 
 The Helm chart sets these when `sandbox.isolation` is `k8s`. Staging and production both use that. The chart default is `off`. See [[Skill Packs]] and [[Deployment]].

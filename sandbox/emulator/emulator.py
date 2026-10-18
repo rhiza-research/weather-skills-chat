@@ -186,6 +186,7 @@ def _make_claim(chat_id: str, name: str, pod_name: str, *, ready: bool = True) -
             "namespace": NS,
             "labels": {"weather-skills-chat": chat_id},
             "finalizers": ["agent.sandbox/storage-cleanup"],
+            "uid": str(uuid.uuid4()),
         },
         "spec": {"warmPoolRef": {"name": "local"}},
         "status": {
@@ -347,10 +348,16 @@ class ApiHandler(BaseHTTPRequestHandler):
             _json(self, 404, {"reason": "NotFound"})
             return
         name = path.rsplit("/", 1)[-1]
+        # DeleteOptions.preconditions.uid, as on the cluster: a delete aimed
+        # at an older claim must not remove its same-named replacement.
+        want_uid = ((_read(self).get("preconditions") or {}).get("uid")) or None
         with _lock:
             chat_id = None
             for cid, claim in list(_claims.items()):
                 if claim["metadata"]["name"] == name:
+                    if want_uid and claim["metadata"].get("uid") != want_uid:
+                        _json(self, 409, {"reason": "Conflict"})
+                        return
                     chat_id = cid
                     pod_name = (claim.get("status") or {}).get("sandbox", {}).get("name")
                     _claims.pop(cid)
