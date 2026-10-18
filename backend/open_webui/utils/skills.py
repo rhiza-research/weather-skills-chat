@@ -563,6 +563,8 @@ def generate_tool_content(
         "Prefer env_secrets over putting {{secret:NAME}} placeholders in argv when "
         "the skill reads os.environ / getenv.",
     ]
+    from open_webui.utils.skill_runtime import DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC
+
     doc = _escape_triple_quotes("\n".join(doc_lines))
     skill_dir_literal = repr(str(skill_dir.resolve()))
     # Token replace — usage text often contains `{...}` braces.
@@ -585,6 +587,7 @@ class Tools:
         argv: list[str] = [],
         script: str = "",
         env_secrets: list[str] = [],
+        timeout: int = __DEFAULT_TIMEOUT__,
         __user__: dict = {},
         __metadata__: dict = {},
     ) -> dict:
@@ -594,6 +597,7 @@ __DOC__
         :param argv: CLI arguments after the script path, e.g. ["--start", "2024-01-01", "--output", "out.zarr"]
         :param script: Optional scripts/ basename when the skill has multiple scripts
         :param env_secrets: Secret names to inject into the process environment (same name as the secret). Example: ["ECMWF_API_KEY"]. Only request secrets this skill needs.
+        :param timeout: Seconds the skill may run before it is stopped. Default __DEFAULT_TIMEOUT__, at most __MAX_TIMEOUT__. Raise it only for work you expect to take longer.
         :return: Structured skill result with exit_code, stdout, and stderr
         """
         return await run_skill(
@@ -603,6 +607,7 @@ __DOC__
             env_secrets=env_secrets or [],
             __user__=__user__,
             __metadata__=__metadata__,
+            timeout=timeout,
         )
 '''
     doc_indented = textwrap.indent(doc, "        ")
@@ -612,6 +617,8 @@ __DOC__
         .replace("__SKILL_DIR__", skill_dir_literal)
         .replace("__METHOD_NAME__", method_name)
         .replace("__DOC__", doc_indented)
+        .replace("__DEFAULT_TIMEOUT__", str(min(DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC)))
+        .replace("__MAX_TIMEOUT__", str(MAX_TIMEOUT_SEC))
     )
 
 

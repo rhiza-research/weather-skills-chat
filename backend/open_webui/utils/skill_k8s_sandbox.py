@@ -382,8 +382,9 @@ RUNNER_UNAVAILABLE_MESSAGE = "Failed to get a tool runner, please try again"
 # message above means that.
 RUNNER_FAILURE_GUIDANCE = (
     "When a tool call fails because of the call itself, its result says so "
-    "clearly: a skill error shows the skill's own output, and running out of "
-    'memory always says "the tool runner ran out of memory". Do not assume a '
+    "clearly: a skill error shows the skill's own output, a skill that ran past "
+    'its timeout says it "did not finish within its timeout", and running out '
+    'of memory always says "the tool runner ran out of memory". Do not assume a '
     "failure was caused by memory or by the size of the request unless the "
     "result says so. Other tool runner failures (the sandbox runner died, the "
     "runner may be overloaded, or no runner was available) are not caused by "
@@ -1408,7 +1409,14 @@ async def exec_on_runner(
 ) -> dict:
     if info is None:
         info = await ensure_runner(chat_id)
-    body = {"cmd": argv, "cwd": cwd or _runner_workspace(chat_id), "env": env or {}}
+    body = {
+        "cmd": argv,
+        "cwd": cwd or _runner_workspace(chat_id),
+        "env": env or {},
+        # The runner stops the skill (and everything it started) at this; chat
+        # waits a little longer so the runner's answer arrives first.
+        "timeout": timeout,
+    }
     base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
     return await _http_json(
         "POST",
@@ -1416,6 +1424,13 @@ async def exec_on_runner(
         json_body=body,
         timeout=timeout + 15,
     )
+
+
+def _runner_timed_out(result: dict) -> bool:
+    if result.get("timed_out"):
+        return True
+    # Runner images before timed_out answered exactly this.
+    return int(result.get("exit_code", 0)) == -1 and (result.get("stderr") or "").strip() == "timed out"
 
 
 def _runner_failed_result(message: str, script_path: Path, workspace: str, args: list[str]) -> dict:
@@ -1443,6 +1458,8 @@ async def run_skill_on_runner(
     timeout: int,
     emitter=None,
 ) -> dict:
+    from open_webui.utils.skill_runtime import skill_timeout_message
+
     info = await ensure_runner(chat_id, emitter=emitter)
     await hold_runner_for_skill(chat_id, timeout)
     workspace = _runner_workspace(chat_id)
@@ -1471,7 +1488,20 @@ async def run_skill_on_runner(
             result = await exec_on_runner(
                 chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
             )
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc.__cause__, TimeoutError):
+            # No answer even after the runner should have stopped the skill.
+            # Closing the connection makes the runner stop it if it has not.
+            log.info(
+                "skill exec timed out chat=%s script=%s runner=%s timeout=%ss",
+                chat_id,
+                script_path.name,
+                _runner_log_name(info),
+                timeout,
+            )
+            return _runner_failed_result(
+                skill_timeout_message(timeout), script_path, workspace, args
+            )
         log.info(
             "tool runner unreachable chat=%s runner=%s",
             chat_id,
@@ -1481,6 +1511,25 @@ async def run_skill_on_runner(
         return _runner_failed_result(
             await _lost_exec_message(chat_id, info), script_path, workspace, args
         )
+    if _runner_timed_out(result):
+        log.info(
+            "skill exec timed out chat=%s script=%s runner=%s timeout=%ss",
+            chat_id,
+            script_path.name,
+            _runner_log_name(info),
+            timeout,
+        )
+        partial = (result.get("stderr") or "").strip()
+        if partial == "timed out":  # runner images before timed_out
+            partial = ""
+        failed = _runner_failed_result(
+            skill_timeout_message(timeout), script_path, workspace, args
+        )
+        failed["exit_code"] = -1
+        failed["stdout"] = (result.get("stdout") or "").strip()
+        if partial:
+            failed["stderr"] += "\n\nSkill stderr before it was stopped:\n" + partial
+        return failed
     if (
         int(result.get("exit_code", 1)) != 0
         and await _runner_health(info) == HEALTH_UNHEALTHY

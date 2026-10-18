@@ -69,6 +69,22 @@ def _write_skill(root: Path, name: str, script: str, filename: str) -> Path:
     return skill
 
 
+def _runtime_kills_on_hang_up() -> bool:
+    path = Path(os.environ.get("SANDBOX_RUNTIME_PATH", "/usr/local/bin/sandbox_runtime.py"))
+    try:
+        return "def client_gone" in path.read_text()
+    except OSError:
+        return False
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
 class RunnerLifecycleTest(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -310,3 +326,46 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         self.assertEqual(self._claim_count(), 1)
         self.assertEqual(self._live_runtimes(), 1)
         self.assertEqual(self.runtime_starts, starts_before_fail + 1)
+
+    def _sleep_pid(self, chat_id: str) -> int:
+        marker = next((self.artifacts / chat_id).glob("sleep-started-*"))
+        return int(marker.name.rsplit("-", 1)[1])
+
+    async def _gone(self, pid: int, seconds: float = 5) -> bool:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if not _pid_alive(pid):
+                return True
+            await asyncio.sleep(0.1)
+        return False
+
+    async def test_stop_kills_the_skill_on_the_runner(self):
+        if not _runtime_kills_on_hang_up():
+            self.skipTest("runner runtime predates killing skills on hang-up")
+        chat_id = "stop-kills"
+        await k8s.ensure_runner(chat_id)
+        task = asyncio.create_task(self._run(chat_id, self.sleep_skill, "sleep.py", argv=["60"]))
+        await self._wait_until_in_flight(chat_id, task)
+        pid = self._sleep_pid(chat_id)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        self.assertTrue(await self._gone(pid), "the skill kept running on the runner after Stop")
+        self.assertEqual(self._live_runtimes(), 1, "Stop must not take the runner down")
+
+    async def test_timeout_stops_the_skill_and_tells_the_model(self):
+        if not _runtime_kills_on_hang_up():
+            self.skipTest("runner runtime predates killing a skill's whole tree")
+        chat_id = "timeout-kills"
+        await k8s.ensure_runner(chat_id)
+        self._stage_pack(chat_id, self.sleep_skill)
+        result = await k8s.run_skill_on_runner(
+            chat_id=chat_id,
+            skill_dir=self.sleep_skill,
+            script_path=self.sleep_skill / "scripts" / "sleep.py",
+            args=["60"],
+            env={},
+            timeout=3,
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("did not finish within its 3s timeout", result["stderr"])
+        self.assertTrue(await self._gone(self._sleep_pid(chat_id)), "the skill outlived its timeout")

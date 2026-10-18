@@ -104,8 +104,10 @@ def main() -> None:
     orig_exec = runtime.run_exec
     orig_unpack = runtime.run_unpack
 
-    def run_exec(body: dict) -> dict:
-        return orig_exec(remap_exec_body(body))
+    def run_exec(body: dict, **kwargs) -> dict:
+        # kwargs: what the runtime's handler passes along, such as gone (the
+        # caller hung up), which newer runtimes use to stop the skill.
+        return orig_exec(remap_exec_body(body), **kwargs)
 
     def run_unpack(body: dict) -> dict:
         out = dict(body)
