@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
@@ -1110,7 +1111,7 @@ class RunnerHealthTest(IsolatedAsyncioTestCase):
 
 
 class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
-    """The top-bar status: an explicit 503 deletes the claim; a broken bound runner reads paused."""
+    """The top-bar status is read-only: a broken runner reads paused, nothing is deleted."""
 
     def tearDown(self):
         _drop_runner("chat-1")
@@ -1135,14 +1136,14 @@ class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
             },
         }
 
-    async def test_cached_runner_answering_503_deletes_its_claim(self):
+    async def test_cached_runner_answering_503_reads_paused_without_deleting(self):
         _store_runner("chat-1", {"pod_ip": "10.0.0.1", "pod_name": "pod-1", "claim": {"metadata": {"uid": "u1"}}})
         with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="unhealthy")), patch(
             "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
         ) as delete:
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "absent")
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_not_awaited()
         self.assertIsNone(_ready_cache.get("chat-1"))
 
     async def test_slow_cached_runner_on_a_ready_pod_stays_ready(self):
@@ -1154,7 +1155,7 @@ class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
         self.assertEqual(status["state"], "ready")
         delete.assert_not_awaited()
 
-    async def test_ready_claim_whose_runner_answers_503_deletes_its_claim(self):
+    async def test_ready_claim_whose_runner_answers_503_reads_paused_without_deleting(self):
         with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(True))), patch(
             "open_webui.utils.skill_k8s_sandbox.get_pod", AsyncMock(return_value=self._pod(ready=True, bound=True))
         ), patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value="unhealthy")), patch(
@@ -1162,7 +1163,7 @@ class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
         ) as delete:
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "absent")
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_not_awaited()
 
     async def test_bound_runner_that_went_not_ready_reads_paused(self):
         with patch("open_webui.utils.skill_k8s_sandbox.get_claim", AsyncMock(return_value=self._claim(False))), patch(
@@ -1187,3 +1188,91 @@ class RunnerStatusBrokenRunnerTest(IsolatedAsyncioTestCase):
             status = await runner_status("chat-1")
         self.assertEqual(status["state"], "absent")
         delete.assert_not_awaited()
+
+
+class InFlightWatcherTest(IsolatedAsyncioTestCase):
+    """While tool calls run, an explicit 503 from the runner deletes its claim at once."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.k8s = k8s
+        self._interval = k8s.RUNNER_WATCH_SECONDS
+        k8s.RUNNER_WATCH_SECONDS = 0.01
+        k8s._watchers.clear()
+
+    def tearDown(self):
+        self.k8s.RUNNER_WATCH_SECONDS = self._interval
+        self.k8s._watchers.clear()
+        _drop_runner("chat-1")
+
+    async def _run_calls(self, health, n=1, exec_seconds=None):
+        info = _runner("old", "u1")
+        deleted = asyncio.Event()
+
+        async def ensure(chat_id, *, emitter=None):
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            if exec_seconds is not None:
+                await asyncio.sleep(exec_seconds)
+                return {"exit_code": 0, "stdout": "done", "stderr": ""}
+            await asyncio.wait_for(deleted.wait(), timeout=5)
+            raise RuntimeError("POST http://10.0.0.1:8888/exec failed: Connection reset by peer")
+
+        async def delete_claim(chat_id, uid=None):
+            deleted.set()
+
+        deleting_pod = {"metadata": {"deletionTimestamp": "2026-10-18T06:00:00Z"}, "status": {"phase": "Running"}}
+        k = "open_webui.utils.skill_k8s_sandbox"
+        with patch(f"{k}.ensure_runner", side_effect=ensure), patch(
+            f"{k}.exec_on_runner", side_effect=exec_on
+        ), patch(f"{k}.hold_runner_for_skill", AsyncMock()), patch(
+            f"{k}._runner_health", AsyncMock(side_effect=health)
+        ), patch(f"{k}.get_pod", AsyncMock(return_value=deleting_pod)), patch(
+            f"{k}.delete_claim", AsyncMock(side_effect=delete_claim)
+        ) as delete, patch(
+            f"{k}.remote_script_path", return_value="/workspace/.skill-packs/x/script.py"
+        ):
+            calls = [
+                asyncio.create_task(
+                    run_skill_on_runner(
+                        chat_id="chat-1",
+                        skill_dir=Path("/data/skills/x"),
+                        script_path=Path("/data/skills/x/script.py"),
+                        args=[],
+                        env={},
+                        timeout=30,
+                    )
+                )
+                for _ in range(n)
+            ]
+            await asyncio.sleep(0)
+            watchers_during = len(self.k8s._watchers)
+            results = await asyncio.gather(*calls)
+        return results, delete, watchers_during
+
+    async def test_a_503_mid_call_deletes_the_claim_and_fails_the_calls_now(self):
+        results, delete, _ = await self._run_calls(
+            ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1
+        )
+        delete.assert_awaited_once_with("chat-1", uid="u1")
+        self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
+        self.assertEqual(self.k8s._watchers, {})
+
+    async def test_slow_answers_never_delete(self):
+        results, delete, _ = await self._run_calls(
+            lambda *a, **k: "no_answer", n=1, exec_seconds=0.1
+        )
+        delete.assert_not_awaited()
+        self.assertTrue(results[0]["ok"])
+
+    async def test_parallel_calls_share_one_watcher_that_stops_after_the_last(self):
+        results, delete, watchers_during = await self._run_calls(
+            lambda *a, **k: "ok", n=3, exec_seconds=0.1
+        )
+        self.assertEqual(watchers_during, 1)
+        self.assertEqual(self.k8s._watchers, {})
+        delete.assert_not_awaited()
+        self.assertTrue(all(r["ok"] for r in results))

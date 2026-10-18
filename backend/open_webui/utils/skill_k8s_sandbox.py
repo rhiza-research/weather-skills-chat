@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import base64
+import contextlib
 import io
 import json
 import logging
@@ -1166,10 +1167,9 @@ async def runner_status(chat_id: str) -> dict:
         if health == HEALTH_OK:
             return {"state": "ready", "claim": name}
         if health == HEALTH_UNHEALTHY:
-            # The runner says it is broken (storage disconnected): delete its
-            # claim now, so a tool call still running on it fails at once
-            # instead of when it next touches its files.
-            await _delete_unhealthy_runner(chat_id, cached)
+            # Read only: deleting a broken runner is the in-flight watcher's
+            # or the next tool call's job, not the status check's.
+            _drop_runner(chat_id)
             return {"state": "absent"}
         if await _pod_alive(cached.get("pod_name")):
             return {"state": "ready", "claim": name}
@@ -1204,7 +1204,6 @@ async def runner_status(chat_id: str) -> dict:
     }
     health = await _runner_health(info)
     if health == HEALTH_UNHEALTHY:
-        await _delete_unhealthy_runner(chat_id, info)
         return {"state": "absent"}
     if health == HEALTH_NO_ANSWER and not await _pod_alive(info["pod_name"]):
         return {"state": "absent"}
@@ -1267,12 +1266,14 @@ def _oom_detail(pod: dict) -> Optional[str]:
     return None
 
 
-async def _lost_exec_message(info: dict) -> str:
+async def _lost_exec_message(chat_id: str, info: dict) -> str:
     """What the model is told when the request to the runner failed.
 
-    Reads the pod; deletes nothing. A runner that is still up is kept (it is
-    most likely overloaded); a dead one is replaced by the Kubernetes
-    readiness check or the next tool call's check.
+    A pod that is gone, terminated, or already being deleted (for example by
+    the in-flight watcher) died. Otherwise only an explicit unhealthy /health
+    answer deletes its claim; a runner that is still up is kept (it is most
+    likely overloaded), and a dead one is replaced by the Kubernetes readiness
+    check or the next tool call's check.
     """
     try:
         pod = await get_pod(info["pod_name"])
@@ -1282,6 +1283,9 @@ async def _lost_exec_message(info: dict) -> str:
     if detail:
         return RUNNER_OOM_MESSAGE.format(detail=detail)
     if _pod_dead(pod):
+        return RUNNER_DIED_MESSAGE
+    if await _runner_health(info) == HEALTH_UNHEALTHY:
+        await _delete_unhealthy_runner(chat_id, info)
         return RUNNER_DIED_MESSAGE
     return RUNNER_UNREACHABLE_MESSAGE
 
@@ -1303,6 +1307,48 @@ async def _delete_unhealthy_runner(chat_id: str, info: dict) -> None:
         await delete_claim(chat_id, uid=uid)
     except Exception:
         log.info("delete unhealthy runner claim failed chat=%s", chat_id, exc_info=True)
+
+
+# While a chat has tool calls running on a runner, one task per runner polls
+# its /health. An explicit error answer (503: its storage disconnected)
+# deletes the claim at once, so the running calls fail now instead of when a
+# skill next touches its files. A slow or missing answer does nothing. The
+# status check stays read-only.
+RUNNER_WATCH_SECONDS = 3.0
+_watchers: dict[tuple[str, str], list] = {}
+
+
+async def _watch_runner(chat_id: str, info: dict) -> None:
+    while True:
+        await asyncio.sleep(RUNNER_WATCH_SECONDS)
+        if await _runner_health(info) == HEALTH_UNHEALTHY:
+            log.info(
+                "tool runner unhealthy during a tool call chat=%s runner=%s",
+                chat_id,
+                _runner_log_name(info),
+            )
+            await _delete_unhealthy_runner(chat_id, info)
+            return
+
+
+@contextlib.asynccontextmanager
+async def _watching_runner(chat_id: str, info: dict):
+    """Keep one health watcher running on this runner while any call is in flight."""
+    key = (chat_id, info.get("pod_name") or "")
+    entry = _watchers.get(key)
+    if entry is None or entry[0].done():
+        task = asyncio.create_task(_watch_runner(chat_id, info), name=f"runner-watch-{chat_id}")
+        entry = [task, 0]
+        _watchers[key] = entry
+    entry[1] += 1
+    try:
+        yield
+    finally:
+        entry[1] -= 1
+        if entry[1] <= 0:
+            entry[0].cancel()
+            if _watchers.get(key) is entry:
+                _watchers.pop(key, None)
 
 
 async def exec_on_runner(
@@ -1375,9 +1421,10 @@ async def run_skill_on_runner(
         _runner_log_name(info),
     )
     try:
-        result = await exec_on_runner(
-            chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
-        )
+        async with _watching_runner(chat_id, info):
+            result = await exec_on_runner(
+                chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+            )
     except Exception:
         log.info(
             "tool runner unreachable chat=%s runner=%s",
@@ -1385,11 +1432,8 @@ async def run_skill_on_runner(
             _runner_log_name(info),
             exc_info=True,
         )
-        if await _runner_health(info) == HEALTH_UNHEALTHY:
-            await _delete_unhealthy_runner(chat_id, info)
-            return _runner_failed_result(RUNNER_DIED_MESSAGE, script_path, workspace, args)
         return _runner_failed_result(
-            await _lost_exec_message(info), script_path, workspace, args
+            await _lost_exec_message(chat_id, info), script_path, workspace, args
         )
     if (
         int(result.get("exit_code", 1)) != 0
