@@ -372,8 +372,24 @@ RUNNER_OOM_MESSAGE = (
     "Retry with less work at once, for example fewer skills in parallel or a "
     "smaller time range or region."
 )
-RUNNER_UNREACHABLE_MESSAGE = "Sending request to tool runner failed, runner may be overloaded"
+RUNNER_UNREACHABLE_MESSAGE = (
+    "Sending request to tool runner failed, runner may be overloaded. "
+    "Please try fewer tool calls at once or try again momentarily."
+)
 RUNNER_UNAVAILABLE_MESSAGE = "Failed to get a tool runner, please try again"
+# Added to the system prompt when the tool runner is on. Models tend to read
+# any runner failure as out of memory and cut their work down; only the OOM
+# message above means that.
+RUNNER_FAILURE_GUIDANCE = (
+    "When a tool call fails because of the call itself, its result says so "
+    "clearly: a skill error shows the skill's own output, and running out of "
+    'memory always says "the tool runner ran out of memory". Do not assume a '
+    "failure was caused by memory or by the size of the request unless the "
+    "result says so. Other tool runner failures (the sandbox runner died, the "
+    "runner may be overloaded, or no runner was available) are not caused by "
+    "the call: first simply retry the same call, and only lower the amount of "
+    "work if it fails again."
+)
 RUNTIME_PROBE_TIMEOUT_SEC = 2
 # A start that failed this recently is returned to new callers instead of
 # starting again, so one tool-call turn waits through one start, not several.
