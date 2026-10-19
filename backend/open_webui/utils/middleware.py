@@ -2320,6 +2320,28 @@ async def process_chat_response(
                                         ):
                                             # The model is writing tool calls;
                                             # say so instead of going quiet.
+                                            # Thinking is over by now, so close
+                                            # it rather than leave it spinning.
+                                            if (
+                                                content_blocks
+                                                and content_blocks[-1].get("type")
+                                                == "reasoning"
+                                                and content_blocks[-1].get("ended_at")
+                                                is None
+                                            ):
+                                                close_open_reasoning_block(
+                                                    content_blocks
+                                                )
+                                                await event_emitter(
+                                                    {
+                                                        "type": "chat:completion",
+                                                        "data": {
+                                                            "content": serialize_content_blocks(
+                                                                content_blocks
+                                                            )
+                                                        },
+                                                    }
+                                                )
                                             await heartbeat.stop(clear=False)
                                             await preparing_tool_calls.start()
 

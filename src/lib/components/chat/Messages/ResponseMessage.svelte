@@ -46,6 +46,7 @@
 	import Citations from './Citations.svelte';
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
+	import { endsWithActivity, isInlineStatus } from '$lib/utils/activityStatus';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 
 	interface MessageType {
@@ -765,11 +766,7 @@
 										message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]
 									).at(-1)}
 									{#if !status?.hidden &&
-										!(
-											String(message?.content ?? '').includes('<details') &&
-											(status?.action === 'waiting_response' ||
-												status?.action === 'weather_skills_runner')
-										)}
+										!(isInlineStatus(status) && endsWithActivity(message?.content))}
 										<div class="status-description flex items-center gap-2 py-0.5">
 											{#if status?.done === false}
 												<div class="">
