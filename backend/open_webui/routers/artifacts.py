@@ -1,9 +1,23 @@
+import hashlib
 import io
 import logging
+import zlib
+from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
@@ -102,7 +116,10 @@ HTML_VIEW_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     # Third-party scripts the page loads (Plotly's CDN) do not learn the chat id.
     "Referrer-Policy": "no-referrer",
+    # The browser keeps a copy but asks before each use; an unchanged file
+    # answers 304 with no body (see the ETag below).
     "Cache-Control": "private, no-cache",
+    "Vary": "Accept-Encoding",
 }
 
 # Reports a fixed-size Plotly figure's size so the chat can scale the frame;
@@ -112,6 +129,9 @@ REPORT_SIZE_SCRIPT = (
     Path(__file__).resolve().parent.parent / "static" / "artifact" / "report-size.js"
 ).read_bytes()
 VIEW_CHUNK_BYTES = 1024 * 1024
+# Part of the ETag, so a deploy that changes the appended script is not served
+# from a browser's cached copy.
+REPORT_SIZE_SCRIPT_TAG = hashlib.sha256(REPORT_SIZE_SCRIPT).hexdigest()[:8]
 
 
 def _html_with_size_report(target: Path):
@@ -121,8 +141,44 @@ def _html_with_size_report(target: Path):
     yield b"\n<script>\n" + REPORT_SIZE_SCRIPT + b"\n</script>\n"
 
 
+def _gzip_stream(chunks):
+    """Gzip a byte stream as it goes. Plotly pages are mostly JSON and shrink
+    about 3x; nothing in front of the app compresses them."""
+    compressor = zlib.compressobj(6, zlib.DEFLATED, 31)
+    for chunk in chunks:
+        out = compressor.compress(chunk)
+        if out:
+            yield out
+    yield compressor.flush()
+
+
+def _view_validators(target: Path) -> tuple[str, str]:
+    st = target.stat()
+    # Weak: the gzipped and plain bodies differ byte for byte.
+    etag = f'W/"{st.st_mtime_ns:x}-{st.st_size:x}-{REPORT_SIZE_SCRIPT_TAG}"'
+    return etag, formatdate(st.st_mtime, usegmt=True)
+
+
+def _not_modified(request: Request, etag: str, last_modified: str) -> bool:
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None:
+        tags = [t.strip() for t in if_none_match.split(",")]
+        return "*" in tags or etag in tags or etag.removeprefix("W/") in tags
+    if_modified_since = request.headers.get("if-modified-since")
+    if if_modified_since:
+        try:
+            return parsedate_to_datetime(last_modified) <= parsedate_to_datetime(
+                if_modified_since
+            )
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
 @router.get("/{chat_id}/artifacts/view/{path:path}")
-async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_user)):
+async def view_html_artifact(
+    chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
+):
     _readable(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
@@ -137,10 +193,16 @@ async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only .html artifacts can be viewed",
         )
+    etag, last_modified = _view_validators(target)
+    headers = {**HTML_VIEW_HEADERS, "ETag": etag, "Last-Modified": last_modified}
+    if _not_modified(request, etag, last_modified):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    body = _html_with_size_report(target)
+    if "gzip" in request.headers.get("accept-encoding", "").lower():
+        headers["Content-Encoding"] = "gzip"
+        body = _gzip_stream(body)
     return StreamingResponse(
-        _html_with_size_report(target),
-        media_type="text/html; charset=utf-8",
-        headers=HTML_VIEW_HEADERS,
+        body, media_type="text/html; charset=utf-8", headers=headers
     )
 
 
