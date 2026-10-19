@@ -401,6 +401,37 @@ def map_usage(usage: Any) -> Optional[dict]:
     return {k: v for k, v in mapped.items() if v is not None}
 
 
+def map_cost(usage: Any) -> Optional[dict]:
+    """The provider's billed cost in USD for this call, as Langfuse cost_details.
+
+    OpenRouter reports it in usage.cost (or cost_details.upstream_inference_cost
+    when only that is set), the same figure the app charges credits from
+    (models.usage.parse_provider_usage). Langfuse cannot price these calls
+    itself: the model id is the app's (e.g. "open-router-.~anthropic/...") and
+    matches none of its price tables. None when the provider sent no cost;
+    nothing is estimated.
+    """
+    if not isinstance(usage, dict):
+        return None
+
+    def as_float(value: Any) -> Optional[float]:
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    cost = as_float(usage.get("cost"))
+    if cost is None:
+        details = usage.get("cost_details") or usage.get("costDetails")
+        if isinstance(details, dict):
+            cost = as_float(details.get("upstream_inference_cost"))
+    if cost is None:
+        return None
+    return {"total": cost}
+
+
 def end_generation(*, output: Any = None, usage: Any = None, error: Any = None) -> None:
     stack = _generation_stack()
     if not stack:
@@ -416,6 +447,9 @@ def end_generation(*, output: Any = None, usage: Any = None, error: Any = None) 
     mapped = map_usage(usage)
     if mapped:
         update_kwargs["usage_details"] = mapped
+    cost = map_cost(usage)
+    if cost:
+        update_kwargs["cost_details"] = cost
     if update_kwargs:
         _safe_call(generation.update, **update_kwargs)
     _safe_call(generation.end)

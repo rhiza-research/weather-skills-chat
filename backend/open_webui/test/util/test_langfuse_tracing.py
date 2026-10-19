@@ -203,5 +203,77 @@ class ScheduleStartChatTraceTest(unittest.TestCase):
             cm.__enter__.assert_called_once()
 
 
+class MapCostTest(unittest.TestCase):
+    def test_openrouter_cost(self):
+        self.assertEqual(lf.map_cost({"prompt_tokens": 10, "cost": 0.0123}), {"total": 0.0123})
+
+    def test_upstream_cost_when_no_cost(self):
+        usage = {"cost": None, "cost_details": {"upstream_inference_cost": 0.5}}
+        self.assertEqual(lf.map_cost(usage), {"total": 0.5})
+
+    def test_zero_is_a_real_cost(self):
+        self.assertEqual(lf.map_cost({"cost": 0}), {"total": 0.0})
+
+    def test_no_cost_is_not_estimated(self):
+        self.assertIsNone(lf.map_cost({"prompt_tokens": 10, "completion_tokens": 5}))
+        self.assertIsNone(lf.map_cost({"cost": "n/a"}))
+        self.assertIsNone(lf.map_cost(None))
+
+
+class GenerationCostExportTest(unittest.TestCase):
+    """The llm span Langfuse receives carries the provider's cost."""
+
+    def setUp(self):
+        lf._trace_var.set(None)
+        lf._propagate_cm_var.set(None)
+        lf._pending_trace_var.set(None)
+        lf._generation_stack_var.set(None)
+
+    def test_cost_and_tokens_reach_langfuse(self):
+        import json
+        import uuid
+        from types import SimpleNamespace
+
+        from langfuse import Langfuse
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        exporter = InMemorySpanExporter()
+        client = Langfuse(
+            public_key=f"pk-test-{uuid.uuid4().hex}",
+            secret_key="sk-test",
+            base_url="http://127.0.0.1:9",
+            span_exporter=exporter,
+            flush_at=1,
+        )
+        usage = {
+            "prompt_tokens": 1200,
+            "completion_tokens": 300,
+            "total_tokens": 1500,
+            "cost": 0.0456,
+            "prompt_tokens_details": {"cached_tokens": 1000},
+        }
+        with patch.object(lf, "get_client", return_value=client), patch.object(
+            lf, "tracing_enabled", return_value=True
+        ):
+            lf.start_chat_trace(
+                user=SimpleNamespace(id="u1", email="person@example.org"),
+                metadata={"chat_id": "chat-1"},
+                form_data={"model": "m", "messages": []},
+            )
+            lf.start_generation({"model": "m", "messages": []})
+            lf.end_generation(output="ok", usage=usage)
+            lf.end_chat_trace(output="done")
+        client.flush()
+        spans = {s.name: dict(s.attributes or {}) for s in exporter.get_finished_spans()}
+        llm = spans["llm"]
+        self.assertEqual(json.loads(llm["langfuse.observation.cost_details"]), {"total": 0.0456})
+        tokens = json.loads(llm["langfuse.observation.usage_details"])
+        self.assertEqual(tokens["input"], 1200)
+        self.assertEqual(tokens["output"], 300)
+        self.assertEqual(tokens["cache_read_input_tokens"], 1000)
+
+
 if __name__ == "__main__":
     unittest.main()
