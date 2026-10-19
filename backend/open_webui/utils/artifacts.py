@@ -506,6 +506,56 @@ def provenance_for_png(path: Path) -> dict | None:
     return _provenance_payload(_parse_history_chains_from_text_map(texts))
 
 
+# Provenance <meta> tags sit in the page head; an embedded Plotly page can be
+# many MB after it, so only the start of the file is read.
+HTML_HEAD_MAX_BYTES = 1024 * 1024
+
+
+def read_html_meta_texts(path: Path) -> dict[str, str]:
+    """weather_skills_history <meta name=... content=...> values from a page head."""
+    from html.parser import HTMLParser
+
+    texts: dict[str, str] = {}
+
+    class _Head(HTMLParser):
+        done = False
+
+        def handle_starttag(self, tag, attrs):
+            if self.done:
+                return
+            if tag == "body":
+                self.done = True
+                return
+            if tag != "meta":
+                return
+            values = dict(attrs)
+            name = values.get("name") or ""
+            content = values.get("content")
+            if content is not None and _is_provenance_key(name):
+                texts[name] = content
+
+        def handle_endtag(self, tag):
+            if tag == "head":
+                self.done = True
+
+    parser = _Head(convert_charrefs=True)
+    with path.open("rb") as f:
+        data = f.read(HTML_HEAD_MAX_BYTES)
+    end = data.lower().find(b"</head>")
+    if end >= 0:
+        data = data[: end + len(b"</head>")]
+    parser.feed(data.decode("utf-8", errors="replace"))
+    return texts
+
+
+def provenance_for_html(path: Path) -> dict | None:
+    try:
+        texts = read_html_meta_texts(path)
+    except Exception:
+        return None
+    return _provenance_payload(_parse_history_chains_from_text_map(texts))
+
+
 def _read_zarr_attr_texts(path: Path) -> dict[str, str]:
     """Best-effort read of weather_skills_history attrs without opening via xarray."""
     texts: dict[str, str] = {}
@@ -611,6 +661,11 @@ def list_artifacts(chat_id: str) -> list[dict]:
                 prov = provenance_for_png(path)
                 if prov:
                     # crumbs kept for compact labels; branches carry full args.
+                    item["provenance"] = prov.get("crumbs") or []
+                    item["provenance_detail"] = prov
+            elif kind == "html":
+                prov = provenance_for_html(path)
+                if prov:
                     item["provenance"] = prov.get("crumbs") or []
                     item["provenance_detail"] = prov
             elif kind == "zarr":

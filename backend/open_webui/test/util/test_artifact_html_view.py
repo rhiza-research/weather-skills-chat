@@ -89,3 +89,51 @@ class HtmlViewRouteTest(unittest.TestCase):
         self.assertGreater(after["modified"], before["modified"])
         folder = {i["path"]: i for i in list_artifacts("chat-1")}["plots"]
         self.assertIsNone(folder["modified"])
+
+
+class HtmlProvenanceTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.artifacts = Path(self.tmp.name) / "artifacts"
+        self.root = self.artifacts / "chat-p"
+        self.root.mkdir(parents=True)
+        self.patch = patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts)
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        self.tmp.cleanup()
+
+    def _listing(self):
+        return {item["path"]: item for item in list_artifacts("chat-p")}
+
+    def test_plotly_page_provenance_is_listed(self):
+        import html
+        import json
+
+        chain = [
+            {"skill": "dynamical-fetch", "version": "0.0.4", "args": {"dataset": "imerg"}, "input": None},
+            {"skill": "plot", "version": "1.0.0", "args": {"animate": True}, "input": "precip.zarr"},
+        ]
+        content = html.escape(json.dumps(chain), quote=True)
+        (self.root / "plot.html").write_text(
+            "<!doctype html><html><head>"
+            f'<meta charset="utf-8"><meta name="weather_skills_history" content="{content}">'
+            "</head><body><div>" + "x" * 2_000_000 + "</div></body></html>"
+        )
+        item = self._listing()["plot.html"]
+        self.assertEqual(item["kind"], "html")
+        self.assertEqual(item["provenance"], ["dynamical-fetch", "plot"])
+        steps = item["provenance_detail"]["branches"][0]["steps"]
+        self.assertEqual([s["skill"] for s in steps], ["dynamical-fetch", "plot"])
+        self.assertEqual(steps[0]["args"], {"dataset": "imerg"})
+
+    def test_page_without_provenance(self):
+        (self.root / "page.html").write_text("<html><head><title>x</title></head><body></body></html>")
+        self.assertNotIn("provenance", self._listing()["page.html"])
+
+    def test_meta_outside_the_head_is_ignored(self):
+        (self.root / "late.html").write_text(
+            '<html><head></head><body><meta name="weather_skills_history" content="[]"></body></html>'
+        )
+        self.assertNotIn("provenance", self._listing()["late.html"])

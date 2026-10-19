@@ -13,7 +13,7 @@ The file list shows every file and folder in the chat. Some kinds of entries are
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
 - Zarr views, which draw a Zarr store as an image. See below.
 
-Images and Zarr stores made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows it, so a user can see how a result was made.
+Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows it, so a user can see how a result was made.
 
 ## Downloading and uploading
 
