@@ -253,6 +253,8 @@ def classify_entry(path: Path) -> str:
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+# Interactive pages, such as Plotly figures saved with write_html.
+HTML_SUFFIXES = {".html", ".htm"}
 PROVENANCE_ATTR_PREFIXES = ("weather_skills_history", "rhiza_history")
 
 
@@ -582,6 +584,8 @@ def list_artifacts(chat_id: str) -> list[dict]:
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
                 kind = "image"
+            elif kind == "file" and path.suffix.lower() in HTML_SUFFIXES:
+                kind = "html"
             item = {
                 "path": rel,
                 "name": path.name,

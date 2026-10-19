@@ -76,7 +76,7 @@
 	$: open = expanded.has(node.path);
 	$: pad = `padding-left: ${depth * 0.75 + 0.25}rem`;
 	$: selected =
-		(file?.kind === 'image' && selectedImage === file.path) ||
+		((file?.kind === 'image' || file?.kind === 'html') && selectedImage === file.path) ||
 		(file?.kind === 'zarr_view' && selectedView === file.path);
 </script>
 
@@ -174,7 +174,7 @@
 			: 'hover:bg-black/5 dark:hover:bg-white/5'}"
 	>
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1" style={pad}>
-			{#if file.kind === 'image'}
+			{#if file.kind === 'image' || file.kind === 'html'}
 				<button
 					type="button"
 					class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
@@ -198,7 +198,7 @@
 				</div>
 			{/if}
 			<div class="flex gap-1 shrink-0">
-				{#if file.kind === 'image'}
+				{#if file.kind === 'image' || file.kind === 'html'}
 					<button
 						type="button"
 						class="underline"

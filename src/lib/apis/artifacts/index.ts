@@ -12,6 +12,17 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 
+/** HTML artifacts (for example Plotly figures) rendered inline by the server,
+ * which sandboxes them. Load only in a sandboxed iframe (HtmlArtifactFrame). */
+export const getArtifactViewUrl = (chatId: string, path: string) =>
+	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/view/${path
+		.split('/')
+		.map(encodeURIComponent)
+		.join('/')}`;
+
+export const isHtmlArtifact = (path: string | null | undefined) =>
+	/\.html?$/i.test(String(path ?? '').trim());
+
 /** Relative markdown hrefs point at this chat's sandbox. Absolute URLs do not. */
 export const artifactHrefForChat = (href: string, chatId: string | null | undefined) => {
 	if (!chatId || chatId === 'local') return null;
