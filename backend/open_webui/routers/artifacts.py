@@ -105,19 +105,20 @@ HTML_VIEW_HEADERS = {
     "Cache-Control": "private, no-cache",
 }
 
-# Fits Plotly figures to the frame and reports their intended size; appended
-# inline because the sandboxed page cannot load the app's own files.
-PLOTLY_FIT_SCRIPT = (
-    Path(__file__).resolve().parent.parent / "static" / "artifact" / "plotly-fit.js"
+# Reports a fixed-size Plotly figure's size so the chat can scale the frame;
+# read only. Appended inline because the sandboxed page cannot load the app's
+# own files.
+REPORT_SIZE_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "static" / "artifact" / "report-size.js"
 ).read_bytes()
 VIEW_CHUNK_BYTES = 1024 * 1024
 
 
-def _html_with_fit_script(target: Path):
+def _html_with_size_report(target: Path):
     with target.open("rb") as f:
         while chunk := f.read(VIEW_CHUNK_BYTES):
             yield chunk
-    yield b"\n<script>\n" + PLOTLY_FIT_SCRIPT + b"\n</script>\n"
+    yield b"\n<script>\n" + REPORT_SIZE_SCRIPT + b"\n</script>\n"
 
 
 @router.get("/{chat_id}/artifacts/view/{path:path}")
@@ -137,7 +138,7 @@ async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_
             detail="Only .html artifacts can be viewed",
         )
     return StreamingResponse(
-        _html_with_fit_script(target),
+        _html_with_size_report(target),
         media_type="text/html; charset=utf-8",
         headers=HTML_VIEW_HEADERS,
     )
