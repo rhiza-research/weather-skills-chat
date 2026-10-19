@@ -39,15 +39,24 @@
 
 	let copied = false;
 	let iframeElement: HTMLIFrameElement;
-	let files = [];
-	let selectedView = null;
-	let selectedImage = null;
+	let files: any[] = [];
+	let selectedView: string | null = null;
+	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
 	let showImageModal = false;
 	// HTML artifacts (Plotly figures) load straight from the view route in a
 	// sandboxed frame, not as a blob.
 	let previewHtmlUrl = '';
 	let showHtmlModal = false;
+	// Modification time of the open file, so a skill rewriting it reloads the
+	// preview when the new file list arrives.
+	let previewModified: number | null = null;
+
+	const fileModified = (path: string | null) =>
+		(files.find((file) => file?.path === path)?.modified as number | undefined) ?? null;
+
+	const htmlPreviewUrl = (path: string, modified: number | null) =>
+		modified ? `${getArtifactViewUrl($chatId, path)}?v=${modified}` : getArtifactViewUrl($chatId, path);
 	let modalAlt = '';
 	let uploading = false;
 	let fileInput: HTMLInputElement;
@@ -81,9 +90,10 @@
 		showImageModal = false;
 		showHtmlModal = false;
 		previewHtmlUrl = '';
+		previewModified = fileModified(path);
 		if (isHtmlArtifact(path)) {
 			revokePreview();
-			previewHtmlUrl = getArtifactViewUrl($chatId, path);
+			previewHtmlUrl = htmlPreviewUrl(path, previewModified);
 			modalAlt = path;
 			return;
 		}
@@ -98,6 +108,7 @@
 		showImageModal = false;
 		showHtmlModal = false;
 		previewHtmlUrl = '';
+		previewModified = null;
 		const url = await loadPreview(getZarrRenderUrl($chatId, path));
 		if (!url) return;
 		modalAlt = title || path;
@@ -110,6 +121,7 @@
 		showImageModal = false;
 		showHtmlModal = false;
 		previewHtmlUrl = '';
+		previewModified = null;
 		revokePreview();
 	};
 
@@ -122,6 +134,21 @@
 	};
 
 	$: previewTitle = selectedView || selectedImage || modalAlt || '';
+
+	// The open file was rewritten (new list from chat:artifacts): reload it.
+	$: if (selectedImage && files) {
+		const modified = fileModified(selectedImage);
+		if (modified && previewModified === null) {
+			previewModified = modified;
+		} else if (modified && modified !== previewModified) {
+			previewModified = modified;
+			if (isHtmlArtifact(selectedImage)) {
+				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
+			} else {
+				loadPreview(getArtifactContentUrl($chatId, selectedImage));
+			}
+		}
+	}
 	$: hasPreview = !!previewUrl || !!previewHtmlUrl;
 
 	const closePanel = () => {

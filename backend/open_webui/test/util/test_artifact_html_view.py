@@ -77,3 +77,15 @@ class HtmlViewRouteTest(unittest.TestCase):
         kinds = {item["path"]: item["kind"] for item in list_artifacts("chat-1")}
         self.assertEqual(kinds["plots/sst 2017.html"], "html")
         self.assertEqual(kinds["data.csv"], "file")
+
+    def test_listing_reports_when_a_file_was_rewritten(self):
+        import os
+
+        target = self.artifacts / "chat-1" / "plots" / "sst 2017.html"
+        before = {i["path"]: i for i in list_artifacts("chat-1")}["plots/sst 2017.html"]
+        self.assertIsInstance(before["modified"], int)
+        os.utime(target, (target.stat().st_atime, target.stat().st_mtime + 5))
+        after = {i["path"]: i for i in list_artifacts("chat-1")}["plots/sst 2017.html"]
+        self.assertGreater(after["modified"], before["modified"])
+        folder = {i["path"]: i for i in list_artifacts("chat-1")}["plots"]
+        self.assertIsNone(folder["modified"])

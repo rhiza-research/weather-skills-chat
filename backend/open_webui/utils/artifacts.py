@@ -586,12 +586,16 @@ def list_artifacts(chat_id: str) -> list[dict]:
                 kind = "image"
             elif kind == "file" and path.suffix.lower() in HTML_SUFFIXES:
                 kind = "html"
+            is_file = path.is_file()
+            stat = path.stat() if is_file else None
             item = {
                 "path": rel,
                 "name": path.name,
                 "kind": kind,
                 "is_dir": path.is_dir(),
-                "size": path.stat().st_size if path.is_file() else None,
+                "size": stat.st_size if stat else None,
+                # Lets an open preview notice the file was rewritten.
+                "modified": int(stat.st_mtime * 1000) if stat else None,
             }
             if kind == "zarr_view":
                 try:
