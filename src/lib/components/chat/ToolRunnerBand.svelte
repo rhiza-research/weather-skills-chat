@@ -8,6 +8,9 @@
 	const CPU_CORES = 3;
 	const MEM_GIB = 12;
 	const MEM_BYTES = MEM_GIB * 1024 ** 3;
+	// Linux keeps a little swap after pressure passes (swap-cache slots and idle
+	// pages of the runtime), so only flag swap well above that leftover.
+	const SWAP_FLAG_BYTES = 500 * 1024 ** 2;
 
 	type Sample = { t: number; cpu: number; memory: number; swap: boolean };
 	type BandState = 'hidden' | 'paused' | 'starting' | 'ready' | 'degraded';
@@ -101,7 +104,7 @@
 			t: Date.now(),
 			cpu: cpuCores(metrics),
 			memory: Number(metrics.memory_bytes || 0),
-			swap: Number(metrics.memory_swap_current || 0) > 0
+			swap: Number(metrics.memory_swap_current || 0) > SWAP_FLAG_BYTES
 		};
 		samples = [...samples.filter((s) => Date.now() - s.t < 60_000), next];
 	};
