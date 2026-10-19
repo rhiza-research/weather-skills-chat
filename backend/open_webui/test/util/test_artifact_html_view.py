@@ -57,6 +57,45 @@ class HtmlViewRouteTest(unittest.TestCase):
         self.assertEqual(res.headers["x-content-type-options"], "nosniff")
         self.assertEqual(res.headers["referrer-policy"], "no-referrer")
 
+    def test_unchanged_page_answers_304_without_a_body(self):
+        url = "/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html"
+        first = self.client.get(url)
+        etag = first.headers["etag"]
+        self.assertTrue(etag.startswith('W/"'))
+        self.assertIn("last-modified", first.headers)
+        again = self.client.get(url, headers={"If-None-Match": etag})
+        self.assertEqual(again.status_code, 304)
+        self.assertEqual(again.content, b"")
+        self.assertEqual(again.headers["etag"], etag)
+        # Still sandboxed, so a 304 never leaves the page without its CSP.
+        self.assertIn("sandbox", again.headers["content-security-policy"])
+        since = self.client.get(url, headers={"If-Modified-Since": first.headers["last-modified"]})
+        self.assertEqual(since.status_code, 304)
+
+    def test_a_rewritten_page_gets_a_new_etag(self):
+        import os
+
+        url = "/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html"
+        etag = self.client.get(url).headers["etag"]
+        target = self.artifacts / "chat-1" / "plots" / "sst 2017.html"
+        target.write_bytes(PAGE + b"<!-- new -->")
+        os.utime(target, (target.stat().st_atime, target.stat().st_mtime + 5))
+        res = self.client.get(url, headers={"If-None-Match": etag})
+        self.assertEqual(res.status_code, 200)
+        self.assertNotEqual(res.headers["etag"], etag)
+        self.assertTrue(res.content.startswith(PAGE + b"<!-- new -->"))
+
+    def test_gzip_only_when_the_browser_accepts_it(self):
+        url = "/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html"
+        zipped = self.client.get(url, headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(zipped.headers["content-encoding"], "gzip")
+        self.assertEqual(zipped.headers["vary"], "Accept-Encoding")
+        self.assertTrue(zipped.content.startswith(PAGE))  # decoded by the client
+        self.assertIn(b"weather-skills:figure-size", zipped.content)
+        plain = self.client.get(url, headers={"Accept-Encoding": "identity"})
+        self.assertNotIn("content-encoding", plain.headers)
+        self.assertEqual(plain.content, zipped.content)
+
     def test_only_html_can_be_viewed(self):
         res = self.client.get("/api/v1/chats/chat-1/artifacts/view/data.csv")
         self.assertEqual(res.status_code, 415)
