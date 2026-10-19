@@ -47,6 +47,11 @@ jobs:
   backend-unit:
     name: Backend unit tests
     runs-on: ubuntu-latest
+    # The telemetry opt-outs the app image sets, so library telemetry threads stay off here too.
+    env:
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      ANONYMIZED_TELEMETRY: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
