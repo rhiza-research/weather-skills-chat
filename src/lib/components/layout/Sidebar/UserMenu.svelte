@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
-	import { createEventDispatcher, getContext } from 'svelte';
+	import { createEventDispatcher, getContext, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
@@ -36,6 +36,16 @@
 	const dispatch = createEventDispatcher();
 
 	let showOrgPicker = false;
+	let orgListElement: HTMLElement | null = null;
+
+	// A long list opens scrolled to the active organization.
+	$: if (showOrgPicker) {
+		tick().then(() =>
+			orgListElement
+				?.querySelector('[data-active="true"]')
+				?.scrollIntoView({ block: 'nearest' })
+		);
+	}
 	let showRequestForm = false;
 	let requestName = '';
 	let requestDescription = '';
@@ -165,23 +175,27 @@
 
 			{#if showOrgPicker}
 				<div class="px-1 pb-1">
-					{#each $organizations ?? [] as org}
-						<button
-							class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
-							$activeOrganizationId
-								? 'bg-gray-50 dark:bg-gray-800 font-medium'
-								: 'text-gray-600 dark:text-gray-300'}"
-							on:click={() => selectOrg(org.id)}
-						>
-							{#if org.logo}
-								<img src={org.logo} alt="" class="size-5 rounded-full object-cover shrink-0" />
-							{/if}
-							<span class="truncate flex-1">{org.name}</span>
-							{#if org.id === $activeOrganizationId}
-								<Check className="size-4 shrink-0" strokeWidth="2.5" />
-							{/if}
-						</button>
-					{/each}
+					<!-- Users in many organizations: the list scrolls past about eight rows. -->
+					<div bind:this={orgListElement} class="max-h-64 overflow-y-auto overscroll-contain">
+						{#each $organizations ?? [] as org}
+							<button
+								class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
+								$activeOrganizationId
+									? 'bg-gray-50 dark:bg-gray-800 font-medium'
+									: 'text-gray-600 dark:text-gray-300'}"
+								data-active={org.id === $activeOrganizationId}
+								on:click={() => selectOrg(org.id)}
+							>
+								{#if org.logo}
+									<img src={org.logo} alt="" class="size-5 rounded-full object-cover shrink-0" />
+								{/if}
+								<span class="truncate flex-1">{org.name}</span>
+								{#if org.id === $activeOrganizationId}
+									<Check className="size-4 shrink-0" strokeWidth="2.5" />
+								{/if}
+							</button>
+						{/each}
+					</div>
 					<button
 						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300"
 						on:click={(e) => {

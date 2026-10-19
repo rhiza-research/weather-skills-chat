@@ -7,7 +7,13 @@
 
 	const i18n = getContext('i18n');
 
-	import { artifactHrefForChat } from '$lib/apis/artifacts';
+	import {
+		artifactHrefForChat,
+		artifactPathForChat,
+		getArtifactContentUrl,
+		getArtifactViewUrl,
+		isHtmlArtifact
+	} from '$lib/apis/artifacts';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { chatId } from '$lib/stores';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
@@ -18,6 +24,8 @@
 	};
 
 	import Image from '$lib/components/common/Image.svelte';
+	import HtmlArtifactInline from '$lib/components/common/HtmlArtifactInline.svelte';
+	import HtmlArtifactLink from '$lib/components/common/HtmlArtifactLink.svelte';
 	import KatexRenderer from './KatexRenderer.svelte';
 	import Source from './Source.svelte';
 
@@ -40,6 +48,20 @@
 		{:else}
 			{@html html}
 		{/if}
+	{:else if token.type === 'link' && isHtmlArtifact(artifactPathForChat(token.href ?? '', $chatId))}
+		{@const htmlPath = artifactPathForChat(token.href ?? '', $chatId) ?? ''}
+		<HtmlArtifactLink
+			src={getArtifactViewUrl($chatId, htmlPath)}
+			downloadUrl={getArtifactContentUrl($chatId, htmlPath)}
+			title={htmlPath}
+			linkTitle={token.title ?? undefined}
+		>
+			{#if token.tokens}
+				<svelte:self id={`${id}-a`} tokens={token.tokens} {onSourceClick} />
+			{:else}
+				{token.text}
+			{/if}
+		</HtmlArtifactLink>
 	{:else if token.type === 'link'}
 		{@const sandboxHref = artifactHrefForChat(token.href ?? '', $chatId)}
 		{@const href = sandboxHref ?? token.href}
@@ -63,6 +85,13 @@
 				title={token.title}>{token.text}</a
 			>
 		{/if}
+	{:else if token.type === 'image' && isHtmlArtifact(artifactPathForChat(token.href ?? '', $chatId))}
+		{@const htmlPath = artifactPathForChat(token.href ?? '', $chatId) ?? ''}
+		<HtmlArtifactInline
+			src={getArtifactViewUrl($chatId, htmlPath)}
+			downloadUrl={getArtifactContentUrl($chatId, htmlPath)}
+			title={token.text || htmlPath}
+		/>
 	{:else if token.type === 'image'}
 		<Image src={artifactHrefForChat(token.href ?? '', $chatId) ?? token.href} alt={token.text} />
 	{:else if token.type === 'strong'}

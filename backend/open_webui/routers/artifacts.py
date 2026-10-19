@@ -1,5 +1,6 @@
 import io
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -7,6 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
+    HTML_SUFFIXES,
     extract_sandbox_archive,
     is_zarr_store,
     is_zarr_view,
@@ -88,6 +90,57 @@ async def get_artifact_content(
         target,
         filename=target.name,
         content_disposition_type="attachment",
+    )
+
+
+# HTML artifacts (for example Plotly figures) are shown in iframes. The CSP
+# sandbox makes the browser give the page its own opaque origin, so its scripts
+# cannot read this app's storage or cookies or call its API as the user. The
+# header applies even when the URL is opened directly in a tab.
+HTML_VIEW_HEADERS = {
+    "Content-Security-Policy": "sandbox allow-scripts allow-downloads",
+    "X-Content-Type-Options": "nosniff",
+    # Third-party scripts the page loads (Plotly's CDN) do not learn the chat id.
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "private, no-cache",
+}
+
+# Reports a fixed-size Plotly figure's size so the chat can scale the frame;
+# read only. Appended inline because the sandboxed page cannot load the app's
+# own files.
+REPORT_SIZE_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "static" / "artifact" / "report-size.js"
+).read_bytes()
+VIEW_CHUNK_BYTES = 1024 * 1024
+
+
+def _html_with_size_report(target: Path):
+    with target.open("rb") as f:
+        while chunk := f.read(VIEW_CHUNK_BYTES):
+            yield chunk
+    yield b"\n<script>\n" + REPORT_SIZE_SCRIPT + b"\n</script>\n"
+
+
+@router.get("/{chat_id}/artifacts/view/{path:path}")
+async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_user)):
+    _readable(chat_id, user)
+    try:
+        target = resolve_in_sandbox(chat_id, path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not target.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    if target.suffix.lower() not in HTML_SUFFIXES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only .html artifacts can be viewed",
+        )
+    return StreamingResponse(
+        _html_with_size_report(target),
+        media_type="text/html; charset=utf-8",
+        headers=HTML_VIEW_HEADERS,
     )
 
 

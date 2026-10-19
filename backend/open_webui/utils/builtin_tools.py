@@ -618,6 +618,14 @@ def looks_like_display_image(data: bytes, suffix: str) -> bool:
     return False
 
 
+DISPLAY_HTML_SUFFIXES = {".html", ".htm"}
+DISPLAY_HTML_HEAD_BYTES = 4096
+
+
+def looks_like_display_html(head: bytes) -> bool:
+    return b"<" in (head or b"")[:DISPLAY_HTML_HEAD_BYTES]
+
+
 def refresh_sandbox_lookup(path: Path) -> None:
     """Bust FUSE/JuiceFS negative dentry cache so a just-written file is visible."""
     try:
@@ -645,6 +653,29 @@ async def wait_for_sandbox_image(
             pass
         if time.monotonic() >= deadline:
             return None
+        await asyncio.sleep(interval_s)
+
+
+async def wait_for_sandbox_html(
+    target: Path,
+    *,
+    timeout_s: float = DISPLAY_IMAGE_WAIT_S,
+    interval_s: float = DISPLAY_IMAGE_POLL_S,
+) -> bool:
+    """Wait until a just-written HTML file is there. Reads only its start: an
+    embedded Plotly figure is several MB."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        refresh_sandbox_lookup(target)
+        try:
+            if target.is_file():
+                with target.open("rb") as f:
+                    if looks_like_display_html(f.read(DISPLAY_HTML_HEAD_BYTES)):
+                        return True
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
         await asyncio.sleep(interval_s)
 
 
@@ -677,11 +708,23 @@ async def display_image(
     except Exception as e:
         return f"Invalid path: {e}"
 
+    if target.suffix.lower() in DISPLAY_HTML_SUFFIXES:
+        # Shown to the user in a sandboxed frame; nothing is sent to the model.
+        if not await wait_for_sandbox_html(
+            target, timeout_s=DISPLAY_IMAGE_WAIT_S, interval_s=DISPLAY_IMAGE_POLL_S
+        ):
+            return f"File not found: `{rel}`"
+        return (
+            f"Showing `{rel}` to the user as an interactive page. You cannot see "
+            "it; to look at a figure yourself, also save it as a PNG and use "
+            "read_artifact."
+        )
+
     mime = DISPLAY_IMAGE_TYPES.get(target.suffix.lower())
     if not mime:
         return (
-            "Unsupported image type. Use a .png, .jpg, .jpeg, .gif, or .webp "
-            f"file (got `{target.suffix or 'no extension'}`)."
+            "Unsupported type. Use a .png, .jpg, .jpeg, .gif, or .webp image, or "
+            f"an .html page (got `{target.suffix or 'no extension'}`)."
         )
 
     data = await wait_for_sandbox_image(target, target.suffix)
@@ -707,7 +750,10 @@ DISPLAY_IMAGE_SPEC = {
     "description": (
         "Display a PNG (or jpeg/gif/webp) from the current chat sandbox inline "
         "in the chat. Pass a relative path such as `plot.png` or "
-        "`intermediate_results/step.png`. This call waits for other tools in "
+        "`intermediate_results/step.png`. It also shows an .html page, such as "
+        "an interactive Plotly figure, in a sandboxed frame the user can zoom "
+        "and hover; save Plotly figures with include_plotlyjs='cdn' so the "
+        "file stays small. This call waits for other tools in "
         "the same turn, so you do not need `depends_on` when a skill just "
         "wrote the file. Show each image either with this tool or with a "
         "relative markdown link such as `![map](plots/map.png)` or "
@@ -720,7 +766,7 @@ DISPLAY_IMAGE_SPEC = {
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Relative path to an image file in the chat sandbox",
+                "description": "Relative path to an image or .html file in the chat sandbox",
             },
         },
         "required": ["path"],

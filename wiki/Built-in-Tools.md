@@ -15,7 +15,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | `read_artifact` | Send a file from the chat's files to the model. The user must approve in a popup first. Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
 | `create_folder` | Create a folder in the chat's files. |
 | `copy_intermediate_result` | Copy a file or folder between the chat's files and its intermediate results folder, which skills use to pass data from one step to the next. |
-| `display_image` | Show an image from the chat's files in the conversation, for the user. If a skill in the same turn writes that image, the display waits for the skill. To send an image to the model, use `read_artifact`. |
+| `display_image` | Show an image from the chat's files in the conversation, for the user. It also shows an `.html` page, such as an interactive Plotly figure, in a sandboxed frame with a button to open it full screen. If a skill in the same turn writes that file, the display waits for the skill. To send an image to the model, use `read_artifact`; the model cannot see an HTML page. |
 | `list_email_recipients` | List the addresses the model may email. |
 | `send_email` | Email a message, with files from the chat attached. |
 
