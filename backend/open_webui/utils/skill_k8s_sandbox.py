@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import base64
+import contextlib
 import io
 import json
 import logging
@@ -344,24 +345,102 @@ async def hold_runner_for_skill(chat_id: str, timeout: int) -> None:
         log.debug("extend runner hold failed", exc_info=True)
 
 
-async def delete_claim(chat_id: str) -> None:
+async def delete_claim(chat_id: str, uid: Optional[str] = None) -> None:
+    """Delete this chat's claim. With uid, only that claim: a later claim
+    reuses the same name, and a stale delete must not remove it."""
+    body = None
+    if uid:
+        body = {"apiVersion": "v1", "kind": "DeleteOptions", "preconditions": {"uid": uid}}
     try:
-        await _k8s("DELETE", _crd("sandboxclaims", claim_name(chat_id)))
+        await _k8s("DELETE", _crd("sandboxclaims", claim_name(chat_id)), body)
     except RuntimeError as exc:
-        if "404" in str(exc):
+        # 404: already gone. 409: the uid no longer matches, so it is gone too.
+        if "404" in str(exc) or (uid and "409" in str(exc)):
             return
         raise
 
 
 WAITING_STATUS = "Waiting on weather skills runner"
 WAITING_ACTION = "weather_skills_runner"
-RUNNER_DIED_MESSAGE = "Runner died while running skills, please try again"
+# Worded so the model does not blame its own call: the runner failed, not the tool.
+RUNNER_DIED_MESSAGE = (
+    "Tool call failed: Sandbox runner died for unknown reasons "
+    "(not clearly related to the tool call). Please try again."
+)
+RUNNER_OOM_MESSAGE = (
+    "Tool call failed: the tool runner ran out of memory{detail}. "
+    "Retry with less work at once, for example fewer skills in parallel or a "
+    "smaller time range or region."
+)
+RUNNER_UNREACHABLE_MESSAGE = (
+    "Sending request to tool runner failed, runner may be overloaded. "
+    "Please try fewer tool calls at once or try again momentarily."
+)
+RUNNER_UNAVAILABLE_MESSAGE = "Failed to get a tool runner, please try again"
+# Added to the system prompt when the tool runner is on. Models tend to read
+# any runner failure as out of memory and cut their work down; only the OOM
+# message above means that.
+RUNNER_FAILURE_GUIDANCE = (
+    "When a tool call fails because of the call itself, its result says so "
+    "clearly: a skill error shows the skill's own output, a skill that ran past "
+    'its timeout says it "did not finish within its timeout", and running out '
+    'of memory always says "the tool runner ran out of memory". Do not assume a '
+    "failure was caused by memory or by the size of the request unless the "
+    "result says so. Other tool runner failures (the sandbox runner died, the "
+    "runner may be overloaded, or no runner was available) are not caused by "
+    "the call: first simply retry the same call, and only lower the amount of "
+    "work if it fails again."
+)
 RUNTIME_PROBE_TIMEOUT_SEC = 2
+# A start that failed this recently is returned to new callers instead of
+# starting again, so one tool-call turn waits through one start, not several.
+RECENT_START_FAILURE_SEC = 15
+
+
+class RunnerUnavailableError(RuntimeError):
+    """No tool runner within the start time limit. The message is for the model."""
+
+    def __init__(self) -> None:
+        super().__init__(RUNNER_UNAVAILABLE_MESSAGE)
+
+
+class _NotYet(Exception):
+    """A start step is waiting on something (a claim being deleted, a pod)."""
+
+
+def _start_timeout_seconds() -> int:
+    return _int_env("SKILL_K8S_START_TIMEOUT_SECONDS", 180)
+
+
+async def _until(deadline: float, what: str, step):
+    """Run step() until it returns, backing off between failures, until deadline.
+
+    Part of waiting for a runner, not a tool-call retry: callers see one
+    RunnerUnavailableError when the start time limit runs out.
+    """
+    delay = 0.5
+    while True:
+        try:
+            return await step()
+        except RunnerUnavailableError:
+            raise
+        except Exception as exc:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                log.warning("tool runner start gave up at %s: %s", what, exc)
+                raise RunnerUnavailableError() from exc
+            pause = min(delay, remaining)
+            if isinstance(exc, _NotYet):
+                log.debug("tool runner start waiting at %s: %s", what, exc)
+            else:
+                log.info("tool runner start: %s failed, retrying in %.1fs: %s", what, pause, exc)
+            await asyncio.sleep(pause)
+            delay = min(delay * 2, 5.0)
 
 
 def public_runner_state(state: Optional[str]) -> str:
     """Map internal runner_status to the top-bar / websocket state."""
-    if state in ("ready", "starting"):
+    if state in ("ready", "starting", "degraded"):
         return state
     return "paused"
 
@@ -493,7 +572,7 @@ def _pod_runner_port(pod: Optional[dict] = None) -> int:
     return _runner_port()
 
 
-# Baked into the runner image (sandbox/runtime/Dockerfile). /workspace is an
+# Baked into the runner image (rhiza-research/infrastructure images/sandbox-runner). /workspace is an
 # emptyDir, so a cache under it would hide the prewarmed wheels.
 RUNNER_UV_CACHE_DIR = "/opt/uv-cache"
 
@@ -645,53 +724,102 @@ def _drop_runner(chat_id: str) -> None:
         _starts.pop(chat_id, None)
 
 
-async def _runtime_reachable(info: Optional[dict]) -> bool:
-    """True when the runner process answers /health."""
+HEALTH_OK = "ok"
+HEALTH_UNHEALTHY = "unhealthy"
+HEALTH_NO_ANSWER = "no_answer"
+
+
+async def _runner_health(info: Optional[dict]) -> str:
+    """The runner's own /health answer, within RUNTIME_PROBE_TIMEOUT_SEC.
+
+    HEALTH_UNHEALTHY means it answered with an error status (503 when its chat
+    storage is disconnected). HEALTH_NO_ANSWER (timeout, connection error) is
+    not a verdict: a runner busy with many skills can be slow to answer.
+    """
     if not info or not info.get("pod_ip"):
-        return False
+        return HEALTH_NO_ANSWER
     try:
         base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
         await _http_json("GET", f"{base}/health", timeout=RUNTIME_PROBE_TIMEOUT_SEC)
-        return True
+        return HEALTH_OK
+    except RuntimeError as exc:
+        # _http_json reports an HTTP error status as "<METHOD> <url> -> <status>: ...".
+        return HEALTH_UNHEALTHY if " -> " in str(exc) else HEALTH_NO_ANSWER
     except Exception:
+        return HEALTH_NO_ANSWER
+
+
+def _pod_ready(pod: dict) -> bool:
+    """Kubernetes' view: Running, no terminated container, and Ready."""
+    if _pod_dead(pod) or (pod.get("status") or {}).get("phase") != "Running":
         return False
+    for cond in (pod.get("status") or {}).get("conditions") or []:
+        if cond.get("type") == "Ready":
+            return cond.get("status") == "True"
+    return True  # no conditions reported (the laptop emulator)
 
 
-async def _claim_runtime_reachable(claim: dict) -> bool:
-    """True if this claim is still starting, or its runner answers /health."""
+async def _pod_alive(pod_name: Optional[str]) -> bool:
+    if not pod_name:
+        return False
+    try:
+        pod = await get_pod(pod_name)
+    except Exception as exc:
+        # Gone means dead; any other API error is not a verdict on the runner.
+        return "404" not in str(exc)
+    return _pod_ready(pod)
+
+
+async def _runner_alive(info: Optional[dict]) -> bool:
+    """Keep using this runner?
+
+    Only the runner answering /health with an error, or Kubernetes saying its
+    pod is gone or not Ready, condemns it. A slow or missing /health answer
+    falls back to Kubernetes' readiness, so a busy runner is kept.
+    """
+    health = await _runner_health(info)
+    if health != HEALTH_NO_ANSWER:
+        return health == HEALTH_OK
+    return await _pod_alive((info or {}).get("pod_name"))
+
+
+async def _claim_runner_alive(claim: dict) -> bool:
+    """True if this claim is still starting, or its runner is alive."""
     if not _claim_ready(claim):
         return True
+    pod_name = _pod_ref(claim)
     try:
-        pod = await get_pod(_pod_ref(claim))
-    except Exception:
-        return False
+        pod = await get_pod(pod_name)
+    except Exception as exc:
+        return "404" not in str(exc)
     pod_ip = (pod.get("status") or {}).get("podIP")
     if not pod_ip:
-        return False
-    return await _runtime_reachable(
-        {"pod_ip": pod_ip, "pod_name": _pod_ref(claim), "pod": pod}
-    )
+        return _pod_ready(pod)
+    return await _runner_alive({"pod_ip": pod_ip, "pod_name": pod_name, "pod": pod})
 
 
 async def _adopt_or_replace_claim(chat_id: str) -> dict:
-    """Keep a live claim, or drop a dead one and take a new runner."""
+    """One step of getting a claim: keep a live one, or clear the way for a new one.
+
+    Raises _NotYet while an old claim is still being deleted (its finalizer
+    unbinds storage first), and after deleting a dead one; _until repeats the
+    step, and a later pass creates the new claim under the same name.
+    """
     claim = await get_claim(chat_id)
     if claim is None:
         return await create_claim(chat_id)
-    if claim.get("metadata", {}).get("deletionTimestamp"):
-        raise RuntimeError("tool runner is shutting down")
-    if await _claim_runtime_reachable(claim):
+    meta = claim.get("metadata") or {}
+    if meta.get("deletionTimestamp"):
+        raise _NotYet("previous tool runner is still shutting down")
+    if await _claim_runner_alive(claim):
         try:
             return await extend_claim_ttl(claim)
         except Exception:
             log.debug("extend ttl failed", exc_info=True)
             return claim
     log.info("replacing dead runner claim chat=%s", chat_id)
-    try:
-        await delete_claim(chat_id)
-    except Exception:
-        log.debug("delete dead runner claim failed", exc_info=True)
-    return await create_claim(chat_id)
+    await delete_claim(chat_id, uid=meta.get("uid"))
+    raise _NotYet("deleted the dead runner's claim")
 
 
 def _pack_names(paths: list[Path]) -> set[str]:
@@ -923,41 +1051,71 @@ def start_runner(chat_id: str) -> asyncio.Task:
             and _cached_runner(chat_id) is not None
         ):
             return task
+        if (
+            task is not None
+            and not task.cancelled()
+            and task.exception() is not None
+            and time.monotonic() - _start_failed_at.get(chat_id, 0.0) < RECENT_START_FAILURE_SEC
+        ):
+            return task
         task = asyncio.create_task(_run_start(chat_id), name=f"runner-start-{chat_id}")
         _starts[chat_id] = task
         return task
 
 
+_start_failed_at: dict[str, float] = {}
+
+
 async def _run_start(chat_id: str) -> dict:
+    """Get this chat's runner ready: claimed, bound, and its skill packs unpacked.
+
+    The runner counts as ready only after all three. Each step backs off and
+    tries again until one time limit for the whole start; past it the caller
+    gets RunnerUnavailableError.
+    """
     cached = _cached_runner(chat_id)
-    if cached and await _runtime_reachable(cached):
+    if cached and await _runner_alive(cached):
         return cached
     if cached:
         _drop_runner(chat_id)
+    deadline = time.monotonic() + _start_timeout_seconds()
     try:
-        claim = await _adopt_or_replace_claim(chat_id)
-        claim = await wait_ready(chat_id)
+        await _until(deadline, "claim", lambda: _adopt_or_replace_claim(chat_id))
+        try:
+            claim = await wait_ready(chat_id, timeout=max(1.0, deadline - time.monotonic()))
+        except TimeoutError as exc:
+            log.warning("tool runner start gave up waiting for a ready claim chat=%s", chat_id)
+            raise RunnerUnavailableError() from exc
         pod_name = _pod_ref(claim)
-        pod = await get_pod(pod_name)
-        annotations = (pod.get("metadata") or {}).get("annotations") or {}
-        if annotations.get(BOUND_ANN) != chat_id:
-            await bind_workspace(chat_id, pod)
-            await _annotate_pod(
-                pod, {BOUND_ANN: chat_id, SAFE_TO_EVICT_ANN: "false"}
-            )
-        elif annotations.get(SAFE_TO_EVICT_ANN) != "false":
-            await _annotate_pod(pod, {SAFE_TO_EVICT_ANN: "false"})
-        pod_ip = (pod.get("status") or {}).get("podIP")
-        if not pod_ip:
-            raise RuntimeError("tool runner has no pod IP")
-        await verify_runtime(pod_ip, pod_name, pod)
+
+        async def bind() -> dict:
+            pod = await get_pod(pod_name)
+            annotations = (pod.get("metadata") or {}).get("annotations") or {}
+            if annotations.get(BOUND_ANN) != chat_id:
+                await bind_workspace(chat_id, pod)
+                await _annotate_pod(pod, {BOUND_ANN: chat_id, SAFE_TO_EVICT_ANN: "false"})
+            elif annotations.get(SAFE_TO_EVICT_ANN) != "false":
+                await _annotate_pod(pod, {SAFE_TO_EVICT_ANN: "false"})
+            if not (pod.get("status") or {}).get("podIP"):
+                raise _NotYet("tool runner has no pod IP yet")
+            return pod
+
+        pod = await _until(deadline, "bind", bind)
+        pod_ip = pod["status"]["podIP"]
+        await _until(deadline, "runtime", lambda: verify_runtime(pod_ip, pod_name, pod))
         info = {"claim": claim, "pod": pod, "pod_ip": pod_ip, "pod_name": pod_name}
-        if not await _packs_ready_on_runner(pod, chat_id, info):
-            await _ensure_packs_on_runner(info, chat_id)
-            await _annotate_pod(pod, {PACKS_ANN: "ready"})
+
+        async def packs() -> None:
+            if not await _packs_ready_on_runner(pod, chat_id, info):
+                await _ensure_packs_on_runner(info, chat_id)
+                await _annotate_pod(pod, {PACKS_ANN: "ready"})
+
+        await _until(deadline, "skill packs", packs)
         _store_runner(chat_id, info)
+        _start_failed_at.pop(chat_id, None)
         return info
     except Exception:
+        _start_failed_at[chat_id] = time.monotonic()
         _drop_runner(chat_id)
         raise
 
@@ -987,21 +1145,63 @@ async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
     chat_id = str(chat_id)
     task = start_runner(chat_id)
     await _emit_waiting(emitter, False)
-    await asyncio.wait_for(asyncio.shield(task), timeout=180)
+    # The start has its own time limit; this only guards against a hang.
+    await asyncio.wait_for(asyncio.shield(task), timeout=_start_timeout_seconds() + 30)
 
 
 async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
-    """Wait for the one start and return the runner. Does not own waiting UI."""
+    """Return a ready runner, starting one if needed.
+
+    A remembered runner that no longer answers /health (dead, or its storage
+    is disconnected) is replaced here, with the waiting status shown, so the
+    tool call runs on the new runner instead of failing.
+    """
     cached = _cached_runner(chat_id)
-    if cached and await _runtime_reachable(cached):
+    if cached and await _runner_alive(cached):
         return cached
     if cached:
         _drop_runner(chat_id)
-    return await asyncio.shield(start_runner(chat_id))
+    task = start_runner(chat_id)
+    if emitter is None:
+        return await asyncio.shield(task)
+    await _emit_waiting(emitter, False)
+    try:
+        return await asyncio.shield(task)
+    finally:
+        await _emit_waiting(emitter, True)
+
+
+# A Ready runner that has not answered /health for this long reads degraded
+# (stuck, or very busy). Display only: nothing is deleted for it.
+DEGRADED_AFTER_NO_ANSWER_SEC = 30.0
+_no_answer_since: dict[str, float] = {}
+
+
+def _ready_or_degraded(chat_id: str, health: str) -> str:
+    if health == HEALTH_OK:
+        _no_answer_since.pop(chat_id, None)
+        return "ready"
+    since = _no_answer_since.setdefault(chat_id, time.monotonic())
+    return "degraded" if time.monotonic() - since >= DEGRADED_AFTER_NO_ANSWER_SEC else "ready"
+
+
+async def _pod_or_none(name: Optional[str]) -> Optional[dict]:
+    if not name:
+        return None
+    try:
+        return await get_pod(name)
+    except Exception:
+        return None
 
 
 async def runner_status(chat_id: str) -> dict:
-    """Read readiness. Does not start the runner or wait on the start task.
+    """Read the runner's state for the top bar. Read only: starts and deletes nothing.
+
+    ready: answering /health (or Ready and only briefly silent).
+    degraded: answers /health with an error (503), its bound pod is NotReady,
+      or Ready but silent for DEGRADED_AFTER_NO_ANSWER_SEC.
+    starting: a start is in flight, or a claimed runner is not bound yet.
+    absent (paused): no claim, or the claim is being deleted.
 
     A ready result is remembered so later status and tool calls do not list
     packs again. Packs are listed only when the pod is not already marked ready.
@@ -1009,19 +1209,35 @@ async def runner_status(chat_id: str) -> dict:
     name = claim_name(chat_id)
     cached = _cached_runner(chat_id)
     if cached:
-        if await _runtime_reachable(cached):
+        health = await _runner_health(cached)
+        if health == HEALTH_OK:
+            _no_answer_since.pop(chat_id, None)
             return {"state": "ready", "claim": name}
+        if health == HEALTH_UNHEALTHY:
+            # Replacing it is the in-flight watcher's or the next tool call's job.
+            _drop_runner(chat_id)
+            return {"state": "degraded", "claim": name}
+        pod = await _pod_or_none(cached.get("pod_name"))
+        if pod is not None and _pod_ready(pod):
+            return {"state": _ready_or_degraded(chat_id, health), "claim": name}
         _drop_runner(chat_id)
     if _start_in_flight(chat_id):
         return {"state": "starting", "claim": name}
     claim = await get_claim(chat_id)
     if not claim or claim.get("metadata", {}).get("deletionTimestamp"):
+        _no_answer_since.pop(chat_id, None)
         return {"state": "absent"}
+    pod = await _pod_or_none(_pod_ref(claim))
+    annotations = ((pod or {}).get("metadata") or {}).get("annotations") or {}
+    bound = pod is not None and annotations.get(BOUND_ANN) == chat_id
+    if bound and not _pod_ready(pod):
+        # Agent Sandbox marks the claim not ready along with its pod, so check
+        # the pod first: a bound runner that is not ready is broken. An unbound
+        # one falls through and reads starting below.
+        return {"state": "degraded", "claim": name}
     if not _claim_ready(claim):
         return {"state": "starting", "claim": name}
-    try:
-        pod = await get_pod(_pod_ref(claim))
-    except Exception:
+    if pod is None:
         return {"state": "absent"}
     pod_ip = (pod.get("status") or {}).get("podIP")
     info = {
@@ -1030,8 +1246,14 @@ async def runner_status(chat_id: str) -> dict:
         "pod_ip": pod_ip,
         "pod_name": _pod_ref(claim),
     }
-    if not await _runtime_reachable(info):
-        return {"state": "absent"}
+    health = await _runner_health(info)
+    if health == HEALTH_UNHEALTHY:
+        return {"state": "degraded", "claim": name}
+    if health == HEALTH_NO_ANSWER:
+        if bound:
+            return {"state": _ready_or_degraded(chat_id, health), "claim": name}
+        return {"state": "starting", "claim": name}
+    _no_answer_since.pop(chat_id, None)
     try:
         if await _packs_ready_on_runner(pod, chat_id):
             if pod_ip:
@@ -1064,6 +1286,118 @@ async def runner_metrics(chat_id: str) -> dict:
         raise
 
 
+def _pod_dead(pod: dict) -> bool:
+    if (pod.get("metadata") or {}).get("deletionTimestamp"):
+        return True
+    status = pod.get("status") or {}
+    if status.get("phase") in ("Failed", "Succeeded"):
+        return True
+    return any(
+        "terminated" in (container.get("state") or {})
+        for container in status.get("containerStatuses") or []
+    )
+
+
+def _oom_detail(pod: dict) -> Optional[str]:
+    """' (<detail>)' when the runner pod ran out of memory, else None."""
+    status = pod.get("status") or {}
+    if status.get("reason") == "Evicted":
+        message = status.get("message") or ""
+        if "memory" in message.lower():
+            return f" (evicted: {message.strip()[:200]})"
+    for container in status.get("containerStatuses") or []:
+        for key in ("state", "lastState"):
+            terminated = (container.get(key) or {}).get("terminated") or {}
+            if terminated.get("reason") == "OOMKilled":
+                return " (OOMKilled)"
+    return None
+
+
+async def _lost_exec_message(chat_id: str, info: dict) -> str:
+    """What the model is told when the request to the runner failed.
+
+    A pod that is gone, terminated, or already being deleted (for example by
+    the in-flight watcher) died. Otherwise only an explicit unhealthy /health
+    answer deletes its claim; a runner that is still up is kept (it is most
+    likely overloaded), and a dead one is replaced by the Kubernetes readiness
+    check or the next tool call's check.
+    """
+    try:
+        pod = await get_pod(info["pod_name"])
+    except Exception as exc:
+        return RUNNER_DIED_MESSAGE if "404" in str(exc) else RUNNER_UNREACHABLE_MESSAGE
+    detail = _oom_detail(pod)
+    if detail:
+        return RUNNER_OOM_MESSAGE.format(detail=detail)
+    if _pod_dead(pod):
+        return RUNNER_DIED_MESSAGE
+    if await _runner_health(info) == HEALTH_UNHEALTHY:
+        await _delete_unhealthy_runner(chat_id, info)
+        return RUNNER_DIED_MESSAGE
+    return RUNNER_UNREACHABLE_MESSAGE
+
+
+def _same_runner(a: Optional[dict], b: Optional[dict]) -> bool:
+    return bool(a and b) and a.get("pod_name") == b.get("pod_name")
+
+
+async def _delete_unhealthy_runner(chat_id: str, info: dict) -> None:
+    """The runner answered /health with an error: delete its claim now
+    rather than wait for the controller. Only this runner's claim (by uid)."""
+    hit = _ready_cache.get(chat_id)
+    if hit is not None and _same_runner(hit[1], info):
+        _drop_runner(chat_id)
+    uid = ((info.get("claim") or {}).get("metadata") or {}).get("uid")
+    if not uid:
+        return
+    try:
+        await delete_claim(chat_id, uid=uid)
+    except Exception:
+        log.info("delete unhealthy runner claim failed chat=%s", chat_id, exc_info=True)
+
+
+# While a chat has tool calls running on a runner, one task per runner polls
+# its /health. An explicit error answer (503: its storage disconnected)
+# deletes the claim at once, so the running calls fail now instead of when a
+# skill next touches its files. A slow or missing answer does nothing. The
+# status check stays read-only.
+RUNNER_WATCH_SECONDS = 3.0
+_watchers: dict[tuple[str, str], list] = {}
+
+
+async def _watch_runner(chat_id: str, info: dict) -> None:
+    while True:
+        await asyncio.sleep(RUNNER_WATCH_SECONDS)
+        if await _runner_health(info) == HEALTH_UNHEALTHY:
+            log.info(
+                "tool runner unhealthy during a tool call chat=%s runner=%s",
+                chat_id,
+                _runner_log_name(info),
+            )
+            await _delete_unhealthy_runner(chat_id, info)
+            return
+
+
+@contextlib.asynccontextmanager
+async def _watching_runner(chat_id: str, info: dict):
+    """Keep one health watcher running on this runner while any call is in flight."""
+    key = (chat_id, info.get("pod_name") or "")
+    entry = _watchers.get(key)
+    if entry is None or entry[0].done():
+        task = asyncio.create_task(_watch_runner(chat_id, info), name=f"runner-watch-{chat_id}")
+        entry = [task, 0]
+        _watchers[key] = entry
+    entry[1] += 1
+    try:
+        yield
+    finally:
+        entry[1] -= 1
+        if entry[1] <= 0:
+            entry[0].cancel()
+            if _watchers.get(key) is entry:
+                _watchers.pop(key, None)
+
+
 async def exec_on_runner(
     chat_id: str,
     argv: list[str],
@@ -1075,7 +1409,14 @@ async def exec_on_runner(
 ) -> dict:
     if info is None:
         info = await ensure_runner(chat_id)
-    body = {"cmd": argv, "cwd": cwd or _runner_workspace(chat_id), "env": env or {}}
+    body = {
+        "cmd": argv,
+        "cwd": cwd or _runner_workspace(chat_id),
+        "env": env or {},
+        # The runner stops the skill (and everything it started) at this; chat
+        # waits a little longer so the runner's answer arrives first.
+        "timeout": timeout,
+    }
     base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
     return await _http_json(
         "POST",
@@ -1083,6 +1424,28 @@ async def exec_on_runner(
         json_body=body,
         timeout=timeout + 15,
     )
+
+
+def _runner_timed_out(result: dict) -> bool:
+    if result.get("timed_out"):
+        return True
+    # Runner images before timed_out answered exactly this.
+    return int(result.get("exit_code", 0)) == -1 and (result.get("stderr") or "").strip() == "timed out"
+
+
+def _runner_failed_result(message: str, script_path: Path, workspace: str, args: list[str]) -> dict:
+    return {
+        "ok": False,
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": message,
+        "script": script_path.name,
+        "cwd": workspace,
+        "argv": args,
+        "sandlock": False,
+        "landlock_backend": None,
+        "tool_runner": True,
+    }
 
 
 async def run_skill_on_runner(
@@ -1095,6 +1458,8 @@ async def run_skill_on_runner(
     timeout: int,
     emitter=None,
 ) -> dict:
+    from open_webui.utils.skill_runtime import skill_timeout_message
+
     info = await ensure_runner(chat_id, emitter=emitter)
     await hold_runner_for_skill(chat_id, timeout)
     workspace = _runner_workspace(chat_id)
@@ -1119,29 +1484,66 @@ async def run_skill_on_runner(
         _runner_log_name(info),
     )
     try:
-        result = await exec_on_runner(
-            chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
-        )
-    except Exception:
+        async with _watching_runner(chat_id, info):
+            result = await exec_on_runner(
+                chat_id, argv, cwd=workspace, env=runner_env, timeout=timeout, info=info
+            )
+    except Exception as exc:
+        if isinstance(exc.__cause__, TimeoutError):
+            # No answer even after the runner should have stopped the skill.
+            # Closing the connection makes the runner stop it if it has not.
+            log.info(
+                "skill exec timed out chat=%s script=%s runner=%s timeout=%ss",
+                chat_id,
+                script_path.name,
+                _runner_log_name(info),
+                timeout,
+            )
+            return _runner_failed_result(
+                skill_timeout_message(timeout), script_path, workspace, args
+            )
         log.info(
             "tool runner unreachable chat=%s runner=%s",
             chat_id,
             _runner_log_name(info),
             exc_info=True,
         )
-        _drop_runner(chat_id)
-        return {
-            "ok": False,
-            "exit_code": 1,
-            "stdout": "",
-            "stderr": RUNNER_DIED_MESSAGE,
-            "script": script_path.name,
-            "cwd": workspace,
-            "argv": args,
-            "sandlock": False,
-            "landlock_backend": None,
-            "tool_runner": True,
-        }
+        return _runner_failed_result(
+            await _lost_exec_message(chat_id, info), script_path, workspace, args
+        )
+    if _runner_timed_out(result):
+        log.info(
+            "skill exec timed out chat=%s script=%s runner=%s timeout=%ss",
+            chat_id,
+            script_path.name,
+            _runner_log_name(info),
+            timeout,
+        )
+        partial = (result.get("stderr") or "").strip()
+        if partial == "timed out":  # runner images before timed_out
+            partial = ""
+        failed = _runner_failed_result(
+            skill_timeout_message(timeout), script_path, workspace, args
+        )
+        failed["exit_code"] = -1
+        failed["stdout"] = (result.get("stdout") or "").strip()
+        if partial:
+            failed["stderr"] += "\n\nSkill stderr before it was stopped:\n" + partial
+        return failed
+    if (
+        int(result.get("exit_code", 1)) != 0
+        and await _runner_health(info) == HEALTH_UNHEALTHY
+    ):
+        # The skill failed and the runner says it is unhealthy (for example its
+        # storage disconnected): the runner's fault, not the skill's.
+        log.info(
+            "tool runner unhealthy after a failed skill chat=%s runner=%s exit=%s",
+            chat_id,
+            _runner_log_name(info),
+            result.get("exit_code"),
+        )
+        await _delete_unhealthy_runner(chat_id, info)
+        return _runner_failed_result(RUNNER_DIED_MESSAGE, script_path, workspace, args)
     log.info(
         "skill exec done chat=%s script=%s runner=%s elapsed=%.2fs exit=%s",
         chat_id,

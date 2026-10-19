@@ -31,7 +31,7 @@ Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, 
 
 The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools and the same cached skill packages. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
 
-To run the emulator by hand instead of Compose, `uv run --script sandbox/emulator/emulator.py` and point the backend at `http://127.0.0.1:18080`.
+To run the emulator by hand instead of Compose, set `SANDBOX_RUNTIME_PATH` to the runner's `sandbox_runtime.py` from an infrastructure checkout, run `uv run --script sandbox/emulator/emulator.py`, and point the backend at `http://127.0.0.1:18080`.
 
 A real cluster is not a local Compose mode. Staging uses `sandbox.isolation=k8s` on [[Deployment]].
 
@@ -80,8 +80,6 @@ The app needs a model provider: an OpenAI-compatible provider set with `OPENAI_A
 ## Tests
 
 `docker compose --profile suite run --rm --build test` runs the backend test suite in a container built from the app image with the development packages added. It needs no database server and no access to Docker from inside the container.
-
-CI also builds the tool runner image and writes a Plotly PNG in it, so a skill that renders a figure can use the browser in that image.
 
 ## Browser tests
 

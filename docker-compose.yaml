@@ -57,16 +57,16 @@ services:
     restart: unless-stopped
 
   # Local stand-in for the GKE tool-runner APIs. Started by
-  # ./run-compose.sh --isolation=emulator. Uses the same image as the
-  # cluster runner (uv, Chromium, CPython). Shares the app data volume so
-  # skill files land in the same artifacts folder the UI reads.
+  # ./run-compose.sh --isolation=emulator. Runs on the cluster's runner image
+  # (uv, Chromium, CPython, sandbox_runtime.py), built in
+  # rhiza-research/infrastructure images/sandbox-runner. The default tag is the
+  # one pinned in that repo's charts/weather-skills-sandbox/values.yaml;
+  # SANDBOX_RUNNER_IMAGE overrides it. Shares the app data volume so skill
+  # files land in the same artifacts folder the UI reads.
   emulator:
     profiles:
       - emulator
-    build:
-      context: ./sandbox/runtime
-      dockerfile: Dockerfile
-    image: weather-skills-chat-sandbox:local
+    image: ${SANDBOX_RUNNER_IMAGE:-ghcr.io/rhiza-research/weather-skills-sandbox-runner:src-8f4552f21a8b}
     container_name: weather-skills-emulator
     user: "0"
     working_dir: /opt/sandbox

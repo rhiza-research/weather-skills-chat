@@ -261,6 +261,39 @@ class ToolRunnerFailedMessageTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["stderr"], "Tool runner failed: TimeoutError")
 
+    async def test_no_runner_in_time_reaches_the_model_as_is(self):
+        from open_webui.utils.skill_k8s_sandbox import (
+            RUNNER_UNAVAILABLE_MESSAGE,
+            RunnerUnavailableError,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp)
+            scripts = skill / "scripts"
+            scripts.mkdir()
+            (scripts / "hello.py").write_text("print('hi')\n", encoding="utf-8")
+
+            async def no_runner(**_kwargs):
+                raise RunnerUnavailableError()
+
+            with (
+                patch(
+                    "open_webui.utils.skill_runtime.tool_runner_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "open_webui.utils.skill_k8s_sandbox.run_skill_on_runner",
+                    side_effect=no_runner,
+                ),
+            ):
+                result = await run_skill(
+                    skill,
+                    script="hello.py",
+                    __metadata__={"chat_id": "chat-err"},
+                )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["stderr"], RUNNER_UNAVAILABLE_MESSAGE)
+
 
 if __name__ == "__main__":
     unittest.main()

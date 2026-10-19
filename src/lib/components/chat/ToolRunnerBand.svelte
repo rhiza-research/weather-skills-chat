@@ -8,9 +8,12 @@
 	const CPU_CORES = 3;
 	const MEM_GIB = 12;
 	const MEM_BYTES = MEM_GIB * 1024 ** 3;
+	// Linux keeps a little swap after pressure passes (swap-cache slots and idle
+	// pages of the runtime), so only flag swap well above that leftover.
+	const SWAP_FLAG_BYTES = 500 * 1024 ** 2;
 
 	type Sample = { t: number; cpu: number; memory: number; swap: boolean };
-	type BandState = 'hidden' | 'paused' | 'starting' | 'ready';
+	type BandState = 'hidden' | 'paused' | 'starting' | 'ready' | 'degraded';
 
 	let state: BandState = 'hidden';
 	let open = false;
@@ -101,14 +104,19 @@
 			t: Date.now(),
 			cpu: cpuCores(metrics),
 			memory: Number(metrics.memory_bytes || 0),
-			swap: Number(metrics.memory_swap_current || 0) > 0
+			swap: Number(metrics.memory_swap_current || 0) > SWAP_FLAG_BYTES
 		};
 		samples = [...samples.filter((s) => Date.now() - s.t < 60_000), next];
 	};
 
 	const applyLive = (row: { state?: string; metrics?: Record<string, any> | null }) => {
 		if (row.state === 'ready') state = 'ready';
-		else if (row.state === 'starting') {
+		else if (row.state === 'degraded') {
+			// The runner reports itself unhealthy, or its pod is not ready, or it
+			// has not answered for a while. It is replaced only when its claim goes.
+			open = false;
+			state = 'degraded';
+		} else if (row.state === 'starting') {
 			if (state === 'ready') open = false;
 			state = 'starting';
 		} else if (row.state === 'paused' || row.state === 'absent') {
@@ -148,7 +156,9 @@
 			? $i18n.t('Weather skills runner ready')
 			: state === 'paused'
 				? $i18n.t('Weather skills runner paused')
-				: $i18n.t('Weather skills runner starting');
+				: state === 'degraded'
+					? $i18n.t('Weather skills runner degraded')
+					: $i18n.t('Weather skills runner starting');
 	$: cpuPct = latest && cpuLimit ? Math.min(100, (latest.cpu / cpuLimit) * 100) : 0;
 	$: memPct = latest && memLimitBytes ? Math.min(100, (latest.memory / memLimitBytes) * 100) : 0;
 	$: inSwap = Boolean(latest?.swap);
@@ -173,15 +183,19 @@
 			{:else if state === 'paused'}
 				<span class="inline-block size-2.5 shrink-0 rounded-full bg-gray-400 dark:bg-gray-500"
 				></span>
+			{:else if state === 'degraded'}
+				<span class="inline-block size-2.5 shrink-0 rounded-full bg-red-500"></span>
 			{:else}
 				<span class="tool-runner-dot inline-block size-2.5 shrink-0 rounded-full bg-emerald-500"
 				></span>
 			{/if}
 			<div class="flex flex-col leading-tight min-w-0 text-left">
-				<span class="text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap"
-					>{statusLabel}</span
+				<span
+					class="text-xs font-medium whitespace-nowrap {state === 'degraded'
+						? 'text-red-600 dark:text-red-400'
+						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
-				{#if state !== 'paused'}
+				{#if state === 'ready' || state === 'starting'}
 					<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
 						>{resources}</span
 					>
