@@ -10,6 +10,11 @@
 	export let title = '';
 
 	let previewElement: HTMLElement | null = null;
+	// The overlay is moved to <body> to cover the page. Moving an iframe
+	// cancels its load, and the browser restarts it without its cached copy,
+	// so the figure would download in full on every open. The frame is only
+	// created once the overlay is in place.
+	let inBody = false;
 
 	const fileName = () => (title || '').split(/[/\\]/).pop()?.trim() || 'figure.html';
 
@@ -35,11 +40,16 @@
 		if (event.key === 'Escape') show = false;
 	};
 
+	// Closed: the next open must render the overlay without its frame first.
+	$: if (!show) inBody = false;
+
 	$: if (show && previewElement) {
 		document.body.appendChild(previewElement);
+		inBody = true;
 		window.addEventListener('keydown', handleKeyDown);
 		document.body.style.overflow = 'hidden';
 	} else if (previewElement) {
+		inBody = false;
 		window.removeEventListener('keydown', handleKeyDown);
 		if (previewElement.parentNode === document.body) document.body.removeChild(previewElement);
 		document.body.style.overflow = 'unset';
@@ -128,7 +138,9 @@
 			</button>
 		</div>
 		<div class="flex-1 min-h-0 w-full bg-white p-2">
-			<HtmlArtifactFrame {src} title={fileName()} fit="contain" lazy={false} />
+			{#if inBody}
+				<HtmlArtifactFrame {src} title={fileName()} fit="contain" lazy={false} />
+			{/if}
 		</div>
 	</div>
 {/if}
