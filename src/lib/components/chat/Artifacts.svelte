@@ -399,7 +399,7 @@
 						<HtmlArtifactFrame
 							src={previewHtmlUrl}
 							title={previewTitle}
-							className="h-full"
+							fit="contain"
 							lazy={false}
 						/>
 					</div>

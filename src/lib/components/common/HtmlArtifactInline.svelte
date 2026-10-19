@@ -14,7 +14,7 @@
 <div
 	class="relative my-2 w-full max-w-3xl overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
 >
-	<HtmlArtifactFrame {src} {title} className="h-[450px]" />
+	<HtmlArtifactFrame {src} {title} fit="width" />
 	<button
 		type="button"
 		class="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"

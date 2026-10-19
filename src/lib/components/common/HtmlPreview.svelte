@@ -127,8 +127,8 @@
 				</svg>
 			</button>
 		</div>
-		<div class="flex-1 min-h-0 w-full bg-white">
-			<HtmlArtifactFrame {src} title={fileName()} className="h-full" lazy={false} />
+		<div class="flex-1 min-h-0 w-full bg-white p-2">
+			<HtmlArtifactFrame {src} title={fileName()} fit="contain" lazy={false} />
 		</div>
 	</div>
 {/if}

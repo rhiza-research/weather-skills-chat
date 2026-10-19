@@ -45,7 +45,9 @@ class HtmlViewRouteTest(unittest.TestCase):
     def test_html_is_served_inline_inside_a_csp_sandbox(self):
         res = self.client.get("/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.content, PAGE)
+        # The file as written, then the script that fits Plotly figures.
+        self.assertTrue(res.content.startswith(PAGE))
+        self.assertIn(b"weather-skills:figure-size", res.content[len(PAGE):])
         self.assertTrue(res.headers["content-type"].startswith("text/html"))
         self.assertNotIn("content-disposition", res.headers)
         csp = res.headers["content-security-policy"]

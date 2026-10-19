@@ -1,5 +1,6 @@
 import io
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -104,6 +105,20 @@ HTML_VIEW_HEADERS = {
     "Cache-Control": "private, no-cache",
 }
 
+# Fits Plotly figures to the frame and reports their intended size; appended
+# inline because the sandboxed page cannot load the app's own files.
+PLOTLY_FIT_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "static" / "artifact" / "plotly-fit.js"
+).read_bytes()
+VIEW_CHUNK_BYTES = 1024 * 1024
+
+
+def _html_with_fit_script(target: Path):
+    with target.open("rb") as f:
+        while chunk := f.read(VIEW_CHUNK_BYTES):
+            yield chunk
+    yield b"\n<script>\n" + PLOTLY_FIT_SCRIPT + b"\n</script>\n"
+
 
 @router.get("/{chat_id}/artifacts/view/{path:path}")
 async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_user)):
@@ -121,8 +136,10 @@ async def view_html_artifact(chat_id: str, path: str, user=Depends(get_verified_
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only .html artifacts can be viewed",
         )
-    return FileResponse(
-        target, media_type="text/html; charset=utf-8", headers=HTML_VIEW_HEADERS
+    return StreamingResponse(
+        _html_with_fit_script(target),
+        media_type="text/html; charset=utf-8",
+        headers=HTML_VIEW_HEADERS,
     )
 
 
