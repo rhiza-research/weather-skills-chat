@@ -25,6 +25,12 @@ export const isHtmlArtifact = (path: string | null | undefined) =>
 
 /** Relative markdown hrefs point at this chat's sandbox. Absolute URLs do not. */
 export const artifactHrefForChat = (href: string, chatId: string | null | undefined) => {
+	const path = artifactPathForChat(href, chatId);
+	return path && chatId ? getArtifactContentUrl(chatId, path) : null;
+};
+
+/** The sandbox path a relative markdown href points at, or null. */
+export const artifactPathForChat = (href: string, chatId: string | null | undefined) => {
 	if (!chatId || chatId === 'local') return null;
 	let raw = (href || '').trim();
 	if (
@@ -45,7 +51,7 @@ export const artifactHrefForChat = (href: string, chatId: string | null | undefi
 	raw = raw.replace(/^\.\//, '').replace(/\\/g, '/');
 	if (!raw || raw === '.') return null;
 	if (raw.split('/').some((part) => part === '' || part === '..')) return null;
-	return getArtifactContentUrl(chatId, raw);
+	return raw;
 };
 
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
