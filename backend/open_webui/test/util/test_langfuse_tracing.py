@@ -153,10 +153,14 @@ class StartChatTraceTest(unittest.TestCase):
             form_data={"model": "gpt-4", "messages": []},
         )
 
-        mock_propagate.assert_called_once()
-        self.assertEqual(mock_propagate.call_args.kwargs["user_id"], "bob@example.com")
-        self.assertEqual(mock_propagate.call_args.kwargs["session_id"], "chat-1")
-        cm.__enter__.assert_called_once()
+        # Once around the root span, once for the spans the request starts later.
+        self.assertEqual(mock_propagate.call_count, 2)
+        for call in mock_propagate.call_args_list:
+            self.assertEqual(call.kwargs["user_id"], "bob@example.com")
+            self.assertEqual(call.kwargs["session_id"], "chat-1")
+        self.assertEqual(cm.__enter__.call_count, 2)
+        self.assertEqual(cm.__exit__.call_count, 1)
+        self.assertIs(lf._propagate_cm_var.get(), cm)
 
 
 class ScheduleStartChatTraceTest(unittest.TestCase):
@@ -181,13 +185,15 @@ class ScheduleStartChatTraceTest(unittest.TestCase):
 
         gate = threading.Event()
         trace = MagicMock()
-        cm = MagicMock()
+        attributes = {"user_id": "bob@example.com", "session_id": "chat-1"}
 
         def _create(**kwargs):
             gate.wait(timeout=1)
-            return trace, cm
+            return trace, attributes
 
-        with patch.object(lf, "_create_chat_trace", side_effect=_create):
+        with patch.object(lf, "_create_chat_trace", side_effect=_create), patch(
+            "langfuse.propagate_attributes", create=True
+        ) as mock_propagate:
             t0 = time.perf_counter()
             lf.schedule_start_chat_trace(
                 user=MagicMock(email="bob@example.com", id="uid-99"),
@@ -200,7 +206,80 @@ class ScheduleStartChatTraceTest(unittest.TestCase):
             pending = lf._pending_trace_var.get()
             self.assertTrue(pending.done.wait(timeout=1))
             self.assertIs(lf.current_trace(), trace)
-            cm.__enter__.assert_called_once()
+            mock_propagate.assert_called_once_with(**attributes)
+            mock_propagate.return_value.__enter__.assert_called_once()
+
+
+
+class ChatTurnUserAttributesTest(unittest.TestCase):
+    """The turn's own span carries the user and session, not only later spans.
+
+    Uses the real Langfuse SDK with an in-memory exporter. Since the trace moved
+    to a background thread (04db06c), the root span was started outside
+    propagate_attributes and had neither.
+    """
+
+    def setUp(self):
+        lf._trace_var.set(None)
+        lf._propagate_cm_var.set(None)
+        lf._pending_trace_var.set(None)
+        lf._generation_stack_var.set(None)
+
+    def _spans(self, start):
+        import time
+        from types import SimpleNamespace
+
+        from langfuse import Langfuse
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        from open_webui.utils import langfuse_tracing as lt
+
+        import uuid
+
+        exporter = InMemorySpanExporter()
+        # The SDK keeps one tracer per public key in a process; a fresh key
+        # gives this test its own exporter.
+        client = Langfuse(
+            public_key=f"pk-test-{uuid.uuid4().hex}",
+            secret_key="sk-test",
+            base_url="http://127.0.0.1:9",
+            span_exporter=exporter,
+            flush_at=1,
+        )
+        user = SimpleNamespace(id="u1", email="person@example.org")
+        metadata = {"chat_id": "chat-123", "message_id": "m1"}
+        form = {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+        with patch.object(lt, "get_client", return_value=client), patch.object(
+            lt, "tracing_enabled", return_value=True
+        ):
+            if start == "scheduled":
+                lt.schedule_start_chat_trace(user=user, metadata=metadata, form_data=form)
+                deadline = time.monotonic() + 5
+                pending = lt._pending_trace_var.get()
+                while not pending.done.is_set() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+            else:
+                lt.start_chat_trace(user=user, metadata=metadata, form_data=form)
+            lt.start_generation({"model": "m", "messages": []})
+            lt.end_generation(output="ok")
+            lt.end_chat_trace(output="done")
+        client.flush()
+        return {s.name: dict(s.attributes or {}) for s in exporter.get_finished_spans()}
+
+    def _assert_user_on_every_span(self, spans):
+        self.assertEqual(set(spans), {"weather-skills-chat", "llm"})
+        for name, attributes in spans.items():
+            with self.subTest(span=name):
+                self.assertEqual(attributes.get("user.id"), "person@example.org")
+                self.assertEqual(attributes.get("session.id"), "chat-123")
+
+    def test_background_trace(self):
+        self._assert_user_on_every_span(self._spans("scheduled"))
+
+    def test_trace_started_on_the_request(self):
+        self._assert_user_on_every_span(self._spans("sync"))
 
 
 if __name__ == "__main__":

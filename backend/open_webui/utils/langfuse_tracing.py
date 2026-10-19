@@ -47,11 +47,11 @@ _pending_trace_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
 
 
 class _PendingTrace:
-    __slots__ = ("trace", "cm", "done")
+    __slots__ = ("trace", "attributes", "done")
 
     def __init__(self):
         self.trace = None
-        self.cm = None
+        self.attributes = None
         self.done = threading.Event()
 
 
@@ -124,6 +124,23 @@ def _safe_call(fn: Callable, *args, **kwargs) -> Any:
         return None
 
 
+def _enter_propagate_attributes(attributes: Optional[dict]) -> None:
+    """Propagate the turn's user, session, tags and metadata to the spans this
+    context starts from now on (generations, tools). OpenTelemetry contexts
+    are per thread, so each context that starts spans enters its own."""
+    if not attributes:
+        return
+    try:
+        from langfuse import propagate_attributes
+
+        cm = propagate_attributes(**attributes)
+        cm.__enter__()
+    except Exception:
+        log.debug("Langfuse propagate_attributes enter failed", exc_info=True)
+        return
+    _propagate_cm_var.set(cm)
+
+
 def _exit_propagate_attributes() -> None:
     cm = _propagate_cm_var.get()
     if cm is None:
@@ -146,11 +163,8 @@ def _adopt_pending_trace(*, wait: bool = False, timeout: float = 5.0) -> None:
         return
     if pending.trace is None:
         return
-    cm = pending.cm
-    if cm is not None:
-        _safe_call(cm.__enter__)
-        _propagate_cm_var.set(cm)
-        pending.cm = None
+    _enter_propagate_attributes(pending.attributes)
+    pending.attributes = None
     _trace_var.set(pending.trace)
 
 
@@ -176,7 +190,9 @@ def _create_chat_trace(
     metadata: Optional[dict],
     form_data: Optional[dict],
     source: str = "chat",
-) -> tuple[Any, Any]:
+) -> tuple[Any, Optional[dict]]:
+    """Start the turn's root span. Returns it with the attributes to
+    propagate to the turn's later spans."""
     client = get_client()
     if not client:
         return None, None
@@ -209,22 +225,25 @@ def _create_chat_trace(
 
     from langfuse import propagate_attributes
 
-    cm = propagate_attributes(
-        user_id=_trace_user_id(user),
-        session_id=chat_id,
-        tags=tags,
-        metadata=trace_metadata,
-    )
-    trace = _safe_call(
-        client.start_observation,
-        name="weather-skills-chat",
-        as_type="span",
-        input=trace_input,
-        metadata=trace_metadata,
-    )
+    attributes = {
+        "user_id": _trace_user_id(user),
+        "session_id": chat_id,
+        "tags": tags,
+        "metadata": trace_metadata,
+    }
+    # Start the root span inside the propagation context, so the turn itself
+    # carries the user and session, not only the spans started after it.
+    with propagate_attributes(**attributes):
+        trace = _safe_call(
+            client.start_observation,
+            name="weather-skills-chat",
+            as_type="span",
+            input=trace_input,
+            metadata=trace_metadata,
+        )
     if trace is None:
         return None, None
-    return trace, cm
+    return trace, attributes
 
 
 def start_chat_trace(
@@ -234,13 +253,11 @@ def start_chat_trace(
     form_data: Optional[dict],
     source: str = "chat",
 ) -> Any:
-    trace, cm = _create_chat_trace(
+    trace, attributes = _create_chat_trace(
         user=user, metadata=metadata, form_data=form_data, source=source
     )
-    if cm is not None:
-        _safe_call(cm.__enter__)
-        _propagate_cm_var.set(cm)
     if trace is not None:
+        _enter_propagate_attributes(attributes)
         _trace_var.set(trace)
     return trace
 
@@ -265,7 +282,7 @@ def schedule_start_chat_trace(
 
     def _run():
         try:
-            pending.trace, pending.cm = _create_chat_trace(
+            pending.trace, pending.attributes = _create_chat_trace(
                 user=user,
                 metadata=snapshot_metadata,
                 form_data=snapshot_form,
