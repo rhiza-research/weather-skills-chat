@@ -17,6 +17,7 @@
 	import AlertRenderer, { alertComponent } from './AlertRenderer.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 	import ActivityLine from '$lib/components/chat/Messages/ActivityLine.svelte';
+	import { isInlineStatus } from '$lib/utils/activityStatus';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { decodeEntities } from '$lib/utils/entities';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
@@ -116,6 +117,16 @@
 		}
 		return idx;
 	})();
+	// The last activity row shows the live status only when nothing but
+	// whitespace follows it; otherwise the line under the message shows it.
+	$: activityStatus =
+		isInlineStatus(status) &&
+		lastActivityIdx >= 0 &&
+		displayTokens
+			.slice(lastActivityIdx + 1)
+			.every((t) => String(t?.raw ?? '').trim() === '')
+			? status
+			: null;
 
 	const headerComponent = (depth: number) => {
 		return 'h' + depth;
@@ -346,7 +357,7 @@
 			</ul>
 		{/if}
 	{:else if token.type === 'activity_group'}
-		<ActivityLine items={token.items} status={tokenIdx === lastActivityIdx ? status : null}>
+		<ActivityLine items={token.items} status={tokenIdx === lastActivityIdx ? activityStatus : null}>
 			{#each token.items as item, itemIdx}
 				{#if inActivityDropdown(item)}
 					<Collapsible

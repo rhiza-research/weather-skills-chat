@@ -119,6 +119,7 @@ WAITING_RESPONSE_INTERVAL_S = float(
     os.environ.get("WAITING_RESPONSE_HEARTBEAT_INTERVAL", "1")
 )
 
+PREPARING_TOOL_CALLS_ACTION = "preparing_tool_calls"
 GENERATION_HEARTBEAT_ACTION = "generation_heartbeat"
 GENERATION_HEARTBEAT_INTERVAL_S = float(
     os.environ.get("GENERATION_HEARTBEAT_INTERVAL", "5")
@@ -237,6 +238,52 @@ class WaitingResponseHeartbeat:
                 pass
         if clear and was_active and not self._cleared:
             self._cleared = True
+            await self._emit(done=True)
+
+
+class PreparingToolCallsStatus(WaitingResponseHeartbeat):
+    """Shown while the model streams tool-call arguments.
+
+    Tool cards appear only once the whole response has arrived, and a turn with
+    many calls can take several seconds to write them; nothing else is on screen
+    then. The count is unknown until the stream ends, so this shows a timer.
+    """
+
+    def __init__(self, event_emitter):
+        super().__init__(event_emitter)
+        self._shown = False
+
+    async def start(self):
+        await super().start()
+        self._shown = self._active
+
+    async def _emit(self, done: bool):
+        if not self.event_emitter:
+            return
+        elapsed = int(time.time() - (self._started_at or time.time()))
+        data = {
+            "action": PREPARING_TOOL_CALLS_ACTION,
+            "description": f"Preparing tool calls… ({elapsed}s)",
+            "done": done,
+        }
+        if done:
+            data["hidden"] = True
+        try:
+            await self.event_emitter({"type": "status", "data": data})
+        except Exception:
+            log.debug("preparing_tool_calls status emit failed", exc_info=True)
+
+    async def finish(self):
+        """The stream ended: stop counting, but leave the line up until the
+        tool cards replace it."""
+        await self.stop(clear=False)
+
+    async def clear(self):
+        """Hide the line once (the tool cards are on screen, or the turn ended)."""
+        await self.stop(clear=False)
+        if self._shown and not self._cleared:
+            self._cleared = True
+            self._shown = False
             await self._emit(done=True)
 
 
@@ -2136,6 +2183,7 @@ async def process_chat_response(
 
             generation_heartbeat = GenerationHeartbeat(event_emitter)
             await generation_heartbeat.start()
+            preparing_tool_calls = PreparingToolCallsStatus(event_emitter)
 
             try:
                 for event in events:
@@ -2264,6 +2312,38 @@ async def process_chat_response(
                                             )
                                         ):
                                             await heartbeat.mark_activity()
+
+                                        if (
+                                            delta_tool_calls
+                                            and not preparing_tool_calls.is_active
+                                            and not response_tool_calls
+                                        ):
+                                            # The model is writing tool calls;
+                                            # say so instead of going quiet.
+                                            # Thinking is over by now, so close
+                                            # it rather than leave it spinning.
+                                            if (
+                                                content_blocks
+                                                and content_blocks[-1].get("type")
+                                                == "reasoning"
+                                                and content_blocks[-1].get("ended_at")
+                                                is None
+                                            ):
+                                                close_open_reasoning_block(
+                                                    content_blocks
+                                                )
+                                                await event_emitter(
+                                                    {
+                                                        "type": "chat:completion",
+                                                        "data": {
+                                                            "content": serialize_content_blocks(
+                                                                content_blocks
+                                                            )
+                                                        },
+                                                    }
+                                                )
+                                            await heartbeat.stop(clear=False)
+                                            await preparing_tool_calls.start()
 
                                         if delta_tool_calls:
                                             for delta_tool_call in delta_tool_calls:
@@ -2489,6 +2569,10 @@ async def process_chat_response(
                         # Keep "Waiting for model…" up until tool cards (or the
                         # runner wait) replace it. Clearing here is the empty gap.
                         await heartbeat.stop(clear=not response_tool_calls)
+                        if response_tool_calls:
+                            await preparing_tool_calls.finish()
+                        else:
+                            await preparing_tool_calls.clear()
 
                 await stream_body_handler(response)
                 close_open_reasoning_block(content_blocks)
@@ -2557,6 +2641,7 @@ async def process_chat_response(
                             pass
                     if waiting_heartbeat is not None:
                         await waiting_heartbeat.stop(clear=True)
+                    await preparing_tool_calls.clear()
 
                     tools = metadata.get("tools", {})
 
@@ -3197,6 +3282,7 @@ async def process_chat_response(
                     log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
+                await preparing_tool_calls.clear()
                 await generation_heartbeat.stop(clear=True)
 
             if response.background is not None:
