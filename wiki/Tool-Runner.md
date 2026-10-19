@@ -14,6 +14,8 @@ When a k8s tool runner is on (a real runner or the local emulator), an open save
 
 If a skill is called before the runner is ready — the first send, after the ten-minute idle stop, after a runner died, or while no runner pod is available — the assistant keeps **Waiting for model…** (or switches to **Waiting on weather skills runner**) until a runner is ready. A runner is ready once it is claimed for the chat, the chat's files are connected to it, and the organization's skills are copied onto it. Each of those steps is tried again while waiting, up to a time limit (`SKILL_K8S_START_TIMEOUT_SECONDS`). Skill calls are not listed while the runner is paused or still starting. When it is ready, that same line updates to the skill that is running. If no runner is ready within the limit, the skill fails with an error asking to try again.
 
+While the model is still writing its tool calls, the assistant shows **Preparing tool calls… (Ns)**, counting the seconds. The tool calls appear once the model has finished writing all of them, which can take several seconds for a batch of parallel calls; how many there are is not known until then.
+
 A running skill keeps the runner for at least that skill's run timeout (see [[Skill Packs]]), even if the runner was already ready. The model can set a longer `timeout` on a call, up to 30 minutes. A skill still running at its timeout is stopped on the runner, along with everything it started, and the model is told it did not finish within its timeout and can retry with a larger timeout or less work. Pressing Stop in the chat also stops the skill on the runner, not just the wait for it. After the last skill, the runner still stops after ten minutes idle.
 
 ## Logs
