@@ -372,6 +372,11 @@ RUNNER_OOM_MESSAGE = (
     "Retry with less work at once, for example fewer skills in parallel or a "
     "smaller time range or region."
 )
+# Evicted for something other than memory (for example its node's disk).
+RUNNER_EVICTED_MESSAGE = (
+    "Tool call failed: Kubernetes evicted the tool runner{detail}. "
+    "A new runner will be started. Please try again."
+)
 RUNNER_UNREACHABLE_MESSAGE = (
     "Sending request to tool runner failed, runner may be overloaded. "
     "Please try fewer tool calls at once or try again momentarily."
@@ -470,17 +475,6 @@ def _pod_ref(claim: dict) -> Optional[str]:
     status = claim.get("status") or {}
     ref = status.get("sandbox") or status.get("sandboxRef") or status.get("podRef") or {}
     return ref.get("name") or status.get("podName")
-
-
-async def wait_ready(chat_id: str, timeout: float = 180) -> dict:
-    deadline = time.monotonic() + timeout
-    last = None
-    while time.monotonic() < deadline:
-        last = await get_claim(chat_id)
-        if last and _claim_ready(last) and _pod_ref(last):
-            return last
-        await asyncio.sleep(1.5)
-    raise TimeoutError("Tool runner did not become ready in time")
 
 
 async def get_pod(name: str) -> dict:
@@ -784,14 +778,26 @@ async def _runner_alive(info: Optional[dict]) -> bool:
 
 
 async def _claim_runner_alive(claim: dict) -> bool:
-    """True if this claim is still starting, or its runner is alive."""
-    if not _claim_ready(claim):
-        return True
+    """True if this claim is still starting, or its runner is alive.
+
+    The pod is checked before the claim's readiness: Agent Sandbox marks a
+    claim not ready when its pod is evicted, but never replaces that pod, so
+    "not ready" alone would wait on a dead runner until the claim's TTL.
+    """
     pod_name = _pod_ref(claim)
+    if not pod_name:
+        return True  # no runner assigned yet
     try:
         pod = await get_pod(pod_name)
     except Exception as exc:
-        return "404" not in str(exc)
+        if "404" in str(exc):
+            # A starting claim can name its pod before the pod exists.
+            return not _claim_ready(claim)
+        return True  # an API error is not a verdict
+    if _pod_gone_for_good(pod):
+        return False
+    if not _claim_ready(claim):
+        return True
     pod_ip = (pod.get("status") or {}).get("podIP")
     if not pod_ip:
         return _pod_ready(pod)
@@ -812,6 +818,10 @@ async def _adopt_or_replace_claim(chat_id: str) -> dict:
     if meta.get("deletionTimestamp"):
         raise _NotYet("previous tool runner is still shutting down")
     if await _claim_runner_alive(claim):
+        if not _claim_ready(claim):
+            # Still starting: its TTL was set at create. Extending a claim
+            # that is not ready would keep a stuck one alive on every retry.
+            return claim
         try:
             return await extend_claim_ttl(claim)
         except Exception:
@@ -1080,12 +1090,16 @@ async def _run_start(chat_id: str) -> dict:
         _drop_runner(chat_id)
     deadline = time.monotonic() + _start_timeout_seconds()
     try:
-        await _until(deadline, "claim", lambda: _adopt_or_replace_claim(chat_id))
-        try:
-            claim = await wait_ready(chat_id, timeout=max(1.0, deadline - time.monotonic()))
-        except TimeoutError as exc:
-            log.warning("tool runner start gave up waiting for a ready claim chat=%s", chat_id)
-            raise RunnerUnavailableError() from exc
+
+        async def claimed() -> dict:
+            # Every pass re-checks the claim, so a runner that dies while
+            # this start waits (evicted, OOM) is replaced, not waited on.
+            claim = await _adopt_or_replace_claim(chat_id)
+            if _claim_ready(claim) and _pod_ref(claim):
+                return claim
+            raise _NotYet("tool runner is not ready yet")
+
+        claim = await _until(deadline, "ready claim", claimed)
         pod_name = _pod_ref(claim)
 
         async def bind() -> dict:
@@ -1199,7 +1213,8 @@ async def runner_status(chat_id: str) -> dict:
 
     ready: answering /health (or Ready and only briefly silent).
     degraded: answers /health with an error (503), its bound pod is NotReady,
-      or Ready but silent for DEGRADED_AFTER_NO_ANSWER_SEC.
+      or Ready but silent for DEGRADED_AFTER_NO_ANSWER_SEC; or its pod was
+      evicted or is being deleted, until its claim is released.
     starting: a start is in flight, or a claimed runner is not bound yet.
     absent (paused): no claim, or the claim is being deleted.
 
@@ -1228,6 +1243,10 @@ async def runner_status(chat_id: str) -> dict:
         _no_answer_since.pop(chat_id, None)
         return {"state": "absent"}
     pod = await _pod_or_none(_pod_ref(claim))
+    if pod is not None and _pod_gone_for_good(pod):
+        # Evicted or being deleted, bound or not: it will not come back, so
+        # it is not starting. Paused once its claim is released.
+        return {"state": "degraded", "claim": name}
     annotations = ((pod or {}).get("metadata") or {}).get("annotations") or {}
     bound = pod is not None and annotations.get(BOUND_ANN) == chat_id
     if bound and not _pod_ready(pod):
@@ -1298,13 +1317,29 @@ def _pod_dead(pod: dict) -> bool:
     )
 
 
+def _pod_gone_for_good(pod: dict) -> bool:
+    """Evicted, completed, or being deleted: this runner will not come back.
+
+    Agent Sandbox never replaces such a pod. Narrower than _pod_dead: a
+    container that is terminated only until the kubelet restarts it (after an
+    OOM kill) does not count.
+    """
+    if (pod.get("metadata") or {}).get("deletionTimestamp"):
+        return True
+    return (pod.get("status") or {}).get("phase") in ("Failed", "Succeeded")
+
+
+def _eviction_detail(message: str) -> str:
+    return f" (evicted: {message.strip()[:200]})"
+
+
 def _oom_detail(pod: dict) -> Optional[str]:
     """' (<detail>)' when the runner pod ran out of memory, else None."""
     status = pod.get("status") or {}
     if status.get("reason") == "Evicted":
         message = status.get("message") or ""
         if "memory" in message.lower():
-            return f" (evicted: {message.strip()[:200]})"
+            return _eviction_detail(message)
     for container in status.get("containerStatuses") or []:
         for key in ("state", "lastState"):
             terminated = (container.get(key) or {}).get("terminated") or {}
@@ -1313,28 +1348,78 @@ def _oom_detail(pod: dict) -> Optional[str]:
     return None
 
 
+async def _eviction_event(pod: dict) -> Optional[str]:
+    """The message of this pod's Evicted event, if the kubelet has evicted it.
+
+    The kubelet records the event when it decides to evict, before it kills
+    the runner. The pod itself reads Evicted only after the kill, which under
+    gVisor can take more than ten seconds.
+    """
+    uid = (pod.get("metadata") or {}).get("uid")
+    if not uid:
+        return None
+    selector = quote(f"involvedObject.uid={uid},reason=Evicted", safe="=,")
+    try:
+        events = await _k8s("GET", f"/api/v1/namespaces/{_ns()}/events?fieldSelector={selector}")
+    except Exception:
+        log.debug("eviction event lookup failed pod=%s", uid, exc_info=True)
+        return None
+    for event in events.get("items") or []:
+        message = event.get("message") or event.get("note") or ""
+        if message:
+            return message
+    return None
+
+
+# How long a tool call whose runner stopped answering waits for Kubernetes to
+# say why (OOM kill, eviction) before telling the model it may be overloaded.
+LOST_RUNNER_VERDICT_SEC = 15.0
+LOST_RUNNER_POLL_SEC = 1.0
+
+
+def _lost_runner_verdict_seconds() -> float:
+    return LOST_RUNNER_VERDICT_SEC
+
+
 async def _lost_exec_message(chat_id: str, info: dict) -> str:
     """What the model is told when the request to the runner failed.
 
-    A pod that is gone, terminated, or already being deleted (for example by
-    the in-flight watcher) died. Otherwise only an explicit unhealthy /health
-    answer deletes its claim; a runner that is still up is kept (it is most
-    likely overloaded), and a dead one is replaced by the Kubernetes readiness
-    check or the next tool call's check.
+    Out of memory (OOM kill, or a memory eviction) says so; a pod that is
+    gone, terminated, or being deleted died; a runner answering /health with
+    an error is replaced. Kubernetes can take a few seconds to record why a
+    runner went away, so a runner that neither answers nor has a verdict is
+    asked again until LOST_RUNNER_VERDICT_SEC, then called overloaded and
+    kept. Only a 503 deletes the claim here. A dead runner's claim is released
+    by the lifecycle controller or replaced by the next start; until then the
+    top bar reads degraded.
     """
-    try:
-        pod = await get_pod(info["pod_name"])
-    except Exception as exc:
-        return RUNNER_DIED_MESSAGE if "404" in str(exc) else RUNNER_UNREACHABLE_MESSAGE
-    detail = _oom_detail(pod)
-    if detail:
-        return RUNNER_OOM_MESSAGE.format(detail=detail)
-    if _pod_dead(pod):
-        return RUNNER_DIED_MESSAGE
-    if await _runner_health(info) == HEALTH_UNHEALTHY:
-        await _delete_unhealthy_runner(chat_id, info)
-        return RUNNER_DIED_MESSAGE
-    return RUNNER_UNREACHABLE_MESSAGE
+    deadline = time.monotonic() + _lost_runner_verdict_seconds()
+    while True:
+        try:
+            pod = await get_pod(info["pod_name"])
+        except Exception as exc:
+            if "404" in str(exc):
+                return RUNNER_DIED_MESSAGE
+            pod = None
+        if pod is not None:
+            detail = _oom_detail(pod)
+            if not detail:
+                evicted = await _eviction_event(pod)
+                if evicted:
+                    detail = _eviction_detail(evicted)
+                    if "memory" not in evicted.lower():
+                        return RUNNER_EVICTED_MESSAGE.format(detail=detail)
+            if detail:
+                return RUNNER_OOM_MESSAGE.format(detail=detail)
+            if _pod_dead(pod):
+                return RUNNER_DIED_MESSAGE
+        health = await _runner_health(info)
+        if health == HEALTH_UNHEALTHY:
+            await _delete_unhealthy_runner(chat_id, info)
+            return RUNNER_DIED_MESSAGE
+        if health == HEALTH_OK or time.monotonic() >= deadline:
+            return RUNNER_UNREACHABLE_MESSAGE
+        await asyncio.sleep(LOST_RUNNER_POLL_SEC)
 
 
 def _same_runner(a: Optional[dict], b: Optional[dict]) -> bool:
