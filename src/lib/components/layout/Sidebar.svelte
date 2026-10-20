@@ -660,9 +660,13 @@
 					event.preventDefault();
 					selectedChatId = null;
 					await goto('/');
-					const newChatButton = document.getElementById('new-chat-button');
+					// goto resolves without arriving when a later click (a chat link) takes over the
+					// navigation. The new-chat button found then is that chat page's, and clicking it
+					// empties the chat the reader just opened.
+					if (location.pathname !== '/') return;
 					setTimeout(() => {
-						newChatButton?.click();
+						if (location.pathname !== '/') return;
+						document.getElementById('new-chat-button')?.click();
 						if ($mobile) {
 							showSidebar.set(false);
 						}

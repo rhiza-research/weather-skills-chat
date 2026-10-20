@@ -25,6 +25,11 @@ test('deleting a message in a temporary chat does not POST history', async ({ pa
 	await input.press('Enter');
 	const userLine = page.getByText('throwaway prompt').first();
 	await expect(userLine).toBeVisible({ timeout: 10_000 });
+	// The failed reply raises a toast over the top of the transcript. If it lands on the pointer,
+	// the message loses hover, its hover-only Delete hides, and the toast pauses its own timeout.
+	const failureToast = page.locator('[data-sonner-toast]', { hasText: 'nope' });
+	await expect(failureToast).toBeVisible({ timeout: 10_000 });
+	await expect(failureToast).toHaveCount(0, { timeout: 10_000 });
 	await userLine.hover();
 	const del = page.getByRole('button', { name: /^delete$/i }).first();
 	await expect(del).toBeVisible({ timeout: 10_000 });
