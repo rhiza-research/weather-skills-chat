@@ -5,27 +5,43 @@ import { emitChatTurn } from '../../helpers';
 const LINE = 'paragraph 40';
 /** One 480px panel plus markdown chrome. A lost position is thousands of pixels. */
 const TILE = 640;
+const PLACE_TOLERANCE = 3; // px a placed target may sit from the requested offset
+const MAX_WHEELS = 3; // wheel calls per placement before the assertion reports the miss
+
+/**
+ * Scroll the pane with mouse wheel input until `read` reports `top`. Chat.svelte's `on:scroll`
+ * handler ignores scroll events while `pinningScroll` is held after each pin to the bottom, so a
+ * `scrollTop` write can be lost. A wheel event reaches `leaveTailFromUser`, which leaves the tail
+ * before the scroll applies.
+ */
+async function wheelTo(
+	page: Page,
+	label: string,
+	read: () => Promise<number | null>,
+	top: number
+) {
+	const pane = await page.locator('#messages-container').boundingBox();
+	if (!pane) throw new Error('messages container missing');
+	await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2);
+	let offset = await read();
+	if (offset == null) offset = await waitForStableOffset(page, read);
+	for (
+		let wheel = 0;
+		wheel < MAX_WHEELS && offset != null && Math.abs(offset - top) >= PLACE_TOLERANCE;
+		wheel += 1
+	) {
+		await page.mouse.wheel(0, offset - top);
+		offset = await waitForStableOffset(page, read);
+	}
+	expect(offset, `${label} is not in the pane`).not.toBeNull();
+	expect(
+		Math.abs((offset ?? 0) - top),
+		`${label} is at ${offset}px, wanted ${top}px`
+	).toBeLessThan(PLACE_TOLERANCE);
+}
 
 async function placeLine(page: Page, text: string, top: number) {
-	await page.evaluate(
-		({ text, top }) => {
-			const container = document.getElementById('messages-container');
-			if (!container) throw new Error('messages container missing');
-			const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-			let node: Node | null;
-			while ((node = walker.nextNode())) {
-				if (!node.textContent?.includes(text)) continue;
-				const range = document.createRange();
-				range.selectNodeContents(node);
-				const rect = range.getBoundingClientRect();
-				const box = container.getBoundingClientRect();
-				container.scrollTop += rect.top - box.top - top;
-				return;
-			}
-			throw new Error(`missing text ${text}`);
-		},
-		{ text, top }
-	);
+	await wheelTo(page, text, () => lineOffset(page, text), top);
 }
 
 async function lineOffset(page: Page, text: string) {
@@ -45,31 +61,11 @@ async function lineOffset(page: Page, text: string) {
 }
 
 async function placeImage(page: Page, alt: string, top: number) {
-	await page.evaluate(
-		({ alt, top }) => {
-			const container = document.getElementById('messages-container');
-			const image = container?.querySelector<HTMLElement>(`img[alt="${alt}"]`);
-			if (!container || !image) throw new Error(`missing image ${alt}`);
-			const rect = image.getBoundingClientRect();
-			const box = container.getBoundingClientRect();
-			container.scrollTop += rect.top - box.top - top;
-		},
-		{ alt, top }
-	);
+	await wheelTo(page, alt, () => imageOffset(page, alt), top);
 }
 
 async function placeImageAt(page: Page, index: number, top: number) {
-	await page.evaluate(
-		({ index, top }) => {
-			const container = document.getElementById('messages-container');
-			const image = container?.querySelectorAll<HTMLElement>('img[alt="panel"]')[index];
-			if (!container || !image) throw new Error(`missing panel ${index}`);
-			const rect = image.getBoundingClientRect();
-			const box = container.getBoundingClientRect();
-			container.scrollTop += rect.top - box.top - top;
-		},
-		{ index, top }
-	);
+	await wheelTo(page, `panel ${index}`, () => imageOffsetAt(page, index), top);
 }
 
 async function imageOffsetAt(page: Page, index: number) {
