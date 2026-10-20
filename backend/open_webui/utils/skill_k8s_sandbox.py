@@ -396,6 +396,13 @@ RUNNER_FAILURE_GUIDANCE = (
     "the call: first simply retry the same call, and only lower the amount of "
     "work if it fails again."
 )
+# Also added to the system prompt, with the limits read from the runner's
+# SandboxTemplate (runner_resources_guidance), so it follows the infra chart.
+RUNNER_RESOURCES_GUIDANCE = (
+    "The tool runner has {cpus} and {memory} of memory, shared by all tool "
+    "calls running at once. Please split and/or parallelize work as "
+    "appropriate to fit within those limits."
+)
 RUNTIME_PROBE_TIMEOUT_SEC = 2
 # A start that failed this recently is returned to new callers instead of
 # starting again, so one tool-call turn waits through one start, not several.
@@ -469,6 +476,98 @@ async def _emit_waiting(emitter, done: bool) -> None:
     if done:
         data["hidden"] = True
     await emitter({"type": "status", "data": data})
+
+
+def _template_name() -> str:
+    # The chart names the warm pool and its SandboxTemplate the same.
+    return _env("SKILL_K8S_SANDBOX_TEMPLATE") or _pool()
+
+
+_BINARY_SUFFIXES = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40}
+_DECIMAL_SUFFIXES = {"k": 10**3, "M": 10**6, "G": 10**9, "T": 10**12}
+
+
+def _cpu_cores(quantity) -> Optional[float]:
+    """A Kubernetes CPU quantity ("3", "2.5", "3000m") in cores."""
+    raw = str(quantity or "").strip()
+    try:
+        if raw.endswith("m"):
+            return float(raw[:-1]) / 1000
+        return float(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _memory_gib(quantity) -> Optional[float]:
+    """A Kubernetes memory quantity ("8Gi", "3686Mi", "8G", bytes) in GiB."""
+    raw = str(quantity or "").strip()
+    try:
+        for suffixes in (_BINARY_SUFFIXES, _DECIMAL_SUFFIXES):
+            for suffix, scale in suffixes.items():
+                if raw.endswith(suffix):
+                    return float(raw[: -len(suffix)]) * scale / 2**30
+        return float(raw) / 2**30 if raw else None
+    except ValueError:
+        return None
+
+
+def _runner_limits(template: dict) -> Optional[tuple[float, float]]:
+    """(CPU cores, memory GiB) limits of the runner container in a SandboxTemplate."""
+    pod = ((template.get("spec") or {}).get("podTemplate") or {}).get("spec") or {}
+    containers = pod.get("containers") or []
+    runner = next((c for c in containers if c.get("name") == "runner"), None)
+    if runner is None and containers:
+        runner = containers[0]
+    limits = ((runner or {}).get("resources") or {}).get("limits") or {}
+    cpus, memory = _cpu_cores(limits.get("cpu")), _memory_gib(limits.get("memory"))
+    if not cpus or not memory:
+        return None
+    return cpus, memory
+
+
+def _amount(value: float) -> str:
+    return str(int(value)) if value == int(value) else f"{value:.1f}"
+
+
+# The prompt line is read once per this long; a failed read is retried sooner.
+RUNNER_LIMITS_CACHE_SEC = 300
+RUNNER_LIMITS_RETRY_SEC = 60
+# Short: this runs before every model call while the tool runner is on.
+RUNNER_LIMITS_TIMEOUT_SEC = 3
+_runner_limits_cache: Optional[tuple[float, float, Optional[str]]] = None
+
+
+async def runner_resources_guidance() -> Optional[str]:
+    """The system-prompt line with the runner's CPU and memory limits.
+
+    Read from the runner's SandboxTemplate, so it matches what the infra chart
+    deploys in each environment. None (no line) when it cannot be read.
+    """
+    global _runner_limits_cache
+    now = time.monotonic()
+    if _runner_limits_cache is not None:
+        read_at, ttl, text = _runner_limits_cache
+        if now - read_at < ttl:
+            return text
+    text = None
+    try:
+        template = await _k8s(
+            "GET", _crd("sandboxtemplates", _template_name()), timeout=RUNNER_LIMITS_TIMEOUT_SEC
+        )
+        limits = _runner_limits(template)
+        if limits:
+            cpus, memory = limits
+            text = RUNNER_RESOURCES_GUIDANCE.format(
+                cpus=f"{_amount(cpus)} CPU core{'' if cpus == 1 else 's'}",
+                memory=f"{_amount(round(memory, 1))} GiB",
+            )
+        else:
+            log.warning("runner template %s has no cpu/memory limits", _template_name())
+    except Exception as exc:
+        log.warning("runner limits unavailable template=%s: %s", _template_name(), exc)
+    ttl = RUNNER_LIMITS_CACHE_SEC if text else RUNNER_LIMITS_RETRY_SEC
+    _runner_limits_cache = (now, ttl, text)
+    return text
 
 
 def _pod_ref(claim: dict) -> Optional[str]:
