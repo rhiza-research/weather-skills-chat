@@ -1739,8 +1739,9 @@ def _runner_failed_result(message: str, script_path: Path, workspace: str, args:
     }
 
 
-# Key on a run_skill_on_runner result holding the skill's CPU, peak memory and run time.
-TOOL_RUNNER_USAGE_KEY = "tool_runner_usage"
+# Key on a run_skill_on_runner result holding the skill's CPU, peak memory and
+# run time. The model sees it in the result; the tool observation gets the same.
+TOOL_RESOURCE_USAGE_KEY = "tool_resource_usage"
 _USAGE_FIELDS = ("cpu_seconds", "peak_memory_bytes", "run_seconds")
 
 
@@ -1768,7 +1769,7 @@ def _runner_usage(reply: dict) -> Optional[dict]:
 def _with_usage(out: dict, reply: dict) -> dict:
     usage = _runner_usage(reply)
     if usage:
-        out[TOOL_RUNNER_USAGE_KEY] = usage
+        out[TOOL_RESOURCE_USAGE_KEY] = usage
     return out
 
 
@@ -1884,7 +1885,10 @@ async def run_skill_on_runner(
             result.get("exit_code"),
         )
         await _delete_unhealthy_runner(chat_id, info)
-        return _runner_failed_result(RUNNER_DIED_MESSAGE, script_path, workspace, args)
+        return _with_usage(
+            _runner_failed_result(RUNNER_DIED_MESSAGE, script_path, workspace, args),
+            result,
+        )
     log.info(
         "skill exec done chat=%s script=%s runner=%s elapsed=%.2fs exit=%s",
         chat_id,

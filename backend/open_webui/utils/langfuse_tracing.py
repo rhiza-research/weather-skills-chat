@@ -22,7 +22,7 @@ from open_webui.env import (
     LANGFUSE_PUBLIC_KEY,
     LANGFUSE_SECRET_KEY,
 )
-from open_webui.utils.skill_k8s_sandbox import TOOL_RUNNER_USAGE_KEY
+from open_webui.utils.skill_k8s_sandbox import TOOL_RESOURCE_USAGE_KEY
 
 log = logging.getLogger(__name__)
 
@@ -439,15 +439,15 @@ def start_tool_observation(name: str, params: Any) -> Any:
     )
 
 
-def pop_tool_runner_usage(result: Any) -> Optional[dict]:
-    """Take the usage off a tool runner result so the model never sees it.
+def tool_resource_usage_metadata(result: Any) -> Optional[dict]:
+    """A tool runner result's usage, under the same key, for its tool observation.
 
-    Other tools' results are returned untouched, even when they carry the same key.
+    Other tools' results give None, even when they carry the same key.
     """
     if not isinstance(result, dict) or result.get("tool_runner") is not True:
         return None
-    usage = result.pop(TOOL_RUNNER_USAGE_KEY, None)
-    return usage if isinstance(usage, dict) else None
+    usage = result.get(TOOL_RESOURCE_USAGE_KEY)
+    return {TOOL_RESOURCE_USAGE_KEY: usage} if isinstance(usage, dict) else None
 
 
 def end_tool_observation(

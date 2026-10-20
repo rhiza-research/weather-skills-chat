@@ -89,8 +89,8 @@ from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
     end_tool_observation,
     observe_stream_and_end_trace,
-    pop_tool_runner_usage,
     start_tool_observation,
+    tool_resource_usage_metadata,
 )
 
 from open_webui.config import (
@@ -591,10 +591,11 @@ async def chat_completion_tools_handler(
                         try:
                             tool_function = tool["callable"]
                             tool_result = await tool_function(**exec_params)
-                            runner_usage = pop_tool_runner_usage(tool_result)
                             tool_result = redact_secrets(tool_result, used_secrets)
                             end_tool_observation(
-                                lf_tool, output=tool_result, metadata=runner_usage
+                                lf_tool,
+                                output=tool_result,
+                                metadata=tool_resource_usage_metadata(tool_result),
                             )
                         except asyncio.CancelledError:
                             end_tool_observation(lf_tool, error="cancelled")
@@ -2734,14 +2735,15 @@ async def process_chat_response(
                                     try:
                                         tool_function = tool["callable"]
                                         tool_result = await tool_function(**exec_params)
-                                        runner_usage = pop_tool_runner_usage(tool_result)
                                         tool_result = redact_secrets(
                                             tool_result, used_secrets
                                         )
                                         end_tool_observation(
                                             lf_tool,
                                             output=tool_result,
-                                            metadata=runner_usage,
+                                            metadata=tool_resource_usage_metadata(
+                                                tool_result
+                                            ),
                                         )
                                     except asyncio.CancelledError:
                                         end_tool_observation(lf_tool, error="cancelled")

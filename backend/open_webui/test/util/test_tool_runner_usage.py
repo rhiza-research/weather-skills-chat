@@ -1,4 +1,4 @@
-"""Tool runner usage reaches the tool's Langfuse observation, never the model."""
+"""Tool runner usage reaches the model and the tool's Langfuse observation with the same values."""
 
 import json
 import unittest
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from starlette.responses import StreamingResponse
 
 import open_webui.utils.middleware as mw
-from open_webui.utils.skill_k8s_sandbox import TOOL_RUNNER_USAGE_KEY
+from open_webui.utils.skill_k8s_sandbox import TOOL_RESOURCE_USAGE_KEY
 
 USAGE = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
 SPAN = object()
@@ -20,7 +20,7 @@ async def run_x():
         "ok": True,
         "stdout": "skill finished",
         "tool_runner": True,
-        TOOL_RUNNER_USAGE_KEY: dict(USAGE),
+        TOOL_RESOURCE_USAGE_KEY: dict(USAGE),
     }
 
 
@@ -84,7 +84,7 @@ def _patch_common(stack: ExitStack) -> MagicMock:
 
 
 class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
-    async def test_usage_goes_to_the_span_and_not_the_model(self):
+    async def test_model_and_span_get_the_same_usage(self):
         followups = []
 
         async def followup(request, form_data, user):
@@ -183,19 +183,22 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
             m for m in followups[0]["messages"] if m.get("role") == "tool"
         ]
         self.assertEqual(len(tool_messages), 1)
-        content = json.dumps(tool_messages[0]["content"])
-        self.assertIn("skill finished", content)
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, content)
-        self.assertNotIn("cpu_seconds", content)
+        content = json.loads(tool_messages[0]["content"])
+        self.assertEqual(content["stdout"], "skill finished")
+        self.assertEqual(content[TOOL_RESOURCE_USAGE_KEY], USAGE)
 
         end_obs.assert_called_once()
         self.assertIs(end_obs.call_args.args[0], SPAN)
-        self.assertEqual(end_obs.call_args.kwargs["metadata"], USAGE)
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, end_obs.call_args.kwargs["output"])
+        self.assertEqual(
+            end_obs.call_args.kwargs["metadata"], {TOOL_RESOURCE_USAGE_KEY: USAGE}
+        )
+        self.assertEqual(
+            end_obs.call_args.kwargs["output"][TOOL_RESOURCE_USAGE_KEY], USAGE
+        )
 
 
 class NonNativeToolHandlerTest(unittest.IsolatedAsyncioTestCase):
-    async def test_usage_goes_to_the_span_and_not_the_model(self):
+    async def test_model_and_span_get_the_same_usage(self):
         request = MagicMock()
         request.app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE = ""
         body = {"model": "m", "messages": [{"role": "user", "content": "run it"}]}
@@ -222,14 +225,15 @@ class NonNativeToolHandlerTest(unittest.IsolatedAsyncioTestCase):
                 TOOLS,
             )
 
-        sent = json.dumps(body["messages"])
-        self.assertIn("skill finished", sent)
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, sent)
-        self.assertNotIn("cpu_seconds", sent)
+        sent = json.loads(body["messages"][-1]["content"].split("Output: ", 1)[1])
+        self.assertEqual(sent["stdout"], "skill finished")
+        self.assertEqual(sent[TOOL_RESOURCE_USAGE_KEY], USAGE)
 
         end_obs.assert_called_once()
         self.assertIs(end_obs.call_args.args[0], SPAN)
-        self.assertEqual(end_obs.call_args.kwargs["metadata"], USAGE)
+        self.assertEqual(
+            end_obs.call_args.kwargs["metadata"], {TOOL_RESOURCE_USAGE_KEY: USAGE}
+        )
 
 
 if __name__ == "__main__":

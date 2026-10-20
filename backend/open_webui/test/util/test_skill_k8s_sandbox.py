@@ -7,7 +7,7 @@ from open_webui.utils.skill_k8s_sandbox import (
     PACKS_ANN,
     RUNNER_HOLD_BUFFER_SEC,
     RUNNER_UV_CACHE_DIR,
-    TOOL_RUNNER_USAGE_KEY,
+    TOOL_RESOURCE_USAGE_KEY,
     WAITING_STATUS,
     _runner_log_name,
     _http_failure,
@@ -689,7 +689,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
     def tearDown(self):
         _drop_runner("chat-1")
 
-    async def _run(self, reply=None, error=None):
+    async def _run(self, reply=None, error=None, health="ok"):
         async def ensure(chat_id, *, emitter=None):
             return {"pod_ip": "10.0.0.1", "pod_name": "ready"}
 
@@ -709,6 +709,11 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
             "open_webui.utils.skill_k8s_sandbox.get_pod",
             AsyncMock(side_effect=RuntimeError("404")),
         ), patch(
+            "open_webui.utils.skill_k8s_sandbox._runner_health",
+            AsyncMock(return_value=health),
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.delete_claim", AsyncMock()
+        ), patch(
             "open_webui.utils.skill_k8s_sandbox.remote_script_path",
             return_value="/workspace/.skill-packs/x/script.py",
         ):
@@ -727,7 +732,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
         result = await self._run(
             {"exit_code": 0, "stdout": "ok", "stderr": "", **self.USAGE}
         )
-        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], self.USAGE)
+        self.assertEqual(result[TOOL_RESOURCE_USAGE_KEY], self.USAGE)
         self.assertTrue(result["tool_runner"])
         self.assertNotIn("cpu_seconds", result)
 
@@ -736,19 +741,27 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
             {"exit_code": -1, "stdout": "", "stderr": "timed out", **self.USAGE}
         )
         self.assertFalse(result["ok"])
-        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], self.USAGE)
+        self.assertEqual(result[TOOL_RESOURCE_USAGE_KEY], self.USAGE)
+
+    async def test_failed_skill_on_an_unhealthy_runner_keeps_usage(self):
+        result = await self._run(
+            {"exit_code": 1, "stdout": "", "stderr": "disconnected", **self.USAGE},
+            health="unhealthy",
+        )
+        self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
+        self.assertEqual(result[TOOL_RESOURCE_USAGE_KEY], self.USAGE)
 
     async def test_old_runner_reply_has_no_usage(self):
         result = await self._run({"exit_code": 0, "stdout": "ok", "stderr": ""})
         self.assertTrue(result["ok"])
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+        self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result)
 
     async def test_one_missing_field_means_no_usage(self):
         for field in self.USAGE:
             reply = {"exit_code": 0, "stdout": "ok", "stderr": "", **self.USAGE}
             del reply[field]
             result = await self._run(reply)
-            self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, field)
+            self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result, field)
 
     async def test_non_numeric_field_means_no_usage(self):
         for bad in ("1.5", None, True, [1], {"v": 1}):
@@ -760,7 +773,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
                 "cpu_seconds": bad,
             }
             result = await self._run(reply)
-            self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, repr(bad))
+            self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result, repr(bad))
 
     async def test_nan_infinite_or_negative_field_means_no_usage(self):
         for field in self.USAGE:
@@ -773,7 +786,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
                     field: bad,
                 }
                 result = await self._run(reply)
-                self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, f"{field}={bad!r}")
+                self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result, f"{field}={bad!r}")
 
     async def test_int_too_large_for_a_float_means_no_usage(self):
         reply = {
@@ -786,17 +799,17 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
         result = await self._run(reply)
         self.assertTrue(result["ok"])
         self.assertEqual(result["stdout"], "ok")
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+        self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result)
 
     async def test_zero_usage_is_kept(self):
         zero = {"cpu_seconds": 0.0, "peak_memory_bytes": 0, "run_seconds": 0.0}
         result = await self._run({"exit_code": 0, "stdout": "", "stderr": "", **zero})
-        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], zero)
+        self.assertEqual(result[TOOL_RESOURCE_USAGE_KEY], zero)
 
     async def test_unreachable_runner_has_no_usage(self):
         result = await self._run(error=RuntimeError("POST /exec -> 502"))
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+        self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result)
 
 
 class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
