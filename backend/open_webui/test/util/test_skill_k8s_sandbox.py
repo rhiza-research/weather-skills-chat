@@ -1251,7 +1251,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         self.k8s._watchers.clear()
         _drop_runner("chat-1")
 
-    async def _run_calls(self, health, n=1, exec_seconds=None):
+    async def _run_calls(self, health, n=1, exec_seconds=None, pod=None):
         info = _runner("old", "u1")
         deleted = asyncio.Event()
 
@@ -1269,7 +1269,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         async def delete_claim(chat_id, uid=None):
             deleted.set()
 
-        deleting_pod = {"metadata": {"deletionTimestamp": "2026-10-18T06:00:00Z"}, "status": {"phase": "Running"}}
+        running_pod = {"status": {"phase": "Running", "podIP": "10.0.0.1", "containerStatuses": [{"restartCount": 0}]}}
         k = "open_webui.utils.skill_k8s_sandbox"
         with patch(f"{k}._eviction_event", AsyncMock(return_value=None)), patch(
             f"{k}._lost_runner_verdict_seconds", return_value=0
@@ -1277,7 +1277,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
             f"{k}.exec_on_runner", side_effect=exec_on
         ), patch(f"{k}.hold_runner_for_skill", AsyncMock()), patch(
             f"{k}._runner_health", AsyncMock(side_effect=health)
-        ), patch(f"{k}.get_pod", AsyncMock(return_value=deleting_pod)), patch(
+        ), patch(f"{k}.get_pod", AsyncMock(return_value=pod or running_pod)), patch(
             f"{k}.delete_claim", AsyncMock(side_effect=delete_claim)
         ) as delete, patch(
             f"{k}.remote_script_path", return_value="/workspace/.skill-packs/x/script.py"
@@ -1301,8 +1301,9 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         return results, delete, watchers_during
 
     async def test_a_503_mid_call_deletes_the_claim_and_fails_the_calls_now(self):
+        deleting_pod = {"metadata": {"deletionTimestamp": "2026-10-18T06:00:00Z"}, "status": {"phase": "Running"}}
         results, delete, _ = await self._run_calls(
-            ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1
+            ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1, pod=deleting_pod
         )
         delete.assert_awaited_once_with("chat-1", uid="u1")
         self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
@@ -1822,3 +1823,179 @@ class QuantityTest(TestCase):
         self.assertEqual(_cpu_cores("800m"), 0.8)
         self.assertIsNone(_cpu_cores(None))
         self.assertIsNone(_cpu_cores("x"))
+
+
+def _runner_pod(ip="10.0.0.1", restarts=0, oom=False, **extra) -> dict:
+    status = {"phase": "Running", "podIP": ip, "containerStatuses": [{"restartCount": restarts, "state": {"running": {}}}]}
+    if oom:
+        status["containerStatuses"][0]["lastState"] = {"terminated": {"reason": "OOMKilled", "exitCode": 128}}
+    status.update(extra)
+    return {"metadata": {"name": "old", "uid": "pod-uid"}, "status": status}
+
+
+class RunnerDiesDuringCallTest(IsolatedAsyncioTestCase):
+    """A runner that dies mid-call (OOM restart, gone) fails its calls now, not at their timeout."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.k8s = k8s
+        self._interval = k8s.RUNNER_WATCH_SECONDS
+        k8s.RUNNER_WATCH_SECONDS = 0.01
+        k8s._watchers.clear()
+
+    def tearDown(self):
+        self.k8s.RUNNER_WATCH_SECONDS = self._interval
+        self.k8s._watchers.clear()
+        _drop_runner("chat-1")
+
+    async def _calls(self, pods, n=1):
+        """Run n calls that hang like a connection to a dead sandbox; get_pod returns pods in turn."""
+        info = _runner("old", "u1")
+        cancelled = []
+
+        async def ensure(chat_id, *, emitter=None):
+            _store_runner(chat_id, info)
+            return info
+
+        async def exec_on(chat_id, argv, **kwargs):
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                cancelled.append(True)
+                raise
+
+        k = "open_webui.utils.skill_k8s_sandbox"
+        with patch(f"{k}.ensure_runner", side_effect=ensure), patch(
+            f"{k}.exec_on_runner", side_effect=exec_on
+        ), patch(f"{k}.hold_runner_for_skill", AsyncMock()), patch(
+            f"{k}._runner_health", AsyncMock(return_value="no_answer")
+        ), patch(f"{k}.get_pod", AsyncMock(side_effect=pods)), patch(
+            f"{k}._eviction_event", AsyncMock(return_value=None)
+        ), patch(f"{k}.delete_claim", AsyncMock()) as delete, patch(
+            f"{k}.remote_script_path", return_value="/workspace/.skill-packs/x/script.py"
+        ):
+            calls = [
+                run_skill_on_runner(
+                    chat_id="chat-1",
+                    skill_dir=Path("/data/skills/x"),
+                    script_path=Path("/data/skills/x/script.py"),
+                    args=[],
+                    env={},
+                    timeout=1200,
+                )
+                for _ in range(n)
+            ]
+            results = await asyncio.wait_for(asyncio.gather(*calls), timeout=5)
+        return results, cancelled, delete
+
+    async def test_an_oom_restart_fails_the_call_with_the_out_of_memory_message(self):
+        before = _runner_pod()
+        after = _runner_pod(ip="10.0.0.9", restarts=1, oom=True)
+        pods = iter([before, before, after, after, after])
+        results, cancelled, delete = await self._calls(lambda name: next(pods))
+        self.assertFalse(results[0]["ok"])
+        self.assertIn("the tool runner ran out of memory (OOMKilled)", results[0]["stderr"])
+        self.assertEqual(cancelled, [True])
+        # The runner kept its claim (it restarted in place); only the stale address is forgotten.
+        delete.assert_not_awaited()
+        self.assertIsNone(_ready_cache.get("chat-1"))
+        self.assertEqual(self.k8s._watchers, {})
+
+    async def test_a_runner_that_is_gone_fails_the_call_as_died(self):
+        pods = iter([_runner_pod()])
+
+        def get_pod(name):
+            try:
+                return next(pods)
+            except StopIteration:
+                raise RuntimeError("k8s GET ... -> 404: NotFound")
+
+        results, cancelled, _ = await self._calls(get_pod)
+        self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
+        self.assertEqual(cancelled, [True])
+
+    async def test_parallel_calls_on_the_dead_runner_all_fail(self):
+        before = _runner_pod()
+        after = _runner_pod(ip="10.0.0.9", restarts=1, oom=True)
+        pods = iter([before] * 2 + [after] * 20)
+        results, cancelled, _ = await self._calls(lambda name: next(pods), n=3)
+        self.assertEqual(len(cancelled), 3)
+        for result in results:
+            self.assertIn("ran out of memory (OOMKilled)", result["stderr"])
+
+    async def test_stop_still_cancels_the_call(self):
+        from open_webui.utils.skill_k8s_sandbox import _unless_runner_lost
+
+        started, cancelled = asyncio.Event(), []
+
+        async def hang():
+            started.set()
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                cancelled.append(True)
+                raise
+
+        task = asyncio.create_task(_unless_runner_lost(asyncio.Event(), hang()))
+        await started.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(cancelled, [True])
+
+
+class RunnerMovedTest(IsolatedAsyncioTestCase):
+    """A cached runner whose pod moved (a restart under gVisor) is not reused at its old address."""
+
+    async def _alive(self, health, pod=None, pod_error=None):
+        from open_webui.utils.skill_k8s_sandbox import _runner_alive
+
+        get_pod = AsyncMock(side_effect=pod_error) if pod_error else AsyncMock(return_value=pod)
+        info = {**_runner("old", "u1"), "pod": {"metadata": {"uid": "pod-uid"}}}
+        with patch("open_webui.utils.skill_k8s_sandbox._runner_health", AsyncMock(return_value=health)), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod", get_pod
+        ):
+            return await _runner_alive(info)
+
+    async def test_same_address_is_kept(self):
+        self.assertTrue(await self._alive("ok", pod=_runner_pod()))
+
+    async def test_a_new_address_is_not_reused_even_if_something_answers_there(self):
+        self.assertFalse(await self._alive("ok", pod=_runner_pod(ip="10.0.0.9")))
+        self.assertFalse(await self._alive("no_answer", pod=_runner_pod(ip="10.0.0.9")))
+
+    async def test_a_replaced_pod_is_not_reused(self):
+        pod = _runner_pod()
+        pod["metadata"]["uid"] = "another-pod"
+        self.assertFalse(await self._alive("ok", pod=pod))
+
+    async def test_a_gone_pod_is_not_reused_even_if_something_answers(self):
+        self.assertFalse(await self._alive("ok", pod_error=RuntimeError("-> 404: NotFound")))
+
+
+class RunnerStatusAfterRestartTest(IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def test_a_runner_restarted_at_a_new_address_reads_ready_there(self):
+        from open_webui.utils.skill_k8s_sandbox import BOUND_ANN
+
+        _store_runner("chat-1", _runner("old", "u1"))
+        moved = _runner_pod(ip="10.0.0.9", restarts=1, oom=True)
+        moved["metadata"]["annotations"] = {BOUND_ANN: "chat-1"}
+        moved["status"]["conditions"] = [{"type": "Ready", "status": "True"}]
+        claim = {"metadata": {"uid": "u1"}, "status": {"ready": True, "sandbox": {"name": "old"}}}
+
+        async def health(info):
+            return "ok" if info.get("pod_ip") == "10.0.0.9" else "no_answer"
+
+        k = "open_webui.utils.skill_k8s_sandbox"
+        with patch(f"{k}._runner_health", side_effect=health), patch(
+            f"{k}._pod_or_none", AsyncMock(return_value=moved)
+        ), patch(f"{k}.get_claim", AsyncMock(return_value=claim)), patch(
+            f"{k}._packs_ready_on_runner", AsyncMock(return_value=True)
+        ):
+            state = await runner_status("chat-1")
+        self.assertEqual(state["state"], "ready")
+        self.assertEqual(_ready_cache["chat-1"][1]["pod_ip"], "10.0.0.9")
