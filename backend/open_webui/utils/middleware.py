@@ -1196,9 +1196,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     if tool_runner_enabled():
                         from open_webui.utils.skill_k8s_sandbox import (
                             RUNNER_FAILURE_GUIDANCE,
+                            runner_resources_guidance,
                         )
 
                         hints.append(RUNNER_FAILURE_GUIDANCE)
+                        resources = await runner_resources_guidance()
+                        if resources:
+                            hints.append(resources)
                 if hints:
                     combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []

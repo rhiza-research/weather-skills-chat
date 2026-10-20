@@ -1726,3 +1726,99 @@ class EvictedRunnerStatusTest(IsolatedAsyncioTestCase):
     async def test_a_new_start_reads_starting(self):
         self.k8s._starts["chat-1"] = asyncio.get_running_loop().create_future()
         self.assertEqual(await self._state(self._claim(), _evicted_pod()), "starting")
+
+
+def _template(cpu="3", memory="8Gi", name="runner") -> dict:
+    return {
+        "spec": {
+            "podTemplate": {
+                "spec": {
+                    "containers": [
+                        {"name": name, "resources": {"requests": {"cpu": "800m", "memory": "3686Mi"}, "limits": {"cpu": cpu, "memory": memory}}}
+                    ]
+                }
+            }
+        }
+    }
+
+
+class RunnerResourcesGuidanceTest(IsolatedAsyncioTestCase):
+    """The prompt line with the runner's limits, read from its SandboxTemplate."""
+
+    def setUp(self):
+        from open_webui.utils import skill_k8s_sandbox as k8s
+
+        self.k8s = k8s
+        k8s._runner_limits_cache = None
+
+    def tearDown(self):
+        self.k8s._runner_limits_cache = None
+
+    async def _guidance(self, k8s_mock):
+        with patch("open_webui.utils.skill_k8s_sandbox._k8s", k8s_mock):
+            return await self.k8s.runner_resources_guidance()
+
+    async def test_states_the_limits(self):
+        k8s_mock = AsyncMock(return_value=_template())
+        text = await self._guidance(k8s_mock)
+        self.assertEqual(
+            text,
+            "The tool runner has 3 CPU cores and 8 GiB of memory, shared by all tool "
+            "calls running at once. Please split and/or parallelize work as "
+            "appropriate to fit within those limits.",
+        )
+        path = k8s_mock.await_args.args[1]
+        self.assertTrue(path.endswith("/sandboxtemplates/weather-skills-standard-runner"), path)
+
+    async def test_other_quantity_forms(self):
+        text = await self._guidance(AsyncMock(return_value=_template(cpu="1000m", memory="12288Mi")))
+        self.assertIn("1 CPU core and 12 GiB of memory", text)
+        self.k8s._runner_limits_cache = None
+        text = await self._guidance(AsyncMock(return_value=_template(cpu="2.5", memory="3686Mi")))
+        self.assertIn("2.5 CPU cores and 3.6 GiB of memory", text)
+
+    async def test_read_once_and_cached(self):
+        k8s_mock = AsyncMock(return_value=_template())
+        await self._guidance(k8s_mock)
+        await self._guidance(k8s_mock)
+        self.assertEqual(k8s_mock.await_count, 1)
+
+    async def test_a_failed_read_leaves_the_line_out_and_retries_later(self):
+        k8s_mock = AsyncMock(side_effect=RuntimeError("k8s GET ... -> 403: forbidden"))
+        self.assertIsNone(await self._guidance(k8s_mock))
+        self.assertIsNone(await self._guidance(k8s_mock))
+        self.assertEqual(k8s_mock.await_count, 1)
+        read_at, ttl, _ = self.k8s._runner_limits_cache
+        self.assertEqual(ttl, self.k8s.RUNNER_LIMITS_RETRY_SEC)
+        self.k8s._runner_limits_cache = (read_at - ttl, ttl, None)
+        k8s_mock.side_effect = None
+        k8s_mock.return_value = _template()
+        self.assertIn("8 GiB", await self._guidance(k8s_mock))
+
+    async def test_a_template_without_limits_leaves_the_line_out(self):
+        template = _template()
+        template["spec"]["podTemplate"]["spec"]["containers"][0]["resources"] = {}
+        self.assertIsNone(await self._guidance(AsyncMock(return_value=template)))
+
+    async def test_falls_back_to_the_first_container(self):
+        self.assertIn("8 GiB", await self._guidance(AsyncMock(return_value=_template(name="main"))))
+
+
+class QuantityTest(TestCase):
+    def test_memory(self):
+        from open_webui.utils.skill_k8s_sandbox import _memory_gib
+
+        self.assertEqual(_memory_gib("8Gi"), 8)
+        self.assertEqual(_memory_gib("1024Mi"), 1)
+        self.assertAlmostEqual(_memory_gib("8G"), 8e9 / 2**30)
+        self.assertEqual(_memory_gib(str(2**30)), 1)
+        self.assertIsNone(_memory_gib(""))
+        self.assertIsNone(_memory_gib("lots"))
+
+    def test_cpu(self):
+        from open_webui.utils.skill_k8s_sandbox import _cpu_cores
+
+        self.assertEqual(_cpu_cores("3"), 3)
+        self.assertEqual(_cpu_cores("800m"), 0.8)
+        self.assertIsNone(_cpu_cores(None))
+        self.assertIsNone(_cpu_cores("x"))
