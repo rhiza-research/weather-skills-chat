@@ -90,6 +90,7 @@ from open_webui.utils.langfuse_tracing import (
     end_tool_observation,
     observe_stream_and_end_trace,
     start_tool_observation,
+    tool_resource_usage_metadata,
 )
 
 from open_webui.config import (
@@ -591,7 +592,11 @@ async def chat_completion_tools_handler(
                             tool_function = tool["callable"]
                             tool_result = await tool_function(**exec_params)
                             tool_result = redact_secrets(tool_result, used_secrets)
-                            end_tool_observation(lf_tool, output=tool_result)
+                            end_tool_observation(
+                                lf_tool,
+                                output=tool_result,
+                                metadata=tool_resource_usage_metadata(tool_result),
+                            )
                         except asyncio.CancelledError:
                             end_tool_observation(lf_tool, error="cancelled")
                             raise
@@ -2733,7 +2738,13 @@ async def process_chat_response(
                                         tool_result = redact_secrets(
                                             tool_result, used_secrets
                                         )
-                                        end_tool_observation(lf_tool, output=tool_result)
+                                        end_tool_observation(
+                                            lf_tool,
+                                            output=tool_result,
+                                            metadata=tool_resource_usage_metadata(
+                                                tool_result
+                                            ),
+                                        )
                                     except asyncio.CancelledError:
                                         end_tool_observation(lf_tool, error="cancelled")
                                         raise
