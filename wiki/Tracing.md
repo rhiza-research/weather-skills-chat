@@ -7,7 +7,7 @@ Weather Skills Chat can send a trace of every chat to Langfuse, so admins can se
 Each chat request, from a user or from an [[Automations]] run, becomes one trace. The trace is tagged with the user, the chat, the model, the tools offered, and whether it came from a chat or an automation. Inside it are:
 
 - Each model call, with the messages sent, the tools offered, the model's reply, and token usage.
-- Each tool run, with its input and output.
+- Each tool run, with its input and output. A tool run on the tool runner also shows its CPU time, the peak memory of its largest process, and how long the skill itself ran.
 
 Very long inputs and outputs are shortened.
 

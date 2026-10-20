@@ -7,6 +7,7 @@ from open_webui.utils.skill_k8s_sandbox import (
     PACKS_ANN,
     RUNNER_HOLD_BUFFER_SEC,
     RUNNER_UV_CACHE_DIR,
+    TOOL_RUNNER_USAGE_KEY,
     WAITING_STATUS,
     _runner_log_name,
     _http_failure,
@@ -682,6 +683,120 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
             puts[0][2]["spec"]["lifecycle"]["shutdownTime"],
             "2026-10-14T19:27:05Z",
         )
+
+
+class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _drop_runner("chat-1")
+
+    async def _run(self, reply=None, error=None):
+        async def ensure(chat_id, *, emitter=None):
+            return {"pod_ip": "10.0.0.1", "pod_name": "ready"}
+
+        async def exec_on(chat_id, argv, **kwargs):
+            if error is not None:
+                raise error
+            return reply
+
+        with patch(
+            "open_webui.utils.skill_k8s_sandbox.ensure_runner", side_effect=ensure
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.exec_on_runner", side_effect=exec_on
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.hold_runner_for_skill",
+            new_callable=AsyncMock,
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.get_pod",
+            AsyncMock(side_effect=RuntimeError("404")),
+        ), patch(
+            "open_webui.utils.skill_k8s_sandbox.remote_script_path",
+            return_value="/workspace/.skill-packs/x/script.py",
+        ):
+            return await run_skill_on_runner(
+                chat_id="chat-1",
+                skill_dir=Path("/data/skills/x"),
+                script_path=Path("/data/skills/x/script.py"),
+                args=[],
+                env={},
+                timeout=30,
+            )
+
+    USAGE = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
+
+    async def test_reply_usage_goes_under_the_runner_key(self):
+        result = await self._run(
+            {"exit_code": 0, "stdout": "ok", "stderr": "", **self.USAGE}
+        )
+        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], self.USAGE)
+        self.assertTrue(result["tool_runner"])
+        self.assertNotIn("cpu_seconds", result)
+
+    async def test_timeout_reply_keeps_usage(self):
+        result = await self._run(
+            {"exit_code": -1, "stdout": "", "stderr": "timed out", **self.USAGE}
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], self.USAGE)
+
+    async def test_old_runner_reply_has_no_usage(self):
+        result = await self._run({"exit_code": 0, "stdout": "ok", "stderr": ""})
+        self.assertTrue(result["ok"])
+        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+
+    async def test_one_missing_field_means_no_usage(self):
+        for field in self.USAGE:
+            reply = {"exit_code": 0, "stdout": "ok", "stderr": "", **self.USAGE}
+            del reply[field]
+            result = await self._run(reply)
+            self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, field)
+
+    async def test_non_numeric_field_means_no_usage(self):
+        for bad in ("1.5", None, True, [1], {"v": 1}):
+            reply = {
+                "exit_code": 0,
+                "stdout": "ok",
+                "stderr": "",
+                **self.USAGE,
+                "cpu_seconds": bad,
+            }
+            result = await self._run(reply)
+            self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, repr(bad))
+
+    async def test_nan_infinite_or_negative_field_means_no_usage(self):
+        for field in self.USAGE:
+            for bad in (float("nan"), float("inf"), float("-inf"), -1):
+                reply = {
+                    "exit_code": 0,
+                    "stdout": "ok",
+                    "stderr": "",
+                    **self.USAGE,
+                    field: bad,
+                }
+                result = await self._run(reply)
+                self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result, f"{field}={bad!r}")
+
+    async def test_int_too_large_for_a_float_means_no_usage(self):
+        reply = {
+            "exit_code": 0,
+            "stdout": "ok",
+            "stderr": "",
+            **self.USAGE,
+            "peak_memory_bytes": 10**400,
+        }
+        result = await self._run(reply)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["stdout"], "ok")
+        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+
+    async def test_zero_usage_is_kept(self):
+        zero = {"cpu_seconds": 0.0, "peak_memory_bytes": 0, "run_seconds": 0.0}
+        result = await self._run({"exit_code": 0, "stdout": "", "stderr": "", **zero})
+        self.assertEqual(result[TOOL_RUNNER_USAGE_KEY], zero)
+
+    async def test_unreachable_runner_has_no_usage(self):
+        result = await self._run(error=RuntimeError("POST /exec -> 502"))
+        self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
+        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
 
 
 class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):

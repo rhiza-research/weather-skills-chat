@@ -22,6 +22,7 @@ from open_webui.env import (
     LANGFUSE_PUBLIC_KEY,
     LANGFUSE_SECRET_KEY,
 )
+from open_webui.utils.skill_k8s_sandbox import TOOL_RUNNER_USAGE_KEY
 
 log = logging.getLogger(__name__)
 
@@ -438,7 +439,25 @@ def start_tool_observation(name: str, params: Any) -> Any:
     )
 
 
-def end_tool_observation(span: Any, *, output: Any = None, error: Any = None) -> None:
+def pop_tool_runner_usage(result: Any) -> Optional[dict]:
+    """Take the usage off a tool runner result so the model never sees it.
+
+    Other tools' results are returned untouched, even when they carry the same key.
+    """
+    if not isinstance(result, dict) or result.get("tool_runner") is not True:
+        return None
+    usage = result.pop(TOOL_RUNNER_USAGE_KEY, None)
+    return usage if isinstance(usage, dict) else None
+
+
+def end_tool_observation(
+    span: Any,
+    *,
+    output: Any = None,
+    error: Any = None,
+    metadata: Optional[dict] = None,
+) -> None:
+    """`metadata` keys are added to the start-time metadata; the SDK sets one span attribute per key."""
     if not span:
         return
     update_kwargs: dict[str, Any] = {}
@@ -448,6 +467,8 @@ def end_tool_observation(span: Any, *, output: Any = None, error: Any = None) ->
         update_kwargs["output"] = truncate_payload(str(error))
     elif output is not None:
         update_kwargs["output"] = truncate_payload(output)
+    if metadata:
+        update_kwargs["metadata"] = metadata
     if update_kwargs:
         _safe_call(span.update, **update_kwargs)
     _safe_call(span.end)

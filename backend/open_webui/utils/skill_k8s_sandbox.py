@@ -15,6 +15,7 @@ import contextlib
 import io
 import json
 import logging
+import math
 import os
 import re
 import ssl
@@ -1738,6 +1739,39 @@ def _runner_failed_result(message: str, script_path: Path, workspace: str, args:
     }
 
 
+# Key on a run_skill_on_runner result holding the skill's CPU, peak memory and run time.
+TOOL_RUNNER_USAGE_KEY = "tool_runner_usage"
+_USAGE_FIELDS = ("cpu_seconds", "peak_memory_bytes", "run_seconds")
+
+
+def _runner_usage(reply: dict) -> Optional[dict]:
+    """The /exec reply's usage, or None when any field is missing, not a finite number, or negative.
+
+    Older runner images send no usage.
+    """
+    usage = {}
+    for field in _USAGE_FIELDS:
+        value = reply.get(field)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            # An int too large for a float.
+            return None
+        if not finite or value < 0:
+            return None
+        usage[field] = value
+    return usage
+
+
+def _with_usage(out: dict, reply: dict) -> dict:
+    usage = _runner_usage(reply)
+    if usage:
+        out[TOOL_RUNNER_USAGE_KEY] = usage
+    return out
+
+
 async def run_skill_on_runner(
     *,
     chat_id: str,
@@ -1836,7 +1870,7 @@ async def run_skill_on_runner(
         failed["stdout"] = (result.get("stdout") or "").strip()
         if partial:
             failed["stderr"] += "\n\nSkill stderr before it was stopped:\n" + partial
-        return failed
+        return _with_usage(failed, result)
     if (
         int(result.get("exit_code", 1)) != 0
         and await _runner_health(info) == HEALTH_UNHEALTHY
@@ -1859,7 +1893,7 @@ async def run_skill_on_runner(
         time.monotonic() - exec_started,
         result.get("exit_code"),
     )
-    return {
+    out = {
         "ok": int(result.get("exit_code", 1)) == 0,
         "exit_code": int(result.get("exit_code", 1)),
         "stdout": (result.get("stdout") or "").strip(),
@@ -1871,3 +1905,4 @@ async def run_skill_on_runner(
         "landlock_backend": None,
         "tool_runner": True,
     }
+    return _with_usage(out, result)

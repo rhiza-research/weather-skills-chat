@@ -126,6 +126,119 @@ class ToolObservationTest(unittest.TestCase):
         span.update.assert_called_once()
         span.end.assert_called_once()
 
+    def test_usage_metadata_reaches_span_update(self):
+        from open_webui.utils.skill_k8s_sandbox import TOOL_RUNNER_USAGE_KEY
+
+        span = MagicMock()
+        usage = {"cpu_seconds": 2.5, "peak_memory_bytes": 4096, "run_seconds": 3.0}
+        result = {
+            "ok": True,
+            "stdout": "done",
+            "tool_runner": True,
+            TOOL_RUNNER_USAGE_KEY: dict(usage),
+        }
+        popped = lf.pop_tool_runner_usage(result)
+        lf.end_tool_observation(span, output=result, metadata=popped)
+        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, result)
+        kwargs = span.update.call_args.kwargs
+        self.assertEqual(kwargs["metadata"], usage)
+        self.assertNotIn(TOOL_RUNNER_USAGE_KEY, kwargs["output"])
+
+    def test_absent_usage_adds_no_metadata(self):
+        for result in (
+            {"ok": True, "stdout": "done", "tool_runner": True},
+            {"ok": True, "stdout": "done"},
+        ):
+            span = MagicMock()
+            lf.end_tool_observation(
+                span, output=result, metadata=lf.pop_tool_runner_usage(result)
+            )
+            self.assertNotIn("metadata", span.update.call_args.kwargs)
+
+    def test_empty_usage_adds_no_metadata(self):
+        span = MagicMock()
+        lf.end_tool_observation(span, output={"ok": True}, metadata={})
+        self.assertNotIn("metadata", span.update.call_args.kwargs)
+
+    def test_non_runner_dict_keeps_the_key(self):
+        from open_webui.utils.skill_k8s_sandbox import TOOL_RUNNER_USAGE_KEY
+
+        for result in (
+            {"answer": 42, TOOL_RUNNER_USAGE_KEY: {"cpu_seconds": 1.0}},
+            {
+                "answer": 42,
+                "tool_runner": "yes",
+                TOOL_RUNNER_USAGE_KEY: {"cpu_seconds": 1.0},
+            },
+        ):
+            before = dict(result)
+            self.assertIsNone(lf.pop_tool_runner_usage(result))
+            self.assertEqual(result, before)
+
+    def test_non_dict_results_pass_through(self):
+        for result in ("text", ["a", "b"], None):
+            self.assertIsNone(lf.pop_tool_runner_usage(result))
+        listed = ["a", "b"]
+        lf.pop_tool_runner_usage(listed)
+        self.assertEqual(listed, ["a", "b"])
+
+    def test_span_update_failure_does_not_raise(self):
+        span = MagicMock()
+        span.update.side_effect = RuntimeError("otel down")
+        lf.end_tool_observation(
+            span, output={"ok": True}, metadata={"cpu_seconds": 1.0}
+        )
+        span.end.assert_called_once()
+
+
+class RealToolSpanTest(unittest.TestCase):
+    """End-to-end through the Langfuse SDK, exported to memory instead of the network."""
+
+    PUBLIC_KEY = "test-real-tool-span"
+
+    def setUp(self):
+        from langfuse import Langfuse
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        self.exporter = InMemorySpanExporter()
+        self.client = Langfuse(
+            public_key=self.PUBLIC_KEY,
+            secret_key="test-secret",
+            tracer_provider=TracerProvider(),
+            span_exporter=self.exporter,
+        )
+        lf._trace_var.set(None)
+        lf._generation_stack_var.set(None)
+
+    def tearDown(self):
+        from langfuse._client.resource_manager import LangfuseResourceManager
+
+        lf._trace_var.set(None)
+        self.client.shutdown()
+        LangfuseResourceManager._instances.pop(self.PUBLIC_KEY, None)
+
+    def test_usage_metadata_is_added_beside_the_tool_key(self):
+        usage = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
+        trace = self.client.start_observation(name="weather-skills-chat", as_type="span")
+        lf._trace_var.set(trace)
+
+        span = lf.start_tool_observation("run_x", {"argv": []})
+        lf.end_tool_observation(span, output={"ok": True}, metadata=usage)
+        trace.end()
+        self.client.flush()
+
+        tool_spans = [s for s in self.exporter.get_finished_spans() if s.name == "tool:run_x"]
+        self.assertEqual(len(tool_spans), 1)
+        attrs = tool_spans[0].attributes
+        prefix = "langfuse.observation.metadata"
+        self.assertEqual(attrs[f"{prefix}.tool"], "run_x")
+        self.assertEqual(float(attrs[f"{prefix}.cpu_seconds"]), 1.5)
+        self.assertEqual(int(attrs[f"{prefix}.peak_memory_bytes"]), 2048)
+        self.assertEqual(float(attrs[f"{prefix}.run_seconds"]), 2.25)
+
 
 class StartChatTraceTest(unittest.TestCase):
     def setUp(self):
