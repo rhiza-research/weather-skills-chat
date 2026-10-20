@@ -4,6 +4,7 @@
 
 	import { createEventDispatcher } from 'svelte';
 	import { tick, getContext } from 'svelte';
+	import { shownStatus } from '$lib/chat/messageStatus';
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType, t } from 'i18next';
 
@@ -139,9 +140,7 @@
 	let model = null;
 	$: model = $models.find((m) => m.id === message.model);
 
-	$: latestStatus = (
-		message?.statusHistory ?? [...(message?.status ? [message.status] : [])]
-	).at(-1) ?? null;
+	$: latestStatus = shownStatus(message);
 
 	let edit = false;
 	let editedContent = '';
@@ -761,10 +760,8 @@
 									/>
 								{/if}
 
-								{#if (message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]).length > 0}
-									{@const status = (
-										message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]
-									).at(-1)}
+								{#if latestStatus}
+									{@const status = latestStatus}
 									{#if !status?.hidden &&
 										!(isInlineStatus(status) && endsWithActivity(message?.content))}
 										<div class="status-description flex items-center gap-2 py-0.5">
