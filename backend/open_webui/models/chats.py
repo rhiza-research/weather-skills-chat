@@ -565,7 +565,10 @@ class ChatTable:
     ) -> Optional[ChatModel]:
         """The final save of a reply: its pending streamed parts and its text
         in one write. Raises ChatWriteError when the chat cannot be written."""
-        from open_webui.utils.message_updates import apply_to_message
+        from open_webui.utils.message_updates import (
+            apply_to_message,
+            close_open_statuses,
+        )
 
         def apply(chat, _item):
             history = chat.get("history", {})
@@ -574,7 +577,10 @@ class ChatTable:
             base = current if isinstance(current, dict) else {}
             if updates:
                 base = apply_to_message(base, updates)
-            messages[message_id] = {**base, **patch}
+            message = {**base, **patch}
+            if message.get("done") is True:
+                message = close_open_statuses(message)
+            messages[message_id] = message
             history["messages"] = messages
             history["currentId"] = message_id
             chat["history"] = history

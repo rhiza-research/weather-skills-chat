@@ -58,3 +58,23 @@ def test_a_batch_merges_into_the_stored_message():
     assert merged["usage"] == {"total_tokens": 110}
     assert [s["source"]["name"] for s in merged["sources"]] == ["before the model ran", "new"]
     assert merged["files"] == [{"url": "/a.png"}, {"url": "/b.png"}]
+
+
+def test_a_finished_reply_closes_its_open_status():
+    from open_webui.utils.message_updates import close_open_statuses
+
+    preparing = {"action": "preparing_tool_calls", "description": "Preparing tool calls… (0s)", "done": False}
+    message = {"done": True, "statusHistory": [preparing], "status": dict(preparing)}
+    closed = close_open_statuses(message)
+    assert closed["statusHistory"] == [{**preparing, "done": True, "hidden": True}]
+    assert closed["status"] == {**preparing, "done": True, "hidden": True}
+    assert message["statusHistory"][0]["done"] is False  # input not changed
+
+
+def test_closed_statuses_are_left_alone():
+    from open_webui.utils.message_updates import close_open_statuses
+
+    shown = {"action": "web_search", "description": "Searched 3 sites", "done": True}
+    message = {"done": True, "statusHistory": [shown]}
+    assert close_open_statuses(message) == message
+    assert close_open_statuses({"done": True}) == {"done": True}

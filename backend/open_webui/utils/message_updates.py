@@ -8,6 +8,8 @@ copy (src/lib/chat/cache.ts), so a reloaded reply matches what was streamed.
 - sources: appended.
 - code_executions: replaced by ``id``, new ones appended.
 - files: appended, without repeating a file already listed.
+
+A finished reply never keeps an open status (close_open_statuses).
 """
 
 import copy
@@ -128,3 +130,24 @@ def apply_to_message(message: dict, updates: dict) -> dict:
     if updates.get("files"):
         merged["files"] = merge_files(merged.get("files"), updates["files"])
     return merged
+
+
+def close_open_statuses(message: dict) -> dict:
+    """A finished reply with its open statuses closed and hidden.
+
+    A status is closed by a later status event; a reply cut off before then
+    (Stop, or the server shutting down mid-turn) would keep showing it as in
+    progress, for example "Preparing tool calls" with a spinner, forever.
+    """
+
+    def close(status: Any) -> Any:
+        if isinstance(status, dict) and status.get("done") is False:
+            return {**status, "done": True, "hidden": True}
+        return status
+
+    closed = dict(message)
+    if isinstance(closed.get("statusHistory"), list):
+        closed["statusHistory"] = [close(s) for s in closed["statusHistory"]]
+    if "status" in closed:
+        closed["status"] = close(closed["status"])
+    return closed
