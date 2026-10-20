@@ -11,7 +11,7 @@ from starlette.responses import StreamingResponse
 import open_webui.utils.middleware as mw
 from open_webui.utils.skill_k8s_sandbox import TOOL_RESOURCE_USAGE_KEY
 
-USAGE = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
+USAGE = {"cpu_seconds": 1.5, "memory_mb": 512.5, "run_seconds": 2.25}
 SPAN = object()
 
 

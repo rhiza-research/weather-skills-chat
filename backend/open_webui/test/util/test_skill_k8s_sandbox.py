@@ -726,7 +726,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
                 timeout=30,
             )
 
-    USAGE = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
+    USAGE = {"cpu_seconds": 1.5, "memory_mb": 512.5, "run_seconds": 2.25}
 
     async def test_reply_usage_goes_under_the_runner_key(self):
         result = await self._run(
@@ -794,15 +794,28 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
             "stdout": "ok",
             "stderr": "",
             **self.USAGE,
-            "peak_memory_bytes": 10**400,
+            "memory_mb": 10**400,
         }
         result = await self._run(reply)
         self.assertTrue(result["ok"])
         self.assertEqual(result["stdout"], "ok")
         self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result)
 
+    async def test_memory_in_bytes_only_means_no_usage(self):
+        reply = {
+            "exit_code": 0,
+            "stdout": "ok",
+            "stderr": "",
+            "cpu_seconds": 1.5,
+            "peak_memory_bytes": 2048,
+            "run_seconds": 2.25,
+        }
+        result = await self._run(reply)
+        self.assertTrue(result["ok"])
+        self.assertNotIn(TOOL_RESOURCE_USAGE_KEY, result)
+
     async def test_zero_usage_is_kept(self):
-        zero = {"cpu_seconds": 0.0, "peak_memory_bytes": 0, "run_seconds": 0.0}
+        zero = {"cpu_seconds": 0.0, "memory_mb": 0.0, "run_seconds": 0.0}
         result = await self._run({"exit_code": 0, "stdout": "", "stderr": "", **zero})
         self.assertEqual(result[TOOL_RESOURCE_USAGE_KEY], zero)
 

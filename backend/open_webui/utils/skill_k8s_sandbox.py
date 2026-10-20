@@ -1742,7 +1742,7 @@ def _runner_failed_result(message: str, script_path: Path, workspace: str, args:
 # Key on a run_skill_on_runner result holding the skill's CPU, peak memory and
 # run time. The model sees it in the result; the tool observation gets the same.
 TOOL_RESOURCE_USAGE_KEY = "tool_resource_usage"
-_USAGE_FIELDS = ("cpu_seconds", "peak_memory_bytes", "run_seconds")
+_USAGE_FIELDS = ("cpu_seconds", "memory_mb", "run_seconds")
 
 
 def _runner_usage(reply: dict) -> Optional[dict]:

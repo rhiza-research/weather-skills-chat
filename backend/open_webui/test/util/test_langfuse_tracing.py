@@ -131,7 +131,7 @@ class ToolObservationTest(unittest.TestCase):
         from open_webui.utils.skill_k8s_sandbox import TOOL_RESOURCE_USAGE_KEY
 
         span = MagicMock()
-        usage = {"cpu_seconds": 2.5, "peak_memory_bytes": 4096, "run_seconds": 3.0}
+        usage = {"cpu_seconds": 2.5, "memory_mb": 1024.0, "run_seconds": 3.0}
         result = {
             "ok": True,
             "stdout": "done",
@@ -224,7 +224,7 @@ class RealToolSpanTest(unittest.TestCase):
         LangfuseResourceManager._instances.pop(self.PUBLIC_KEY, None)
 
     def test_usage_metadata_is_added_beside_the_tool_key(self):
-        usage = {"cpu_seconds": 1.5, "peak_memory_bytes": 2048, "run_seconds": 2.25}
+        usage = {"cpu_seconds": 1.5, "memory_mb": 512.5, "run_seconds": 2.25}
         trace = self.client.start_observation(name="weather-skills-chat", as_type="span")
         lf._trace_var.set(trace)
 
