@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import { applyChatHistoryPatch, getChatById, getRecentChats } from '$lib/apis/chats';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 import { markUnseenMessages } from '$lib/chat/scroll';
+import { PREFETCH_ARTIFACT_DEPTH, isPartialArtifactList } from '$lib/chat/artifactsList';
 import { chatArtifactLists, chatId, socket, socketConnected } from '$lib/stores';
 import {
 	GENERATION_LOST_MESSAGE,
@@ -555,6 +556,9 @@ export function refetchChat(token: string, id: string) {
 }
 
 export async function documentForOpen(token: string, id: string) {
+	// The prefetch may have listed only the top level. Opening the chat
+	// fetches the whole tree; a complete cached list is kept as is.
+	if (id && id !== 'local') void ensureArtifacts(token, id);
 	const entry = entries.get(id);
 	if (entry?.document) {
 		// The screen paints this copy now. A newer revision downloads behind it.
@@ -829,15 +833,19 @@ export function onChatUpdated(id: string, revision: number, token: string) {
 	noteRemoteRevision(id, revision, token);
 }
 
-const artifactInflight = new Map<string, Promise<any[] | null>>();
+/** In-flight artifact list per chat, and whether it is the whole tree. */
+const artifactInflight = new Map<string, { job: Promise<any[] | null>; full: boolean }>();
 
 async function fetchArtifactList(
 	token: string,
 	id: string,
 	background: boolean
 ): Promise<any[] | null> {
+	// The background prefetch lists only the top level. Opening the chat
+	// lists the whole tree.
+	const query = background ? `?depth=${PREFETCH_ARTIFACT_DEPTH}` : '';
 	try {
-		const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/artifacts`, {
+		const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/artifacts${query}`, {
 			headers: { authorization: `Bearer ${token}` },
 			...(background ? { priority: 'low' as const } : {})
 		} as RequestInit);
@@ -850,42 +858,48 @@ async function fetchArtifactList(
 	}
 }
 
-/** Artifact list for a chat. Joins a fetch already in flight. */
-export function ensureArtifacts(token: string, id: string, background = false) {
-	const cached = artifactListFor(id);
-	if (Array.isArray(cached)) return Promise.resolve(cached);
-	return fetchArtifacts(token, id, background);
-}
-
-/** Replace the cached list. Used after this tab changes the files. */
-export function refreshArtifacts(token: string, id: string) {
-	const job = fetchArtifactList(token, id, false)
+function startArtifactFetch(token: string, id: string, background: boolean) {
+	const before = artifactListFor(id);
+	const job = fetchArtifactList(token, id, background)
 		.then((files) => {
-			if (artifactInflight.get(id) !== job) return Array.isArray(files) ? files : null;
+			// A newer fetch replaced this one; its list wins.
+			if (artifactInflight.get(id)?.job !== job) return Array.isArray(files) ? files : null;
+			// The whole tree arrived (chat:artifacts) while the prefetch ran.
+			const now = artifactListFor(id);
+			if (background && now !== before && Array.isArray(now) && !isPartialArtifactList(now)) {
+				return now;
+			}
 			if (Array.isArray(files)) rememberArtifacts(id, files);
 			return Array.isArray(files) ? files : null;
 		})
 		.finally(() => {
-			if (artifactInflight.get(id) === job) artifactInflight.delete(id);
+			if (artifactInflight.get(id)?.job === job) artifactInflight.delete(id);
 		});
-	artifactInflight.set(id, job);
+	artifactInflight.set(id, { job, full: !background });
 	return job;
+}
+
+/**
+ * Artifact list for a chat. Joins a fetch already in flight. The background
+ * prefetch takes any cached list; a foreground call wants the whole tree.
+ */
+export function ensureArtifacts(token: string, id: string, background = false) {
+	const cached = artifactListFor(id);
+	if (Array.isArray(cached) && (background || !isPartialArtifactList(cached))) {
+		return Promise.resolve(cached);
+	}
+	return fetchArtifacts(token, id, background);
+}
+
+/** Replace the cached list with the whole tree. Used after this tab changes the files. */
+export function refreshArtifacts(token: string, id: string) {
+	return startArtifactFetch(token, id, false);
 }
 
 function fetchArtifacts(token: string, id: string, background: boolean) {
 	const pending = artifactInflight.get(id);
-	if (pending) return pending;
-	const job = fetchArtifactList(token, id, background)
-		.then((files) => {
-			if (artifactInflight.get(id) !== job) return Array.isArray(files) ? files : null;
-			if (Array.isArray(files)) rememberArtifacts(id, files);
-			return Array.isArray(files) ? files : null;
-		})
-		.finally(() => {
-			if (artifactInflight.get(id) === job) artifactInflight.delete(id);
-		});
-	artifactInflight.set(id, job);
-	return job;
+	if (pending && (background || pending.full)) return pending.job;
+	return startArtifactFetch(token, id, background);
 }
 
 /**
@@ -959,14 +973,17 @@ export async function refreshRecent(token: string) {
 	await preloadRecent(token, recentOrganizationId);
 }
 
-/** Re-list artifacts after a disconnect so files written while offline appear. */
+/**
+ * Re-list artifacts after a disconnect so files written while offline appear.
+ * The open chat gets its whole tree; the rest get the prefetch's top level.
+ */
 export async function refreshCachedArtifacts(token: string) {
 	if (!token) return;
 	for (const id of [...entries.keys()]) {
 		const entry = entries.get(id);
 		if (entry) entry.artifacts = null;
 		try {
-			await fetchArtifacts(token, id, true);
+			await fetchArtifacts(token, id, id !== openId);
 		} catch (error) {
 			console.error(error);
 		}
