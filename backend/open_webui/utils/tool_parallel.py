@@ -123,9 +123,12 @@ def execution_waves(
 ) -> list[list[int]]:
     """Partition same-turn calls into waves.
 
-    A call may depend on sibling tool_call ids or function names. Dependencies
+    A call may depend on sibling tool_call ids or function names. A name means
+    the calls with that name issued before this one, or every call with that
+    name when none comes earlier. So in fetch → select → label_group(depends_on
+    select) → select, label_group waits only for the first select. Dependencies
     that are not in this batch are treated as already satisfied (prior turn).
-    Cycles fall back to a single remaining wave (best-effort parallel).
+    Cycles fall back to running the remaining calls one at a time, in order.
     """
     n = len(call_ids)
     if n == 0:
@@ -147,9 +150,9 @@ def execution_waves(
                 if j != i:
                     pred[i].add(j)
                 continue
-            for j in name_to_idxs.get(dep, []):
-                if j != i:
-                    pred[i].add(j)
+            matches = [j for j in name_to_idxs.get(dep, []) if j != i]
+            earlier = [j for j in matches if j < i]
+            pred[i].update(earlier or matches)
 
     remaining = set(range(n))
     completed: set[int] = set()
@@ -158,8 +161,9 @@ def execution_waves(
     while remaining:
         wave = sorted(i for i in remaining if pred[i].issubset(completed))
         if not wave:
-            # Cycle or unsatisfiable edge — run the rest together.
-            waves.append(sorted(remaining))
+            # Cycle — run the rest one at a time in issue order, so a chain
+            # still sees each earlier call's output.
+            waves.extend([i] for i in sorted(remaining))
             break
         waves.append(wave)
         remaining.difference_update(wave)
