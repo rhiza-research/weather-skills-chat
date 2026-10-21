@@ -677,10 +677,6 @@
 													const commandsContainerElement =
 														document.getElementById('commands-container');
 
-													if (e.key === 'Escape') {
-														stopResponse();
-													}
-
 													// Command/Ctrl + Shift + Enter to submit a message pair
 													if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
 														e.preventDefault();
@@ -778,15 +774,6 @@
 															}
 														}
 													}
-
-													if (e.key === 'Escape') {
-														console.log('Escape');
-														atSelectedModel = undefined;
-														selectedToolIds = [];
-														webSearchEnabled = false;
-														imageGenerationEnabled = false;
-														codeInterpreterEnabled = false;
-													}
 												}}
 												on:paste={async (e) => {
 													e = e.detail.event;
@@ -846,10 +833,6 @@
 
 												const commandsContainerElement =
 													document.getElementById('commands-container');
-
-												if (e.key === 'Escape') {
-													stopResponse();
-												}
 
 												// Command/Ctrl + Shift + Enter to submit a message pair
 												if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
@@ -973,15 +956,6 @@
 
 													e.target.style.height = '';
 													e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
-												}
-
-												if (e.key === 'Escape') {
-													console.log('Escape');
-													atSelectedModel = undefined;
-													selectedToolIds = [];
-													webSearchEnabled = false;
-													imageGenerationEnabled = false;
-													codeInterpreterEnabled = false;
 												}
 											}}
 											rows="1"
