@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import io
 import logging
@@ -26,7 +27,7 @@ from open_webui.utils.artifacts import (
     extract_sandbox_archive,
     is_zarr_store,
     is_zarr_view,
-    list_artifacts,
+    list_artifacts_async,
     pack_sandbox_archive,
     pack_sandbox_zip,
     read_view,
@@ -65,9 +66,14 @@ def _writable(chat_id: str, user):
 
 
 @router.get("/{chat_id}/artifacts")
-async def get_artifacts(chat_id: str, user=Depends(get_verified_user)):
-    _readable(chat_id, user)
-    return list_artifacts(chat_id)
+async def get_artifacts(
+    chat_id: str,
+    depth: Optional[int] = Query(None, ge=1),
+    provenance: bool = True,
+    user=Depends(get_verified_user),
+):
+    await asyncio.to_thread(_readable, chat_id, user)
+    return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
 
 
 @router.get("/{chat_id}/artifacts/content")
@@ -272,16 +278,16 @@ async def upload_artifact(
     file: UploadFile = File(...),
     user=Depends(get_verified_user),
 ):
-    _writable(chat_id, user)
+    await asyncio.to_thread(_writable, chat_id, user)
     data = await file.read()
     try:
-        write_bytes(chat_id, path, data)
+        await asyncio.to_thread(write_bytes, chat_id, path, data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     from open_webui.utils.chat_realtime import schedule_artifacts
 
     schedule_artifacts(chat_id)
-    return list_artifacts(chat_id)
+    return await list_artifacts_async(chat_id)
 
 
 class ZarrViewForm(BaseModel):

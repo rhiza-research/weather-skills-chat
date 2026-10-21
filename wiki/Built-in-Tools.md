@@ -11,7 +11,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | `secrets_page` | Give the user a link to the page where they enter a secret. The model never receives the value. See [[Secrets]]. |
 | `list_preferences` | Read the user's saved [[Preferences]]. |
 | `create_preference` | Save a new preference. The model is told to ask the user first. |
-| `list_artifacts` | List the chat's files. |
+| `list_artifacts` | List the chat's files, or one folder of them. The model can limit how many folder levels are listed, and can ask which skills produced each image, HTML page, and Zarr store. |
 | `read_artifact` | Send a file from the chat's files to the model. The user must approve in a popup first. Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
 | `create_folder` | Create a folder in the chat's files. |
 | `copy_intermediate_result` | Copy a file or folder between the chat's files and its intermediate results folder, which skills use to pass data from one step to the next. |
