@@ -1029,7 +1029,8 @@ def _packs_for_chat(chat_id: str) -> list[Path]:
     from open_webui.models.users import Users
     from open_webui.utils.tools import accessible_skill_records
 
-    chat = Chats.get_chat_by_id(chat_id)
+    # Owner and organization only; the full chat can be megabytes.
+    chat = Chats.get_chat_access_row(chat_id)
     if chat is None or not chat.user_id:
         log.warning("skill packs skipped, chat missing id=%s", chat_id)
         return []

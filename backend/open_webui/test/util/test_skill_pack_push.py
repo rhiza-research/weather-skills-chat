@@ -121,3 +121,32 @@ class HttpJsonBytesTest(IsolatedAsyncioTestCase):
         self.assertEqual(sent["data"], b'{"a": 1}')
         self.assertIsNone(sent["json"])
         self.assertEqual(sent["headers"]["Content-Type"], "application/json")
+
+
+class PacksForChatTest(TestCase):
+    def test_reads_only_the_chat_owner_and_organization(self):
+        from unittest.mock import MagicMock
+
+        from open_webui.models.chats import ChatAccessRow
+
+        row = ChatAccessRow(id="chat-1", user_id="u1", organization_id="org-1", visibility="private")
+        user = MagicMock(id="u1")
+        with patch("open_webui.models.chats.Chats") as chats, patch(
+            "open_webui.models.users.Users"
+        ) as users, patch("open_webui.models.tools.Tools") as tools, patch(
+            "open_webui.utils.tools.accessible_skill_records", return_value=[]
+        ) as records:
+            chats.get_chat_access_row.return_value = row
+            users.get_user_by_id.return_value = user
+            tools.get_tool_catalog.return_value = []
+            self.assertEqual(sandbox._packs_for_chat("chat-1"), [])
+
+        chats.get_chat_access_row.assert_called_once_with("chat-1")
+        chats.get_chat_by_id.assert_not_called()
+        users.get_user_by_id.assert_called_once_with("u1")
+        self.assertEqual(records.call_args.kwargs["organization_id"], "org-1")
+
+    def test_missing_chat_lists_no_packs(self):
+        with patch("open_webui.models.chats.Chats") as chats:
+            chats.get_chat_access_row.return_value = None
+            self.assertEqual(sandbox._packs_for_chat("gone"), [])
