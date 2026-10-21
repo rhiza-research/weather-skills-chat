@@ -24,7 +24,9 @@ A limit can also be set when someone is invited. See [[Invitations]].
 When a reply stops because a limit was reached, the error in the chat has a **Request credit increase** button. It opens a short form that asks why the user needs more credits and, optionally, how many. Sending it emails the admins who can raise that limit:
 
 - For the organization limit, the platform admins.
-- For a member limit, the organization's owners and admins, or the platform admins when the organization has no other admin.
+- For a member limit, the organization's owners and admins, or the platform admins when the organization has no admin.
+
+A user who is one of those admins gets the email too.
 
 The email names the user, the organization, the limit reached, and this month's spend, and links to the admin page where the limit is changed. Replies go to the user. Requests use the mail settings on [[Built-in Tools]], and cannot be sent until those are set.
 

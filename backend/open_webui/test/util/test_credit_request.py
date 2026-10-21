@@ -26,7 +26,10 @@ def _usage(**overrides):
 
 
 def _admins(by_org):
-    return lambda organization_id, exclude="": list(by_org.get(organization_id, []))
+    def admin_emails(organization_id, exclude=""):
+        return [a for a in by_org.get(organization_id, []) if a != exclude]
+
+    return admin_emails
 
 
 class CreditRequestRouteTest(unittest.IsolatedAsyncioTestCase):
@@ -68,7 +71,22 @@ class CreditRequestRouteTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((args[6], args[7]), (40.0, 40.0))
         self.assertEqual(args[10], "/organization/membership")
 
-    async def test_member_limit_without_other_admins_goes_to_platform(self):
+    async def test_requester_who_is_an_admin_gets_the_email(self):
+        args = await self._submit(
+            _usage(),
+            {PLATFORM_ORG_ID: ["ops@example.com", "sam@example.com"]},
+        )
+        self.assertEqual(args[1], ["ops@example.com", "sam@example.com"])
+
+    async def test_member_limit_with_requester_as_only_admin_stays_in_org(self):
+        args = await self._submit(
+            _usage(org_cost_usd=120.0, user_limit_usd=40.0),
+            {PLATFORM_ORG_ID: ["ops@example.com"], "org-1": ["sam@example.com"]},
+        )
+        self.assertEqual(args[1], ["sam@example.com"])
+        self.assertEqual(args[10], "/organization/membership")
+
+    async def test_member_limit_without_admins_goes_to_platform(self):
         args = await self._submit(
             _usage(org_cost_usd=120.0, user_limit_usd=40.0),
             {PLATFORM_ORG_ID: ["ops@example.com"]},
