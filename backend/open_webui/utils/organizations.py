@@ -53,6 +53,19 @@ def is_platform_admin(user_id: str) -> bool:
     return is_at_least(PLATFORM_ORG_ID, user_id, "admin")
 
 
+def admin_emails(organization_id: str, exclude: str = "") -> list[str]:
+    """Addresses of the organization's owners and admins, without ``exclude``."""
+    skip = (exclude or "").strip().lower()
+    out: list[str] = []
+    for member in Organizations.get_members(organization_id):
+        if ROLE_RANK.get(member.role, 0) < ROLE_RANK["admin"]:
+            continue
+        addr = (member.email or "").strip().lower()
+        if addr and addr != skip and addr not in out:
+            out.append(addr)
+    return out
+
+
 def effective_user_role(user: UserModel, organization_id: Optional[str] = None) -> str:
     """Admin is platform-org membership, and only in the platform context."""
     stored = getattr(user, "role", None) or "pending"

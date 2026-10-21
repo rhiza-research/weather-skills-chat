@@ -25,7 +25,7 @@
 	import { createOrganization } from '$lib/apis/organizations';
 	import { getMyUsage } from '$lib/apis/usage';
 	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
-	import { formatCreditAmount, usageBarPercent } from '$lib/utils/usage';
+	import { formatCreditAmount, usageBarPercent, usageMeters } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
@@ -249,24 +249,27 @@
 							})}
 						{/if}
 					</div>
-					<div class="text-xs font-medium tabular-nums">
-						{formatCreditAmount(usage.cost_usd, '0.00')}{#if usage.effective_limit_usd != null}
-							/ {formatCreditAmount(usage.effective_limit_usd)}{/if}{' '}{$i18n.t('credits')}
-					</div>
-					{#if usage.effective_limit_usd != null}
-						<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-							<div
-								class="h-full rounded-full {usage.over_limit
-									? 'bg-red-500'
-									: 'bg-gray-900 dark:bg-white'}"
-								style="width: {usageBarPercent(
-									usage.cost_usd,
-									usage.effective_limit_usd,
-									usage.over_limit
-								)}%"
-							></div>
+					{#each usageMeters(usage) as meter (meter.scope)}
+						{#if meter.scope === 'member'}
+							<div class="mt-2 text-[11px] uppercase tracking-wide text-gray-400">
+								{$i18n.t('Your usage')}
+							</div>
+						{/if}
+						<div class="text-xs font-medium tabular-nums">
+							{formatCreditAmount(meter.spend, '0.00')}{#if meter.limit != null}
+								/ {formatCreditAmount(meter.limit)}{/if}{' '}{$i18n.t('credits')}
 						</div>
-					{/if}
+						{#if meter.limit != null}
+							<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+								<div
+									class="h-full rounded-full {meter.over
+										? 'bg-red-500'
+										: 'bg-gray-900 dark:bg-white'}"
+									style="width: {usageBarPercent(meter.spend, meter.limit, meter.over)}%"
+								></div>
+							</div>
+						{/if}
+					{/each}
 					{#if usage.over_limit && usage.message}
 						<div class="mt-1 text-[11px] text-red-600 leading-snug">{usage.message}</div>
 					{/if}
