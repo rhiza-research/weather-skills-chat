@@ -15,7 +15,7 @@ Secret names are written like environment variable names: letters, digits, and u
 
 ## How skills use secrets
 
-The model asks for secrets by name when it calls a skill. The skill receives each one as an environment variable of the same name. Names are looked up in the active organization, and if any name is missing, the skill does not run and the model is told which names are missing.
+The model asks for secrets by name when it calls a skill. The skill receives each one as an environment variable of the same name. Names are looked up in the chat's organization (see [[Organizations]]), and if any name is missing, the skill does not run and the model is told which names are missing.
 
 Tools can also receive a secret inside an argument, through a `{{secret:NAME}}` placeholder that the app replaces with the value before the tool runs. Placeholders work only for tools that run on the server, so values never reach the browser.
 

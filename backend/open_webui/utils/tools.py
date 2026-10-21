@@ -36,6 +36,7 @@ from langchain_core.utils.function_calling import (
 from open_webui.models.tools import ToolCatalogModel, Tools
 from open_webui.models.users import UserModel
 from open_webui.utils.access_control import user_owns_or_has_access
+from open_webui.utils.organizations import request_organization_id
 from open_webui.utils.plugin import load_tool_module_by_id
 from open_webui.utils.skill_version import (
     register_tool_by_function_name,
@@ -158,11 +159,7 @@ def get_tools(
     t0 = time.perf_counter()
     if catalog is None:
         catalog = Tools.get_tool_catalog()
-    raw_org = None
-    headers = getattr(request, "headers", None)
-    if headers is not None:
-        raw_org = headers.get("X-Organization-Id")
-    org_id = raw_org.strip() if isinstance(raw_org, str) and raw_org.strip() else None
+    org_id = request_organization_id(request)
     t_resolve = time.perf_counter()
     skill_records = accessible_skill_records(
         user, organization_id=org_id, catalog=catalog

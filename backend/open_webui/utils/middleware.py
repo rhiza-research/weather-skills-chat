@@ -1111,8 +1111,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
         from open_webui.utils.tools import accessible_skill_records
         from open_webui.models.tools import Tools
+        from open_webui.utils.organizations import request_organization_id
 
-        org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
+        org_id = request_organization_id(request)
         catalog = Tools.get_tool_catalog()
         clock.mark("db.tool_catalog", n=len(catalog))
         skill_records = accessible_skill_records(

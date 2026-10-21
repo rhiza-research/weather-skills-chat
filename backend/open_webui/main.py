@@ -410,7 +410,11 @@ from open_webui.utils.catalog import (
     can_manage_public,
 )
 from open_webui.models.org_catalog import RESOURCE_MODEL
-from open_webui.utils.organizations import can_write_chat, get_active_organization_id
+from open_webui.utils.organizations import (
+    can_write_chat,
+    chat_organization_id,
+    get_active_organization_id,
+)
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.usage import UsageLimitExceeded
 from open_webui.utils.usage import check_usage_caps
@@ -1183,22 +1187,23 @@ async def get_base_models(
     return {"data": models}
 
 
-def require_owned_chat(chat_id, user) -> None:
+def require_owned_chat(chat_id, user):
     """Refuse a request that names a saved chat the user does not own.
 
     Completions, outlets, and actions write into the chat and stream into
     every tab watching it, so only the owner may target a chat. A temporary
-    chat has no saved id and is not checked.
+    chat has no saved id and is not checked. Returns the saved chat's access
+    row, or None for a temporary chat.
     """
     if not chat_id or chat_id == "local":
-        return
-    if not isinstance(chat_id, str) or not can_write_chat(
-        user, Chats.get_chat_access_row(chat_id)
-    ):
+        return None
+    chat = Chats.get_chat_access_row(chat_id) if isinstance(chat_id, str) else None
+    if not can_write_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+    return chat
 
 
 @app.post("/api/chat/completions")
@@ -1209,7 +1214,10 @@ async def chat_completion(
     organization_id: str = Depends(get_active_organization_id),
 ):
     # Before anything else: the error path below writes into this chat id.
-    require_owned_chat(form_data.get("chat_id"), user)
+    chat = require_owned_chat(form_data.get("chat_id"), user)
+    # Skills, model access and spend follow the chat's organization, not the
+    # one the browser has active.
+    organization_id = chat_organization_id(chat, user, organization_id)
 
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)

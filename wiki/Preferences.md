@@ -15,4 +15,4 @@ Each preference can be turned off without deleting it. Titles must be unique amo
 
 ## How the model sees them
 
-At the start of every chat turn, the app gives the model all the enabled preferences that apply to the user in the active organization, sorted by title, and tells the model to follow them when they apply to the conversation. Each one is labeled as private or organization.
+At the start of every chat turn, the app gives the model all the enabled preferences that apply to the user in the chat's organization (see [[Organizations]]), sorted by title, and tells the model to follow them when they apply to the conversation. Each one is labeled as private or organization.

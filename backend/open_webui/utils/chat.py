@@ -43,6 +43,7 @@ from open_webui.models.models import Models
 
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.models import check_model_access, remember_catalog_model
+from open_webui.utils.organizations import request_organization_id
 from open_webui.utils.payload import convert_payload_openai_to_ollama
 from open_webui.utils.response import (
     convert_response_ollama_to_openai,
@@ -289,8 +290,7 @@ async def _generate_chat_completion(
         # Check if user has access to the model
         if not bypass_filter and user.role == "user":
             try:
-                org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
-                check_model_access(user, model, org_id)
+                check_model_access(user, model, request_organization_id(request))
             except Exception as e:
                 raise e
 
