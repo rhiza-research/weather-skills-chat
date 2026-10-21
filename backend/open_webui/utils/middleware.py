@@ -104,6 +104,7 @@ from open_webui.env import (
     ENABLE_REALTIME_CHAT_SAVE,
 )
 from open_webui.constants import TASKS
+from open_webui.models.usage import UsageLimitExceeded
 
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -137,6 +138,15 @@ def completion_revision(chat_id: str | None) -> int:
     except Exception:
         log.warning("Reading chat revision failed chat_id=%s", chat_id, exc_info=True)
         return 0
+
+
+def model_call_error_message(e: Exception) -> str:
+    """The error a user sees when a model call is refused, e.g. by a usage cap."""
+    if isinstance(e, HTTPException) and isinstance(e.detail, str):
+        return e.detail
+    if isinstance(e, UsageLimitExceeded):
+        return e.detail
+    return str(e)
 
 
 def tool_call_files_for_display(
@@ -2587,6 +2597,8 @@ async def process_chat_response(
                 close_open_reasoning_block(content_blocks)
 
                 tool_call_retries = 0
+                # A follow-up model call that was refused, shown on the reply.
+                followup_error = None
 
                 while len(tool_calls) > 0 and tool_call_retries < MAX_TOOL_CALL_RETRIES:
                     tool_call_retries += 1
@@ -2887,6 +2899,7 @@ async def process_chat_response(
                             pending_tool_batches=len(tool_calls),
                             error=str(e),
                         )
+                        followup_error = model_call_error_message(e)
                         break
 
                 if len(tool_calls) > 0 and tool_call_retries >= MAX_TOOL_CALL_RETRIES:
@@ -3113,6 +3126,7 @@ async def process_chat_response(
                                 limit=MAX_CODE_INTERPRETER_RETRIES,
                                 error=str(e),
                             )
+                            followup_error = model_call_error_message(e)
                             break
 
                     if (
@@ -3134,6 +3148,9 @@ async def process_chat_response(
                                 ),
                             }
                         )
+
+                # A follow-up refused before streaming leaves the waiting status up.
+                await waiting_heartbeat.stop(clear=True)
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])
                 final_content = serialize_content_blocks(content_blocks)
@@ -3176,14 +3193,16 @@ async def process_chat_response(
                     save_final_reply,
                 )
 
+                reply = {"content": final_content, "done": True}
+                if followup_error:
+                    reply["error"] = {"content": followup_error}
+
                 saved = True
-                if not ENABLE_REALTIME_CHAT_SAVE:
+                if not ENABLE_REALTIME_CHAT_SAVE or followup_error:
                     # A failed save is reported on the reply, not as a failed
                     # generation: the model finished, the database did not.
                     saved = await save_final_reply(
-                        metadata["chat_id"],
-                        metadata["message_id"],
-                        {"content": final_content, "done": True},
+                        metadata["chat_id"], metadata["message_id"], reply
                     )
 
                 data = {
@@ -3192,7 +3211,9 @@ async def process_chat_response(
                     "title": title,
                     "revision": completion_revision(metadata["chat_id"]),
                 }
-                if not saved:
+                if followup_error:
+                    data["error"] = {"content": followup_error}
+                elif not saved:
                     data["error"] = {"content": REPLY_SAVE_FAILED_MESSAGE}
 
                 # Send a webhook notification if the user is not active
@@ -3297,6 +3318,7 @@ async def process_chat_response(
                     log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
+                await waiting_heartbeat.stop(clear=True)
                 await preparing_tool_calls.clear()
                 await generation_heartbeat.stop(clear=True)
 
