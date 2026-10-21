@@ -79,13 +79,46 @@ def test_unknown_dependency_is_ignored():
     assert waves == [[0, 1]]
 
 
-def test_cycle_falls_back_to_one_wave():
+def test_cycle_falls_back_to_serial_waves():
     waves = execution_waves(
         ["a", "b"],
         ["one", "two"],
         [["two"], ["one"]],
     )
-    assert waves == [[0, 1]]
+    assert waves == [[0], [1]]
+
+
+def test_repeated_tool_name_resolves_to_earlier_call():
+    # The chain from a real chat: two selects, each later step depending on the
+    # previous step by name. Matching every select made a false cycle, and the
+    # cycle fallback ran the last five steps at once.
+    names = [
+        "convert_to_totals",
+        "select",
+        "label_group",
+        "summarize_dim",
+        "edit_coords",
+        "select",
+        "inspect_zarr",
+    ]
+    deps = [
+        [],
+        ["convert_to_totals"],
+        ["select"],
+        ["label_group"],
+        ["summarize_dim"],
+        ["edit_coords"],
+        ["select"],
+    ]
+    waves = execution_waves([""] * len(names), names, deps)
+    assert waves == [[0], [1], [2], [3], [4], [5], [6]]
+
+
+def test_display_image_waits_for_every_earlier_plot():
+    names = ["plot", "plot", "display_image"]
+    deps = with_implicit_depends_on(names, [[], [], []])
+    waves = execution_waves(["a", "b", "c"], names, deps)
+    assert waves == [[0, 1], [2]]
 
 
 def test_display_image_waits_for_sibling_skills():
