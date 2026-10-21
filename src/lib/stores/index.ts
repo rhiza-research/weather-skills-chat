@@ -47,6 +47,8 @@ export const organizations = writable([]);
 export const activeOrganizationId = writable(null);
 /** Full-screen hold while the active organization catalog and chat list reload. */
 export const switchingOrganization = writable(false);
+/** An organization to switch to without leaving the current page; the sidebar does the switch. */
+export const organizationSwitchRequest: Writable<string | null> = writable(null);
 /** Settings and organization membership have been loaded for this session. */
 export const preferencesReady = writable(false);
 

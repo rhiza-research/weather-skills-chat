@@ -28,7 +28,7 @@ Admins and owners can change the organization's name, description, logo, and def
 
 A platform admin is an admin or owner of the platform organization. Platform admins activate new organizations, see every organization, set organization spending limits, manage the public catalog, and can add and remove members in any organization.
 
-The Open WebUI admin role, including the admin settings, applies only while the platform organization is active. In any other organization, a platform admin works with the role their membership there gives them. An existing Open WebUI admin account is added to the platform organization as an admin on its next request.
+The Open WebUI admin role, including the admin settings, applies only while the platform organization is active. A platform admin who opens an admin page while another organization is active, for example from a link in an email, is switched to the platform organization and stays on that page. In any other organization, a platform admin works with the role their membership there gives them. An existing Open WebUI admin account is added to the platform organization as an admin on its next request.
 
 ## Catalog
 
