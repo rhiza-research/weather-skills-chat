@@ -54,10 +54,11 @@ async def request_credit_increase(
     )
 
     # Organization admins set member limits; platform admins set organization
-    # limits, and take a member request when the organization has no other admin.
+    # limits, and take a member request when the organization has no admin. A
+    # requester who is one of those admins gets the email too.
     recipients = []
     if member_over and not org_over:
-        recipients = admin_emails(organization_id, exclude=user.email)
+        recipients = admin_emails(organization_id)
         limit_label = "Member limit"
         used, limit = usage.cost_usd, usage.user_limit_usd
         review_path = "/organization/membership"
@@ -66,7 +67,7 @@ async def request_credit_increase(
         used, limit = usage.org_cost_usd, usage.org_limit_usd
         review_path = "/admin/users"
     if not recipients:
-        recipients = admin_emails(PLATFORM_ORG_ID, exclude=user.email)
+        recipients = admin_emails(PLATFORM_ORG_ID)
         if member_over and not org_over:
             review_path = "/admin/users"
 
