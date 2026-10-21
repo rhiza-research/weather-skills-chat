@@ -191,6 +191,10 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
 
+# The sandbox emulator. The app does not read it: weather-skills-eval copies it out of this image
+# onto a sandbox runner container. emulator.py loads local_runtime.py from its own folder.
+COPY sandbox/emulator/emulator.py sandbox/emulator/local_runtime.py /app/sandbox/emulator/
+
 EXPOSE 8080
 
 HEALTHCHECK CMD curl --silent --fail http://localhost:${PORT:-8080}/health | jq -ne 'input.status == true' || exit 1
