@@ -225,29 +225,9 @@ def is_zarr_store(path: Path) -> bool:
     return any((path / marker).exists() for marker in ZARR_MARKERS)
 
 
-def is_zarr_view(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    if path.name.endswith(".zarrview.json"):
-        return True
-    if path.suffix != ".json":
-        return False
-    try:
-        data = json.loads(path.read_text())
-    except Exception:
-        return False
-    return isinstance(data, dict) and data.get("type") == "zarr_view"
-
-
-def read_view(path: Path) -> dict:
-    return json.loads(path.read_text())
-
-
 def classify_entry(path: Path) -> str:
     if is_zarr_store(path):
         return "zarr"
-    if is_zarr_view(path):
-        return "zarr_view"
     if path.is_dir():
         return "directory"
     return "file"
@@ -678,16 +658,6 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            if kind == "zarr_view":
-                try:
-                    spec = read_view(path)
-                    zarr_rel = spec.get("zarr") or ""
-                    target = resolve_in_sandbox(chat_id, zarr_rel)
-                    item["zarr"] = zarr_rel
-                    item["title"] = spec.get("title") or path.stem
-                    item["missing_zarr"] = not is_zarr_store(target)
-                except Exception:
-                    item["missing_zarr"] = True
             prov = None
             if provenance:
                 if kind == "image" and path.suffix.lower() == ".png":
@@ -979,11 +949,3 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
             own_sandbox_path(dest)
             written.append(name)
     return written
-
-
-def write_json(chat_id: str, relpath: str, payload: dict) -> Path:
-    target = resolve_in_sandbox(chat_id, relpath)
-    make_sandbox_dir(target.parent, chat_sandbox(chat_id))
-    target.write_text(json.dumps(payload, indent=2))
-    own_sandbox_path(target)
-    return target

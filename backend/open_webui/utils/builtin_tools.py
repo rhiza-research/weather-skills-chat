@@ -509,7 +509,7 @@ async def list_artifacts(
 
     def readable() -> bool:
         user = Users.get_user_by_id(__user__.get("id"))
-        chat = Chats.get_chat_by_id(chat_id)
+        chat = Chats.get_chat_access_row(chat_id)
         return can_read_chat(user, chat)
 
     if not await asyncio.to_thread(readable):

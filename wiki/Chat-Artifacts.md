@@ -11,7 +11,6 @@ The file list shows every file and folder in the chat. Some kinds of entries are
 - Images, which can be viewed in place.
 - HTML pages, such as interactive Plotly figures, which open in the side panel and full screen, where the user can zoom and hover. They run in a sandbox: the page cannot read the user's login or act in the chat as them. A Plotly figure saved with `include_plotlyjs='cdn'` is a few kilobytes and loads plotly.js from Plotly's CDN in the user's browser. In a reply, a markdown link to an HTML file, such as `[SST](plots/sst.html)`, opens it full screen, and image syntax, such as `![SST](plots/sst.html)`, shows it in the message.
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
-- Zarr views, which draw a Zarr store as an image. See below.
 
 Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows it, so a user can see how a result was made.
 
@@ -25,12 +24,6 @@ Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carr
 Archive downloads and archive uploads have a size limit, and so do the files the model copies into running code on [[Built-in Tools]].
 
 Anyone who can read a chat can list and download its files. Only the chat's owner can add or change them. Who can read a chat is described on [[Organizations]].
-
-## Zarr views
-
-A Zarr view is a saved way of drawing a Zarr store. It names the store, a title, the variable to draw, and the style: a map (heatmap) or a time series. It can also set the color scale, pick one position along dimensions such as time, and limit the map to a latitude and longitude box. Opening a view draws the image from the current data.
-
-A view is a small JSON file in the chat's files, usually with a name ending in `.zarrview.json`. Anything that writes files into the chat, such as a skill, can create one. The model has no built-in tool for creating views, and the file list only shows and opens them.
 
 ## Copying and deleting chats
 
