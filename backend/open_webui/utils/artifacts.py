@@ -629,10 +629,12 @@ def list_artifacts(
 ) -> list[dict]:
     """List a chat's sandbox. Blocks on JuiceFS; async code uses list_artifacts_async.
 
-    path: start at this folder instead of the sandbox root. Paths in the result
-    stay relative to the root.
-    depth: how many folder levels to list below the start (1 = its direct
-    children). Folders at the limit are listed with ``truncated`` set.
+    path: only the entry at this relative path and everything under it, exactly
+    as if the full listing were filtered by path. Folders that do not lead to
+    it are not walked. Paths in the result stay relative to the sandbox root.
+    depth: how many folder levels to list below path, or below the root
+    (1 = direct contents). Folders at the limit are listed with ``truncated``
+    set. None lists every level.
     provenance: read provenance from images, HTML pages and Zarr stores. Each
     read opens the file, so turning it off makes large listings much cheaper.
     """
@@ -640,15 +642,26 @@ def list_artifacts(
         raise ValueError("depth must be at least 1")
     t0 = time.perf_counter()
     root = chat_sandbox(chat_id)
-    start = resolve_in_sandbox(chat_id, path) if path else root
+    prefix = path or ""
+    base = prefix.rstrip("/")
+    base_levels = len(base.split("/")) if base else 0
     entries = []
 
-    def walk(directory: Path, level: int):
+    def walk(directory: Path):
         for path in sorted(directory.iterdir()):
             # Hide dotfiles/dirs (uv cache, HOME scratch under Landlock, etc.)
             if path.name.startswith("."):
                 continue
             rel = path.relative_to(root).as_posix()
+            if prefix and rel != prefix and not rel.startswith(base + "/"):
+                # Outside the requested path: only walk on toward it.
+                if (
+                    prefix.startswith(rel + "/")
+                    and path.is_dir()
+                    and not is_zarr_store(path)
+                ):
+                    walk(path)
+                continue
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
                 kind = "image"
@@ -689,14 +702,15 @@ def list_artifacts(
                 item["provenance_detail"] = prov
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
+            level = rel.count("/") + 1 - base_levels
             if descend and depth is not None and level >= depth:
                 item["truncated"] = True
                 descend = False
             entries.append(item)
             if descend:
-                walk(path, level + 1)
+                walk(path)
 
-    walk(start, 1)
+    walk(root)
     log_timing(
         "juicefs.list_artifacts",
         time.perf_counter() - t0,

@@ -83,10 +83,43 @@ class ListArtifactsOptionsTest(SandboxCase):
         self.assertNotIn("runs/2024/day1", items)
         self.assertNotIn("truncated", items["runs"])
 
-    def test_path_starts_below_root_and_keeps_root_relative_paths(self):
+    def test_path_lists_the_entry_and_what_is_under_it(self):
         items = self.paths(path="runs", depth=1)
-        self.assertEqual(set(items), {"runs/2024"})
+        self.assertEqual(set(items), {"runs", "runs/2024"})
+        self.assertNotIn("truncated", items["runs"])
         self.assertTrue(items["runs/2024"]["truncated"])
+
+    def test_path_matches_filtering_the_full_listing(self):
+        root = self.artifacts / self.chat_id
+        (root / "store.zarr" / "precip").mkdir(parents=True)
+        (root / "store.zarr" / ".zgroup").write_text("{}")
+        (root / "store.zarr" / "precip" / "0").write_text("x")
+        (root / ".cache" / "deep").mkdir(parents=True)
+        (root / ".cache" / "deep" / "x").write_text("x")
+        full = list_artifacts(self.chat_id)
+        for prefix in [
+            "runs", "runs/", "runs/2024", "plots", "notes.csv", "nope",
+            "store.zarr", "store.zarr/precip", ".cache", ".cache/deep",
+        ]:
+            base = prefix.rstrip("/") + "/"
+            expected = [
+                e for e in full
+                if e["path"] == prefix or e["path"].startswith(base)
+            ]
+            self.assertEqual(list_artifacts(self.chat_id, path=prefix), expected, prefix)
+
+    def test_path_skips_folders_that_do_not_lead_to_it(self):
+        walked = []
+        real = Path.iterdir
+
+        def spy(directory):
+            walked.append(directory.name)
+            return real(directory)
+
+        with patch.object(Path, "iterdir", spy):
+            list_artifacts(self.chat_id, path="runs/2024")
+        self.assertNotIn("plots", walked)
+        self.assertNotIn("intermediate_results", walked)
 
     def test_provenance_off_skips_file_reads(self):
         with patch.object(artifacts_utils, "provenance_for_html") as read:
@@ -183,8 +216,14 @@ class ListArtifactsToolOptionsTest(SandboxCase):
         self.assertNotIn("runs/2024", out)
         self.assertIn("list one by passing it as `path`", out)
 
+    def test_default_lists_every_level(self):
+        out = self.call()
+        self.assertIn("`runs/2024/day1/out.csv`", out)
+        self.assertNotIn("not expanded", out)
+
     def test_path_lists_only_that_subtree(self):
         out = self.call(path="runs")
+        self.assertIn("- `runs/` (directory)", out)
         self.assertIn("`runs/2024/day1/out.csv`", out)
         self.assertNotIn("notes.csv", out)
 
