@@ -15,7 +15,7 @@ There are two limits, and a call must be under both.
 - The organization limit applies to the whole organization. New personal and workspace organizations start at 300 US dollars a month. The platform organization has no limit. Only platform admins set or remove organization limits.
 - The member limit applies to one person in one organization. It starts with no limit. Organization admins set it, and it cannot be higher than the organization limit.
 
-When a limit is reached, the model stops answering new requests in that organization until the next month or until an admin raises the limit, and the user is told whether the organization or their own limit was reached. A reply that started before the limit was reached finishes. An automation run that starts while a limit is reached creates no chat.
+When a limit is reached, the model stops answering new requests in that organization until the next month or until an admin raises the limit, and the user is told whether the organization or their own limit was reached. A reply that is still running when the limit is reached stops before its next model call, for example after a skill finishes. It keeps what it has written and the skills it has run, and shows the same message. An automation run that starts while a limit is reached creates no chat.
 
 A limit can also be set when someone is invited. See [[Invitations]].
 

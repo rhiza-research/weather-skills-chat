@@ -392,6 +392,7 @@ from open_webui.utils.chat import (
 )
 from open_webui.utils.middleware import (
     WaitingResponseHeartbeat,
+    model_call_error_message,
     process_chat_payload,
     process_chat_response,
     emit_chat_title_if_needed,
@@ -1439,12 +1440,7 @@ async def chat_completion(
                 job_metadata.get("chat_id"),
                 job_metadata.get("message_id"),
             )
-            if isinstance(e, HTTPException) and isinstance(e.detail, str):
-                error_content = e.detail
-            elif isinstance(e, UsageLimitExceeded):
-                error_content = e.detail
-            else:
-                error_content = str(e)
+            error_content = model_call_error_message(e)
             await waiting_heartbeat.stop(clear=True)
             event_emitter = get_event_emitter(job_metadata)
             if event_emitter:
