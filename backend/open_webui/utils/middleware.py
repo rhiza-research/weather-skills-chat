@@ -140,6 +140,18 @@ def completion_revision(chat_id: str | None) -> int:
         return 0
 
 
+def unavailable_tool_message(tool_name: str) -> str:
+    """Tool result when the model calls a tool this message does not offer."""
+    name = f"`{tool_name}`" if tool_name else "That tool"
+    return (
+        f"Error: {name} is not available for this message, so it did not run. "
+        "Do not call it again in this reply. Tell the user it is not turned on "
+        "for this chat: they can turn it on in the + menu next to the message "
+        "box and send their message again. If it is not listed there, an "
+        "organization admin has to turn it on first."
+    )
+
+
 def model_call_error_message(e: Exception) -> str:
     """The error a user sees when a model call is refused, e.g. by a usage cap."""
     if isinstance(e, HTTPException) and isinstance(e.detail, str):
@@ -2771,6 +2783,13 @@ async def process_chat_response(
                                     if "used_secrets" in locals()
                                     else str(e)
                                 )
+                        else:
+                            log.warning(
+                                "tool not offered chat=%s tool=%s",
+                                metadata.get("chat_id"),
+                                tool_name,
+                            )
+                            tool_result = unavailable_tool_message(tool_name)
 
                         tool_result_files = []
                         if isinstance(tool_result, list):
