@@ -29,7 +29,7 @@ Only one install, update, or delete runs at a time on each server. Starting anot
 
 Packs follow the catalog rules on [[Organizations]]: a platform admin decides whether a public pack starts on or off and can withdraw it everywhere, and each organization's admins can turn it on or off for their organization. The same controls exist for each skill inside a pack, so an organization can use a pack but leave some of its skills off.
 
-The model can run a skill only when both the pack and the skill are on for the active organization.
+The model can run a skill only when both the pack and the skill are on for the chat's organization (see [[Organizations]]).
 
 When two packs offer a skill with the same name, the model runs the one with the highest version number.
 

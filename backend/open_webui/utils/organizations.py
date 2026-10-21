@@ -249,3 +249,35 @@ def get_active_organization_id(
             detail="Organization is not active",
         )
     return org.id
+
+
+def chat_organization_id(chat, user: UserModel, active_organization_id: str) -> str:
+    """Organization a saved chat's messages run in.
+
+    A chat belongs to the organization it was created in, whichever one the
+    browser has active. Keeps the active organization when there is no saved
+    chat or the user is no longer a member of an active chat organization.
+    """
+    chat_org_id = getattr(chat, "organization_id", None)
+    if not chat_org_id or chat_org_id == active_organization_id:
+        return active_organization_id
+    org, member = Organizations.get_organization_for_member(chat_org_id, user.id)
+    if org and member and org.active:
+        return chat_org_id
+    return active_organization_id
+
+
+def request_organization_id(request) -> Optional[str]:
+    """Organization a chat request runs in.
+
+    The chat route and automations put it in request.state.metadata. The
+    X-Organization-Id header is the fallback for requests without it.
+    """
+    metadata = getattr(getattr(request, "state", None), "metadata", None)
+    if isinstance(metadata, dict) and metadata.get("organization_id"):
+        return metadata["organization_id"]
+    headers = getattr(request, "headers", None)
+    raw = headers.get("X-Organization-Id") if headers is not None else None
+    if not isinstance(raw, str):
+        return None
+    return raw.strip() or None
