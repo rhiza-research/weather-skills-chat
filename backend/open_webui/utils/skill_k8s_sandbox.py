@@ -586,15 +586,20 @@ async def _http_json(
     url: str,
     *,
     json_body: Optional[dict] = None,
+    json_bytes: Optional[bytes] = None,
     headers: Optional[dict] = None,
     timeout: int = 30,
 ) -> dict:
+    """json_bytes: a body already encoded as JSON. Large bodies are encoded off the loop."""
+    if json_bytes is not None:
+        headers = {**(headers or {}), "Content-Type": "application/json"}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.request(
                 method,
                 url,
                 json=json_body,
+                data=json_bytes,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
@@ -1115,21 +1120,28 @@ async def _packs_ready_on_runner(
     if not info.get("pod_ip"):
         return False
     have = await _listed_packs(info) or set()
-    return _pack_names(_packs_for_chat(chat_id)).issubset(have)
+    wanted = await asyncio.to_thread(_packs_for_chat, chat_id)
+    return _pack_names(wanted).issubset(have)
+
+
+def _unpack_request(skill_dir: Path) -> tuple[str, bytes]:
+    """Runner path and /unpack body for a pack. Reads JuiceFS and compresses; run in a thread."""
+    pack = _pack_root(skill_dir)
+    dest = f"{_runner_packs_root()}/{pack.name}"
+    archive = base64.b64encode(_tar_pack(pack)).decode()
+    return dest, json.dumps({"dest": dest, "archive": archive}).encode()
 
 
 async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
     """Put the pack on the runner emptyDir. JuiceFS copytree of many files is slow."""
-    pack = _pack_root(skill_dir)
-    dest = f"{_runner_packs_root()}/{pack.name}"
     base = await _runner_base(info["pod_ip"], info.get("pod_name"), info.get("pod"))
     started = time.monotonic()
-    archive = base64.b64encode(_tar_pack(pack)).decode()
+    dest, body = await asyncio.to_thread(_unpack_request, skill_dir)
     packed = time.monotonic()
     result = await _http_json(
         "POST",
         f"{base}/unpack",
-        json_body={"dest": dest, "archive": archive},
+        json_bytes=body,
         timeout=180,
     )
     log.info(
@@ -1145,7 +1157,7 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
 
 
 async def _ensure_packs_on_runner(info: dict, chat_id: str) -> None:
-    wanted = _packs_for_chat(chat_id)
+    wanted = await asyncio.to_thread(_packs_for_chat, chat_id)
     have = await _listed_packs(info) or set()
     missing = _missing_packs(have, wanted)
     if not missing:
