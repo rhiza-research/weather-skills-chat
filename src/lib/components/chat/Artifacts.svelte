@@ -210,20 +210,17 @@
 		}
 	};
 
-	// A cached file list paints with the transcript. Fetch when this chat has
-	// no list yet, or only the prefetch's top level; that joins the whole-tree
-	// fetch opening the chat started. Later changes arrive on chat:artifacts,
-	// or from an upload.
+	// A cached file list paints with the transcript. Fetch only when this chat
+	// has no list yet. Later changes arrive on chat:artifacts, or from an upload.
 	$: {
 		if ($showArtifacts && $chatId && $chatId !== 'local') {
 			const listed = $chatArtifactLists[$chatId];
-			if (Array.isArray(listed)) files = listed;
-			if (!shouldLoadArtifactList(listed)) {
+			if (Array.isArray(listed)) {
+				files = listed;
 				loadedArtifactKey = $chatId;
-			} else if (loadedArtifactKey !== $chatId) {
+			} else if (shouldLoadArtifactList(listed) && loadedArtifactKey !== $chatId) {
 				loadedArtifactKey = $chatId;
-				if (Array.isArray(listed)) void ensureArtifacts(localStorage.token, $chatId);
-				else loadFiles();
+				loadFiles();
 			}
 		} else {
 			if (!$chatId || $chatId === 'local') files = [];

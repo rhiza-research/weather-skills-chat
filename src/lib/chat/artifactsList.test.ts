@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
-import { isPartialArtifactList, shouldLoadArtifactList } from './artifactsList';
+import { shouldLoadArtifactList } from './artifactsList';
 
 const artifactsSource = readFileSync(
 	resolve(dirname(fileURLToPath(import.meta.url)), '../components/chat/Artifacts.svelte'),
@@ -17,14 +17,6 @@ test('a successful list, including empty, does not refetch', () => {
 test('a missing or failed list can be fetched again', () => {
 	expect(shouldLoadArtifactList(undefined)).toBe(true);
 	expect(shouldLoadArtifactList(null)).toBe(true);
-});
-
-test('a list with truncated folders is partial and loads the whole tree', () => {
-	const partial = [{ path: 'plots', truncated: true }, { path: 'notes.csv' }];
-	expect(isPartialArtifactList(partial)).toBe(true);
-	expect(shouldLoadArtifactList(partial)).toBe(true);
-	expect(isPartialArtifactList([{ path: 'notes.csv' }])).toBe(false);
-	expect(isPartialArtifactList(undefined)).toBe(false);
 });
 
 test('the artifacts panel uses shouldLoadArtifactList instead of a sticky false key', () => {
