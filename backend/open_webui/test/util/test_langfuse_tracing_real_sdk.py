@@ -140,6 +140,7 @@ class RealLangfuseTestCase(unittest.IsolatedAsyncioTestCase):
     def _end(self, **kwargs):
         thread = lf._input_thread_var.get()
         lf.end_chat_trace(**kwargs)
+        lf.wait_for_trace_ends()
         if thread is not None:
             thread.join(timeout=5)
             self.assertFalse(thread.is_alive())
@@ -728,6 +729,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
 
     def _flush(self):
         self._join_input_thread()
+        lf.wait_for_trace_ends()
         self.client.flush()
 
     def _assert_error_root(self, message):

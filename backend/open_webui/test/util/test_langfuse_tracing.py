@@ -394,10 +394,13 @@ class BeginChatTraceTest(unittest.TestCase):
         ender.start()
         self.assertTrue(end_joining.wait(timeout=5))
         trace.end.assert_not_called()
-        release_update.set()
+        # end_chat_trace returned without waiting; the span ends after the input.
         ender.join(timeout=5)
-        input_thread.join(timeout=5)
         self.assertFalse(ender.is_alive())
+        trace.end.assert_not_called()
+        release_update.set()
+        lf.wait_for_trace_ends()
+        input_thread.join(timeout=5)
         self.assertEqual(calls, ["update", "end"])
         self.assertIsNone(ctx.run(lf.current_trace))
 
@@ -695,6 +698,7 @@ class BeginChatTraceNeverRaisesTest(unittest.TestCase):
         client.start_observation.assert_called_once()
         self.assertIsNone(lf._propagate_cm_var.get())
         lf.end_chat_trace()
+        lf.wait_for_trace_ends()
         trace.end.assert_called_once()
         self.assertIsNone(lf.current_trace())
         cm.__exit__.assert_not_called()
@@ -716,6 +720,7 @@ class EndChatTraceInputTimeoutTest(unittest.TestCase):
         lf._trace_var.set(trace)
         with self.assertLogs(lf.log, level="DEBUG") as logs:
             lf.end_chat_trace()
+            lf.wait_for_trace_ends()
         stuck.join.assert_called_once_with(timeout=5.0)
         self.assertTrue(any("not attached" in line for line in logs.output))
         trace.end.assert_called_once()
@@ -829,3 +834,67 @@ class ProviderCallErrorSpanTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoFlushOnTheLoopTest(unittest.TestCase):
+    """Spans export on the SDK's own thread; nothing on the send path flushes."""
+
+    def setUp(self):
+        _reset_trace_state()
+        self.client = MagicMock()
+        self.patch = patch.object(lf, "get_client", return_value=self.client)
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        _reset_trace_state()
+
+    def test_end_generation_does_not_flush(self):
+        generation = MagicMock()
+        lf._generation_stack_var.set([generation])
+        lf.end_generation(output={"content": "rain"})
+        generation.end.assert_called_once()
+        self.client.flush.assert_not_called()
+
+    def test_end_chat_trace_does_not_flush(self):
+        trace = MagicMock()
+        lf._trace_var.set(trace)
+        lf.end_chat_trace(output={"content": "rain"})
+        lf.wait_for_trace_ends()
+        trace.end.assert_called_once()
+        self.client.flush.assert_not_called()
+
+    def test_end_chat_trace_returns_while_input_is_still_attaching(self):
+        import threading
+
+        release = threading.Event()
+        input_thread = threading.Thread(target=release.wait, args=(5,))
+        input_thread.start()
+        trace = MagicMock()
+        lf._trace_var.set(trace)
+        lf._input_thread_var.set(input_thread)
+        lf.end_chat_trace(output={"content": "rain"})
+        # The caller is free; the span waits for the input on its own thread.
+        trace.end.assert_not_called()
+        self.assertIsNone(lf.current_trace())
+        release.set()
+        lf.wait_for_trace_ends()
+        trace.end.assert_called_once()
+
+    def test_shutdown_ends_pending_roots_before_the_final_flush(self):
+        import threading
+
+        calls = []
+        release = threading.Event()
+        input_thread = threading.Thread(target=release.wait, args=(5,))
+        input_thread.start()
+        trace = MagicMock()
+        trace.end.side_effect = lambda: calls.append("end")
+        self.client.flush.side_effect = lambda: calls.append("flush")
+        lf._client = self.client
+        lf._trace_var.set(trace)
+        lf._input_thread_var.set(input_thread)
+        lf.end_chat_trace()
+        threading.Timer(0.05, release.set).start()
+        lf.shutdown_langfuse()
+        self.assertEqual(calls[:2], ["end", "flush"])
