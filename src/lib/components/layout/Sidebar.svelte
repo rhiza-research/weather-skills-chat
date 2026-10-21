@@ -21,7 +21,6 @@
 		organizations,
 		activeOrganizationId,
 		switchingOrganization,
-		organizationSwitchRequest,
 		socket
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy, type ComponentType } from 'svelte';
@@ -259,8 +258,7 @@
 	$: privateFolders = foldersWithVisibility(folders, 'private');
 	$: teamFolders = foldersWithVisibility(folders, 'organization');
 
-	/** With `stay`, the current page stays open, e.g. an admin page opened from a link. */
-	const switchOrganization = async (orgId, { stay = false } = {}) => {
+	const switchOrganization = async (orgId) => {
 		if (!orgId || orgId === $activeOrganizationId || $switchingOrganization) {
 			return;
 		}
@@ -273,11 +271,9 @@
 			chatId.set('');
 			search = '';
 			await initChatList();
-			if (!stay) {
-				await goto('/');
-				await tick();
-				document.getElementById('new-chat-button')?.click();
-			}
+			await goto('/');
+			await tick();
+			document.getElementById('new-chat-button')?.click();
 		} catch (error) {
 			activeOrganizationId.set(previousId);
 			try {
@@ -291,12 +287,6 @@
 			switchingOrganization.set(false);
 		}
 	};
-
-	$: if ($organizationSwitchRequest) {
-		const orgId = $organizationSwitchRequest;
-		organizationSwitchRequest.set(null);
-		switchOrganization(orgId, { stay: true });
-	}
 
 	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
 	const softRefreshChatList = async () => {

@@ -2,43 +2,32 @@
 	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	import {
-		WEBUI_NAME,
-		activeOrganizationId,
-		organizationSwitchRequest,
-		organizations,
-		showSidebar,
-		switchingOrganization,
-		user
-	} from '$lib/stores';
+	import { WEBUI_NAME, organizations, showSidebar, user } from '$lib/stores';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { page } from '$app/stores';
-	import {
-		applyContextUserRole,
-		platformAdminMembership
-	} from '$lib/utils/organizationContext';
+	import { platformAdminMembership } from '$lib/utils/organizationContext';
 
 	const i18n = getContext('i18n');
 
 	let loaded = false;
-	// A platform admin who opens an admin link while another organization is
-	// active is switched to the platform organization instead of sent away.
-	let switchRequested = false;
 
-	onMount(() => {
+	onMount(async () => {
+		if ($user?.role !== 'admin') {
+			// A platform admin who opens an admin link in another organization
+			// reloads into the platform organization instead of being sent away.
+			const platform = platformAdminMembership($organizations);
+			if (platform?.id && localStorage.getItem('activeOrganizationId') !== platform.id) {
+				localStorage.setItem('activeOrganizationId', platform.id);
+				location.reload();
+				return;
+			}
+			await goto('/');
+		}
 		loaded = true;
 	});
 
-	$: if (loaded && $user && $user.role !== 'admin' && !$switchingOrganization) {
-		const platform = switchRequested ? null : platformAdminMembership($organizations);
-		switchRequested = true;
-		if (platform?.id === $activeOrganizationId) {
-			applyContextUserRole();
-		} else if (platform?.id) {
-			organizationSwitchRequest.set(platform.id);
-		} else {
-			goto('/');
-		}
+	$: if (loaded && $user && $user.role !== 'admin') {
+		goto('/');
 	}
 </script>
 
@@ -48,7 +37,7 @@
 	</title>
 </svelte:head>
 
-{#if loaded && $user?.role === 'admin'}
+{#if loaded}
 	<div
 		class=" flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 			? 'md:max-w-[calc(100%-260px)]'
