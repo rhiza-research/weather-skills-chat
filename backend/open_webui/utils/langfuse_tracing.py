@@ -12,6 +12,7 @@ import copy
 import json
 import logging
 import threading
+import time
 from typing import Any, Callable, Optional
 
 from starlette.responses import StreamingResponse
@@ -96,6 +97,7 @@ def shutdown_langfuse() -> None:
     if not client:
         return
     try:
+        wait_for_trace_ends()
         client.flush()
         shutdown = getattr(client, "shutdown", None)
         if callable(shutdown):
@@ -339,35 +341,80 @@ def end_chat_trace(*, output: Any = None, error: Any = None) -> None:
         return
     if state is not None:
         state["ended"] = True
-    # An ended span drops updates, so the input must land first.
     input_thread = _input_thread_var.get()
-    if input_thread is not None:
-        input_thread.join(timeout=5.0)
-        if input_thread.is_alive():
-            log.debug("Langfuse chat trace input was not attached before end")
     while _generation_stack():
         end_generation(error=error or "trace closed")
     trace = _trace_var.get()
     try:
         if trace:
-            if error is not None:
-                _safe_call(
-                    trace.update,
-                    output=truncate_payload(str(error)),
-                    level="ERROR",
-                    status_message=str(error),
-                )
-            elif output is not None:
-                _safe_call(trace.update, output=truncate_payload(output))
-            _safe_call(trace.end)
+            # Waiting for the input and truncating the output can take
+            # seconds, so the root span ends on a worker thread.
+            _start_trace_end(trace, input_thread, output, error)
     except Exception:
         log.debug("Langfuse end_chat_trace failed", exc_info=True)
     finally:
+        # The propagation cm must be exited in the context that entered it.
         _clear_trace_context()
         _exit_propagate_attributes()
-        client = get_client()
-        if client:
-            _safe_call(client.flush)
+
+
+# Root spans being ended on worker threads.
+_ending_threads: set = set()
+_ending_lock = threading.Lock()
+
+
+def _end_root_span(trace: Any, input_thread: Any, output: Any, error: Any) -> None:
+    try:
+        # An ended span drops updates, so the input must land first.
+        if input_thread is not None:
+            input_thread.join(timeout=5.0)
+            if input_thread.is_alive():
+                log.debug("Langfuse chat trace input was not attached before end")
+        if error is not None:
+            _safe_call(
+                trace.update,
+                output=truncate_payload(str(error)),
+                level="ERROR",
+                status_message=str(error),
+            )
+        elif output is not None:
+            _safe_call(trace.update, output=truncate_payload(output))
+        _safe_call(trace.end)
+    except Exception:
+        log.debug("Langfuse end_chat_trace failed", exc_info=True)
+    finally:
+        with _ending_lock:
+            _ending_threads.discard(threading.current_thread())
+
+
+def _start_trace_end(trace: Any, input_thread: Any, output: Any, error: Any) -> None:
+    thread = threading.Thread(
+        target=_end_root_span,
+        args=(trace, input_thread, output, error),
+        name="langfuse-chat-trace-end",
+        daemon=True,
+    )
+    with _ending_lock:
+        _ending_threads.add(thread)
+    try:
+        thread.start()
+    except Exception:
+        with _ending_lock:
+            _ending_threads.discard(thread)
+        log.debug("Langfuse chat trace end thread failed to start", exc_info=True)
+        _end_root_span(trace, input_thread, output, error)
+
+
+def wait_for_trace_ends(timeout: float = 10.0) -> None:
+    """Block until root spans ending on worker threads have ended.
+
+    For shutdown, so those spans are exported, and for tests.
+    """
+    deadline = time.monotonic() + timeout
+    with _ending_lock:
+        threads = list(_ending_threads)
+    for thread in threads:
+        thread.join(max(0.0, deadline - time.monotonic()))
 
 
 # Who records a connection's model calls, set per connection as
@@ -590,10 +637,6 @@ def end_generation(*, output: Any = None, usage: Any = None, error: Any = None) 
     if update_kwargs:
         _safe_call(generation.update, **update_kwargs)
     _safe_call(generation.end)
-    # Push mid-turn generations promptly (tool loops can run a long time).
-    client = get_client()
-    if client:
-        _safe_call(client.flush)
 
 
 def start_tool_observation(name: str, params: Any) -> Any:
