@@ -49,3 +49,21 @@ export const getMyUsage = async (token: string): Promise<UsageMe> => {
 	}
 	return res;
 };
+
+export const requestCreditIncrease = async (
+	token: string,
+	body: { credits: number | null; reason: string }
+): Promise<{ status: boolean }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/usage/credit-request`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`,
+			...organizationHeaders()
+		},
+		body: JSON.stringify(body)
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
+};

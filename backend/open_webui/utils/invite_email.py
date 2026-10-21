@@ -7,6 +7,34 @@ from open_webui.utils.builtin_tools import _send_via_smtp
 _FAVICON_PATH = Path(__file__).resolve().parents[1] / "static" / "favicon-96x96.png"
 
 
+def _send_app_email(
+    config,
+    reply_to: str | None,
+    to: list[str],
+    subject: str,
+    body: str,
+    html_body: str,
+    favicon: bytes | None,
+) -> tuple[bool, str]:
+    """Send from the app's sender address; replies go to ``reply_to`` or the sender."""
+    from_email = (getattr(config, "EMAIL_TOOL_FROM_EMAIL", "") or "").strip()
+    return _send_via_smtp(
+        (getattr(config, "EMAIL_TOOL_SMTP_HOST", "") or "").strip(),
+        int(getattr(config, "EMAIL_TOOL_SMTP_PORT", 465) or 465),
+        (getattr(config, "EMAIL_TOOL_SMTP_USERNAME", "") or "").strip(),
+        (getattr(config, "EMAIL_TOOL_SMTP_PASSWORD", "") or "").strip(),
+        bool(getattr(config, "EMAIL_TOOL_SMTP_USE_TLS", True)),
+        "Weather Skills",
+        from_email,
+        reply_to or from_email,
+        to,
+        subject,
+        body,
+        html=html_body,
+        inline_images=[("favicon", favicon, "png")] if favicon else None,
+    )
+
+
 class InviteEmailError(Exception):
     def __init__(self, message: str, saved: bool = False):
         super().__init__(message)
@@ -103,26 +131,8 @@ def deliver_invite_email(
     favicon = _favicon_png()
     html_body = _invite_html(lead, link_label, link, expiry, show_icon=favicon is not None)
 
-    host = (getattr(config, "EMAIL_TOOL_SMTP_HOST", "") or "").strip()
-    port = int(getattr(config, "EMAIL_TOOL_SMTP_PORT", 465) or 465)
-    username = (getattr(config, "EMAIL_TOOL_SMTP_USERNAME", "") or "").strip()
-    password = (getattr(config, "EMAIL_TOOL_SMTP_PASSWORD", "") or "").strip()
-    use_tls = bool(getattr(config, "EMAIL_TOOL_SMTP_USE_TLS", True))
-    from_email = (getattr(config, "EMAIL_TOOL_FROM_EMAIL", "") or "").strip()
-    ok, err = _send_via_smtp(
-        host,
-        port,
-        username,
-        password,
-        use_tls,
-        app_name,
-        from_email,
-        from_email,
-        [to],
-        subject,
-        body,
-        html=html_body,
-        inline_images=[("favicon", favicon, "png")] if favicon else None,
+    ok, err = _send_app_email(
+        config, None, [to], subject, body, html_body, favicon
     )
     if not ok:
         raise InviteEmailError(
@@ -188,26 +198,8 @@ def deliver_signup_alert(
         + "</div>"
     )
 
-    host = (getattr(config, "EMAIL_TOOL_SMTP_HOST", "") or "").strip()
-    port = int(getattr(config, "EMAIL_TOOL_SMTP_PORT", 465) or 465)
-    username = (getattr(config, "EMAIL_TOOL_SMTP_USERNAME", "") or "").strip()
-    password = (getattr(config, "EMAIL_TOOL_SMTP_PASSWORD", "") or "").strip()
-    use_tls = bool(getattr(config, "EMAIL_TOOL_SMTP_USE_TLS", True))
-    from_email = (getattr(config, "EMAIL_TOOL_FROM_EMAIL", "") or "").strip()
-    ok, err = _send_via_smtp(
-        host,
-        port,
-        username,
-        password,
-        use_tls,
-        app_name,
-        from_email,
-        email,
-        recipients,
-        subject,
-        body,
-        html=html_body,
-        inline_images=[("favicon", favicon, "png")] if favicon else None,
+    ok, err = _send_app_email(
+        config, email, recipients, subject, body, html_body, favicon
     )
     if not ok:
         raise InviteEmailError(f"Signup alert could not be sent. ({err})", saved=False)
@@ -258,26 +250,82 @@ def deliver_signup_approval(
         + "</p></div>"
     )
 
-    host = (getattr(config, "EMAIL_TOOL_SMTP_HOST", "") or "").strip()
-    port = int(getattr(config, "EMAIL_TOOL_SMTP_PORT", 465) or 465)
-    username = (getattr(config, "EMAIL_TOOL_SMTP_USERNAME", "") or "").strip()
-    password = (getattr(config, "EMAIL_TOOL_SMTP_PASSWORD", "") or "").strip()
-    use_tls = bool(getattr(config, "EMAIL_TOOL_SMTP_USE_TLS", True))
-    from_email = (getattr(config, "EMAIL_TOOL_FROM_EMAIL", "") or "").strip()
-    ok, err = _send_via_smtp(
-        host,
-        port,
-        username,
-        password,
-        use_tls,
-        app_name,
-        from_email,
-        help_addr or from_email,
-        [recipient],
-        subject,
-        body,
-        html=html_body,
-        inline_images=[("favicon", favicon, "png")] if favicon else None,
+    ok, err = _send_app_email(
+        config, help_addr or from_email, [recipient], subject, body, html_body, favicon
     )
     if not ok:
         raise InviteEmailError(f"Signup approval could not be sent. ({err})", saved=False)
+
+
+def deliver_credit_request(
+    config,
+    admin_emails: list[str],
+    requester_name: str,
+    requester_email: str,
+    organization_name: str,
+    limit_label: str,
+    used: float,
+    limit: float | None,
+    requested: float | None,
+    reason: str,
+    review_path: str,
+) -> None:
+    """Email the admins who can raise a limit that a user asked for more credits."""
+    missing = smtp_is_configured(config)
+    if missing:
+        raise InviteEmailError(missing, saved=False)
+    if not admin_emails:
+        raise InviteEmailError("No admin can receive this request.", saved=False)
+
+    app_name = "Weather Skills"
+    person = (requester_name or "").strip() or requester_email
+    used_text = f"{used:.2f}"
+    limit_text = f"{limit:.2f}" if limit is not None else "none"
+    requested_text = f"{requested:.2f}" if requested is not None else "not specified"
+    subject = f"Credit increase request for {organization_name} on {app_name}"
+    lead = f"{person} asked for more credits in the {organization_name} organization."
+    details = [
+        ("Name", person),
+        ("Email", requester_email),
+        ("Organization", organization_name),
+        ("Limit reached", limit_label),
+        ("Used this month", f"{used_text} of {limit_text} credits"),
+        ("Additional credits requested", requested_text),
+    ]
+    base = (getattr(config, "WEBUI_URL", "") or "").rstrip("/")
+    review_url = f"{base}{review_path}" if base else ""
+
+    body = lead + "\n\n" + "\n".join(f"{k}: {v}" for k, v in details)
+    body += f"\n\nReason:\n{reason}"
+    if review_url:
+        body += f"\n\nChange the limit:\n{review_url}"
+
+    favicon = _favicon_png()
+    html_body = (
+        '<div style="font-family:Helvetica,Arial,sans-serif;color:#1c1917;font-size:16px;line-height:1.5;">'
+        + (
+            '<img src="cid:favicon" width="48" height="48" alt="Weather Skills" '
+            'style="border-radius:12px;display:block;margin:0 0 16px;" />'
+            if favicon
+            else ""
+        )
+        + f"<p>{html.escape(lead)}</p>"
+        + "<p>"
+        + "<br>".join(f"{html.escape(k)}: {html.escape(v)}" for k, v in details)
+        + "</p>"
+        + f'<p>Reason:</p><p style="white-space:pre-wrap;">{html.escape(reason)}</p>'
+        + (
+            f'<p><a href="{html.escape(review_url, quote=True)}">Change the limit</a></p>'
+            if review_url
+            else ""
+        )
+        + "</div>"
+    )
+
+    ok, err = _send_app_email(
+        config, requester_email, admin_emails, subject, body, html_body, favicon
+    )
+    if not ok:
+        raise InviteEmailError(
+            f"The request could not be sent. ({err})", saved=False
+        )

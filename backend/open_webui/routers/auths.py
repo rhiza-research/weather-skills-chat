@@ -426,17 +426,12 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
 
 
 def _notify_admins_of_signup(request: Request, user, description: str) -> None:
-    from open_webui.models.organizations import PLATFORM_ORG_ID, Organizations
+    from open_webui.models.organizations import PLATFORM_ORG_ID
     from open_webui.utils.invite_email import deliver_signup_alert
+    from open_webui.utils.organizations import admin_emails
 
     signup_email = (user.email or "").strip().lower()
-    recipients = []
-    for member in Organizations.get_members(PLATFORM_ORG_ID):
-        if member.role not in ("owner", "admin"):
-            continue
-        addr = (member.email or "").strip().lower()
-        if addr and addr != signup_email and addr not in recipients:
-            recipients.append(addr)
+    recipients = admin_emails(PLATFORM_ORG_ID, exclude=signup_email)
     if not recipients:
         return
     deliver_signup_alert(

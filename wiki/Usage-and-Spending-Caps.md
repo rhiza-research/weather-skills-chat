@@ -19,6 +19,15 @@ When a limit is reached, the model stops answering new requests in that organiza
 
 A limit can also be set when someone is invited. See [[Invitations]].
 
+## Requesting more credits
+
+When a reply stops because a limit was reached, the error in the chat has a **Request credit increase** button. It opens a short form that asks why the user needs more credits and, optionally, how many. Sending it emails the admins who can raise that limit:
+
+- For the organization limit, the platform admins.
+- For a member limit, the organization's owners and admins, or the platform admins when the organization has no other admin.
+
+The email names the user, the organization, the limit reached, and this month's spend, and links to the admin page where the limit is changed. Replies go to the user. Requests use the mail settings on [[Built-in Tools]], and cannot be sent until those are set.
+
 ## Seeing usage
 
-Each user can see their own usage this month in the active organization, their remaining budget, and which limit applies to them. Members of an organization see its usage this month, and platform admins see the usage of every organization.
+The usage counter in the user menu shows the active organization's spend this month against the organization limit. A user with a member limit also sees their own spend against it. Members of an organization see its usage this month, and platform admins see the usage of every organization.
