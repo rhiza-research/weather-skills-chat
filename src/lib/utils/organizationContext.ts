@@ -25,6 +25,11 @@ export const currentOrganization = () => {
 export const isPlatformAdminContext = (org = currentOrganization()) =>
 	org?.kind === 'platform' && (org.role === 'owner' || org.role === 'admin');
 
+/** The user's platform membership when it makes them a platform admin. */
+export const platformAdminMembership = (
+	memberships: Parameters<typeof isPlatformAdminContext>[0][] | null
+) => (memberships ?? []).find((org) => isPlatformAdminContext(org)) ?? null;
+
 export const isWorkspaceManagerContext = (org = currentOrganization()) =>
 	org?.kind === 'workspace' && (org.role === 'owner' || org.role === 'admin');
 
