@@ -1,5 +1,6 @@
-"""Each model call checks caps and access, builds its request and records usage off the event loop."""
+"""Each model call checks caps and access, reads its tracing style, builds its request and records usage off the event loop."""
 
+import asyncio
 import json
 import threading
 import unittest
@@ -10,6 +11,7 @@ from starlette.responses import StreamingResponse
 
 from open_webui.routers import openai as openai_router
 from open_webui.utils import chat, usage
+from open_webui.utils.langfuse_tracing import MODEL_CALL_TRACING_APP
 
 
 class _FakeResponse:
@@ -75,6 +77,12 @@ class ModelCallThreadsTest(unittest.IsolatedAsyncioTestCase):
         self.loop_thread = threading.current_thread()
         self.ran_on = {}
         self.sent = []
+        self.hops = []
+        real_to_thread = asyncio.to_thread
+
+        async def to_thread(func, *args, **kwargs):
+            self.hops.append(func.__name__)
+            return await real_to_thread(func, *args, **kwargs)
 
         def on(name, result=None):
             def record(*args, **kwargs):
@@ -99,12 +107,21 @@ class ModelCallThreadsTest(unittest.IsolatedAsyncioTestCase):
                 return_value=["org-1"],
             ),
             patch("open_webui.utils.catalog.is_usable", return_value=True),
-            patch.object(usage, "record_provider_usage", side_effect=on("usage")),
+            patch.object(
+                usage, "record_provider_usage", autospec=True, side_effect=on("usage")
+            ),
             patch.object(
                 openai_router.aiohttp,
                 "ClientSession",
                 side_effect=lambda **kwargs: _FakeSession(self.sent),
             ),
+            patch.object(chat, "tracing_enabled", return_value=True),
+            patch.object(
+                chat,
+                "model_call_tracing_style_for_model",
+                side_effect=on("style", MODEL_CALL_TRACING_APP),
+            ),
+            patch.object(asyncio, "to_thread", to_thread),
         ]
         self.mocks = [p.start() for p in self.patches]
 
@@ -116,14 +133,22 @@ class ModelCallThreadsTest(unittest.IsolatedAsyncioTestCase):
         return SimpleNamespace(id="u1", email="u1@example.com", name="U", role=role)
 
     async def test_checks_request_build_and_usage_run_on_worker_threads(self):
-        response = await chat.generate_chat_completion(_request(), _form(), self._user())
+        response = await chat.generate_chat_completion(
+            _request(), _form(), self._user()
+        )
 
         self.assertEqual(response["choices"][0]["message"]["content"], "Rain outlook")
-        self.assertEqual(set(self.ran_on), {"caps", "access", "router_model", "usage"})
+        self.assertEqual(
+            set(self.ran_on), {"caps", "access", "style", "router_model", "usage"}
+        )
         for name, thread in self.ran_on.items():
             self.assertIsNot(thread, self.loop_thread, name)
-        # Caps and access share one thread hop; the router builds in its own.
-        self.assertIs(self.ran_on["caps"], self.ran_on["access"])
+        # One hop checks caps and access and reads the style, the router
+        # builds the request in a second, and the usage write is the third.
+        self.assertEqual(
+            self.hops,
+            ["authorize_model_call", "prepare_provider_call", "record_provider_usage"],
+        )
         self.assertEqual(self.sent[0]["model"], "weather-agent")
 
     async def test_a_user_without_access_never_reaches_the_provider(self):

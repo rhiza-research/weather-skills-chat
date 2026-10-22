@@ -184,10 +184,9 @@ async def generate_chat_completion(
         )
         return await _generate_chat_completion(request, form_data, user, bypass_filter)
     inject_include_usage(form_data)
-    await asyncio.to_thread(
+    style = await asyncio.to_thread(
         authorize_model_call, request, form_data, user, bypass_filter
     )
-    style = _model_call_tracing_style(request, form_data)
     _carry_model_call_tracing_style(form_data, style)
     response = await observe_generation(
         form_data,
@@ -201,15 +200,17 @@ async def generate_chat_completion(
 
 def authorize_model_call(
     request: Request, form_data: dict, user: Any, bypass_filter: bool
-) -> None:
-    """Usage caps, then model access, for one model call.
+) -> str:
+    """Usage caps, model access, then the call's tracing style, for one model call.
 
-    Synchronous: both read the database, so the caller runs this in a thread.
-    Raises HTTPException 429 over a cap, and Exception("Model not found") when
-    the user cannot use the model.
+    Synchronous: the checks read the database, and the style can read the
+    model row, so the caller runs this in a thread. Returns the style for
+    observe_generation. Raises HTTPException 429 over a cap, and
+    Exception("Model not found") when the user cannot use the model.
     """
     enforce_usage_caps(request, form_data, user)
     check_model_call_access(request, form_data, user, bypass_filter)
+    return _model_call_tracing_style(request, form_data)
 
 
 def check_model_call_access(
