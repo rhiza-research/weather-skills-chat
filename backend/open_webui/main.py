@@ -1253,6 +1253,13 @@ async def chat_completion(
         try:
             check_usage_caps(organization_id, user.id)
         except UsageLimitExceeded as e:
+            chat_id = form_data.get("chat_id")
+            if form_data.get("turn") and chat_id and chat_id != "local":
+                from open_webui.utils.chat_turns import store_refused_turn
+
+                await asyncio.to_thread(
+                    store_refused_turn, chat_id, form_data["turn"], user, e.detail
+                )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.detail
             ) from e

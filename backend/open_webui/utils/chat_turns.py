@@ -134,6 +134,46 @@ def messages_for_model(history: dict, message_id: str) -> list[dict]:
     return prepared
 
 
+def _expected_revision(turn: dict) -> Optional[int]:
+    if turn.get("expected_revision") is None:
+        return None
+    try:
+        return int(turn["expected_revision"])
+    except (TypeError, ValueError):
+        return None
+
+
+def store_refused_turn(chat_id: str, turn, user, error: str) -> bool:
+    """Store a turn refused before it ran, its reply finished with the error.
+
+    Without this the chat ends on the user message with no reply, and the
+    error the user saw is gone on reload. Best effort: the refusal is still
+    returned when this cannot write.
+    """
+    if not isinstance(turn, dict):
+        return False
+    user_message = turn.get("user_message")
+    assistant_message = turn.get("assistant_message")
+    if not isinstance(user_message, dict) or not user_message.get("id"):
+        return False
+    if not isinstance(assistant_message, dict) or not assistant_message.get("id"):
+        return False
+    try:
+        chat = Chats.get_chat_access_row(chat_id)
+        if chat is None or not can_write_chat(user, chat):
+            return False
+        _, state = Chats.append_turn(
+            chat_id,
+            user_message,
+            {**assistant_message, "done": True, "error": {"content": error}},
+            _expected_revision(turn),
+        )
+    except Exception:
+        log.warning("Could not store refused turn chat_id=%s", chat_id, exc_info=True)
+        return False
+    return state == "ok"
+
+
 def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
     """Store the new user and assistant messages, then build the model transcript.
 
@@ -155,21 +195,12 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
     if chat is None or not can_write_chat(user, chat):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Access prohibited")
 
-    expected: Optional[int]
-    if "expected_revision" in turn and turn.get("expected_revision") is not None:
-        try:
-            expected = int(turn["expected_revision"])
-        except (TypeError, ValueError):
-            expected = None
-    else:
-        expected = None
-
     try:
         stored, state = Chats.append_turn(
             chat_id,
             user_message,
             assistant_message,
-            expected,
+            _expected_revision(turn),
         )
     except Exception as exc:
         from open_webui.models.chats import ChatWriteError

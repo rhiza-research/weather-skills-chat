@@ -56,7 +56,8 @@
 		GENERATION_HEARTBEAT_ACTION,
 		GENERATION_LOST_MESSAGE,
 		clearSpinningToolCalls,
-		formatGenerationRequestError
+		formatGenerationRequestError,
+		isReplyRunning
 	} from '$lib/utils/generationLiveness';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
 	import {
@@ -1930,7 +1931,7 @@
 			return;
 		}
 
-		if (messages.length != 0 && messages.at(-1).done != true) {
+		if (isReplyRunning(messages.at(-1))) {
 			// Response not done
 			return;
 		}
