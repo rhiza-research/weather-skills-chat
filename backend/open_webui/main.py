@@ -401,6 +401,7 @@ from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
     begin_chat_trace,
+    get_client as get_langfuse_client,
     shutdown_langfuse,
 )
 from open_webui.env import LANGFUSE_ENABLED
@@ -570,6 +571,10 @@ async def lifespan(app: FastAPI):
     # Don't block HTTP listen on HF/model load or skill module imports.
     asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
     asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
+    # Importing the Langfuse SDK and building its client takes about half a
+    # second. Do it here, off the loop and before serving, not in the first
+    # chat turn.
+    await asyncio.to_thread(get_langfuse_client)
     yield
     shutdown_langfuse()
     shutdown_scheduler()
