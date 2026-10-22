@@ -367,7 +367,7 @@ async def copy_intermediate_result(
         return "Cannot copy intermediate results in a temporary chat."
 
     user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_write_chat(user, chat):
         return "You do not have write access to this chat."
 
@@ -452,7 +452,7 @@ async def create_folder(
         return "Cannot create folders in a temporary chat."
 
     user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_write_chat(user, chat):
         return "You do not have write access to this chat."
 
@@ -726,7 +726,7 @@ async def display_image(
         return "Cannot display an image in a temporary chat."
 
     user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_read_chat(user, chat):
         return "You do not have access to this chat."
 
@@ -952,7 +952,7 @@ async def read_artifact(
         return "Cannot read artifacts in a temporary chat. Save the chat first."
 
     user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_read_chat(user, chat):
         return "You do not have access to this chat."
 
@@ -1140,7 +1140,7 @@ async def list_email_recipients(
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     chat = (
-        Chats.get_chat_by_id(chat_id) if chat_id and chat_id != "local" else None
+        Chats.get_chat_access_row(chat_id) if chat_id and chat_id != "local" else None
     )
     directory = _email_recipient_directory(user.id, chat)
 
@@ -1368,7 +1368,7 @@ async def send_email(
     user = Users.get_user_by_id(__user__.get("id"))
     if not user:
         return "User not found."
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_read_chat(user, chat):
         return "You do not have access to this chat."
 
@@ -1868,7 +1868,7 @@ async def execute_code(
 
     if input_paths or output_paths:
         user = Users.get_user_by_id((__user__ or {}).get("id"))
-        chat = Chats.get_chat_by_id(chat_id) if chat_id else None
+        chat = Chats.get_chat_access_row(chat_id) if chat_id else None
         if output_paths:
             if not can_write_chat(user, chat):
                 return json.dumps(

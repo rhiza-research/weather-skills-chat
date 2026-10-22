@@ -74,6 +74,21 @@ def _require_writable_chat(chat_id: str, user):
         )
     return chat
 
+
+def _require_writable_access(chat_id: str, user):
+    """Like _require_writable_chat, for callers that need only the check.
+
+    Loads the owner, organization and visibility instead of the whole chat,
+    which can be megabytes.
+    """
+    chat = Chats.get_chat_access_row(chat_id)
+    if not can_write_chat(user, chat):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    return chat
+
 ############################
 # GetChatList
 ############################
@@ -120,7 +135,7 @@ async def e2e_clear_chats(user=Depends(get_verified_user)):
 @router.post("/{id}/e2e/age", response_model=Optional[ChatResponse])
 async def e2e_age_chat(id: str, form_data: E2EAgeForm, user=Depends(get_verified_user)):
     _require_e2e_fixtures()
-    _require_writable_chat(id, user)
+    _require_writable_access(id, user)
     if form_data.days_ago < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
@@ -529,7 +544,7 @@ async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def update_chat_by_id(
     id: str, form_data: ChatForm, user=Depends(get_verified_user)
 ):
-    _require_writable_chat(id, user)
+    _require_writable_access(id, user)
     try:
         chat = await asyncio.to_thread(Chats.update_chat_fields, id, form_data.chat)
     except ChatWriteError as exc:
@@ -553,7 +568,7 @@ async def update_chat_by_id(
 async def patch_chat_history(
     id: str, form_data: HistoryPatchForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = _require_writable_access(id, user)
     if chat is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -600,7 +615,7 @@ class MessageForm(BaseModel):
 async def update_chat_message_by_id(
     id: str, message_id: str, form_data: MessageForm, user=Depends(get_verified_user)
 ):
-    chat = Chats.get_chat_by_id(id)
+    chat = Chats.get_chat_access_row(id)
 
     if not chat:
         raise HTTPException(
@@ -659,7 +674,7 @@ class EventForm(BaseModel):
 async def send_chat_message_event_by_id(
     id: str, message_id: str, form_data: EventForm, user=Depends(get_verified_user)
 ):
-    chat = Chats.get_chat_by_id(id)
+    chat = Chats.get_chat_access_row(id)
 
     if not chat:
         raise HTTPException(
@@ -768,7 +783,7 @@ async def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/{id}/pin", response_model=Optional[ChatResponse])
 async def pin_chat_by_id(id: str, user=Depends(get_verified_user)):
-    _require_writable_chat(id, user)
+    _require_writable_access(id, user)
     return await asyncio.to_thread(Chats.toggle_chat_pinned_by_id, id)
 
 
@@ -859,7 +874,7 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/{id}/archive", response_model=Optional[ChatResponse])
 async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
-    chat = _require_writable_chat(id, user)
+    chat = _require_writable_access(id, user)
     if chat:
         chat = await asyncio.to_thread(Chats.toggle_chat_archive_by_id, id)
 
@@ -956,7 +971,7 @@ class ChatVisibilityForm(BaseModel):
 async def update_chat_visibility_by_id(
     id: str, form_data: ChatVisibilityForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = _require_writable_access(id, user)
     if is_personal_org(chat.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -975,7 +990,7 @@ async def update_chat_visibility_by_id(
 async def update_chat_folder_id_by_id(
     id: str, form_data: ChatFolderIdForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = _require_writable_access(id, user)
     if chat:
         if form_data.folder_id:
             folder = Folders.get_folder_by_id(form_data.folder_id)

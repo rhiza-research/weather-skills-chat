@@ -293,7 +293,7 @@ async def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
     # If it is, get the user_id from the chat
     if user_id.startswith("shared-"):
         chat_id = user_id.replace("shared-", "")
-        chat = Chats.get_chat_by_id(chat_id)
+        chat = Chats.get_chat_access_row(chat_id)
         if chat:
             user_id = chat.user_id
         else:

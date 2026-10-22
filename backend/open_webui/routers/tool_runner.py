@@ -15,7 +15,8 @@ router = APIRouter()
 
 
 def _readable(chat_id: str, user):
-    chat = Chats.get_chat_by_id(chat_id)
+    # Owner, organization and visibility only; the full chat can be megabytes.
+    chat = Chats.get_chat_access_row(chat_id)
     if not can_read_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND

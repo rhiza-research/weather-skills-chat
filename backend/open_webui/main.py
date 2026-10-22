@@ -1546,7 +1546,7 @@ async def list_tasks_endpoint(user=Depends(get_verified_user)):
 
 @app.get("/api/tasks/chat/{chat_id}")
 async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if chat is None or chat.user_id != user.id:
         return {"task_ids": []}
 
