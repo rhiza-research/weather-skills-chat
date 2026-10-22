@@ -137,19 +137,37 @@ def requires_sharing_permission(access_control: Optional[dict]) -> bool:
     return is_public_access(access_control) or has_explicit_acl_grants(access_control)
 
 
+class Memberships:
+    """A user's group and organization ids, read from the database on first use.
+
+    has_access needs both for every restricted resource it checks. When checking
+    a list of resources, pass one Memberships so they are read once.
+    """
+
+    def __init__(self, user_id: str):
+        self.user_id = user_id
+        self._ids: Optional[tuple[list[str], list[str]]] = None
+
+    def ids(self) -> tuple[list[str], list[str]]:
+        """(group ids, organization ids)."""
+        if self._ids is None:
+            from open_webui.models.organizations import Organizations
+
+            group_ids = [group.id for group in Groups.get_groups_by_member_id(self.user_id)]
+            self._ids = (group_ids, Organizations.user_organization_ids(self.user_id))
+        return self._ids
+
+
 def has_access(
     user_id: str,
     type: str = "write",
     access_control: Optional[dict] = None,
+    memberships: Optional[Memberships] = None,
 ) -> bool:
     if access_control is None:
         return type == "read"
 
-    from open_webui.models.organizations import Organizations
-
-    user_groups = Groups.get_groups_by_member_id(user_id)
-    user_group_ids = [group.id for group in user_groups]
-    user_org_ids = Organizations.user_organization_ids(user_id)
+    user_group_ids, user_org_ids = (memberships or Memberships(user_id)).ids()
     permission_access = access_control.get(type, {})
     permitted_group_ids = permission_access.get("group_ids", [])
     permitted_org_ids = permission_access.get("organization_ids", []) or permission_access.get(
@@ -170,6 +188,7 @@ def user_owns_or_has_access(
     access_control: Optional[dict],
     permission: str = "read",
     user_role: Optional[str] = None,
+    memberships: Optional[Memberships] = None,
 ) -> bool:
     """
     Unified resource ACL check for workspace models, knowledge, prompts, tools, and skills.
@@ -180,6 +199,8 @@ def user_owns_or_has_access(
     - Restricted resources follow explicit read/write grants.
     - Admins do not bypass privacy: they only see private resources they own.
     - Admins can read/write public resources and anything explicitly shared with them.
+
+    Pass memberships when checking many resources for one user.
     """
     if owner_user_id and owner_user_id == user_id:
         return True
@@ -190,12 +211,12 @@ def user_owns_or_has_access(
         if permission == "read":
             if is_public_access(access_control):
                 return True
-            return has_access(user_id, "read", access_control)
+            return has_access(user_id, "read", access_control, memberships)
         if is_public_access(access_control):
             return True
-        return has_access(user_id, "write", access_control)
+        return has_access(user_id, "write", access_control, memberships)
 
-    return has_access(user_id, permission, access_control)
+    return has_access(user_id, permission, access_control, memberships)
 
 
 def access_control_organization_ids(access_control: Optional[dict]) -> list[str]:

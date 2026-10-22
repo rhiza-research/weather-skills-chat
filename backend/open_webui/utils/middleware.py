@@ -5,6 +5,7 @@ import os
 import base64
 
 import asyncio
+from dataclasses import dataclass
 from aiocache import cached
 from typing import Any, Optional
 import random
@@ -995,6 +996,144 @@ def apply_params_to_form_data(form_data, model):
     return form_data
 
 
+@dataclass
+class PayloadStart:
+    """The request after its model params and history rebuild, and its inlet filters."""
+
+    form_data: dict
+    filter_functions: list
+
+
+def start_chat_payload(form_data: dict, model: dict) -> PayloadStart:
+    """Apply the model's params, rebuild tool turns from the UI history, and
+    look up the inlet filters.
+
+    Synchronous: the rebuild walks the whole conversation and the filter
+    lookups read the database, so process_chat_payload runs this in a thread.
+    """
+    form_data = apply_params_to_form_data(form_data, model)
+    log.debug(f"form_data: {form_data}")
+
+    # Rebuild native assistant/tool turns from UI <details type="tool_calls">
+    # history (and strip reasoning chrome). Prevents the client processDetails
+    # XML rewrite from teaching the model a fake tool-call dialect on follow-ups.
+    try:
+        from open_webui.utils.model_messages import expand_ui_tool_history_messages
+
+        form_data["messages"] = expand_ui_tool_history_messages(
+            form_data.get("messages")
+        )
+    except Exception:
+        log.exception("expand_ui_tool_history_messages failed")
+
+    try:
+        filter_functions = [
+            Functions.get_function_by_id(filter_id)
+            for filter_id in get_sorted_filter_ids(model)
+        ]
+    except Exception as e:
+        raise Exception(f"Error: {e}")
+    return PayloadStart(form_data=form_data, filter_functions=filter_functions)
+
+
+@dataclass
+class PayloadContext:
+    """What a request needs from the database after its inlet filters ran."""
+
+    tools: dict  # function name -> tool; the chat's tools override built-ins
+    tool_ids: Optional[list]  # resolved to the user's skill versions
+    secret_hint: str  # empty unless function calling is native
+    model_params: Optional[dict]  # the workspace model's, for its system prompt
+    preferences: Optional[str]  # the user's saved preferences prompt
+
+
+def load_payload_context(
+    request, user, metadata: dict, tool_extra: dict, model_id: Optional[str], clock
+) -> PayloadContext:
+    """The chat's tools, the secrets hint, the model's params and the user's
+    preferences.
+
+    Synchronous: the tool catalog, skill records, tool access and modules,
+    secrets, the model row and preferences are database reads, so
+    process_chat_payload runs this in one thread.
+    """
+    tool_ids = metadata.get("tool_ids", None)
+    tools = {}
+    if tool_ids:
+        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+        from open_webui.utils.tools import accessible_skill_records
+        from open_webui.models.tools import Tools
+        from open_webui.utils.organizations import request_organization_id
+
+        org_id = request_organization_id(request)
+        catalog = Tools.get_tool_catalog()
+        clock.mark("db.tool_catalog", n=len(catalog))
+        skill_records = accessible_skill_records(
+            user, organization_id=org_id, catalog=catalog
+        )
+        clock.mark("accessible_skill_records", n=len(skill_records))
+        tool_ids = resolve_tool_ids_by_skill_version(
+            list(tool_ids), skill_records
+        )
+        clock.mark("resolve_tool_ids", n=len(tool_ids))
+        tools = get_tools(
+            request,
+            tool_ids,
+            user,
+            tool_extra,
+            catalog=catalog,
+            skill_records=skill_records,
+        )
+        clock.mark("get_tools", n_out=len(tools))
+
+    try:
+        from open_webui.utils.builtin_tools import get_builtin_tools
+
+        tools = {**get_builtin_tools(tool_extra), **tools}
+    except Exception:
+        log.exception("Failed to load built-in tools")
+    clock.mark("builtins", n_tools=len(tools))
+
+    secret_hint = ""
+    if metadata.get("function_calling") == "native":
+        try:
+            from open_webui.utils.secrets import secret_usage_hint
+
+            secret_hint = secret_usage_hint(
+                user,
+                organization_id=metadata.get("organization_id"),
+                webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
+            )
+        except Exception:
+            log.debug("Secret usage hint skipped", exc_info=True)
+
+    model_params = None
+    try:
+        model_info = Models.get_model_by_id(model_id) if model_id else None
+        if model_info and model_info.params:
+            model_params = model_info.params.model_dump()
+    except Exception:
+        log.debug("Early model system prompt apply skipped", exc_info=True)
+
+    preferences = None
+    try:
+        from open_webui.utils.preferences import preferences_prompt
+
+        org_id = metadata.get("organization_id") or getattr(user, "id", None)
+        if org_id:
+            preferences = preferences_prompt(user, org_id)
+    except Exception:
+        log.debug("Preference prompt inject skipped", exc_info=True)
+
+    return PayloadContext(
+        tools=tools,
+        tool_ids=tool_ids,
+        secret_hint=secret_hint,
+        model_params=model_params,
+        preferences=preferences,
+    )
+
+
 async def process_chat_payload(request, form_data, user, metadata, model):
     clock = StageClock(
         "process_chat_payload",
@@ -1002,9 +1141,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         message_id=metadata.get("message_id"),
     )
 
-    form_data = apply_params_to_form_data(form_data, model)
-    log.debug(f"form_data: {form_data}")
-    clock.mark("apply_params")
+    start = await asyncio.to_thread(start_chat_payload, form_data, model)
+    form_data = start.form_data
+    clock.mark("start_payload", n_filters=len(start.filter_functions))
 
     event_emitter = get_event_emitter(metadata)
     event_call = get_event_call(metadata)
@@ -1041,19 +1180,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     events = []
     sources = []
-
-    # Rebuild native assistant/tool turns from UI <details type="tool_calls">
-    # history (and strip reasoning chrome). Prevents the client processDetails
-    # XML rewrite from teaching the model a fake tool-call dialect on follow-ups.
-    try:
-        from open_webui.utils.model_messages import expand_ui_tool_history_messages
-
-        form_data["messages"] = expand_ui_tool_history_messages(
-            form_data.get("messages")
-        )
-    except Exception:
-        log.exception("expand_ui_tool_history_messages failed")
-    clock.mark("expand_history")
 
     user_message = get_last_user_message(form_data["messages"])
     model_knowledge = model.get("info", {}).get("meta", {}).get("knowledge", False)
@@ -1107,12 +1233,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         raise e
     clock.mark("pipeline_inlet")
 
+    filter_functions = start.filter_functions
     try:
-        filter_functions = [
-            Functions.get_function_by_id(filter_id)
-            for filter_id in get_sorted_filter_ids(model)
-        ]
-
         form_data, flags = await process_filter_functions(
             request=request,
             filter_functions=filter_functions,
@@ -1122,7 +1244,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise Exception(f"Error: {e}")
-    clock.mark("db.inlet_filters", n_filters=len(filter_functions))
+    clock.mark("inlet_filters", n_filters=len(filter_functions))
 
     features = form_data.pop("features", None)
     if features:
@@ -1161,7 +1283,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     log.debug(f"{tool_ids=}")
     log.debug(f"{tool_servers=}")
 
-    tools_dict = {}
     tool_extra = {
         **extra_params,
         "__model__": models.get(task_model_id) if isinstance(models, dict) else None,
@@ -1169,40 +1290,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         "__files__": metadata.get("files", []),
     }
 
+    context = await asyncio.to_thread(
+        load_payload_context,
+        request,
+        user,
+        metadata,
+        tool_extra,
+        form_data.get("model") or (model or {}).get("id"),
+        clock,
+    )
     if tool_ids:
-        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
-        from open_webui.utils.tools import accessible_skill_records
-        from open_webui.models.tools import Tools
-        from open_webui.utils.organizations import request_organization_id
-
-        org_id = request_organization_id(request)
-        catalog = Tools.get_tool_catalog()
-        clock.mark("db.tool_catalog", n=len(catalog))
-        skill_records = accessible_skill_records(
-            user, organization_id=org_id, catalog=catalog
-        )
-        clock.mark("accessible_skill_records", n=len(skill_records))
-        tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), skill_records
-        )
-        metadata["tool_ids"] = tool_ids
-        clock.mark("resolve_tool_ids", n=len(tool_ids))
-        tools_dict = get_tools(
-            request,
-            tool_ids,
-            user,
-            tool_extra,
-            catalog=catalog,
-        )
-        clock.mark("get_tools", n_out=len(tools_dict))
-
-    try:
-        from open_webui.utils.builtin_tools import get_builtin_tools
-
-        tools_dict = {**get_builtin_tools(tool_extra), **tools_dict}
-    except Exception:
-        log.exception("Failed to load built-in tools")
-    clock.mark("builtins", n_tools=len(tools_dict))
+        metadata["tool_ids"] = context.tool_ids
+    tools_dict = context.tools
 
     if tool_servers:
         for tool_server in tool_servers:
@@ -1227,16 +1326,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 key=lambda t: ((t.get("function") or {}).get("name") or ""),
             )
             try:
-                from open_webui.utils.secrets import secret_usage_hint
-
                 hints = []
-                hint = secret_usage_hint(
-                    user,
-                    organization_id=metadata.get("organization_id"),
-                    webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
-                )
-                if hint:
-                    hints.append(hint)
+                if context.secret_hint:
+                    hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
                 tool_names = [
                     (tool.get("spec") or {}).get("name")
@@ -1375,12 +1467,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     try:
         from open_webui.utils.payload import apply_model_system_prompt_to_body
 
-        model_id = form_data.get("model") or (model or {}).get("id")
-        model_info = Models.get_model_by_id(model_id) if model_id else None
-        if model_info and model_info.params:
-            params = model_info.params.model_dump()
+        if context.model_params:
             form_data = apply_model_system_prompt_to_body(
-                params, form_data, metadata, user
+                context.model_params, form_data, metadata, user
             )
     except Exception:
         log.debug("Early model system prompt apply skipped", exc_info=True)
@@ -1394,13 +1483,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
     try:
-        from open_webui.utils.preferences import inject_preferences, preferences_prompt
+        from open_webui.utils.preferences import inject_preferences
 
-        org_id = metadata.get("organization_id") or getattr(user, "id", None)
-        if org_id:
+        if context.preferences is not None:
             form_data["messages"] = inject_preferences(
-                form_data.get("messages") or [],
-                preferences_prompt(user, org_id),
+                form_data.get("messages") or [], context.preferences
             )
     except Exception:
         log.debug("Preference prompt inject skipped", exc_info=True)

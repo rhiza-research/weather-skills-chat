@@ -15,6 +15,7 @@ from urllib.parse import urlencode, parse_qs, urlparse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from dataclasses import dataclass
 from typing import Optional
 from aiocache import cached
 import aiohttp
@@ -1206,25 +1207,43 @@ def require_owned_chat(chat_id, user):
     return chat
 
 
-@app.post("/api/chat/completions")
-async def chat_completion(
-    request: Request,
-    form_data: dict,
-    user=Depends(get_verified_user),
-    organization_id: str = Depends(get_active_organization_id),
-):
+@dataclass
+class PreparedChat:
+    """The checked request: what the chat job needs from chat_completion."""
+
+    model: dict
+    metadata: dict
+    direct: bool
+    tasks: Optional[dict]
+    turn: Optional[dict]
+
+
+def prepare_chat_completion(
+    request: Request, form_data: dict, user, organization_id: str
+) -> PreparedChat:
+    """Check one chat completion request and prepare it for the job.
+
+    Checks chat ownership, the model and its access, and usage caps, then for a
+    turn builds the messages from the saved chat. Synchronous: each step reads
+    the database, so the route runs this in a thread. Pops the request fields it
+    uses from form_data and sets its metadata, and for a turn its messages.
+
+    Raises HTTPException for the client. Any other error after the reply's
+    message is known is recorded on that message, then re-raised.
+    """
     # Before anything else: the error path below writes into this chat id.
-    chat = await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
+    chat = require_owned_chat(form_data.get("chat_id"), user)
     # Skills, model access and spend follow the chat's organization, not the
     # one the browser has active.
     organization_id = chat_organization_id(chat, user, organization_id)
 
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
+    direct = bool(model_item.get("direct", False))
 
     metadata = {}
     try:
-        if not model_item.get("direct", False):
+        if not direct:
             model_id = form_data.get("model", None)
             model = remember_catalog_model(request, model_id)
             if model is None:
@@ -1239,16 +1258,10 @@ async def chat_completion(
 
             # Check if user has access to the curated catalog model
             if not BYPASS_MODEL_ACCESS_CONTROL:
-                try:
-                    check_model_access(user, model, organization_id)
-                except Exception as e:
-                    raise e
+                check_model_access(user, model, organization_id)
         else:
             model = model_item
             model_info = None
-
-            request.state.direct = True
-            request.state.model = model
 
         try:
             check_usage_caps(organization_id, user.id)
@@ -1257,9 +1270,7 @@ async def chat_completion(
             if form_data.get("turn") and chat_id and chat_id != "local":
                 from open_webui.utils.chat_turns import store_refused_turn
 
-                await asyncio.to_thread(
-                    store_refused_turn, chat_id, form_data["turn"], user, e.detail
-                )
+                store_refused_turn(chat_id, form_data["turn"], user, e.detail)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.detail
             ) from e
@@ -1275,7 +1286,7 @@ async def chat_completion(
             "features": form_data.get("features", None),
             "variables": form_data.get("variables", None),
             "model": model,
-            "direct": model_item.get("direct", False),
+            "direct": direct,
             "organization_id": organization_id,
             "usage_source": "chat",
             **(
@@ -1289,8 +1300,6 @@ async def chat_completion(
                 else {}
             ),
         }
-
-        request.state.metadata = metadata
         form_data["metadata"] = metadata
 
         turn = form_data.pop("turn", None)
@@ -1307,8 +1316,8 @@ async def chat_completion(
             )
 
             try:
-                form_data["messages"] = await asyncio.to_thread(
-                    prepare_completion_messages, chat_id, turn, user
+                form_data["messages"] = prepare_completion_messages(
+                    chat_id, turn, user
                 )
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
@@ -1318,37 +1327,63 @@ async def chat_completion(
                         "revision": conflict.revision,
                     },
                 ) from conflict
-            from open_webui.utils.chat_realtime import emit_chat_turn
-
-            try:
-                await emit_chat_turn(
-                    user.id,
-                    metadata["chat_id"],
-                    metadata.get("session_id"),
-                    turn.get("user_message"),
-                    turn.get("assistant_message"),
-                )
-            except Exception:
-                log.debug("chat turn emit failed", exc_info=True)
-
     except HTTPException:
         raise
     except Exception as e:
         log.debug(f"Error preparing chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):
-            await asyncio.to_thread(
-                Chats.upsert_message_to_chat_by_id_and_message_id,
+            Chats.upsert_message_to_chat_by_id_and_message_id(
                 metadata["chat_id"],
                 metadata["message_id"],
                 {
                     "error": {"content": str(e)},
                 },
             )
+        raise
 
+    return PreparedChat(
+        model=model, metadata=metadata, direct=direct, tasks=tasks, turn=turn
+    )
+
+
+@app.post("/api/chat/completions")
+async def chat_completion(
+    request: Request,
+    form_data: dict,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    try:
+        prepared = await asyncio.to_thread(
+            prepare_chat_completion, request, form_data, user, organization_id
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+    model, metadata, tasks = prepared.model, prepared.metadata, prepared.tasks
+    if prepared.direct:
+        request.state.direct = True
+        request.state.model = model
+    request.state.metadata = metadata
+
+    if prepared.turn:
+        from open_webui.utils.chat_realtime import emit_chat_turn
+
+        try:
+            await emit_chat_turn(
+                user.id,
+                metadata["chat_id"],
+                metadata.get("session_id"),
+                prepared.turn.get("user_message"),
+                prepared.turn.get("assistant_message"),
+            )
+        except Exception:
+            log.debug("chat turn emit failed", exc_info=True)
 
     async def run_chat_job():
         job_form_data = form_data
