@@ -35,7 +35,7 @@ from langchain_core.utils.function_calling import (
 
 from open_webui.models.tools import ToolCatalogModel, Tools
 from open_webui.models.users import UserModel
-from open_webui.utils.access_control import user_owns_or_has_access
+from open_webui.utils.access_control import Memberships, user_owns_or_has_access
 from open_webui.utils.organizations import request_organization_id
 from open_webui.utils.plugin import load_tool_module_by_id
 from open_webui.utils.skill_version import (
@@ -155,16 +155,23 @@ def get_tools(
     user: UserModel,
     extra_params: dict,
     catalog: Optional[list[ToolCatalogModel]] = None,
+    skill_records: Optional[list[dict]] = None,
 ) -> dict[str, dict]:
+    """The chat's tools by function name.
+
+    Synchronous: reads the catalog, skill records, access and tool modules.
+    Pass the catalog and skill records when the caller already has them.
+    """
     tools_dict = {}
     t0 = time.perf_counter()
     if catalog is None:
         catalog = Tools.get_tool_catalog()
     org_id = request_organization_id(request)
     t_resolve = time.perf_counter()
-    skill_records = accessible_skill_records(
-        user, organization_id=org_id, catalog=catalog
-    )
+    if skill_records is None:
+        skill_records = accessible_skill_records(
+            user, organization_id=org_id, catalog=catalog
+        )
     usable_skill_ids = {record["id"] for record in skill_records}
     tool_ids = resolve_tool_ids_by_skill_version(list(tool_ids), skill_records)
     resolve_s = time.perf_counter() - t_resolve
@@ -174,6 +181,7 @@ def get_tools(
     valves_s = 0.0
     cache_hits = 0
     cache_misses = 0
+    memberships = Memberships(user.id)
 
     for tool_id in tool_ids:
         tool = by_id.get(tool_id)
@@ -191,7 +199,12 @@ def get_tools(
                     "access_control", None
                 )
                 if not user_owns_or_has_access(
-                    user.id, f"server:{server_idx}", server_acl, "read", user.role
+                    user.id,
+                    f"server:{server_idx}",
+                    server_acl,
+                    "read",
+                    user.role,
+                    memberships,
                 ):
                     continue
                 tool_server_data = None
@@ -247,7 +260,12 @@ def get_tools(
         else:
             # Usable skills follow org enablement, not the installer's private ACL.
             if _tool_manifest(tool).get("kind") != "skill" and not user_owns_or_has_access(
-                user.id, tool.user_id, tool.access_control, "read", user.role
+                user.id,
+                tool.user_id,
+                tool.access_control,
+                "read",
+                user.role,
+                memberships,
             ):
                 continue
             module = request.app.state.TOOLS.get(tool_id, None)
