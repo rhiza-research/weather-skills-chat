@@ -186,8 +186,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The runner image already has Chromium's system libraries. --with-deps only
+      # adds fonts from the Ubuntu apt mirror, which sometimes stalls for minutes.
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run smoke tests
         id: playwright
