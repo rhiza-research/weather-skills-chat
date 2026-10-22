@@ -122,7 +122,7 @@ class ProcessChatPayloadTest(unittest.IsolatedAsyncioTestCase):
 
         def start(form_data, model):
             ran_on["start"] = threading.current_thread()
-            return middleware.PayloadStart(form_data=form_data, filter_functions=[])
+            return form_data, []
 
         def load(request, user, metadata, tool_extra, model_id, clock):
             ran_on["context"] = threading.current_thread()

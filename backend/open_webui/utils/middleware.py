@@ -996,17 +996,11 @@ def apply_params_to_form_data(form_data, model):
     return form_data
 
 
-@dataclass
-class PayloadStart:
-    """The request after its model params and history rebuild, and its inlet filters."""
-
-    form_data: dict
-    filter_functions: list
-
-
-def start_chat_payload(form_data: dict, model: dict) -> PayloadStart:
+def start_chat_payload(form_data: dict, model: dict) -> tuple[dict, list]:
     """Apply the model's params, rebuild tool turns from the UI history, and
     look up the inlet filters.
+
+    Returns the request and its inlet filter functions.
 
     Synchronous: the rebuild walks the whole conversation and the filter
     lookups read the database, so process_chat_payload runs this in a thread.
@@ -1033,7 +1027,7 @@ def start_chat_payload(form_data: dict, model: dict) -> PayloadStart:
         ]
     except Exception as e:
         raise Exception(f"Error: {e}")
-    return PayloadStart(form_data=form_data, filter_functions=filter_functions)
+    return form_data, filter_functions
 
 
 @dataclass
@@ -1141,9 +1135,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         message_id=metadata.get("message_id"),
     )
 
-    start = await asyncio.to_thread(start_chat_payload, form_data, model)
-    form_data = start.form_data
-    clock.mark("start_payload", n_filters=len(start.filter_functions))
+    form_data, filter_functions = await asyncio.to_thread(
+        start_chat_payload, form_data, model
+    )
+    clock.mark("start_payload", n_filters=len(filter_functions))
 
     event_emitter = get_event_emitter(metadata)
     event_call = get_event_call(metadata)
@@ -1233,7 +1228,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         raise e
     clock.mark("pipeline_inlet")
 
-    filter_functions = start.filter_functions
     try:
         form_data, flags = await process_filter_functions(
             request=request,
