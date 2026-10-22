@@ -10,7 +10,7 @@ from unittest.mock import patch
 import httpx
 
 from perf_harness import LoopProbe, check_budget, db_delay, fs_delay, record
-from perf_harness.app_data import app_with, ensure_user, insert_chat
+from perf_harness.app_data import app_with, call_tool, ensure_user, insert_chat
 from perf_harness.data import big_chat
 
 CALLS = 30
@@ -85,7 +85,7 @@ def test_tool_calls_on_a_large_chat(tmp_path):
     async def run():
         async with LoopProbe() as probe:
             for i in range(CALLS):
-                out = await builtin_tools.create_folder(
+                out = await call_tool(builtin_tools.create_folder,
                     path=f"plots/week_{i}",
                     __user__={"id": user.id},
                     __metadata__={"chat_id": chat_id},
