@@ -581,9 +581,10 @@ async def save_final_reply(chat_id: str, message_id: str, patch: dict) -> Option
     """Save a finished reply, with its pending streamed parts, retrying a few times.
 
     Returns the chat revision the save produced, which the client adopts from
-    the completion event; 0 when there is no saved chat to write. Never
-    raises. None means every attempt failed; the caller tells the user with
-    REPLY_SAVE_FAILED_MESSAGE instead of reporting a failed generation.
+    the completion event; 0 when nothing was written because there is no
+    saved chat or message to write to. Never raises. None means every attempt
+    failed; the caller tells the user with REPLY_SAVE_FAILED_MESSAGE instead
+    of reporting a failed generation.
     """
     if not chat_id or chat_id == "local" or not message_id:
         return 0

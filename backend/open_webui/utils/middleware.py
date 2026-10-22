@@ -187,8 +187,9 @@ async def completion_revision(
 
     written is the revision the turn's final save produced, so no write
     landing after it can be adopted in its place. The revision is read back
-    only when the turn made no final save (realtime saves) or it failed."""
-    if written is not None:
+    when the turn made no final save (realtime saves), when the save wrote
+    nothing (written is 0), or when it failed (None)."""
+    if written:
         return written
     if not chat_id:
         return 0
