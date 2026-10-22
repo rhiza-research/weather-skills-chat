@@ -85,7 +85,8 @@ def test_tool_calls_on_a_large_chat(tmp_path):
     async def run():
         async with LoopProbe() as probe:
             for i in range(CALLS):
-                out = await call_tool(builtin_tools.create_folder,
+                out = await call_tool(
+                    builtin_tools.create_folder,
                     path=f"plots/week_{i}",
                     __user__={"id": user.id},
                     __metadata__={"chat_id": chat_id},

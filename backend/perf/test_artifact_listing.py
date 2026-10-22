@@ -66,7 +66,8 @@ def test_list_artifacts_tool_on_a_large_sandbox(tmp_path):
 
     async def run():
         async with LoopProbe() as probe:
-            out = await call_tool(builtin_tools.list_artifacts,
+            out = await call_tool(
+                builtin_tools.list_artifacts,
                 __user__={"id": user.id}, __metadata__={"chat_id": chat_id}
             )
         assert "plots/" in out
