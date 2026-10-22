@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional, overload
@@ -780,16 +781,25 @@ def provider_trace_style(metadata: Optional[dict], api_config: dict) -> str:
     return MODEL_CALL_TRACING_APP
 
 
-@router.post("/chat/completions")
-async def generate_chat_completion(
-    request: Request,
-    form_data: dict,
-    user=Depends(get_verified_user),
-    bypass_filter: Optional[bool] = False,
-):
-    if BYPASS_MODEL_ACCESS_CONTROL:
-        bypass_filter = True
+@dataclass
+class ProviderCall:
+    """One request to an OpenAI-compatible provider, ready to send."""
 
+    url: str
+    key: str
+    payload: str  # the JSON body
+    chat_id: Optional[str]
+
+
+def prepare_provider_call(
+    request: Request, form_data: dict, user, bypass_filter: bool
+) -> ProviderCall:
+    """Check the model and build the provider request for one model call.
+
+    Synchronous: it reads the model row and the user's organizations, and
+    serializes the whole conversation. Callers on the event loop run it in a
+    thread. Raises HTTPException when the user cannot use the model.
+    """
     payload = {**form_data}
     # The style travels only in metadata, which is never sent upstream.
     metadata = payload.pop("metadata", None)
@@ -907,6 +917,24 @@ async def generate_chat_completion(
         chat_id=chat_id,
         payload_bytes=len(payload),
     )
+
+    return ProviderCall(url=url, key=key, payload=payload, chat_id=chat_id)
+
+
+@router.post("/chat/completions")
+async def generate_chat_completion(
+    request: Request,
+    form_data: dict,
+    user=Depends(get_verified_user),
+    bypass_filter: Optional[bool] = False,
+):
+    if BYPASS_MODEL_ACCESS_CONTROL:
+        bypass_filter = True
+
+    call = await asyncio.to_thread(
+        prepare_provider_call, request, form_data, user, bypass_filter
+    )
+    url, key, payload, chat_id = call.url, call.key, call.payload, call.chat_id
 
     r = None
     session = None
