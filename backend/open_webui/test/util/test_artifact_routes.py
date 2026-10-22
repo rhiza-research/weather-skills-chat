@@ -37,7 +37,7 @@ class ArtifactRoutesTest(unittest.TestCase):
         )
         self.patches = [
             patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts),
-            patch.object(artifacts_router, "Chats", self.chats),
+            patch("open_webui.utils.organizations.Chats", self.chats),
         ]
         for p in self.patches:
             p.start()

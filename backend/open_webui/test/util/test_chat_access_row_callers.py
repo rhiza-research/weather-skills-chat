@@ -29,7 +29,6 @@ ACCESS_ONLY = {
         "update_chat_visibility_by_id",
         "update_chat_folder_id_by_id",
     ],
-    "routers/tool_runner.py": ["_readable"],
     "routers/users.py": ["get_user_by_id"],
     "main.py": ["list_tasks_by_chat_id_endpoint", "require_owned_chat"],
     "utils/chat_turns.py": ["prepare_completion_messages"],
@@ -71,14 +70,16 @@ class AccessOnlyCallersTest(unittest.TestCase):
                 self.assertFalse(called & FULL_CHAT_CALLS, f"{rel}:{name} loads the whole chat")
 
 
-class RequireWritableAccessTest(unittest.TestCase):
-    def setUp(self):
-        from open_webui.routers import chats as chats_router
+class RequireChatAccessTest(unittest.TestCase):
+    """The shared route checks read the access row, never the whole chat."""
 
-        self.router = chats_router
+    def setUp(self):
+        from open_webui.utils import organizations
+
+        self.organizations = organizations
         self.chats = MagicMock()
         self.chats.get_chat_by_id.side_effect = AssertionError("loaded the whole chat")
-        self.patch = patch.object(chats_router, "Chats", self.chats)
+        self.patch = patch.object(organizations, "Chats", self.chats)
         self.patch.start()
 
     def tearDown(self):
@@ -86,18 +87,31 @@ class RequireWritableAccessTest(unittest.TestCase):
 
     def test_owner_gets_the_access_row(self):
         self.chats.get_chat_access_row.return_value = _row()
-        row = self.router._require_writable_access("chat-1", MagicMock(id="u1"))
-        self.assertEqual(row.user_id, "u1")
-        self.chats.get_chat_access_row.assert_called_once_with("chat-1")
+        for require in (self.organizations.require_chat_read, self.organizations.require_chat_write):
+            row = require("chat-1", MagicMock(id="u1"))
+            self.assertEqual(row.user_id, "u1")
+        self.chats.get_chat_access_row.assert_called_with("chat-1")
 
-    def test_other_user_and_missing_chat_are_refused(self):
+    def test_org_member_can_read_a_shared_chat_but_not_change_it(self):
         self.chats.get_chat_access_row.return_value = _row(user_id="u2", visibility="organization")
-        with self.assertRaises(HTTPException) as ctx:
-            self.router._require_writable_access("chat-1", MagicMock(id="u1"))
+        with patch.object(self.organizations, "is_member", return_value=True):
+            self.organizations.require_chat_read("chat-1", MagicMock(id="u1"))
+            with self.assertRaises(HTTPException) as ctx:
+                self.organizations.require_chat_write("chat-1", MagicMock(id="u1"))
         self.assertEqual(ctx.exception.status_code, 401)
+
+    def test_missing_chat_is_refused(self):
         self.chats.get_chat_access_row.return_value = None
-        with self.assertRaises(HTTPException):
-            self.router._require_writable_access("chat-1", MagicMock(id="u1"))
+        for require in (self.organizations.require_chat_read, self.organizations.require_chat_write):
+            with self.assertRaises(HTTPException) as ctx:
+                require("chat-1", MagicMock(id="u1"))
+            self.assertEqual(ctx.exception.status_code, 401)
+
+    def test_routers_use_the_shared_checks(self):
+        for rel in ("routers/artifacts.py", "routers/tool_runner.py", "routers/chats.py"):
+            source = (ROOT / rel).read_text()
+            for gone in ("def _readable(", "def _writable(", "def _require_writable_access("):
+                self.assertNotIn(gone, source, f"{rel} defines its own {gone}")
 
 
 class BuiltinToolAccessTest(unittest.TestCase):
