@@ -171,10 +171,8 @@ class BuiltinToolAccessTest(unittest.TestCase):
             users.get_user_by_id.return_value = MagicMock(id="u1")
             chats.get_chat_access_row.return_value = _row()
             chats.get_chat_by_id.side_effect = AssertionError("loaded the whole chat")
-            out = asyncio.run(
-                builtin_tools.create_folder(
-                    path="plots", __user__={"id": "u1"}, __metadata__={"chat_id": "chat-1"}
-                )
+            out = builtin_tools.create_folder(
+                path="plots", __user__={"id": "u1"}, __metadata__={"chat_id": "chat-1"}
             )
             self.assertTrue((Path(tmp) / "chat-1" / "plots").is_dir(), out)
 

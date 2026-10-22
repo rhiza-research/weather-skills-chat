@@ -202,12 +202,10 @@ class ListArtifactsToolOptionsTest(SandboxCase):
             patch("open_webui.utils.builtin_tools.Chats"),
             patch("open_webui.utils.builtin_tools.can_read_chat", return_value=True),
         ):
-            return asyncio.run(
-                list_artifacts_tool(
-                    __user__={"id": "u1"},
-                    __metadata__={"chat_id": self.chat_id},
-                    **kwargs,
-                )
+            return list_artifacts_tool(
+                __user__={"id": "u1"},
+                __metadata__={"chat_id": self.chat_id},
+                **kwargs,
             )
 
     def test_depth_marks_unexpanded_folders(self):

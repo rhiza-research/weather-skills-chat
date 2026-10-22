@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 from open_webui.utils.builtin_tools import list_artifacts
 
 
-class ListArtifactsToolTest(unittest.IsolatedAsyncioTestCase):
-    async def test_lists_sandbox_tree(self):
+class ListArtifactsToolTest(unittest.TestCase):
+    def test_lists_sandbox_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp) / "artifacts"
             chat_id = "chat-list"
@@ -29,7 +29,7 @@ class ListArtifactsToolTest(unittest.IsolatedAsyncioTestCase):
             ):
                 users.get_user_by_id.return_value = user
                 chats.get_chat_by_id.return_value = chat
-                out = await list_artifacts(
+                out = list_artifacts(
                     __user__={"id": "u1"},
                     __metadata__={"chat_id": chat_id},
                 )
@@ -39,6 +39,6 @@ class ListArtifactsToolTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("`plots/map.png`", out)
             self.assertIn("`intermediate_results/`", out)
 
-    async def test_rejects_temporary_chat(self):
-        out = await list_artifacts(__user__={"id": "u1"}, __metadata__={"chat_id": "local"})
+    def test_rejects_temporary_chat(self):
+        out = list_artifacts(__user__={"id": "u1"}, __metadata__={"chat_id": "local"})
         self.assertIn("temporary chat", out)

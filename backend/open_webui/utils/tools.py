@@ -63,9 +63,10 @@ def get_async_tool_function_and_apply_extra_params(
         update_wrapper(partial_func, function)
         return partial_func
     else:
-        # Make it a coroutine function
+        # A synchronous tool reads files or the database; run it in a worker
+        # thread so it does not hold the event loop.
         async def new_function(*args, **kwargs):
-            return partial_func(*args, **kwargs)
+            return await asyncio.to_thread(partial_func, *args, **kwargs)
 
         update_wrapper(new_function, function)
         return new_function
