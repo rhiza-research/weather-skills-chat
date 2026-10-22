@@ -99,7 +99,7 @@ from open_webui.routers.retrieval import (
     get_rf,
 )
 
-from open_webui.internal.db import Session, engine
+from open_webui.internal.db import Session, engine, get_db
 
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
@@ -1769,8 +1769,12 @@ async def healthcheck():
 
 
 @app.get("/health/db")
-async def healthcheck_with_db():
-    Session.execute(text("SELECT 1;")).all()
+def healthcheck_with_db():
+    # A plain def runs in the threadpool: on the event loop a slow database
+    # would also stall /health, failing liveness as well as readiness. Its own
+    # session, closed here, so no transaction is left open on the worker.
+    with get_db() as db:
+        db.execute(text("SELECT 1;")).all()
     return {"status": True}
 
 
