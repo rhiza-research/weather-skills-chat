@@ -912,15 +912,16 @@ class TestFinalReplySave(AbstractPostgresTest):
                 self.chat.id, "a1", {"content": "final answer", "done": True}
             )
 
-        assert asyncio.run(run()) is True
+        revision = asyncio.run(run())
         assert calls["n"] == 3
+        assert revision == self.Chats.get_chat_revision(self.chat.id)
         message = self.Chats.get_chat_by_id(self.chat.id).chat["history"]["messages"][
             "a1"
         ]
         assert message["content"] == "final answer"
         assert message["usage"] == {"total_tokens": 7}
 
-    def test_a_save_that_keeps_failing_reports_false_instead_of_raising(
+    def test_a_save_that_keeps_failing_reports_none_instead_of_raising(
         self, monkeypatch
     ):
         monkeypatch.setattr(self.realtime, "FINAL_SAVE_RETRY_SECONDS", (0.01, 0.01))
@@ -936,7 +937,7 @@ class TestFinalReplySave(AbstractPostgresTest):
                 self.chat.id, "a1", {"content": "x", "done": True}
             )
         )
-        assert saved is False
+        assert saved is None
         assert calls["n"] == 3
 
 

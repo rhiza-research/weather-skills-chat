@@ -179,13 +179,22 @@ def repair_unclosed_details(content: str) -> str:
     return "".join(out)
 
 
-def completion_revision(chat_id: str | None) -> int:
+async def completion_revision(
+    chat_id: str | None, written: Optional[int] = None
+) -> int:
     """Revision after the turn's transcript write. The client adopts this
-    from the same completion event that unlocks the next send."""
+    from the same completion event that unlocks the next send.
+
+    written is the revision the turn's final save produced, so no write
+    landing after it can be adopted in its place. The revision is read back
+    when the turn made no final save (realtime saves), when the save wrote
+    nothing (written is 0), or when it failed (None)."""
+    if written:
+        return written
     if not chat_id:
         return 0
     try:
-        return Chats.get_chat_revision(chat_id)
+        return await asyncio.to_thread(Chats.get_chat_revision, chat_id)
     except Exception:
         log.warning("Reading chat revision failed chat_id=%s", chat_id, exc_info=True)
         return 0
@@ -635,7 +644,9 @@ async def chat_completion_tools_handler(
                     used_secrets = sensitive_values_from_params(
                         tool_function_name, tool_function_params
                     )
-                    exec_params, substituted = apply_secrets_for_tool(
+                    # Placeholders are resolved from the database.
+                    exec_params, substituted = await asyncio.to_thread(
+                        apply_secrets_for_tool,
                         tool_function_params,
                         user,
                         direct=tool.get("direct", False),
@@ -1496,6 +1507,38 @@ def is_default_chat_title(title: Optional[str]) -> bool:
     return normalized in {"", "new chat", "new weather chat"}
 
 
+@dataclass
+class TurnEnd:
+    """The chat's title and messages, read once at the end of a turn."""
+
+    title: Optional[str]  # None when the chat is gone
+    message_map: dict  # message id -> message
+
+    def finish_reply(self, message_id: str, content: str) -> None:
+        """Put the reply's final content in the map, as it is being saved."""
+        if message_id in self.message_map:
+            self.message_map[message_id] = {
+                **self.message_map[message_id],
+                "content": content,
+                "done": True,
+            }
+
+
+def load_turn_end(chat_id: str) -> TurnEnd:
+    """Read the chat once for the end of a turn.
+
+    Synchronous: the whole chat is one database read, so callers on the event
+    loop run this in a thread.
+    """
+    chat = Chats.get_chat_by_id(chat_id)
+    if chat is None:
+        return TurnEnd(title=None, message_map={})
+    return TurnEnd(
+        title=chat.chat.get("title", "New Chat"),
+        message_map=chat.chat.get("history", {}).get("messages", {}) or {},
+    )
+
+
 async def emit_chat_title_if_needed(
     request,
     form_data: dict,
@@ -1503,19 +1546,26 @@ async def emit_chat_title_if_needed(
     metadata: dict,
     tasks: Optional[dict] = None,
     force: bool = False,
+    turn: Optional[TurnEnd] = None,
 ):
-    """Generate a title when the chat is still on the default untitled name."""
+    """Generate a title when the chat is still on the default untitled name.
+
+    turn is the chat as the end of the turn read it; without one the chat is
+    read here.
+    """
     chat_id = metadata.get("chat_id")
     message_id = metadata.get("message_id")
     if not chat_id or not message_id:
         return
 
-    current_title = Chats.get_chat_title_by_id(chat_id)
+    if turn is None:
+        turn = await asyncio.to_thread(load_turn_end, chat_id)
+    current_title = turn.title
     if not is_default_chat_title(current_title):
         # Already named (e.g. user renamed) — don't overwrite.
         return
 
-    message_map = Chats.get_messages_by_chat_id(chat_id)
+    message_map = turn.message_map
     message = message_map.get(message_id) if message_map else None
     if not message:
         return
@@ -1604,6 +1654,34 @@ async def emit_chat_title_if_needed(
         )
 
 
+def start_chat_response(
+    model: dict,
+    chat_id: Optional[str] = None,
+    message_id: Optional[str] = None,
+    model_id: str = "",
+) -> tuple[list, Optional[dict]]:
+    """Look up the model's stream filters; for a saved reply, stamp the model
+    on its message and read the message back.
+
+    Returns the filter functions and the reply's saved message (None without
+    a saved reply).
+
+    Synchronous: database reads and a write, so process_chat_response runs
+    this in a thread.
+    """
+    filter_functions = [
+        Functions.get_function_by_id(filter_id)
+        for filter_id in get_sorted_filter_ids(model)
+    ]
+    message = None
+    if chat_id and message_id:
+        Chats.upsert_message_to_chat_by_id_and_message_id(
+            chat_id, message_id, {"model": model_id}, bump_revision=False
+        )
+        message = Chats.get_message_by_id_and_message_id(chat_id, message_id)
+    return filter_functions, message
+
+
 async def process_chat_response(
     request,
     response,
@@ -1616,8 +1694,8 @@ async def process_chat_response(
     detach=True,
     waiting_heartbeat=None,
 ):
-    async def background_tasks_handler():
-        message_map = Chats.get_messages_by_chat_id(metadata["chat_id"])
+    async def background_tasks_handler(turn: TurnEnd):
+        message_map = turn.message_map
         message = message_map.get(metadata["message_id"]) if message_map else None
 
         if message:
@@ -1626,7 +1704,7 @@ async def process_chat_response(
             if messages:
                 # Always try to name untitled chats after a turn (including retries).
                 await emit_chat_title_if_needed(
-                    request, form_data, user, metadata, tasks=tasks
+                    request, form_data, user, metadata, tasks=tasks, turn=turn
                 )
 
                 if tasks and TASKS.TAGS_GENERATION in tasks and tasks[TASKS.TAGS_GENERATION]:
@@ -1723,18 +1801,21 @@ async def process_chat_response(
                         }
                     )
 
-                    title = Chats.get_chat_title_by_id(metadata["chat_id"])
+                    turn = await asyncio.to_thread(load_turn_end, metadata["chat_id"])
+                    title = turn.title
+                    turn.finish_reply(metadata["message_id"], content)
 
                     from open_webui.utils.chat_realtime import (
                         REPLY_SAVE_FAILED_MESSAGE,
                         save_final_reply,
                     )
 
-                    saved = await save_final_reply(
+                    revision = await save_final_reply(
                         metadata["chat_id"],
                         metadata["message_id"],
                         {"content": content, "done": True},
                     )
+                    saved = revision is not None
 
                     await event_emitter(
                         {
@@ -1743,7 +1824,9 @@ async def process_chat_response(
                                 "done": True,
                                 "content": content,
                                 "title": title,
-                                "revision": completion_revision(metadata["chat_id"]),
+                                "revision": await completion_revision(
+                                    metadata["chat_id"], revision
+                                ),
                                 **(
                                     {}
                                     if saved
@@ -1771,7 +1854,7 @@ async def process_chat_response(
                                 },
                             )
 
-                    await background_tasks_handler()
+                    await background_tasks_handler(turn)
 
             end_chat_trace(
                 output=(response.get("choices", [{}])[0].get("message") if isinstance(response, dict) else None)
@@ -1802,11 +1885,6 @@ async def process_chat_response(
         "__request__": request,
         "__model__": model,
     }
-    filter_functions = [
-        Functions.get_function_by_id(filter_id)
-        for filter_id in get_sorted_filter_ids(model)
-    ]
-
     # Streaming response
     if event_emitter and event_caller:
         task_id = str(uuid4())  # Create a unique task ID.
@@ -1814,14 +1892,12 @@ async def process_chat_response(
         if waiting_heartbeat is None:
             waiting_heartbeat = WaitingResponseHeartbeat(event_emitter)
 
-        await asyncio.to_thread(
-            Chats.upsert_message_to_chat_by_id_and_message_id,
+        filter_functions, saved_message = await asyncio.to_thread(
+            start_chat_response,
+            model,
             metadata["chat_id"],
             metadata["message_id"],
-            {
-                "model": model_id,
-            },
-            bump_revision=False,
+            model_id,
         )
 
         def split_content_and_whitespace(content):
@@ -2233,9 +2309,7 @@ async def process_chat_response(
 
                 return content, content_blocks, end_flag
 
-            message = Chats.get_message_by_id_and_message_id(
-                metadata["chat_id"], metadata["message_id"]
-            )
+            message = saved_message
 
             tool_calls = []
 
@@ -2830,7 +2904,9 @@ async def process_chat_response(
                                 used_secrets = sensitive_values_from_params(
                                     tool_name, tool_function_params
                                 )
-                                exec_params, substituted = apply_secrets_for_tool(
+                                # Placeholders are resolved from the database.
+                                exec_params, substituted = await asyncio.to_thread(
+                                    apply_secrets_for_tool,
                                     tool_function_params,
                                     user,
                                     direct=tool.get("direct", False),
@@ -3273,14 +3349,14 @@ async def process_chat_response(
                 # A follow-up refused before streaming leaves the waiting status up.
                 await waiting_heartbeat.stop(clear=True)
 
-                title = Chats.get_chat_title_by_id(metadata["chat_id"])
+                turn = await asyncio.to_thread(load_turn_end, metadata["chat_id"])
+                title = turn.title
                 final_content = serialize_content_blocks(content_blocks)
                 try:
                     from open_webui.utils.chat import chat_completed as apply_outlet
 
-                    message_map = Chats.get_messages_by_chat_id(metadata["chat_id"]) or {}
                     outlet_messages = get_message_list(
-                        message_map, metadata["message_id"]
+                        turn.message_map, metadata["message_id"]
                     ) or []
                     if outlet_messages:
                         outlet_messages[-1] = {
@@ -3317,20 +3393,24 @@ async def process_chat_response(
                 reply = {"content": final_content, "done": True}
                 if followup_error:
                     reply["error"] = {"content": followup_error}
+                turn.finish_reply(metadata["message_id"], final_content)
 
-                saved = True
+                saved, revision = True, None
                 if not ENABLE_REALTIME_CHAT_SAVE or followup_error:
                     # A failed save is reported on the reply, not as a failed
                     # generation: the model finished, the database did not.
-                    saved = await save_final_reply(
+                    revision = await save_final_reply(
                         metadata["chat_id"], metadata["message_id"], reply
                     )
+                    saved = revision is not None
 
                 data = {
                     "done": True,
                     "content": final_content,
                     "title": title,
-                    "revision": completion_revision(metadata["chat_id"]),
+                    "revision": await completion_revision(
+                        metadata["chat_id"], revision
+                    ),
                 }
                 if followup_error:
                     data["error"] = {"content": followup_error}
@@ -3360,7 +3440,7 @@ async def process_chat_response(
                     }
                 )
 
-                await background_tasks_handler()
+                await background_tasks_handler(turn)
                 end_chat_trace(output=data)
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
@@ -3372,18 +3452,21 @@ async def process_chat_response(
                     save_final_reply,
                 )
 
-                saved = await save_final_reply(
+                revision = await save_final_reply(
                     metadata["chat_id"],
                     metadata["message_id"],
                     {"content": cancelled_content, "done": True},
                 )
+                saved = revision is not None
                 await event_emitter(
                     {
                         "type": "chat:completion",
                         "data": {
                             "content": cancelled_content,
                             "done": True,
-                            "revision": completion_revision(metadata["chat_id"]),
+                            "revision": await completion_revision(
+                                metadata["chat_id"], revision
+                            ),
                             **(
                                 {}
                                 if saved
@@ -3418,7 +3501,7 @@ async def process_chat_response(
                 }
                 from open_webui.utils.chat_realtime import save_final_reply
 
-                await save_final_reply(
+                revision = await save_final_reply(
                     metadata["chat_id"],
                     metadata["message_id"],
                     {"content": failed_content, "done": True, "error": error_payload},
@@ -3431,7 +3514,9 @@ async def process_chat_response(
                                 "content": failed_content,
                                 "done": True,
                                 "error": error_payload,
-                                "revision": completion_revision(metadata["chat_id"]),
+                                "revision": await completion_revision(
+                                    metadata["chat_id"], revision
+                                ),
                             },
                         }
                     )
@@ -3459,6 +3544,8 @@ async def process_chat_response(
         return {"status": True}
 
     else:
+        filter_functions, _ = await asyncio.to_thread(start_chat_response, model)
+
         # Fallback to the original response
         async def stream_wrapper(original_generator, events):
             def wrap_item(item):

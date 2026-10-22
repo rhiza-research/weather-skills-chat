@@ -147,17 +147,20 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
                 patch.object(mw.Chats, "get_message_by_id_and_message_id", return_value=None)
             )
             stack.enter_context(
-                patch.object(mw.Chats, "get_chat_title_by_id", return_value="Chat")
-            )
-            stack.enter_context(
-                patch.object(mw.Chats, "get_messages_by_chat_id", return_value={})
+                patch.object(
+                    mw.Chats,
+                    "get_chat_by_id",
+                    return_value=SimpleNamespace(
+                        chat={"title": "Chat", "history": {"messages": {}}}
+                    ),
+                )
             )
             stack.enter_context(patch.object(mw.Chats, "get_chat_revision", return_value=1))
             stack.enter_context(
                 patch(
                     "open_webui.utils.chat_realtime.save_final_reply",
                     new_callable=AsyncMock,
-                    return_value=True,
+                    return_value=1,
                 )
             )
             stack.enter_context(

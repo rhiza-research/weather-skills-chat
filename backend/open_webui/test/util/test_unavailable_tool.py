@@ -73,8 +73,9 @@ class UnavailableToolTest(unittest.IsolatedAsyncioTestCase):
             patch.object(mw, "get_event_emitter", return_value=emit),
             patch.object(mw, "get_event_call", return_value=AsyncMock()),
             patch.object(mw, "Chats", MagicMock(**{
-                "get_messages_by_chat_id.return_value": {},
-                "get_chat_title_by_id.return_value": "Title",
+                "get_chat_by_id.return_value": SimpleNamespace(
+                    chat={"title": "Title", "history": {"messages": {}}}
+                ),
                 "get_chat_revision.return_value": 1,
                 "get_message_by_id_and_message_id.return_value": {},
             })),
@@ -83,7 +84,7 @@ class UnavailableToolTest(unittest.IsolatedAsyncioTestCase):
             patch.object(mw, "generate_chat_completion", self.followup),
             patch(
                 "open_webui.utils.chat_realtime.save_final_reply",
-                AsyncMock(return_value=True),
+                AsyncMock(return_value=1),
             ),
         ]
         for p in patches:

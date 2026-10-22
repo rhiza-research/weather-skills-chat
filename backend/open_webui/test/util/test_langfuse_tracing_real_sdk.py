@@ -654,7 +654,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         self.loop_body = self._loop_success
         self.handler_error = None
         save_patch = patch.object(
-            chat_realtime, "save_final_reply", autospec=True, return_value=True
+            chat_realtime, "save_final_reply", autospec=True, return_value=1
         )
         self.save_final_reply = save_patch.start()
         self.addCleanup(save_patch.stop)

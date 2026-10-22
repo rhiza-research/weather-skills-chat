@@ -409,25 +409,49 @@ async def _generate_chat_completion(
 chat_completion = generate_chat_completion
 
 
-async def chat_completed(request: Request, form_data: dict, user: Any):
-    if not (
-        getattr(request.state, "direct", False) and hasattr(request.state, "model")
-    ):
+def start_chat_outlet(
+    request: Request, form_data: dict
+) -> tuple[dict, dict, list, Optional[Exception]]:
+    """Find the reply's model and look up its outlet filters.
+
+    Returns the models, the reply's model, its outlet filter functions, and the
+    error when looking up the filters failed.
+
+    Synchronous: an uncached model and the filters are database reads, so
+    chat_completed runs this in a thread. Raises Exception("Model not found").
+    """
+    direct = getattr(request.state, "direct", False) and hasattr(request.state, "model")
+    if not direct:
         remember_catalog_model(request, form_data.get("model"))
 
-    if getattr(request.state, "direct", False) and hasattr(request.state, "model"):
+    if direct:
         models = {
             request.state.model["id"]: request.state.model,
         }
     else:
         models = request.app.state.MODELS
 
-    data = form_data
-    model_id = data["model"]
+    model_id = form_data["model"]
     if model_id not in models:
         raise Exception("Model not found")
 
     model = models[model_id]
+    try:
+        filter_functions = [
+            Functions.get_function_by_id(filter_id)
+            for filter_id in get_sorted_filter_ids(model)
+        ]
+        filter_error = None
+    except Exception as e:
+        filter_functions, filter_error = [], e
+    return models, model, filter_functions, filter_error
+
+
+async def chat_completed(request: Request, form_data: dict, user: Any):
+    models, model, filter_functions, filter_error = await asyncio.to_thread(
+        start_chat_outlet, request, form_data
+    )
+    data = form_data
 
     try:
         data = await process_pipeline_outlet_filter(request, data, user, models)
@@ -456,10 +480,8 @@ async def chat_completed(request: Request, form_data: dict, user: Any):
     }
 
     try:
-        filter_functions = [
-            Functions.get_function_by_id(filter_id)
-            for filter_id in get_sorted_filter_ids(model)
-        ]
+        if filter_error is not None:
+            raise filter_error
 
         result, _ = await process_filter_functions(
             request=request,

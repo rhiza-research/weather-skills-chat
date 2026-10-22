@@ -104,8 +104,9 @@ class StreamEmitTest(unittest.IsolatedAsyncioTestCase):
                 "Chats",
                 MagicMock(
                     **{
-                        "get_messages_by_chat_id.return_value": {},
-                        "get_chat_title_by_id.return_value": "Title",
+                        "get_chat_by_id.return_value": SimpleNamespace(
+                            chat={"title": "Title", "history": {"messages": {}}}
+                        ),
                         "get_chat_revision.return_value": 1,
                         "get_message_by_id_and_message_id.return_value": {},
                     }
@@ -113,7 +114,7 @@ class StreamEmitTest(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(mw, "get_sorted_filter_ids", return_value=[]),
             patch.object(mw, "get_active_status_by_user_id", return_value=True),
-            patch("open_webui.utils.chat_realtime.save_final_reply", AsyncMock(return_value=True)),
+            patch("open_webui.utils.chat_realtime.save_final_reply", AsyncMock(return_value=1)),
         ]
         for p in patches:
             p.start()

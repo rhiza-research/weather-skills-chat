@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import logging
 import os
 import re
@@ -239,7 +240,22 @@ def user_skill_uv_dirs(user_id: str, *, caches_root: Optional[Path] = None) -> t
     return uv_cache, uv_python
 
 
-async def run_skill(
+@dataclass
+class SkillRun:
+    """A skill run ready to start: its script, sandbox, secrets and environment."""
+
+    skill_path: Path
+    script_path: Path
+    args: list[str]
+    timeout: int
+    used_secrets: dict[str, str]
+    chat_id: Optional[str]
+    use_chat_sandbox: bool
+    cwd: Path
+    env: dict[str, str]
+
+
+def prepare_skill_run(
     skill_dir: str | Path,
     argv: Optional[list] = None,
     script: Optional[str] = None,
@@ -247,8 +263,13 @@ async def run_skill(
     __user__: Optional[dict] = None,
     __metadata__: Optional[dict] = None,
     timeout: Optional[int] = None,
-) -> dict:
-    """Run a skill's uv script and return structured stdout/stderr for UI + model."""
+) -> "SkillRun | dict":
+    """Find the skill's script, resolve its env secrets and prepare its sandbox.
+
+    Returns the error result for the model instead when the skill cannot run.
+    Synchronous: the skill and the chat sandbox are on JuiceFS and the secrets
+    are database reads, so run_skill runs this in a thread.
+    """
     skill_path = Path(skill_dir).resolve()
     if not skill_path.is_dir():
         return _error_result(f"Skill directory not found: {skill_path}")
@@ -297,6 +318,45 @@ async def run_skill(
     env["HOME"] = str(cwd)
     for name, value in used_secrets.items():
         env[name] = value
+
+    return SkillRun(
+        skill_path=skill_path,
+        script_path=script_path,
+        args=args,
+        timeout=timeout,
+        used_secrets=used_secrets,
+        chat_id=chat_id,
+        use_chat_sandbox=use_chat_sandbox,
+        cwd=cwd,
+        env=env,
+    )
+
+
+async def run_skill(
+    skill_dir: str | Path,
+    argv: Optional[list] = None,
+    script: Optional[str] = None,
+    env_secrets: Optional[list] = None,
+    __user__: Optional[dict] = None,
+    __metadata__: Optional[dict] = None,
+    timeout: Optional[int] = None,
+) -> dict:
+    """Run a skill's uv script and return structured stdout/stderr for UI + model."""
+    run = await asyncio.to_thread(
+        prepare_skill_run,
+        skill_dir,
+        argv,
+        script,
+        env_secrets,
+        __user__,
+        __metadata__,
+        timeout,
+    )
+    if isinstance(run, dict):
+        return run
+    skill_path, script_path, args = run.skill_path, run.script_path, run.args
+    timeout, used_secrets, chat_id = run.timeout, run.used_secrets, run.chat_id
+    use_chat_sandbox, cwd, env = run.use_chat_sandbox, run.cwd, run.env
 
     sandboxed = False
     landlock_backend: str | None = None
