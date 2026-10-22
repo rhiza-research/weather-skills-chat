@@ -179,19 +179,57 @@ async def generate_chat_completion(
         # The arena calls this function again for the model it selects, and
         # that call enforces the usage caps and records the generation and
         # the usage.
+        await asyncio.to_thread(
+            check_model_call_access, request, form_data, user, bypass_filter
+        )
         return await _generate_chat_completion(request, form_data, user, bypass_filter)
     inject_include_usage(form_data)
-    enforce_usage_caps(request, form_data, user)
-    style = _model_call_tracing_style(request, form_data)
+    style = await asyncio.to_thread(
+        authorize_model_call, request, form_data, user, bypass_filter
+    )
     _carry_model_call_tracing_style(form_data, style)
     response = await observe_generation(
         form_data,
         _generate_chat_completion(request, form_data, user, bypass_filter),
         style=style,
     )
-    return bind_usage_to_response(
+    return await bind_usage_to_response(
         response, resolve_usage_context(request, form_data, user)
     )
+
+
+def authorize_model_call(
+    request: Request, form_data: dict, user: Any, bypass_filter: bool
+) -> str:
+    """Usage caps, model access, then the call's tracing style, for one model call.
+
+    Synchronous: the checks read the database, and the style can read the
+    model row, so the caller runs this in a thread. Returns the style for
+    observe_generation. Raises HTTPException 429 over a cap, and
+    Exception("Model not found") when the user cannot use the model.
+    """
+    enforce_usage_caps(request, form_data, user)
+    check_model_call_access(request, form_data, user, bypass_filter)
+    return _model_call_tracing_style(request, form_data)
+
+
+def check_model_call_access(
+    request: Request, form_data: dict, user: Any, bypass_filter: bool
+) -> None:
+    """Raise Exception("Model not found") when a user may not call the model.
+
+    Synchronous: reads the model row and the user's organizations. Admins,
+    direct connections and bypassed calls are not checked; an unknown model
+    is reported by _generate_chat_completion.
+    """
+    if BYPASS_MODEL_ACCESS_CONTROL or bypass_filter or user.role != "user":
+        return
+    if getattr(request.state, "direct", False):
+        return
+    model = (request.app.state.MODELS or {}).get(form_data.get("model"))
+    if model is None:
+        return
+    check_model_access(user, model, request_organization_id(request))
 
 
 def _catalog_model(request: Request, form_data: dict) -> Optional[dict]:
@@ -287,13 +325,7 @@ async def _generate_chat_completion(
             request, form_data, user=user, models=models
         )
     else:
-        # Check if user has access to the model
-        if not bypass_filter and user.role == "user":
-            try:
-                check_model_access(user, model, request_organization_id(request))
-            except Exception as e:
-                raise e
-
+        # generate_chat_completion checked model access (check_model_call_access).
         if model.get("owned_by") == "arena":
             model_ids = model.get("info", {}).get("meta", {}).get("model_ids")
             filter_mode = model.get("info", {}).get("meta", {}).get("filter_mode")
