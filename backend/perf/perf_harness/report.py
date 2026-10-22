@@ -27,14 +27,30 @@ def record(scenario: str, stats: LoopStats, **extra) -> dict:
     return row
 
 
-def check_budget(stats: LoopStats, *, max_lag_ms: float, blocked_pct: float | None = None):
-    """Fail when the scenario held the loop longer than the budget allows."""
+def check_budget(
+    stats: LoopStats,
+    *,
+    max_lag_ms: float,
+    blocked_pct: float | None = None,
+    pending: str | None = None,
+):
+    """Fail when the scenario held the loop longer than the budget allows.
+
+    ``pending`` names a fix that has not landed yet. Over budget, the test is
+    marked as an expected failure, so its numbers are still recorded. Within
+    budget, it fails as a reminder to drop ``pending`` and enforce the budget.
+    """
     if os.environ.get(REPORT_ONLY_ENV):
         return
-    assert stats.max_lag_ms <= max_lag_ms, (
-        f"event loop held for {stats.max_lag_ms:.0f} ms (budget {max_lag_ms:.0f} ms)"
-    )
-    if blocked_pct is not None:
-        assert stats.blocked_pct <= blocked_pct, (
-            f"event loop blocked {stats.blocked_pct:.1f}% of the run (budget {blocked_pct}%)"
-        )
+    import pytest
+
+    problems = []
+    if stats.max_lag_ms > max_lag_ms:
+        problems.append(f"event loop held for {stats.max_lag_ms:.0f} ms (budget {max_lag_ms:.0f} ms)")
+    if blocked_pct is not None and stats.blocked_pct > blocked_pct:
+        problems.append(f"event loop blocked {stats.blocked_pct:.1f}% of the run (budget {blocked_pct}%)")
+    if pending:
+        if problems:
+            pytest.xfail(f"pending {pending}: " + "; ".join(problems))
+        pytest.fail(f"within budget now; if {pending} is fixed, remove pending= to enforce the budget")
+    assert not problems, "; ".join(problems)
