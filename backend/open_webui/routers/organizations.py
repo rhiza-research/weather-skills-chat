@@ -55,7 +55,7 @@ def _with_all_members(orgs: list[OrganizationModel], user_id: str) -> list[Organ
 
 
 @router.get("/", response_model=list[OrganizationModel])
-async def get_organizations(user=Depends(get_verified_user)):
+def get_organizations(user=Depends(get_verified_user)):
     Organizations.ensure_personal(user.id)
     return attach_org_usage_list(Organizations.get_organizations_by_user_id(user.id))
 

@@ -16,12 +16,21 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 SECRET_PLACEHOLDER_RE = re.compile(r"\{\{\s*secret:([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
-def can_manage_secret(user: UserModel, row: Optional[Secret]) -> bool:
+def can_manage_secret(
+    user: UserModel, row: Optional[Secret], is_admin: Optional[bool] = None
+) -> bool:
+    """Private secrets: the owner. Shared: the owner and the organization's admins.
+
+    is_admin, when given, is whether the user administers the row's
+    organization, so a caller checking many rows reads it once.
+    """
     if row is None:
         return False
     if row.visibility == "private":
         return row.user_id == user.id
-    return is_org_admin(row.organization_id, user.id) or row.user_id == user.id
+    if row.user_id == user.id:
+        return True
+    return is_org_admin(row.organization_id, user.id) if is_admin is None else is_admin
 
 
 def can_use_secret(user: UserModel, row: Optional[Secret]) -> bool:
@@ -39,13 +48,19 @@ def list_secret_metadata(
     import time as _time
 
     t0 = _time.perf_counter()
+    rows = Secrets.list_for_org(organization_id, user.id)
+    # Every row is in this organization: one admin check covers the shared
+    # secrets other members saved.
+    is_admin = None
+    if any(row.visibility != "private" and row.user_id != user.id for row in rows):
+        is_admin = is_org_admin(organization_id, user.id)
     items = []
-    for row in Secrets.list_for_org(organization_id, user.id):
+    for row in rows:
         items.append(
             {
                 **row.model_dump(),
                 "scope": "organization" if row.visibility == "organization" else "private",
-                "can_manage": can_manage_secret(user, Secrets.get_by_id(row.id)),
+                "can_manage": can_manage_secret(user, row, is_admin),
                 "overridden": False,
             }
         )

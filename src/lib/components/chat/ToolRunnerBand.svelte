@@ -2,23 +2,25 @@
 	import { getContext } from 'svelte';
 	import { chatId, chatRunner, config, temporaryChatEnabled } from '$lib/stores';
 	import { getToolRunner } from '$lib/apis/chats';
+	import { fmtCpu, fmtMemGib, runnerResourcesLine } from '$lib/chat/runnerResources';
 
 	const i18n = getContext('i18n');
 
-	const CPU_CORES = 3;
-	const MEM_GIB = 12;
-	const MEM_BYTES = MEM_GIB * 1024 ** 3;
+	// Linux keeps a little swap after pressure passes (swap-cache slots and idle
+	// pages of the runtime), so only flag swap well above that leftover.
+	const SWAP_FLAG_BYTES = 500 * 1024 ** 2;
 
 	type Sample = { t: number; cpu: number; memory: number; swap: boolean };
-	type BandState = 'hidden' | 'paused' | 'starting' | 'ready';
+	type BandState = 'hidden' | 'paused' | 'starting' | 'ready' | 'degraded';
 
 	let state: BandState = 'hidden';
 	let open = false;
 	let samples: Sample[] = [];
 	let lastCpuUsage: number | null = null;
 	let lastCpuTime: number | null = null;
-	let cpuLimit = CPU_CORES;
-	let memLimitBytes = MEM_BYTES;
+	// Unknown until the runner's metrics report them; no limits are shown until then.
+	let cpuLimit: number | null = null;
+	let memLimitBytes: number | null = null;
 	let startedFor = '';
 	let ensuring = false;
 
@@ -46,8 +48,8 @@
 		samples = [];
 		lastCpuUsage = null;
 		lastCpuTime = null;
-		cpuLimit = CPU_CORES;
-		memLimitBytes = MEM_BYTES;
+		cpuLimit = null;
+		memLimitBytes = null;
 	};
 
 	const readStatus = async (id: string) => {
@@ -87,7 +89,8 @@
 		lastCpuUsage = usage;
 		lastCpuTime = now;
 		if (dt <= 0) return 0;
-		return Math.min(cpuLimit, Math.max(0, du / 1_000_000 / dt));
+		const cores = Math.max(0, du / 1_000_000 / dt);
+		return cpuLimit ? Math.min(cpuLimit, cores) : cores;
 	};
 
 	const applyMetrics = (metrics: Record<string, any>) => {
@@ -101,14 +104,19 @@
 			t: Date.now(),
 			cpu: cpuCores(metrics),
 			memory: Number(metrics.memory_bytes || 0),
-			swap: Number(metrics.memory_swap_current || 0) > 0
+			swap: Number(metrics.memory_swap_current || 0) > SWAP_FLAG_BYTES
 		};
 		samples = [...samples.filter((s) => Date.now() - s.t < 60_000), next];
 	};
 
 	const applyLive = (row: { state?: string; metrics?: Record<string, any> | null }) => {
 		if (row.state === 'ready') state = 'ready';
-		else if (row.state === 'starting') {
+		else if (row.state === 'degraded') {
+			// The runner reports itself unhealthy, or its pod is not ready, or it
+			// has not answered for a while. It is replaced only when its claim goes.
+			open = false;
+			state = 'degraded';
+		} else if (row.state === 'starting') {
 			if (state === 'ready') open = false;
 			state = 'starting';
 		} else if (row.state === 'paused' || row.state === 'absent') {
@@ -125,30 +133,16 @@
 		open = !open;
 	};
 
-	const fmtCpu = (n: number) => {
-		if (n >= 10) return n.toFixed(0);
-		return n.toFixed(1).replace(/\.0$/, '');
-	};
-
-	const fmtMemGib = (bytes: number) => {
-		const gb = bytes / 1024 ** 3;
-		if (gb <= 0) return '0';
-		if (gb >= 10) return gb.toFixed(0);
-		if (gb >= 1) return gb.toFixed(1);
-		return gb.toFixed(2);
-	};
-
 	$: latest = samples[samples.length - 1];
-	$: memLimitGb = memLimitBytes / 1024 ** 3;
-	$: resources = latest
-		? `${fmtCpu(latest.cpu)} / ${fmtCpu(cpuLimit)} CPU - ${fmtMemGib(latest.memory)} / ${fmtMemGib(memLimitBytes)} GB Memory`
-		: `0 / ${fmtCpu(cpuLimit)} CPU - 0 / ${fmtMemGib(memLimitBytes)} GB Memory`;
+	$: resources = runnerResourcesLine(latest, cpuLimit, memLimitBytes);
 	$: statusLabel =
 		state === 'ready'
 			? $i18n.t('Weather skills runner ready')
 			: state === 'paused'
 				? $i18n.t('Weather skills runner paused')
-				: $i18n.t('Weather skills runner starting');
+				: state === 'degraded'
+					? $i18n.t('Weather skills runner degraded')
+					: $i18n.t('Weather skills runner starting');
 	$: cpuPct = latest && cpuLimit ? Math.min(100, (latest.cpu / cpuLimit) * 100) : 0;
 	$: memPct = latest && memLimitBytes ? Math.min(100, (latest.memory / memLimitBytes) * 100) : 0;
 	$: inSwap = Boolean(latest?.swap);
@@ -173,15 +167,19 @@
 			{:else if state === 'paused'}
 				<span class="inline-block size-2.5 shrink-0 rounded-full bg-gray-400 dark:bg-gray-500"
 				></span>
+			{:else if state === 'degraded'}
+				<span class="inline-block size-2.5 shrink-0 rounded-full bg-red-500"></span>
 			{:else}
 				<span class="tool-runner-dot inline-block size-2.5 shrink-0 rounded-full bg-emerald-500"
 				></span>
 			{/if}
 			<div class="flex flex-col leading-tight min-w-0 text-left">
-				<span class="text-xs font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap"
-					>{statusLabel}</span
+				<span
+					class="text-xs font-medium whitespace-nowrap {state === 'degraded'
+						? 'text-red-600 dark:text-red-400'
+						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
-				{#if state !== 'paused'}
+				{#if (state === 'ready' || state === 'starting') && resources}
 					<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
 						>{resources}</span
 					>
@@ -193,14 +191,16 @@
 				class="absolute right-0 top-full mt-1 z-40 w-64 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
 			>
 				<div class="mb-1 text-gray-500">
-					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)} / {fmtCpu(cpuLimit)}
+					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)}{cpuLimit ? ` / ${fmtCpu(cpuLimit)}` : ''}
 					{$i18n.t('cores')})
 				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
 				</div>
 				<div class="mt-2 mb-1 text-gray-500">
-					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)} / {fmtMemGib(memLimitBytes)} GB)
+					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)}{memLimitBytes
+						? ` / ${fmtMemGib(memLimitBytes)}`
+						: ''} GB)
 				</div>
 				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 					<div
@@ -213,7 +213,7 @@
 					{#each samples as s}
 						<div
 							class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-sky-400'}"
-							style="height: {Math.max(8, (s.memory / memLimitBytes) * 100)}%"
+							style="height: {memLimitBytes ? Math.max(8, (s.memory / memLimitBytes) * 100) : 8}%"
 							title="{fmtMemGib(s.memory)} GB{s.swap ? ` · ${$i18n.t('swap')}` : ''}"
 						></div>
 					{/each}

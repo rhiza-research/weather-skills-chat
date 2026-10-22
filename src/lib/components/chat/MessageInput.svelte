@@ -38,6 +38,7 @@
 
 	import { WEBUI_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
 	import { fileFromDataUrl } from '$lib/apis/artifacts';
+	import { isReplyRunning } from '$lib/utils/generationLiveness';
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
@@ -677,10 +678,6 @@
 													const commandsContainerElement =
 														document.getElementById('commands-container');
 
-													if (e.key === 'Escape') {
-														stopResponse();
-													}
-
 													// Command/Ctrl + Shift + Enter to submit a message pair
 													if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
 														e.preventDefault();
@@ -778,15 +775,6 @@
 															}
 														}
 													}
-
-													if (e.key === 'Escape') {
-														console.log('Escape');
-														atSelectedModel = undefined;
-														selectedToolIds = [];
-														webSearchEnabled = false;
-														imageGenerationEnabled = false;
-														codeInterpreterEnabled = false;
-													}
 												}}
 												on:paste={async (e) => {
 													e = e.detail.event;
@@ -846,10 +834,6 @@
 
 												const commandsContainerElement =
 													document.getElementById('commands-container');
-
-												if (e.key === 'Escape') {
-													stopResponse();
-												}
 
 												// Command/Ctrl + Shift + Enter to submit a message pair
 												if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
@@ -973,15 +957,6 @@
 
 													e.target.style.height = '';
 													e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
-												}
-
-												if (e.key === 'Escape') {
-													console.log('Escape');
-													atSelectedModel = undefined;
-													selectedToolIds = [];
-													webSearchEnabled = false;
-													imageGenerationEnabled = false;
-													codeInterpreterEnabled = false;
 												}
 											}}
 											rows="1"
@@ -1202,7 +1177,7 @@
 									</div>
 
 									<div class="self-end flex space-x-1 mr-1 shrink-0">
-										{#if (!history?.currentId || history.messages[history.currentId]?.done == true) && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true))}
+										{#if !isReplyRunning(history?.messages?.[history?.currentId]) && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true))}
 											<Tooltip content={$i18n.t('Record voice')}>
 												<button
 													id="voice-input-button"
@@ -1251,7 +1226,7 @@
 											</Tooltip>
 										{/if}
 
-										{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true)}
+										{#if (taskIds && taskIds.length > 0) || isReplyRunning(history?.messages?.[history?.currentId])}
 											<div class=" flex items-center">
 												<Tooltip content={$i18n.t('Stop')}>
 													<button

@@ -34,6 +34,7 @@ from open_webui.utils.organizations import (
     get_active_organization_id,
     is_member,
     is_personal_org,
+    require_chat_write,
     resolve_visibility,
 )
 
@@ -74,6 +75,7 @@ def _require_writable_chat(chat_id: str, user):
         )
     return chat
 
+
 ############################
 # GetChatList
 ############################
@@ -81,7 +83,7 @@ def _require_writable_chat(chat_id: str, user):
 
 @router.get("/", response_model=list[ChatTitleIdResponse])
 @router.get("/list", response_model=list[ChatTitleIdResponse])
-async def get_session_user_chat_list(
+def get_session_user_chat_list(
     user=Depends(get_verified_user),
     page: Optional[int] = None,
     organization_id: str = Depends(get_active_organization_id),
@@ -120,7 +122,7 @@ async def e2e_clear_chats(user=Depends(get_verified_user)):
 @router.post("/{id}/e2e/age", response_model=Optional[ChatResponse])
 async def e2e_age_chat(id: str, form_data: E2EAgeForm, user=Depends(get_verified_user)):
     _require_e2e_fixtures()
-    _require_writable_chat(id, user)
+    await asyncio.to_thread(require_chat_write, id, user)
     if form_data.days_ago < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT()
@@ -298,7 +300,7 @@ async def search_user_chats(
 
 
 @router.get("/recent")
-async def get_recent_chats(
+def get_recent_chats(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
@@ -366,7 +368,7 @@ async def get_chats_by_folder_id(folder_id: str, user=Depends(get_verified_user)
 
 
 @router.get("/pinned", response_model=list[ChatResponse])
-async def get_user_pinned_chats(
+def get_user_pinned_chats(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
@@ -408,7 +410,7 @@ async def get_user_archived_chats(user=Depends(get_verified_user)):
 
 
 @router.get("/all/tags", response_model=list[TagModel])
-async def get_all_user_tags(user=Depends(get_verified_user)):
+def get_all_user_tags(user=Depends(get_verified_user)):
     try:
         tags = Tags.get_tags_by_user_id(user.id)
         return tags
@@ -515,7 +517,7 @@ async def get_user_chat_list_by_tag_name(
 
 
 @router.get("/{id}", response_model=Optional[ChatResponse])
-async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
+def get_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     return ChatResponse(**chat.model_dump())
 
@@ -529,7 +531,7 @@ async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def update_chat_by_id(
     id: str, form_data: ChatForm, user=Depends(get_verified_user)
 ):
-    _require_writable_chat(id, user)
+    await asyncio.to_thread(require_chat_write, id, user)
     try:
         chat = await asyncio.to_thread(Chats.update_chat_fields, id, form_data.chat)
     except ChatWriteError as exc:
@@ -553,7 +555,7 @@ async def update_chat_by_id(
 async def patch_chat_history(
     id: str, form_data: HistoryPatchForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = await asyncio.to_thread(require_chat_write, id, user)
     if chat is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -600,19 +602,7 @@ class MessageForm(BaseModel):
 async def update_chat_message_by_id(
     id: str, message_id: str, form_data: MessageForm, user=Depends(get_verified_user)
 ):
-    chat = Chats.get_chat_by_id(id)
-
-    if not chat:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-
-    if not can_write_chat(user, chat):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+    await asyncio.to_thread(require_chat_write, id, user)
 
     chat = await asyncio.to_thread(
         Chats.upsert_message_to_chat_by_id_and_message_id,
@@ -659,19 +649,7 @@ class EventForm(BaseModel):
 async def send_chat_message_event_by_id(
     id: str, message_id: str, form_data: EventForm, user=Depends(get_verified_user)
 ):
-    chat = Chats.get_chat_by_id(id)
-
-    if not chat:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-
-    if not can_write_chat(user, chat):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
+    await asyncio.to_thread(require_chat_write, id, user)
 
     event_emitter = get_event_emitter(
         {
@@ -696,10 +674,13 @@ async def send_chat_message_event_by_id(
 ############################
 
 
-@router.delete("/{id}", response_model=bool)
-async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified_user)):
+def _clear_chat_for_delete(id: str, user, user_permissions):
+    """Check the delete is allowed, then drop the chat's tags, automation links
+    and files, and return the chat. Reads the database and walks the files on
+    JuiceFS: run in a thread.
+    """
     if user.role != "admin" and not has_permission(
-        user.id, "chat.delete", request.app.state.config.USER_PERMISSIONS
+        user.id, "chat.delete", user_permissions
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -724,6 +705,14 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
         delete_sandbox(id)
     except Exception:
         log.exception("Failed to delete chat artifacts")
+    return chat
+
+
+@router.delete("/{id}", response_model=bool)
+async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified_user)):
+    chat = await asyncio.to_thread(
+        _clear_chat_for_delete, id, user, request.app.state.config.USER_PERMISSIONS
+    )
 
     from open_webui.utils.chat_realtime import publish_chat_removed
 
@@ -756,7 +745,7 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
 
 
 @router.get("/{id}/pinned", response_model=Optional[bool])
-async def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
+def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     return chat.pinned
 
@@ -768,7 +757,7 @@ async def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/{id}/pin", response_model=Optional[ChatResponse])
 async def pin_chat_by_id(id: str, user=Depends(get_verified_user)):
-    _require_writable_chat(id, user)
+    await asyncio.to_thread(require_chat_write, id, user)
     return await asyncio.to_thread(Chats.toggle_chat_pinned_by_id, id)
 
 
@@ -785,7 +774,7 @@ class CloneForm(BaseModel):
 async def clone_chat_by_id(
     form_data: CloneForm, id: str, user=Depends(get_verified_user)
 ):
-    chat = _require_readable_chat(id, user)
+    chat = await asyncio.to_thread(_require_readable_chat, id, user)
     updated_chat = {
         **chat.chat,
         "originalChatId": chat.id,
@@ -808,7 +797,8 @@ async def clone_chat_by_id(
     try:
         from open_webui.utils.artifacts import copy_sandbox
 
-        copy_sandbox(source_id, chat.id)
+        # Copies every file of the chat on JuiceFS.
+        await asyncio.to_thread(copy_sandbox, source_id, chat.id)
     except Exception:
         log.exception("Failed to copy chat artifacts")
     return ChatResponse(**chat.model_dump())
@@ -823,9 +813,9 @@ async def clone_chat_by_id(
 async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 
     if user.role == "admin":
-        chat = Chats.get_chat_by_id(id)
+        chat = await asyncio.to_thread(Chats.get_chat_by_id, id)
     else:
-        chat = Chats.get_chat_by_share_id(id)
+        chat = await asyncio.to_thread(Chats.get_chat_by_share_id, id)
 
     if chat:
         updated_chat = {
@@ -842,7 +832,7 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
         try:
             from open_webui.utils.artifacts import copy_sandbox
 
-            copy_sandbox(source_id, chat.id)
+            await asyncio.to_thread(copy_sandbox, source_id, chat.id)
         except Exception:
             log.exception("Failed to copy shared chat artifacts")
         return ChatResponse(**chat.model_dump())
@@ -859,7 +849,7 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 
 @router.post("/{id}/archive", response_model=Optional[ChatResponse])
 async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
-    chat = _require_writable_chat(id, user)
+    chat = await asyncio.to_thread(require_chat_write, id, user)
     if chat:
         chat = await asyncio.to_thread(Chats.toggle_chat_archive_by_id, id)
 
@@ -956,7 +946,7 @@ class ChatVisibilityForm(BaseModel):
 async def update_chat_visibility_by_id(
     id: str, form_data: ChatVisibilityForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = await asyncio.to_thread(require_chat_write, id, user)
     if is_personal_org(chat.organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -975,7 +965,7 @@ async def update_chat_visibility_by_id(
 async def update_chat_folder_id_by_id(
     id: str, form_data: ChatFolderIdForm, user=Depends(get_verified_user)
 ):
-    chat = _require_writable_chat(id, user)
+    chat = await asyncio.to_thread(require_chat_write, id, user)
     if chat:
         if form_data.folder_id:
             folder = Folders.get_folder_by_id(form_data.folder_id)
@@ -1015,7 +1005,7 @@ async def update_chat_folder_id_by_id(
 
 
 @router.get("/{id}/tags", response_model=list[TagModel])
-async def get_chat_tags_by_id(id: str, user=Depends(get_verified_user)):
+def get_chat_tags_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     if chat:
         tags = chat.meta.get("tags", [])

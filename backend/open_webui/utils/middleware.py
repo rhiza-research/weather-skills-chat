@@ -5,6 +5,7 @@ import os
 import base64
 
 import asyncio
+from dataclasses import dataclass
 from aiocache import cached
 from typing import Any, Optional
 import random
@@ -90,6 +91,7 @@ from open_webui.utils.langfuse_tracing import (
     end_tool_observation,
     observe_stream_and_end_trace,
     start_tool_observation,
+    tool_resource_usage_metadata,
 )
 
 from open_webui.config import (
@@ -103,6 +105,7 @@ from open_webui.env import (
     ENABLE_REALTIME_CHAT_SAVE,
 )
 from open_webui.constants import TASKS
+from open_webui.models.usage import UsageLimitExceeded
 
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -119,10 +122,61 @@ WAITING_RESPONSE_INTERVAL_S = float(
     os.environ.get("WAITING_RESPONSE_HEARTBEAT_INTERVAL", "1")
 )
 
+PREPARING_TOOL_CALLS_ACTION = "preparing_tool_calls"
 GENERATION_HEARTBEAT_ACTION = "generation_heartbeat"
 GENERATION_HEARTBEAT_INTERVAL_S = float(
     os.environ.get("GENERATION_HEARTBEAT_INTERVAL", "5")
 )
+
+
+# A streamed reply is serialized and sent at most this often; each delta still
+# updates the blocks. The browser replaces the whole message on each send.
+STREAM_EMIT_INTERVAL_S = 0.1
+# While reading a stream, hand the event loop to other tasks at least this often.
+STREAM_YIELD_INTERVAL_S = 0.01
+
+_DETAILS_OPEN = "<details"
+_DETAILS_CLOSE = "</details>"
+
+
+def repair_unclosed_details(content: str) -> str:
+    """Insert missing </details> before sibling <details> opens.
+
+    GPT reasoning blocks can be left open when the model switches to
+    tool_calls; nested-looking HTML then breaks the markdown details
+    tokenizer and raw tags render in the chat.
+
+    Runs on every send of a streamed reply, so it jumps from tag to tag
+    rather than walking the text one character at a time.
+    """
+    if not content or _DETAILS_OPEN not in content:
+        return content
+    out: list[str] = []
+    depth = 0
+    i = 0
+    while True:
+        next_open = content.find(_DETAILS_OPEN, i)
+        next_close = content.find(_DETAILS_CLOSE, i)
+        if next_open == -1 and next_close == -1:
+            out.append(content[i:])
+            break
+        if next_close == -1 or (next_open != -1 and next_open < next_close):
+            out.append(content[i:next_open])
+            if depth > 0:
+                out.append(f"\n{_DETAILS_CLOSE}\n")
+                depth = 0
+            out.append(_DETAILS_OPEN)
+            depth += 1
+            i = next_open + len(_DETAILS_OPEN)
+        else:
+            out.append(content[i:next_close])
+            out.append(_DETAILS_CLOSE)
+            depth = max(0, depth - 1)
+            i = next_close + len(_DETAILS_CLOSE)
+    while depth > 0:
+        out.append(f"\n{_DETAILS_CLOSE}")
+        depth -= 1
+    return "".join(out)
 
 
 def completion_revision(chat_id: str | None) -> int:
@@ -135,6 +189,27 @@ def completion_revision(chat_id: str | None) -> int:
     except Exception:
         log.warning("Reading chat revision failed chat_id=%s", chat_id, exc_info=True)
         return 0
+
+
+def unavailable_tool_message(tool_name: str) -> str:
+    """Tool result when the model calls a tool this message does not offer."""
+    name = f"`{tool_name}`" if tool_name else "That tool"
+    return (
+        f"Error: {name} is not available for this message, so it did not run. "
+        "Do not call it again in this reply. Tell the user it is not turned on "
+        "for this chat: they can turn it on in the tools list under the wrench "
+        "button next to the message box and send their message again. If it "
+        "is not listed there, an organization admin has to turn it on first."
+    )
+
+
+def model_call_error_message(e: Exception) -> str:
+    """The error a user sees when a model call is refused, e.g. by a usage cap."""
+    if isinstance(e, HTTPException) and isinstance(e.detail, str):
+        return e.detail
+    if isinstance(e, UsageLimitExceeded):
+        return e.detail
+    return str(e)
 
 
 def tool_call_files_for_display(
@@ -237,6 +312,52 @@ class WaitingResponseHeartbeat:
                 pass
         if clear and was_active and not self._cleared:
             self._cleared = True
+            await self._emit(done=True)
+
+
+class PreparingToolCallsStatus(WaitingResponseHeartbeat):
+    """Shown while the model streams tool-call arguments.
+
+    Tool cards appear only once the whole response has arrived, and a turn with
+    many calls can take several seconds to write them; nothing else is on screen
+    then. The count is unknown until the stream ends, so this shows a timer.
+    """
+
+    def __init__(self, event_emitter):
+        super().__init__(event_emitter)
+        self._shown = False
+
+    async def start(self):
+        await super().start()
+        self._shown = self._active
+
+    async def _emit(self, done: bool):
+        if not self.event_emitter:
+            return
+        elapsed = int(time.time() - (self._started_at or time.time()))
+        data = {
+            "action": PREPARING_TOOL_CALLS_ACTION,
+            "description": f"Preparing tool calls… ({elapsed}s)",
+            "done": done,
+        }
+        if done:
+            data["hidden"] = True
+        try:
+            await self.event_emitter({"type": "status", "data": data})
+        except Exception:
+            log.debug("preparing_tool_calls status emit failed", exc_info=True)
+
+    async def finish(self):
+        """The stream ended: stop counting, but leave the line up until the
+        tool cards replace it."""
+        await self.stop(clear=False)
+
+    async def clear(self):
+        """Hide the line once (the tool cards are on screen, or the turn ended)."""
+        await self.stop(clear=False)
+        if self._shown and not self._cleared:
+            self._cleared = True
+            self._shown = False
             await self._emit(done=True)
 
 
@@ -544,7 +665,11 @@ async def chat_completion_tools_handler(
                             tool_function = tool["callable"]
                             tool_result = await tool_function(**exec_params)
                             tool_result = redact_secrets(tool_result, used_secrets)
-                            end_tool_observation(lf_tool, output=tool_result)
+                            end_tool_observation(
+                                lf_tool,
+                                output=tool_result,
+                                metadata=tool_resource_usage_metadata(tool_result),
+                            )
                         except asyncio.CancelledError:
                             end_tool_observation(lf_tool, error="cancelled")
                             raise
@@ -871,6 +996,138 @@ def apply_params_to_form_data(form_data, model):
     return form_data
 
 
+def start_chat_payload(form_data: dict, model: dict) -> tuple[dict, list]:
+    """Apply the model's params, rebuild tool turns from the UI history, and
+    look up the inlet filters.
+
+    Returns the request and its inlet filter functions.
+
+    Synchronous: the rebuild walks the whole conversation and the filter
+    lookups read the database, so process_chat_payload runs this in a thread.
+    """
+    form_data = apply_params_to_form_data(form_data, model)
+    log.debug(f"form_data: {form_data}")
+
+    # Rebuild native assistant/tool turns from UI <details type="tool_calls">
+    # history (and strip reasoning chrome). Prevents the client processDetails
+    # XML rewrite from teaching the model a fake tool-call dialect on follow-ups.
+    try:
+        from open_webui.utils.model_messages import expand_ui_tool_history_messages
+
+        form_data["messages"] = expand_ui_tool_history_messages(
+            form_data.get("messages")
+        )
+    except Exception:
+        log.exception("expand_ui_tool_history_messages failed")
+
+    try:
+        filter_functions = [
+            Functions.get_function_by_id(filter_id)
+            for filter_id in get_sorted_filter_ids(model)
+        ]
+    except Exception as e:
+        raise Exception(f"Error: {e}")
+    return form_data, filter_functions
+
+
+@dataclass
+class PayloadContext:
+    """What a request needs from the database after its inlet filters ran."""
+
+    tools: dict  # function name -> tool; the chat's tools override built-ins
+    tool_ids: Optional[list]  # resolved to the user's skill versions
+    secret_hint: str  # empty unless function calling is native
+    model_params: Optional[dict]  # the workspace model's, for its system prompt
+    preferences: Optional[str]  # the user's saved preferences prompt
+
+
+def load_payload_context(
+    request, user, metadata: dict, tool_extra: dict, model_id: Optional[str], clock
+) -> PayloadContext:
+    """The chat's tools, the secrets hint, the model's params and the user's
+    preferences.
+
+    Synchronous: the tool catalog, skill records, tool access and modules,
+    secrets, the model row and preferences are database reads, so
+    process_chat_payload runs this in one thread.
+    """
+    tool_ids = metadata.get("tool_ids", None)
+    tools = {}
+    if tool_ids:
+        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+        from open_webui.utils.tools import accessible_skill_records
+        from open_webui.models.tools import Tools
+        from open_webui.utils.organizations import request_organization_id
+
+        org_id = request_organization_id(request)
+        catalog = Tools.get_tool_catalog()
+        clock.mark("db.tool_catalog", n=len(catalog))
+        skill_records = accessible_skill_records(
+            user, organization_id=org_id, catalog=catalog
+        )
+        clock.mark("accessible_skill_records", n=len(skill_records))
+        tool_ids = resolve_tool_ids_by_skill_version(
+            list(tool_ids), skill_records
+        )
+        clock.mark("resolve_tool_ids", n=len(tool_ids))
+        tools = get_tools(
+            request,
+            tool_ids,
+            user,
+            tool_extra,
+            catalog=catalog,
+            skill_records=skill_records,
+        )
+        clock.mark("get_tools", n_out=len(tools))
+
+    try:
+        from open_webui.utils.builtin_tools import get_builtin_tools
+
+        tools = {**get_builtin_tools(tool_extra), **tools}
+    except Exception:
+        log.exception("Failed to load built-in tools")
+    clock.mark("builtins", n_tools=len(tools))
+
+    secret_hint = ""
+    if metadata.get("function_calling") == "native":
+        try:
+            from open_webui.utils.secrets import secret_usage_hint
+
+            secret_hint = secret_usage_hint(
+                user,
+                organization_id=metadata.get("organization_id"),
+                webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
+            )
+        except Exception:
+            log.debug("Secret usage hint skipped", exc_info=True)
+
+    model_params = None
+    try:
+        model_info = Models.get_model_by_id(model_id) if model_id else None
+        if model_info and model_info.params:
+            model_params = model_info.params.model_dump()
+    except Exception:
+        log.debug("Early model system prompt apply skipped", exc_info=True)
+
+    preferences = None
+    try:
+        from open_webui.utils.preferences import preferences_prompt
+
+        org_id = metadata.get("organization_id") or getattr(user, "id", None)
+        if org_id:
+            preferences = preferences_prompt(user, org_id)
+    except Exception:
+        log.debug("Preference prompt inject skipped", exc_info=True)
+
+    return PayloadContext(
+        tools=tools,
+        tool_ids=tool_ids,
+        secret_hint=secret_hint,
+        model_params=model_params,
+        preferences=preferences,
+    )
+
+
 async def process_chat_payload(request, form_data, user, metadata, model):
     clock = StageClock(
         "process_chat_payload",
@@ -878,9 +1135,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         message_id=metadata.get("message_id"),
     )
 
-    form_data = apply_params_to_form_data(form_data, model)
-    log.debug(f"form_data: {form_data}")
-    clock.mark("apply_params")
+    form_data, filter_functions = await asyncio.to_thread(
+        start_chat_payload, form_data, model
+    )
+    clock.mark("start_payload", n_filters=len(filter_functions))
 
     event_emitter = get_event_emitter(metadata)
     event_call = get_event_call(metadata)
@@ -917,19 +1175,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     events = []
     sources = []
-
-    # Rebuild native assistant/tool turns from UI <details type="tool_calls">
-    # history (and strip reasoning chrome). Prevents the client processDetails
-    # XML rewrite from teaching the model a fake tool-call dialect on follow-ups.
-    try:
-        from open_webui.utils.model_messages import expand_ui_tool_history_messages
-
-        form_data["messages"] = expand_ui_tool_history_messages(
-            form_data.get("messages")
-        )
-    except Exception:
-        log.exception("expand_ui_tool_history_messages failed")
-    clock.mark("expand_history")
 
     user_message = get_last_user_message(form_data["messages"])
     model_knowledge = model.get("info", {}).get("meta", {}).get("knowledge", False)
@@ -984,11 +1229,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     clock.mark("pipeline_inlet")
 
     try:
-        filter_functions = [
-            Functions.get_function_by_id(filter_id)
-            for filter_id in get_sorted_filter_ids(model)
-        ]
-
         form_data, flags = await process_filter_functions(
             request=request,
             filter_functions=filter_functions,
@@ -998,7 +1238,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         )
     except Exception as e:
         raise Exception(f"Error: {e}")
-    clock.mark("db.inlet_filters", n_filters=len(filter_functions))
+    clock.mark("inlet_filters", n_filters=len(filter_functions))
 
     features = form_data.pop("features", None)
     if features:
@@ -1037,7 +1277,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     log.debug(f"{tool_ids=}")
     log.debug(f"{tool_servers=}")
 
-    tools_dict = {}
     tool_extra = {
         **extra_params,
         "__model__": models.get(task_model_id) if isinstance(models, dict) else None,
@@ -1045,39 +1284,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         "__files__": metadata.get("files", []),
     }
 
+    context = await asyncio.to_thread(
+        load_payload_context,
+        request,
+        user,
+        metadata,
+        tool_extra,
+        form_data.get("model") or (model or {}).get("id"),
+        clock,
+    )
     if tool_ids:
-        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
-        from open_webui.utils.tools import accessible_skill_records
-        from open_webui.models.tools import Tools
-
-        org_id = (request.headers.get("X-Organization-Id") or "").strip() or None
-        catalog = Tools.get_tool_catalog()
-        clock.mark("db.tool_catalog", n=len(catalog))
-        skill_records = accessible_skill_records(
-            user, organization_id=org_id, catalog=catalog
-        )
-        clock.mark("accessible_skill_records", n=len(skill_records))
-        tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), skill_records
-        )
-        metadata["tool_ids"] = tool_ids
-        clock.mark("resolve_tool_ids", n=len(tool_ids))
-        tools_dict = get_tools(
-            request,
-            tool_ids,
-            user,
-            tool_extra,
-            catalog=catalog,
-        )
-        clock.mark("get_tools", n_out=len(tools_dict))
-
-    try:
-        from open_webui.utils.builtin_tools import get_builtin_tools
-
-        tools_dict = {**get_builtin_tools(tool_extra), **tools_dict}
-    except Exception:
-        log.exception("Failed to load built-in tools")
-    clock.mark("builtins", n_tools=len(tools_dict))
+        metadata["tool_ids"] = context.tool_ids
+    tools_dict = context.tools
 
     if tool_servers:
         for tool_server in tool_servers:
@@ -1102,16 +1320,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 key=lambda t: ((t.get("function") or {}).get("name") or ""),
             )
             try:
-                from open_webui.utils.secrets import secret_usage_hint
-
                 hints = []
-                hint = secret_usage_hint(
-                    user,
-                    organization_id=metadata.get("organization_id"),
-                    webui_url=getattr(request.app.state.config, "WEBUI_URL", ""),
-                )
-                if hint:
-                    hints.append(hint)
+                if context.secret_hint:
+                    hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
                 tool_names = [
                     (tool.get("spec") or {}).get("name")
@@ -1119,16 +1330,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     if (tool.get("spec") or {}).get("name")
                 ]
                 if tool_names:
-                    shown = ", ".join(f"`{n}`" for n in tool_names[:40])
-                    more = (
-                        f" (+{len(tool_names) - 40} more)"
-                        if len(tool_names) > 40
-                        else ""
-                    )
+                    shown = ", ".join(f"`{n}`" for n in tool_names)
                     hints.append(
                         "Tools/skills enabled for this chat: "
                         + shown
-                        + more
                         + ". If the user asks what you can use, call "
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
@@ -1150,6 +1355,18 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "those calls to a short phrase for the whole batch, such as "
                         '"Fetching IMERG and clipping to Kenya".'
                     )
+                    from open_webui.env import tool_runner_enabled
+
+                    if tool_runner_enabled():
+                        from open_webui.utils.skill_k8s_sandbox import (
+                            RUNNER_FAILURE_GUIDANCE,
+                            runner_resources_guidance,
+                        )
+
+                        hints.append(RUNNER_FAILURE_GUIDANCE)
+                        resources = await runner_resources_guidance()
+                        if resources:
+                            hints.append(resources)
                 if hints:
                     combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []
@@ -1244,12 +1461,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     try:
         from open_webui.utils.payload import apply_model_system_prompt_to_body
 
-        model_id = form_data.get("model") or (model or {}).get("id")
-        model_info = Models.get_model_by_id(model_id) if model_id else None
-        if model_info and model_info.params:
-            params = model_info.params.model_dump()
+        if context.model_params:
             form_data = apply_model_system_prompt_to_body(
-                params, form_data, metadata, user
+                context.model_params, form_data, metadata, user
             )
     except Exception:
         log.debug("Early model system prompt apply skipped", exc_info=True)
@@ -1263,13 +1477,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
     try:
-        from open_webui.utils.preferences import inject_preferences, preferences_prompt
+        from open_webui.utils.preferences import inject_preferences
 
-        org_id = metadata.get("organization_id") or getattr(user, "id", None)
-        if org_id:
+        if context.preferences is not None:
             form_data["messages"] = inject_preferences(
-                form_data.get("messages") or [],
-                preferences_prompt(user, org_id),
+                form_data.get("messages") or [], context.preferences
             )
     except Exception:
         log.debug("Preference prompt inject skipped", exc_info=True)
@@ -1810,42 +2022,6 @@ async def process_chat_response(
 
                 return repair_unclosed_details(content.strip())
 
-            def repair_unclosed_details(content: str) -> str:
-                """Insert missing </details> before sibling <details> opens.
-
-                GPT reasoning blocks can be left open when the model switches to
-                tool_calls; nested-looking HTML then breaks the markdown details
-                tokenizer and raw tags render in the chat.
-                """
-                if not content or "<details" not in content:
-                    return content
-                out: list[str] = []
-                depth = 0
-                i = 0
-                n = len(content)
-                open_tag = "<details"
-                close_tag = "</details>"
-                while i < n:
-                    if content.startswith(open_tag, i):
-                        if depth > 0:
-                            out.append(f"\n{close_tag}\n")
-                            depth = 0
-                        out.append(open_tag)
-                        depth += 1
-                        i += len(open_tag)
-                        continue
-                    if content.startswith(close_tag, i):
-                        out.append(close_tag)
-                        depth = max(0, depth - 1)
-                        i += len(close_tag)
-                        continue
-                    out.append(content[i])
-                    i += 1
-                while depth > 0:
-                    out.append(f"\n{close_tag}")
-                    depth -= 1
-                return "".join(out)
-
             def close_open_reasoning_block(content_blocks):
                 """End an in-flight reasoning block before tool calls / final text."""
                 if not content_blocks:
@@ -2134,6 +2310,7 @@ async def process_chat_response(
 
             generation_heartbeat = GenerationHeartbeat(event_emitter)
             await generation_heartbeat.start()
+            preparing_tool_calls = PreparingToolCallsStatus(event_emitter)
 
             try:
                 for event in events:
@@ -2173,8 +2350,38 @@ async def process_chat_response(
                         )
                         await heartbeat.start()
 
+                    # Each content delta updates the blocks. The whole message
+                    # is serialized and sent at most every STREAM_EMIT_INTERVAL_S,
+                    # and once more when the stream ends: serializing grows with
+                    # the message, so sending it per token is quadratic.
+                    # The first delta always goes out at once.
+                    last_emit = float("-inf")
+                    emit_pending = False
+                    last_yield = time.monotonic()
+
+                    async def emit_content():
+                        nonlocal last_emit, emit_pending
+                        data = {"content": serialize_content_blocks(content_blocks)}
+                        if ENABLE_REALTIME_CHAT_SAVE:
+                            await asyncio.to_thread(
+                                Chats.upsert_message_to_chat_by_id_and_message_id,
+                                metadata["chat_id"],
+                                metadata["message_id"],
+                                data,
+                                bump_revision=False,
+                            )
+                        await event_emitter({"type": "chat:completion", "data": data})
+                        last_emit = time.monotonic()
+                        emit_pending = False
+
                     try:
                         async for line in response.body_iterator:
+                            # Lines already buffered come back without waiting, so
+                            # a burst would otherwise hold the event loop until it
+                            # drains. Hand it over now and then.
+                            if time.monotonic() - last_yield >= STREAM_YIELD_INTERVAL_S:
+                                await asyncio.sleep(0)
+                                last_yield = time.monotonic()
                             line = (
                                 line.decode("utf-8")
                                 if isinstance(line, bytes)
@@ -2226,6 +2433,8 @@ async def process_chat_response(
                                             error = data.get("error", {})
                                             if error:
                                                 await heartbeat.mark_activity()
+                                                if emit_pending:
+                                                    await emit_content()
                                                 await event_emitter(
                                                     {
                                                         "type": "chat:completion",
@@ -2262,6 +2471,29 @@ async def process_chat_response(
                                             )
                                         ):
                                             await heartbeat.mark_activity()
+
+                                        if (
+                                            delta_tool_calls
+                                            and not preparing_tool_calls.is_active
+                                            and not response_tool_calls
+                                        ):
+                                            # The model is writing tool calls;
+                                            # say so instead of going quiet.
+                                            # Thinking is over by now, so close
+                                            # it rather than leave it spinning.
+                                            if (
+                                                content_blocks
+                                                and content_blocks[-1].get("type")
+                                                == "reasoning"
+                                                and content_blocks[-1].get("ended_at")
+                                                is None
+                                            ):
+                                                close_open_reasoning_block(
+                                                    content_blocks
+                                                )
+                                                await emit_content()
+                                            await heartbeat.stop(clear=False)
+                                            await preparing_tool_calls.start()
 
                                         if delta_tool_calls:
                                             for delta_tool_call in delta_tool_calls:
@@ -2339,12 +2571,6 @@ async def process_chat_response(
                                                 "content"
                                             ] += reasoning_content
 
-                                            data = {
-                                                "content": serialize_content_blocks(
-                                                    content_blocks
-                                                )
-                                            }
-
                                         if value:
                                             if (
                                                 content_blocks
@@ -2415,27 +2641,13 @@ async def process_chat_response(
                                                     )
                                                 )
 
-                                            data = {
-                                                "content": serialize_content_blocks(
-                                                    content_blocks
-                                                ),
-                                            }
-                                            if ENABLE_REALTIME_CHAT_SAVE:
-                                                await asyncio.to_thread(
-                                                    Chats.upsert_message_to_chat_by_id_and_message_id,
-                                                    metadata["chat_id"],
-                                                    metadata["message_id"],
-                                                    data,
-                                                    bump_revision=False,
-                                                )
-
                                         if reasoning_content or value:
-                                            await event_emitter(
-                                                {
-                                                    "type": "chat:completion",
-                                                    "data": data,
-                                                }
-                                            )
+                                            emit_pending = True
+                                            if (
+                                                time.monotonic() - last_emit
+                                                >= STREAM_EMIT_INTERVAL_S
+                                            ):
+                                                await emit_content()
                             except Exception as e:
                                 done = "data: [DONE]" in line
                                 if done:
@@ -2453,6 +2665,9 @@ async def process_chat_response(
                                             error=str(e),
                                         )
                                     continue
+
+                        if emit_pending:
+                            await emit_content()
 
                         if content_blocks:
                             # Clean up the last text block
@@ -2487,11 +2702,17 @@ async def process_chat_response(
                         # Keep "Waiting for model…" up until tool cards (or the
                         # runner wait) replace it. Clearing here is the empty gap.
                         await heartbeat.stop(clear=not response_tool_calls)
+                        if response_tool_calls:
+                            await preparing_tool_calls.finish()
+                        else:
+                            await preparing_tool_calls.clear()
 
                 await stream_body_handler(response)
                 close_open_reasoning_block(content_blocks)
 
                 tool_call_retries = 0
+                # A follow-up model call that was refused, shown on the reply.
+                followup_error = None
 
                 while len(tool_calls) > 0 and tool_call_retries < MAX_TOOL_CALL_RETRIES:
                     tool_call_retries += 1
@@ -2555,6 +2776,7 @@ async def process_chat_response(
                             pass
                     if waiting_heartbeat is not None:
                         await waiting_heartbeat.stop(clear=True)
+                    await preparing_tool_calls.clear()
 
                     tools = metadata.get("tools", {})
 
@@ -2642,7 +2864,13 @@ async def process_chat_response(
                                         tool_result = redact_secrets(
                                             tool_result, used_secrets
                                         )
-                                        end_tool_observation(lf_tool, output=tool_result)
+                                        end_tool_observation(
+                                            lf_tool,
+                                            output=tool_result,
+                                            metadata=tool_resource_usage_metadata(
+                                                tool_result
+                                            ),
+                                        )
                                     except asyncio.CancelledError:
                                         end_tool_observation(lf_tool, error="cancelled")
                                         raise
@@ -2656,6 +2884,13 @@ async def process_chat_response(
                                     if "used_secrets" in locals()
                                     else str(e)
                                 )
+                        else:
+                            log.warning(
+                                "tool not offered chat=%s tool=%s",
+                                metadata.get("chat_id"),
+                                tool_name,
+                            )
+                            tool_result = unavailable_tool_message(tool_name)
 
                         tool_result_files = []
                         if isinstance(tool_result, list):
@@ -2785,6 +3020,7 @@ async def process_chat_response(
                             pending_tool_batches=len(tool_calls),
                             error=str(e),
                         )
+                        followup_error = model_call_error_message(e)
                         break
 
                 if len(tool_calls) > 0 and tool_call_retries >= MAX_TOOL_CALL_RETRIES:
@@ -3011,6 +3247,7 @@ async def process_chat_response(
                                 limit=MAX_CODE_INTERPRETER_RETRIES,
                                 error=str(e),
                             )
+                            followup_error = model_call_error_message(e)
                             break
 
                     if (
@@ -3032,6 +3269,9 @@ async def process_chat_response(
                                 ),
                             }
                         )
+
+                # A follow-up refused before streaming leaves the waiting status up.
+                await waiting_heartbeat.stop(clear=True)
 
                 title = Chats.get_chat_title_by_id(metadata["chat_id"])
                 final_content = serialize_content_blocks(content_blocks)
@@ -3074,14 +3314,16 @@ async def process_chat_response(
                     save_final_reply,
                 )
 
+                reply = {"content": final_content, "done": True}
+                if followup_error:
+                    reply["error"] = {"content": followup_error}
+
                 saved = True
-                if not ENABLE_REALTIME_CHAT_SAVE:
+                if not ENABLE_REALTIME_CHAT_SAVE or followup_error:
                     # A failed save is reported on the reply, not as a failed
                     # generation: the model finished, the database did not.
                     saved = await save_final_reply(
-                        metadata["chat_id"],
-                        metadata["message_id"],
-                        {"content": final_content, "done": True},
+                        metadata["chat_id"], metadata["message_id"], reply
                     )
 
                 data = {
@@ -3090,7 +3332,9 @@ async def process_chat_response(
                     "title": title,
                     "revision": completion_revision(metadata["chat_id"]),
                 }
-                if not saved:
+                if followup_error:
+                    data["error"] = {"content": followup_error}
+                elif not saved:
                     data["error"] = {"content": REPLY_SAVE_FAILED_MESSAGE}
 
                 # Send a webhook notification if the user is not active
@@ -3195,6 +3439,8 @@ async def process_chat_response(
                     log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
+                await waiting_heartbeat.stop(clear=True)
+                await preparing_tool_calls.clear()
                 await generation_heartbeat.stop(clear=True)
 
             if response.background is not None:

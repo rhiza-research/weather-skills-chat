@@ -15,7 +15,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RUNTIME = HERE.parent / "runtime" / "sandbox_runtime.py"
+# The runner runtime lives in rhiza-research/infrastructure
+# (images/sandbox-runner) and is installed at this path in the runner image.
+# Outside that image, point SANDBOX_RUNTIME_PATH at a checkout's copy.
+RUNTIME = Path(os.environ.get("SANDBOX_RUNTIME_PATH", "/usr/local/bin/sandbox_runtime.py"))
 
 
 def collect_metrics() -> dict:
@@ -101,8 +104,10 @@ def main() -> None:
     orig_exec = runtime.run_exec
     orig_unpack = runtime.run_unpack
 
-    def run_exec(body: dict) -> dict:
-        return orig_exec(remap_exec_body(body))
+    def run_exec(body: dict, **kwargs) -> dict:
+        # kwargs: what the runtime's handler passes along, such as gone (the
+        # caller hung up), which newer runtimes use to stop the skill.
+        return orig_exec(remap_exec_body(body), **kwargs)
 
     def run_unpack(body: dict) -> dict:
         out = dict(body)
@@ -118,5 +123,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     if not RUNTIME.is_file():
-        raise SystemExit(f"missing {RUNTIME}")
+        raise SystemExit(
+            f"missing {RUNTIME}: set SANDBOX_RUNTIME_PATH to sandbox_runtime.py from "
+            "rhiza-research/infrastructure images/sandbox-runner"
+        )
     main()

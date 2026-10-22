@@ -198,9 +198,18 @@ def _access_row(chat_id: str):
     return Chats.get_chat_by_id(chat_id)
 
 
+async def _can_read(user, chat) -> bool:
+    """can_read_chat off the loop. The owner needs no lookup; anyone else does."""
+    if user is None or chat is None:
+        return False
+    if chat.user_id == user.id:
+        return True
+    return await asyncio.to_thread(can_read_chat, user, chat)
+
+
 async def _emit_if_allowed(sid: str, chat, event: str, payload: dict) -> bool:
     user = _user_for_sid(sid)
-    if user is None or not can_read_chat(user, chat):
+    if not await _can_read(user, chat):
         drop_chat_watch(sid, chat.id)
         try:
             await sio.emit("chat:evict", {"id": chat.id}, to=sid)
@@ -368,32 +377,41 @@ async def recheck_watches(user_id: str | None = None) -> None:
     session is. A chat that fails the check is dropped from the session's
     watch and the tab is told to evict it.
     """
-    users: dict = {}
-    rows: dict = {}
-    for sid, watch in list(WATCHES.items()):
-        owner_id = (watch or {}).get("user_id")
-        if user_id is not None and owner_id != user_id:
-            continue
-        if owner_id not in users:
-            users[owner_id] = Users.get_user_by_id(owner_id) if owner_id else None
-        user = users[owner_id]
-        chat_ids = list(dict.fromkeys([*(watch.get("ids") or []), watch.get("active")]))
-        for chat_id in chat_ids:
-            if not chat_id:
+    watches = list(WATCHES.items())
+
+    # The user, chat and membership reads run on a worker thread.
+    def lost_access() -> list[tuple[str, str]]:
+        users: dict = {}
+        rows: dict = {}
+        lost = []
+        for sid, watch in watches:
+            owner_id = (watch or {}).get("user_id")
+            if user_id is not None and owner_id != user_id:
                 continue
-            if chat_id not in rows:
-                rows[chat_id] = Chats.get_chat_access_row(chat_id)
-            if user is not None and can_read_chat(user, rows[chat_id]):
-                continue
-            drop_chat_watch(sid, chat_id)
-            try:
-                await sio.emit("chat:evict", {"id": chat_id}, to=sid)
-            except Exception:
-                log.debug("chat evict failed", exc_info=True)
+            if owner_id not in users:
+                users[owner_id] = Users.get_user_by_id(owner_id) if owner_id else None
+            user = users[owner_id]
+            chat_ids = list(dict.fromkeys([*(watch.get("ids") or []), watch.get("active")]))
+            for chat_id in chat_ids:
+                if not chat_id:
+                    continue
+                if chat_id not in rows:
+                    rows[chat_id] = Chats.get_chat_access_row(chat_id)
+                if user is not None and can_read_chat(user, rows[chat_id]):
+                    continue
+                lost.append((sid, chat_id))
+        return lost
+
+    for sid, chat_id in await asyncio.to_thread(lost_access):
+        drop_chat_watch(sid, chat_id)
+        try:
+            await sio.emit("chat:evict", {"id": chat_id}, to=sid)
+        except Exception:
+            log.debug("chat evict failed", exc_info=True)
 
 
 async def emit_chat_runner(chat_id: str, payload: dict) -> None:
-    chat = _access_row(chat_id)
+    chat = await asyncio.to_thread(_access_row, chat_id)
     if chat is None:
         return
     body = {**payload, "id": chat_id}
@@ -458,7 +476,7 @@ def schedule_runner_metrics(chat_id: str) -> None:
 
 
 async def emit_chat_artifacts(chat_id: str, files: list) -> None:
-    chat = _access_row(chat_id)
+    chat = await asyncio.to_thread(_access_row, chat_id)
     if chat is None:
         return
     payload = {"id": chat_id, "files": files}
@@ -491,9 +509,9 @@ def schedule_artifacts(chat_id: str) -> None:
         try:
             while True:
                 await asyncio.sleep(ARTIFACT_DEBOUNCE_SECONDS)
-                from open_webui.utils.artifacts import list_artifacts
+                from open_webui.utils.artifacts import list_artifacts_async
 
-                files = await asyncio.to_thread(list_artifacts, chat_id)
+                files = await list_artifacts_async(chat_id)
                 await emit_chat_artifacts(chat_id, files)
                 if chat_id not in _artifact_dirty:
                     break
@@ -621,11 +639,15 @@ def register() -> None:
         if isinstance(active, str) and active in candidates:
             candidates.remove(active)
             candidates.insert(0, active)
-        allowed = []
-        for chat_id in candidates[:MAX_WATCHED_CHATS]:
-            chat = Chats.get_chat_access_row(chat_id)
-            if can_read_chat(user, chat):
-                allowed.append(chat_id)
+        # Up to MAX_WATCHED_CHATS chat and membership reads, on a worker thread.
+        def readable_ids() -> list[str]:
+            return [
+                chat_id
+                for chat_id in candidates[:MAX_WATCHED_CHATS]
+                if can_read_chat(user, Chats.get_chat_access_row(chat_id))
+            ]
+
+        allowed = await asyncio.to_thread(readable_ids)
         active_id = active if isinstance(active, str) and active in allowed else None
         set_watch(sid, user.id, allowed, active_id)
         if active_id:

@@ -200,7 +200,7 @@ async def update_user_role(
 
 
 @router.get("/user/settings", response_model=Optional[UserSettings])
-async def get_user_settings_by_session_user(user=Depends(get_verified_user)):
+def get_user_settings_by_session_user(user=Depends(get_verified_user)):
     user = Users.get_user_by_id(user.id)
     if user:
         return user.settings
@@ -288,12 +288,12 @@ class UserResponse(BaseModel):
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
+def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
     # Check if user_id is a shared chat
     # If it is, get the user_id from the chat
     if user_id.startswith("shared-"):
         chat_id = user_id.replace("shared-", "")
-        chat = Chats.get_chat_by_id(chat_id)
+        chat = Chats.get_chat_access_row(chat_id)
         if chat:
             user_id = chat.user_id
         else:

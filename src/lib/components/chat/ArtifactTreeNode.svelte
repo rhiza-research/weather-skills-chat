@@ -16,10 +16,8 @@
 		children: any[];
 	};
 	export let depth = 0;
-	export let files: any[] = [];
 	export let expanded: Set<string> = new Set();
 	export let selectedImage: string | null = null;
-	export let selectedView: string | null = null;
 
 	const isNavigableDir = (n) => {
 		const kind = n.file?.kind;
@@ -27,9 +25,6 @@
 		if (kind === 'directory' || n.file?.is_dir) return true;
 		return n.children?.length > 0 && !n.file;
 	};
-
-	const viewsFor = (zarrPath: string) =>
-		(files || []).filter((file) => file.kind === 'zarr_view' && file.zarr === zarrPath);
 
 	const provenanceLabel = (file) => {
 		const crumbs = file?.provenance_detail?.crumbs ?? file?.provenance;
@@ -75,9 +70,7 @@
 	$: navigable = isNavigableDir(node);
 	$: open = expanded.has(node.path);
 	$: pad = `padding-left: ${depth * 0.75 + 0.25}rem`;
-	$: selected =
-		(file?.kind === 'image' && selectedImage === file.path) ||
-		(file?.kind === 'zarr_view' && selectedView === file.path);
+	$: selected = (file?.kind === 'image' || file?.kind === 'html') && selectedImage === file.path;
 </script>
 
 {#if navigable}
@@ -101,13 +94,10 @@
 				<svelte:self
 					node={child}
 					depth={depth + 1}
-					{files}
 					{expanded}
 					{selectedImage}
-					{selectedView}
 					on:toggle
 					on:openImage
-					on:openView
 				/>
 			{/each}
 		{/if}
@@ -139,33 +129,6 @@
 				{provenanceLabel(file)}
 			</div>
 		{/if}
-		{#each viewsFor(file.path) as view}
-			<div
-				class="flex items-center justify-between gap-2 text-xs px-1 py-1 rounded-md {selectedView ===
-				view.path
-					? 'bg-black/5 dark:bg-white/5'
-					: 'hover:bg-black/5 dark:hover:bg-white/5'}"
-				style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}
-			>
-				<div class="truncate flex items-center gap-1 min-w-0">
-					{#if view.missing_zarr}
-						<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
-					{/if}
-					<span class="truncate">{view.title || view.name || view.path}</span>
-					<span class="text-gray-400 shrink-0">view</span>
-				</div>
-				{#if !view.missing_zarr}
-					<button
-						type="button"
-						class="underline shrink-0"
-						on:click={() =>
-							dispatch('openView', { path: view.path, title: view.title || view.path })}
-					>
-						{$i18n.t('View')}
-					</button>
-				{/if}
-			</div>
-		{/each}
 	</div>
 {:else if file}
 	<div
@@ -174,7 +137,7 @@
 			: 'hover:bg-black/5 dark:hover:bg-white/5'}"
 	>
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1" style={pad}>
-			{#if file.kind === 'image'}
+			{#if file.kind === 'image' || file.kind === 'html'}
 				<button
 					type="button"
 					class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
@@ -183,14 +146,6 @@
 					<span class="truncate">{node.name}</span>
 					<span class="text-gray-400 shrink-0">{file.kind}</span>
 				</button>
-			{:else if file.kind === 'zarr_view'}
-				<div class="truncate flex items-center gap-1 min-w-0">
-					{#if file.missing_zarr}
-						<span class="text-red-500" title={$i18n.t('Referenced zarr is missing')}>!</span>
-					{/if}
-					<span class="truncate">{file.title || node.name}</span>
-					<span class="text-gray-400 shrink-0">view</span>
-				</div>
 			{:else}
 				<div class="truncate flex items-center gap-1 min-w-0">
 					<span class="truncate">{node.name}</span>
@@ -198,7 +153,7 @@
 				</div>
 			{/if}
 			<div class="flex gap-1 shrink-0">
-				{#if file.kind === 'image'}
+				{#if file.kind === 'image' || file.kind === 'html'}
 					<button
 						type="button"
 						class="underline"
@@ -224,15 +179,6 @@
 							)}
 					>
 						{$i18n.t('Download')}
-					</button>
-				{:else if file.kind === 'zarr_view' && !file.missing_zarr}
-					<button
-						type="button"
-						class="underline"
-						on:click={() =>
-							dispatch('openView', { path: file.path, title: file.title || file.path })}
-					>
-						{$i18n.t('View')}
 					</button>
 				{:else if !file.is_dir}
 					<a

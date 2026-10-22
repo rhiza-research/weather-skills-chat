@@ -15,6 +15,7 @@ from urllib.parse import urlencode, parse_qs, urlparse
 from pydantic import BaseModel
 from sqlalchemy import text
 
+from dataclasses import dataclass
 from typing import Optional
 from aiocache import cached
 import aiohttp
@@ -99,7 +100,7 @@ from open_webui.routers.retrieval import (
     get_rf,
 )
 
-from open_webui.internal.db import Session, engine
+from open_webui.internal.db import Session, engine, get_db
 
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
@@ -392,6 +393,7 @@ from open_webui.utils.chat import (
 )
 from open_webui.utils.middleware import (
     WaitingResponseHeartbeat,
+    model_call_error_message,
     process_chat_payload,
     process_chat_response,
     emit_chat_title_if_needed,
@@ -399,7 +401,8 @@ from open_webui.utils.middleware import (
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
-    schedule_start_chat_trace,
+    begin_chat_trace,
+    get_client as get_langfuse_client,
     shutdown_langfuse,
 )
 from open_webui.env import LANGFUSE_ENABLED
@@ -409,7 +412,11 @@ from open_webui.utils.catalog import (
     can_manage_public,
 )
 from open_webui.models.org_catalog import RESOURCE_MODEL
-from open_webui.utils.organizations import can_write_chat, get_active_organization_id
+from open_webui.utils.organizations import (
+    can_write_chat,
+    chat_organization_id,
+    get_active_organization_id,
+)
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.usage import UsageLimitExceeded
 from open_webui.utils.usage import check_usage_caps
@@ -565,6 +572,10 @@ async def lifespan(app: FastAPI):
     # Don't block HTTP listen on HF/model load or skill module imports.
     asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
     asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
+    # Importing the Langfuse SDK and building its client takes about half a
+    # second. Do it here, off the loop and before serving, not in the first
+    # chat turn.
+    await asyncio.to_thread(get_langfuse_client)
     yield
     shutdown_langfuse()
     shutdown_scheduler()
@@ -1123,7 +1134,7 @@ if audit_level != AuditLevel.NONE:
 
 
 @app.get("/api/models")
-async def get_models(
+def get_models(
     request: Request,
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
@@ -1182,40 +1193,62 @@ async def get_base_models(
     return {"data": models}
 
 
-def require_owned_chat(chat_id, user) -> None:
+def require_owned_chat(chat_id, user):
     """Refuse a request that names a saved chat the user does not own.
 
     Completions, outlets, and actions write into the chat and stream into
     every tab watching it, so only the owner may target a chat. A temporary
-    chat has no saved id and is not checked.
+    chat has no saved id and is not checked. Returns the saved chat's access
+    row, or None for a temporary chat.
     """
     if not chat_id or chat_id == "local":
-        return
-    if not isinstance(chat_id, str) or not can_write_chat(
-        user, Chats.get_chat_access_row(chat_id)
-    ):
+        return None
+    chat = Chats.get_chat_access_row(chat_id) if isinstance(chat_id, str) else None
+    if not can_write_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+    return chat
 
 
-@app.post("/api/chat/completions")
-async def chat_completion(
-    request: Request,
-    form_data: dict,
-    user=Depends(get_verified_user),
-    organization_id: str = Depends(get_active_organization_id),
-):
+@dataclass
+class PreparedChat:
+    """The checked request: what the chat job needs from chat_completion."""
+
+    model: dict
+    metadata: dict
+    direct: bool
+    tasks: Optional[dict]
+    turn: Optional[dict]
+
+
+def prepare_chat_completion(
+    request: Request, form_data: dict, user, organization_id: str
+) -> PreparedChat:
+    """Check one chat completion request and prepare it for the job.
+
+    Checks chat ownership, the model and its access, and usage caps, then for a
+    turn builds the messages from the saved chat. Synchronous: each step reads
+    the database, so the route runs this in a thread. Pops the request fields it
+    uses from form_data and sets its metadata, and for a turn its messages.
+
+    Raises HTTPException for the client. Any other error after the reply's
+    message is known is recorded on that message, then re-raised.
+    """
     # Before anything else: the error path below writes into this chat id.
-    require_owned_chat(form_data.get("chat_id"), user)
+    chat = require_owned_chat(form_data.get("chat_id"), user)
+    # Skills, model access and spend follow the chat's organization, not the
+    # one the browser has active.
+    organization_id = chat_organization_id(chat, user, organization_id)
 
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
+    direct = bool(model_item.get("direct", False))
 
     metadata = {}
     try:
-        if not model_item.get("direct", False):
+        if not direct:
             model_id = form_data.get("model", None)
             model = remember_catalog_model(request, model_id)
             if model is None:
@@ -1230,20 +1263,19 @@ async def chat_completion(
 
             # Check if user has access to the curated catalog model
             if not BYPASS_MODEL_ACCESS_CONTROL:
-                try:
-                    check_model_access(user, model, organization_id)
-                except Exception as e:
-                    raise e
+                check_model_access(user, model, organization_id)
         else:
             model = model_item
             model_info = None
 
-            request.state.direct = True
-            request.state.model = model
-
         try:
             check_usage_caps(organization_id, user.id)
         except UsageLimitExceeded as e:
+            chat_id = form_data.get("chat_id")
+            if form_data.get("turn") and chat_id and chat_id != "local":
+                from open_webui.utils.chat_turns import store_refused_turn
+
+                store_refused_turn(chat_id, form_data["turn"], user, e.detail)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.detail
             ) from e
@@ -1259,7 +1291,7 @@ async def chat_completion(
             "features": form_data.get("features", None),
             "variables": form_data.get("variables", None),
             "model": model,
-            "direct": model_item.get("direct", False),
+            "direct": direct,
             "organization_id": organization_id,
             "usage_source": "chat",
             **(
@@ -1273,8 +1305,6 @@ async def chat_completion(
                 else {}
             ),
         }
-
-        request.state.metadata = metadata
         form_data["metadata"] = metadata
 
         turn = form_data.pop("turn", None)
@@ -1291,8 +1321,8 @@ async def chat_completion(
             )
 
             try:
-                form_data["messages"] = await asyncio.to_thread(
-                    prepare_completion_messages, chat_id, turn, user
+                form_data["messages"] = prepare_completion_messages(
+                    chat_id, turn, user
                 )
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
@@ -1302,37 +1332,63 @@ async def chat_completion(
                         "revision": conflict.revision,
                     },
                 ) from conflict
-            from open_webui.utils.chat_realtime import emit_chat_turn
-
-            try:
-                await emit_chat_turn(
-                    user.id,
-                    metadata["chat_id"],
-                    metadata.get("session_id"),
-                    turn.get("user_message"),
-                    turn.get("assistant_message"),
-                )
-            except Exception:
-                log.debug("chat turn emit failed", exc_info=True)
-
     except HTTPException:
         raise
     except Exception as e:
         log.debug(f"Error preparing chat completion: {e}")
         if metadata.get("chat_id") and metadata.get("message_id"):
-            await asyncio.to_thread(
-                Chats.upsert_message_to_chat_by_id_and_message_id,
+            Chats.upsert_message_to_chat_by_id_and_message_id(
                 metadata["chat_id"],
                 metadata["message_id"],
                 {
                     "error": {"content": str(e)},
                 },
             )
+        raise
 
+    return PreparedChat(
+        model=model, metadata=metadata, direct=direct, tasks=tasks, turn=turn
+    )
+
+
+@app.post("/api/chat/completions")
+async def chat_completion(
+    request: Request,
+    form_data: dict,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    try:
+        prepared = await asyncio.to_thread(
+            prepare_chat_completion, request, form_data, user, organization_id
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+    model, metadata, tasks = prepared.model, prepared.metadata, prepared.tasks
+    if prepared.direct:
+        request.state.direct = True
+        request.state.model = model
+    request.state.metadata = metadata
+
+    if prepared.turn:
+        from open_webui.utils.chat_realtime import emit_chat_turn
+
+        try:
+            await emit_chat_turn(
+                user.id,
+                metadata["chat_id"],
+                metadata.get("session_id"),
+                prepared.turn.get("user_message"),
+                prepared.turn.get("assistant_message"),
+            )
+        except Exception:
+            log.debug("chat turn emit failed", exc_info=True)
 
     async def run_chat_job():
         job_form_data = form_data
@@ -1345,7 +1401,7 @@ async def chat_completion(
         waiting_heartbeat = WaitingResponseHeartbeat(get_event_emitter(job_metadata))
         try:
             if LANGFUSE_ENABLED:
-                schedule_start_chat_trace(
+                begin_chat_trace(
                     user=user, metadata=job_metadata, form_data=job_form_data
                 )
             clock.mark("langfuse_start")
@@ -1439,12 +1495,7 @@ async def chat_completion(
                 job_metadata.get("chat_id"),
                 job_metadata.get("message_id"),
             )
-            if isinstance(e, HTTPException) and isinstance(e.detail, str):
-                error_content = e.detail
-            elif isinstance(e, UsageLimitExceeded):
-                error_content = e.detail
-            else:
-                error_content = str(e)
+            error_content = model_call_error_message(e)
             await waiting_heartbeat.stop(clear=True)
             event_emitter = get_event_emitter(job_metadata)
             if event_emitter:
@@ -1490,7 +1541,7 @@ generate_chat_completion = chat_completion
 async def chat_completed(
     request: Request, form_data: dict, user=Depends(get_verified_user)
 ):
-    require_owned_chat(form_data.get("chat_id"), user)
+    await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
@@ -1510,7 +1561,7 @@ async def chat_completed(
 async def chat_action(
     request: Request, action_id: str, form_data: dict, user=Depends(get_verified_user)
 ):
-    require_owned_chat(form_data.get("chat_id"), user)
+    await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
@@ -1541,8 +1592,8 @@ async def list_tasks_endpoint(user=Depends(get_verified_user)):
 
 
 @app.get("/api/tasks/chat/{chat_id}")
-async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
-    chat = Chats.get_chat_by_id(chat_id)
+def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
+    chat = Chats.get_chat_access_row(chat_id)
     if chat is None or chat.user_id != user.id:
         return {"task_ids": []}
 
@@ -1560,7 +1611,7 @@ async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified
 
 
 @app.get("/api/app_config")
-async def get_app_config():
+def get_app_config():
     onboarding = Users.get_num_users() == 0
     return {
         **({"onboarding": True} if onboarding else {}),
@@ -1589,7 +1640,7 @@ async def get_app_config():
 
 
 @app.get("/api/v1/user_config")
-async def get_user_config(user=Depends(get_verified_user)):
+def get_user_config(user=Depends(get_verified_user)):
     return {
         "features": {
             "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
@@ -1758,8 +1809,12 @@ async def healthcheck():
 
 
 @app.get("/health/db")
-async def healthcheck_with_db():
-    Session.execute(text("SELECT 1;")).all()
+def healthcheck_with_db():
+    # A plain def runs in the threadpool: on the event loop a slow database
+    # would also stall /health, failing liveness as well as readiness. Its own
+    # session, closed here, so no transaction is left open on the worker.
+    with get_db() as db:
+        db.execute(text("SELECT 1;")).all()
     return {"status": True}
 
 

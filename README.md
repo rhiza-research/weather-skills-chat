@@ -56,9 +56,10 @@ To work on the UI and API without Docker, start `npm run dev` and `backend/dev.s
 | Image | Role |
 | --- | --- |
 | `ghcr.io/rhiza-research/weather-skills-chat` | The chat app |
-| `ghcr.io/rhiza-research/weather-skills-chat-sandbox` | Tool runner |
 
 Tags follow the branch (`dev`, `main`), `latest` (from `main`), commit (`sha-…`), and release versions.
+
+The tool runner image, `ghcr.io/rhiza-research/weather-skills-sandbox-runner`, is built in [rhiza-research/infrastructure](https://github.com/rhiza-research/infrastructure) (`images/sandbox-runner`).
 
 Production and staging run on Kubernetes with [`charts/weather-skills-chat`](charts/weather-skills-chat).
 

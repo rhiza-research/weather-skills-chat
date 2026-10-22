@@ -69,11 +69,24 @@ jobs:
           mkdir -p test-results
           uv run --frozen --no-sync python -m pytest backend/open_webui/test --import-mode=importlib --junitxml=test-results/pytest.xml
 
+      # The emulator starts the real runner runtime, which lives in
+      # rhiza-research/infrastructure (a private repo). Copy it out of the
+      # public runner image that docker-compose.yaml pins.
+      - name: Fetch the tool runner runtime
+        run: |
+          set -euo pipefail
+          image=$(grep -oE 'ghcr.io/rhiza-research/weather-skills-sandbox-runner:src-[0-9a-f]+' docker-compose.yaml)
+          docker pull --quiet "$image"
+          id=$(docker create "$image")
+          docker cp "$id:/usr/local/bin/sandbox_runtime.py" "$RUNNER_TEMP/sandbox_runtime.py"
+          docker rm "$id"
+          echo "SANDBOX_RUNTIME_PATH=$RUNNER_TEMP/sandbox_runtime.py" >> "$GITHUB_ENV"
+
       - name: Run sandbox tests
         env:
           PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}/backend/open_webui
         run: |
-          uv run --frozen --no-sync python -m pytest sandbox/runtime/tests sandbox/emulator/tests --import-mode=importlib --ignore=sandbox/runtime/tests/plotly_png_check.py
+          uv run --frozen --no-sync python -m pytest sandbox/emulator/tests --import-mode=importlib
 
       - name: Publish backend unit test report
         uses: dorny/test-reporter@v1
@@ -186,8 +199,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The runner image already has Chromium's system libraries. --with-deps only
+      # adds fonts from the Ubuntu apt mirror, which sometimes stalls for minutes.
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run smoke tests
         id: playwright
@@ -214,32 +229,3 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report
           retention-days: 14
-
-  sandbox-image:
-    name: Tool runner image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build sandbox image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./sandbox/runtime
-          file: ./sandbox/runtime/Dockerfile
-          push: false
-          load: true
-          tags: weather-skills-chat-sandbox:ci
-          cache-from: type=gha,scope=sandbox
-          cache-to: type=gha,mode=max,scope=sandbox
-
-      - name: Render a Plotly PNG with Kaleido
-        run: |
-          docker run --rm \
-            -u 1000 \
-            -v "$GITHUB_WORKSPACE/sandbox/runtime/tests/plotly_png_check.py:/workspace/plotly_png_check.py:ro" \
-            weather-skills-chat-sandbox:ci \
-            uv run --script /workspace/plotly_png_check.py

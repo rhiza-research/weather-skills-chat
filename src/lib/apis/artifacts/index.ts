@@ -12,8 +12,25 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 
+/** HTML artifacts (for example Plotly figures) rendered inline by the server,
+ * which sandboxes them. Load only in a sandboxed iframe (HtmlArtifactFrame). */
+export const getArtifactViewUrl = (chatId: string, path: string) =>
+	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/view/${path
+		.split('/')
+		.map(encodeURIComponent)
+		.join('/')}`;
+
+export const isHtmlArtifact = (path: string | null | undefined) =>
+	/\.html?$/i.test(String(path ?? '').trim());
+
 /** Relative markdown hrefs point at this chat's sandbox. Absolute URLs do not. */
 export const artifactHrefForChat = (href: string, chatId: string | null | undefined) => {
+	const path = artifactPathForChat(href, chatId);
+	return path && chatId ? getArtifactContentUrl(chatId, path) : null;
+};
+
+/** The sandbox path a relative markdown href points at, or null. */
+export const artifactPathForChat = (href: string, chatId: string | null | undefined) => {
 	if (!chatId || chatId === 'local') return null;
 	let raw = (href || '').trim();
 	if (
@@ -34,33 +51,17 @@ export const artifactHrefForChat = (href: string, chatId: string | null | undefi
 	raw = raw.replace(/^\.\//, '').replace(/\\/g, '/');
 	if (!raw || raw === '.') return null;
 	if (raw.split('/').some((part) => part === '' || part === '..')) return null;
-	return getArtifactContentUrl(chatId, raw);
+	return raw;
 };
 
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?path=${encodeURIComponent(path)}&format=zip`;
-
-export const getZarrRenderUrl = (chatId: string, view: string) =>
-	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/render?view=${encodeURIComponent(view)}`;
 
 export const getZarrMeta = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(
 		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/meta?path=${encodeURIComponent(path)}`,
 		{ headers: { authorization: `Bearer ${token}` } }
 	);
-	if (!res.ok) throw await parseApiError(res);
-	return res.json();
-};
-
-export const createZarrView = async (token: string, chatId: string, view: object) => {
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/views`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify(view)
-	});
 	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };

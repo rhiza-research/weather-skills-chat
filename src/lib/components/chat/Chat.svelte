@@ -56,7 +56,8 @@
 		GENERATION_HEARTBEAT_ACTION,
 		GENERATION_LOST_MESSAGE,
 		clearSpinningToolCalls,
-		formatGenerationRequestError
+		formatGenerationRequestError,
+		isReplyRunning
 	} from '$lib/utils/generationLiveness';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
 	import {
@@ -119,6 +120,7 @@
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 	import { revealApp } from '$lib/utils/splash';
+	import { createPromptQueue } from '$lib/utils/eventPrompts';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -174,7 +176,24 @@
 	let eventConfirmationInput = false;
 	let eventConfirmationInputPlaceholder = '';
 	let eventConfirmationInputValue = '';
-	let eventCallback = null;
+	const eventPrompts = createPromptQueue<Record<string, any>>();
+
+	const showEventPrompt = (data) => {
+		eventConfirmationInput = data.input;
+		eventConfirmationTitle = data.title ?? '';
+		eventConfirmationMessage = data.message ?? '';
+		eventConfirmationInputPlaceholder = data.placeholder ?? '';
+		eventConfirmationInputValue = data.value ?? '';
+		showEventConfirmation = true;
+	};
+
+	const answerEventPrompt = async (value) => {
+		const next = eventPrompts.answer(value);
+		if (!next) return;
+		// Let the dialog close before it opens for the next prompt.
+		await tick();
+		showEventPrompt(next.data);
+	};
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
 	let artifactsBumpTimer: ReturnType<typeof setTimeout> | null = null;
@@ -488,17 +507,10 @@
 			} else {
 				toast.info(toastContent);
 			}
-		} else if (type === 'confirmation') {
-			eventCallback = cb;
-
-			eventConfirmationInput = false;
-			showEventConfirmation = true;
-
-			eventConfirmationTitle = data.title;
-			eventConfirmationMessage = data.message;
+		} else if (type === 'confirmation' || type === 'input') {
+			const prompt = { data: { ...data, input: type === 'input' }, respond: (v) => cb?.(v) };
+			if (eventPrompts.push(prompt)) showEventPrompt(prompt.data);
 		} else if (type === 'execute') {
-			eventCallback = cb;
-
 			try {
 				const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
 				const result = await asyncFunction();
@@ -509,16 +521,6 @@
 			} catch (error) {
 				console.error('Error executing code:', error);
 			}
-		} else if (type === 'input') {
-			eventCallback = cb;
-
-			eventConfirmationInput = true;
-			showEventConfirmation = true;
-
-			eventConfirmationTitle = data.title;
-			eventConfirmationMessage = data.message;
-			eventConfirmationInputPlaceholder = data.placeholder;
-			eventConfirmationInputValue = data?.value ?? '';
 		} else {
 			console.log('Unknown message type', data);
 		}
@@ -1930,7 +1932,7 @@
 			return;
 		}
 
-		if (messages.length != 0 && messages.at(-1).done != true) {
+		if (isReplyRunning(messages.at(-1))) {
 			// Response not done
 			return;
 		}
@@ -2797,16 +2799,8 @@
 	input={eventConfirmationInput}
 	inputPlaceholder={eventConfirmationInputPlaceholder}
 	inputValue={eventConfirmationInputValue}
-	on:confirm={(e) => {
-		if (e.detail) {
-			eventCallback?.(e.detail);
-		} else {
-			eventCallback?.(true);
-		}
-	}}
-	on:cancel={() => {
-		eventCallback?.(false);
-	}}
+	on:confirm={(e) => answerEventPrompt(e.detail ? e.detail : true)}
+	on:cancel={() => answerEventPrompt(false)}
 />
 
 <div

@@ -35,8 +35,9 @@
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
 	import Image from './Image.svelte';
+	import HtmlArtifactInline from './HtmlArtifactInline.svelte';
 	import ToolCallDetails from './ToolCallDetails.svelte';
-	import { getArtifactContentUrl } from '$lib/apis/artifacts';
+	import { getArtifactContentUrl, getArtifactViewUrl, isHtmlArtifact } from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
 	export let open = false;
@@ -315,6 +316,16 @@
 		return null;
 	})();
 
+	// display_image on an .html page shows it in a sandboxed frame. The tool's
+	// note starts with "Showing" once the file is there.
+	$: displayHtmlPath =
+		displayImagePath && isHtmlArtifact(displayImagePath) ? displayImagePath : null;
+	$: displayHtmlShown =
+		Boolean(displayHtmlPath) &&
+		String(unwrapJSON(toolResultRaw) ?? '')
+			.trim()
+			.startsWith('Showing');
+
 	let displayImageSrc = '';
 	let displayImageLoadedKey = '';
 
@@ -355,7 +366,11 @@
 	}
 
 	$: displayImageRequestKey =
-		showResultMedia && displayImagePath && $chatId && attributes?.done === 'true'
+		showResultMedia &&
+		displayImagePath &&
+		!displayHtmlPath &&
+		$chatId &&
+		attributes?.done === 'true'
 			? `${$chatId}::${displayImagePath}`
 			: '';
 
@@ -596,7 +611,13 @@
 			{/if}
 
 			{#if showResultMedia && attributes?.done === 'true'}
-				{#if displayImageSrc}
+				{#if displayHtmlPath && displayHtmlShown && $chatId}
+					<HtmlArtifactInline
+						src={getArtifactViewUrl($chatId, displayHtmlPath)}
+						downloadUrl={getArtifactContentUrl($chatId, displayHtmlPath)}
+						title={displayHtmlPath}
+					/>
+				{:else if displayImageSrc}
 					<Image
 						id={`${collapsibleId}-tool-calls-${attributes?.id}-display-image`}
 						src={displayImageSrc}

@@ -9,7 +9,8 @@ import {
 	remainingUsd,
 	tokenUsageLabel,
 	tokenUsageTooltip,
-	usageBarPercent
+	usageBarPercent,
+	usageMeters
 } from './usage';
 
 test('first usage is copied', () => {
@@ -77,4 +78,28 @@ test('formats usd and tokens', () => {
 	expect(tokenUsageTooltip({ prompt_tokens: 1500, completion_tokens: 20, total_tokens: 1520, uncached_tokens: 400 })).toBe(
 		'Prompt / Completion / Total / Uncached<br>Prompt: 1.5k<br>Completion: 20<br>Total: 1.5k<br>Uncached: 400'
 	);
+});
+
+test('counter shows organization spend, not the member spend', () => {
+	const meters = usageMeters({ cost_usd: 12, org_cost_usd: 300, org_limit_usd: 300 });
+	expect(meters).toEqual([{ scope: 'organization', spend: 300, limit: 300, over: true }]);
+});
+
+test('counter adds the member meter when the member has a limit', () => {
+	const meters = usageMeters({
+		cost_usd: 40,
+		org_cost_usd: 120,
+		org_limit_usd: 300,
+		user_limit_usd: 40
+	});
+	expect(meters).toEqual([
+		{ scope: 'organization', spend: 120, limit: 300, over: false },
+		{ scope: 'member', spend: 40, limit: 40, over: true }
+	]);
+});
+
+test('counter without limits has no cap', () => {
+	expect(usageMeters({ cost_usd: 1, org_cost_usd: 5, org_limit_usd: null })).toEqual([
+		{ scope: 'organization', spend: 5, limit: null, over: false }
+	]);
 });

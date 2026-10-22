@@ -1,26 +1,16 @@
+import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
-from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS, tool_runner_enabled
-from open_webui.models.chats import Chats
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.organizations import can_read_chat
+from open_webui.utils.organizations import require_chat_read
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 router = APIRouter()
-
-
-def _readable(chat_id: str, user):
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-    return chat
 
 
 def _status_body(status_body: dict, *, started: bool = False) -> dict:
@@ -37,7 +27,7 @@ def _status_body(status_body: dict, *, started: bool = False) -> dict:
 async def get_tool_runner(id: str, user=Depends(get_verified_user)):
     if not tool_runner_enabled():
         return {"enabled": False, "state": "off"}
-    _readable(id, user)
+    await asyncio.to_thread(require_chat_read, id, user)
     from open_webui.utils.chat_realtime import schedule_runner_metrics
     from open_webui.utils.skill_k8s_sandbox import runner_status
 
@@ -53,7 +43,7 @@ async def get_tool_runner(id: str, user=Depends(get_verified_user)):
 async def start_tool_runner(id: str, user=Depends(get_verified_user)):
     if not tool_runner_enabled():
         return {"enabled": False, "state": "off"}
-    _readable(id, user)
+    await asyncio.to_thread(require_chat_read, id, user)
     from open_webui.utils.chat_realtime import emit_chat_runner, schedule_runner_metrics
     from open_webui.utils.skill_k8s_sandbox import runner_status, start_runner
 

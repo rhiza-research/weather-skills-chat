@@ -13,7 +13,8 @@
 	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
-		getZarrRenderUrl,
+		getArtifactViewUrl,
+		isHtmlArtifact,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
 	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
@@ -25,6 +26,8 @@
 	import SvgPanZoom from '../common/SVGPanZoom.svelte';
 	import ArrowLeft from '../icons/ArrowLeft.svelte';
 	import ImagePreview from '../common/ImagePreview.svelte';
+	import HtmlPreview from '../common/HtmlPreview.svelte';
+	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
 
 	export let history;
@@ -35,11 +38,23 @@
 
 	let copied = false;
 	let iframeElement: HTMLIFrameElement;
-	let files = [];
-	let selectedView = null;
-	let selectedImage = null;
-	let previewUrl = null;
+	let files: any[] = [];
+	let selectedImage: string | null = null;
+	let previewUrl: string | null = null;
 	let showImageModal = false;
+	// HTML artifacts (Plotly figures) load straight from the view route in a
+	// sandboxed frame, not as a blob.
+	let previewHtmlUrl = '';
+	let showHtmlModal = false;
+	// Modification time of the open file, so a skill rewriting it reloads the
+	// preview when the new file list arrives.
+	let previewModified: number | null = null;
+
+	const fileModified = (path: string | null) =>
+		(files.find((file) => file?.path === path)?.modified as number | undefined) ?? null;
+
+	const htmlPreviewUrl = (path: string, modified: number | null) =>
+		modified ? `${getArtifactViewUrl($chatId, path)}?v=${modified}` : getArtifactViewUrl($chatId, path);
 	let modalAlt = '';
 	let uploading = false;
 	let fileInput: HTMLInputElement;
@@ -69,38 +84,56 @@
 
 	const openImage = async (path: string) => {
 		selectedImage = path;
-		selectedView = null;
 		showImageModal = false;
+		showHtmlModal = false;
+		previewHtmlUrl = '';
+		previewModified = fileModified(path);
+		if (isHtmlArtifact(path)) {
+			revokePreview();
+			previewHtmlUrl = htmlPreviewUrl(path, previewModified);
+			modalAlt = path;
+			return;
+		}
 		const url = await loadPreview(getArtifactContentUrl($chatId, path));
 		if (!url) return;
 		modalAlt = path;
 	};
 
-	const openView = async (path: string, title: string = '') => {
-		selectedView = path;
-		selectedImage = null;
-		showImageModal = false;
-		const url = await loadPreview(getZarrRenderUrl($chatId, path));
-		if (!url) return;
-		modalAlt = title || path;
-	};
-
 	const clearPreview = () => {
 		selectedImage = null;
-		selectedView = null;
 		modalAlt = '';
 		showImageModal = false;
+		showHtmlModal = false;
+		previewHtmlUrl = '';
+		previewModified = null;
 		revokePreview();
 	};
 
 	const expandPreview = () => {
-		if (previewUrl) {
+		if (previewHtmlUrl) {
+			showHtmlModal = true;
+		} else if (previewUrl) {
 			showImageModal = true;
 		}
 	};
 
-	$: previewTitle = selectedView || selectedImage || modalAlt || '';
-	$: hasPreview = !!previewUrl;
+	$: previewTitle = selectedImage || modalAlt || '';
+
+	// The open file was rewritten (new list from chat:artifacts): reload it.
+	$: if (selectedImage && files) {
+		const modified = fileModified(selectedImage);
+		if (modified && previewModified === null) {
+			previewModified = modified;
+		} else if (modified && modified !== previewModified) {
+			previewModified = modified;
+			if (isHtmlArtifact(selectedImage)) {
+				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
+			} else {
+				loadPreview(getArtifactContentUrl($chatId, selectedImage));
+			}
+		}
+	}
+	$: hasPreview = !!previewUrl || !!previewHtmlUrl;
 
 	const closePanel = () => {
 		showArtifacts.set(false);
@@ -328,6 +361,13 @@
 	alt={modalAlt}
 />
 
+<HtmlPreview
+	bind:show={showHtmlModal}
+	src={previewHtmlUrl}
+	downloadUrl={selectedImage && $chatId ? getArtifactContentUrl($chatId, selectedImage) : ''}
+	title={modalAlt}
+/>
+
 <div class="w-full h-full max-h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0 overflow-hidden">
 	{#if hasPreview}
 		<div
@@ -360,17 +400,34 @@
 					</button>
 				</div>
 			</div>
-			<button
-				type="button"
-				class="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden px-2 pb-2 cursor-zoom-in"
-				on:click={expandPreview}
-			>
-				<img
-					class="max-w-full max-h-full object-contain rounded border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
-					src={previewUrl}
-					alt={previewTitle || 'preview'}
-				/>
-			</button>
+			{#if previewHtmlUrl}
+				<div
+					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
+				>
+					<div
+						class="h-full w-full overflow-hidden rounded border border-gray-100 dark:border-gray-800"
+					>
+						<HtmlArtifactFrame
+							src={previewHtmlUrl}
+							title={previewTitle}
+							fit="contain"
+							lazy={false}
+						/>
+					</div>
+				</div>
+			{:else}
+				<button
+					type="button"
+					class="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden px-2 pb-2 cursor-zoom-in"
+					on:click={expandPreview}
+				>
+					<img
+						class="max-w-full max-h-full object-contain rounded border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+						src={previewUrl}
+						alt={previewTitle || 'preview'}
+					/>
+				</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -407,9 +464,7 @@
 			<ArtifactBrowser
 				{files}
 				{selectedImage}
-				{selectedView}
 				on:openImage={(e) => openImage(e.detail.path)}
-				on:openView={(e) => openView(e.detail.path, e.detail.title)}
 			/>
 		</div>
 

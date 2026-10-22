@@ -29,13 +29,15 @@ Only one install, update, or delete runs at a time on each server. Starting anot
 
 Packs follow the catalog rules on [[Organizations]]: a platform admin decides whether a public pack starts on or off and can withdraw it everywhere, and each organization's admins can turn it on or off for their organization. The same controls exist for each skill inside a pack, so an organization can use a pack but leave some of its skills off.
 
-The model can run a skill only when both the pack and the skill are on for the active organization.
+The model can run a skill only when both the pack and the skill are on for the chat's organization (see [[Organizations]]).
 
 When two packs offer a skill with the same name, the model runs the one with the highest version number.
 
 ## Choosing skills in a chat
 
 A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
+
+If the model calls a skill that is off for the message, the skill does not run, and the model is told to tell the user to turn it on there and send the message again.
 
 ## When a skill runs
 
@@ -61,7 +63,8 @@ When confinement is on, dependencies are kept in an environment per chat, on the
 | `SKILL_LANDLOCK_BACKEND` | `auto` | Which Landlock method to use when confinement is on: `auto` picks the best the server supports; `sandlock` and `landlock_only` force one |
 
 The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confinement off. `auto`, `sandlock`, and `landlock_only` confine on the chat server. `k8s` sends skills to a [[Tool Runner]] instead. Staging and production both use `k8s`. See [[Deployment]].
-| `SKILL_RUN_TIMEOUT` | `600` | How long, in seconds, a skill may run before it is stopped |
+| `SKILL_RUN_TIMEOUT` | `600` | How long, in seconds, a skill may run before it is stopped, unless the model asks for a different `timeout` on that call |
+| `SKILL_RUN_TIMEOUT_MAX` | `1800` | The longest `timeout`, in seconds, the model may ask for on one call; longer requests are cut to this |
 | `SKILL_VENV_ROOT` | `/var/skill-venvs` | Volume for per-chat skill environments; used only when it exists and the app can write to it |
 | `SKILL_VENV_MAX_BYTES` | `0` | Space, in bytes, that per-chat environments may use; `0` means 85% of the volume |
 | `SKILLS_DIR` | `<DATA_DIR>/skills` | Where installed packs are stored |

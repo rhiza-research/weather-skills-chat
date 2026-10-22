@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,7 @@ from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import (
     can_update_access_control,
     has_permission,
+    Memberships,
     user_owns_or_has_access,
 )
 from open_webui.env import SRC_LOG_LEVELS
@@ -55,9 +57,9 @@ def _stamp_skill_enabled(tool, enabled: bool):
     return type(tool).model_validate(data)
 
 
-def _can_read(user, tool) -> bool:
+def _can_read(user, tool, memberships: Optional[Memberships] = None) -> bool:
     return user_owns_or_has_access(
-        user.id, tool.user_id, tool.access_control, "read", user.role
+        user.id, tool.user_id, tool.access_control, "read", user.role, memberships
     )
 
 
@@ -124,6 +126,11 @@ async def _visible_tools(request: Request, user, organization_id: str):
             request.app.state.config.TOOL_SERVER_CONNECTIONS
         )
 
+    # The tool catalog, skill records and access checks are database reads.
+    return await asyncio.to_thread(_visible_tool_list, request, user, organization_id)
+
+
+def _visible_tool_list(request: Request, user, organization_id: str):
     tools = Tools.get_tools()
     for server in request.app.state.TOOL_SERVERS:
         tools.append(
@@ -153,6 +160,7 @@ async def _visible_tools(request: Request, user, organization_id: str):
     usable_skill_ids = {
         record["id"] for record in accessible_skill_records(user, organization_id)
     }
+    memberships = Memberships(user.id)
 
     return [
         _stamp_skill_enabled(tool, True)
@@ -160,7 +168,7 @@ async def _visible_tools(request: Request, user, organization_id: str):
         if (
             tool.id in usable_skill_ids
             if _is_skill_tool(tool)
-            else _can_read(user, tool)
+            else _can_read(user, tool, memberships)
         )
     ]
 

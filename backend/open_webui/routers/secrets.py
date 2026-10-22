@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[SecretModel])
-async def list_secrets(
+def list_secrets(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):

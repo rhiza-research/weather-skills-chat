@@ -32,6 +32,28 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 DEFAULT_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT", "600"))
+# The model may ask for a longer timeout per call, up to this.
+MAX_TIMEOUT_SEC = int(os.getenv("SKILL_RUN_TIMEOUT_MAX", "1800"))
+SKILL_TIMEOUT_MESSAGE = (
+    "Tool call failed: the skill did not finish within its {timeout}s timeout "
+    "and was stopped. If it needs more time, call it again with a larger "
+    "timeout (at most {max_timeout}s); otherwise call it with less work."
+)
+
+
+def skill_timeout(value) -> int:
+    """The requested timeout in seconds, defaulted and capped at MAX_TIMEOUT_SEC."""
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        return min(DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC)
+    if seconds <= 0:
+        return min(DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC)
+    return min(seconds, MAX_TIMEOUT_SEC)
+
+
+def skill_timeout_message(timeout: int) -> str:
+    return SKILL_TIMEOUT_MESSAGE.format(timeout=timeout, max_timeout=MAX_TIMEOUT_SEC)
 # Chat-sandboxed skills are Landlock-confined when available (sandlock or landlock_only).
 SKILL_SANDLOCK = os.getenv("SKILL_SANDLOCK", "true").lower() in ("1", "true", "yes")
 SAFE_SCRIPT_RE = re.compile(r"^[A-Za-z0-9._-]+\.py$")
@@ -230,6 +252,7 @@ async def run_skill(
     skill_path = Path(skill_dir).resolve()
     if not skill_path.is_dir():
         return _error_result(f"Skill directory not found: {skill_path}")
+    timeout = skill_timeout(timeout)
 
     try:
         script_path = _resolve_script(skill_path, script)
@@ -299,7 +322,7 @@ async def run_skill(
                 script_path=script_path,
                 args=args,
                 env={name: value for name, value in used_secrets.items()},
-                timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_SEC,
+                timeout=timeout,
                 emitter=emitter,
             )
         except Exception as e:
@@ -461,7 +484,7 @@ async def run_skill(
         await _terminate_skill_process(proc)
         return _redact_skill_result(
             _error_result(
-                f"Skill timed out after {limit}s: {script_path.name}",
+                skill_timeout_message(limit),
                 exit_code=-1,
                 script=script_path.name,
                 cwd=str(cwd),

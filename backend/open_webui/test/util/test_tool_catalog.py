@@ -196,5 +196,79 @@ class GetToolsCatalogTest(unittest.TestCase):
         self.assertEqual(tools["plot"]["tool_id"], "skill_plot__v1")
 
 
+class GetToolsOrganizationTest(unittest.TestCase):
+    """Skills come from the request's organization, not the raw header."""
+
+    def _module(self, label):
+        module = SimpleNamespace()
+
+        def plot():
+            """Plot something."""
+            return label
+
+        module.plot = plot
+        return module
+
+    def _records(self, organization_id=None, catalog=None):
+        # The org's copy is plot 1.0.0. With no org, every org the user is in
+        # counts, which adds a newer copy from another org.
+        org_copy = {
+            "id": "skill_plot",
+            "skill_name": "plot",
+            "version": "1.0.0",
+            "enabled": True,
+        }
+        other_copy = {
+            "id": "skill_plot_2",
+            "skill_name": "plot",
+            "version": "1.0.1",
+            "enabled": True,
+        }
+        if organization_id == "org-k":
+            return [org_copy]
+        if organization_id == "org-other":
+            return [other_copy]
+        return [org_copy, other_copy]
+
+    def _get_tools(self, header, metadata):
+        user = SimpleNamespace(id="alice", role="user", settings=None)
+        catalog = [
+            _skill("skill_plot", "plot", "1.0.0"),
+            _skill("skill_plot_2", "plot", "1.0.1"),
+        ]
+        request = MagicMock()
+        request.headers.get.return_value = header
+        request.state.metadata = metadata
+        request.app.state.TOOLS = {
+            "skill_plot": self._module("org"),
+            "skill_plot_2": self._module("other"),
+        }
+        with patch(
+            "open_webui.utils.tools.accessible_skill_records",
+            side_effect=lambda user, organization_id=None, catalog=None: self._records(
+                organization_id
+            ),
+        ):
+            return get_tools(
+                request,
+                ["skill_plot"],
+                user,
+                {"__user__": {"id": "alice"}},
+                catalog=catalog,
+            )
+
+    def test_automation_without_header_uses_its_organization(self):
+        tools = self._get_tools(None, {"organization_id": "org-k"})
+        self.assertEqual(tools["plot"]["tool_id"], "skill_plot")
+
+    def test_request_organization_wins_over_header(self):
+        tools = self._get_tools("org-other", {"organization_id": "org-k"})
+        self.assertEqual(tools["plot"]["tool_id"], "skill_plot")
+
+    def test_header_is_the_fallback(self):
+        tools = self._get_tools("org-k", None)
+        self.assertEqual(tools["plot"]["tool_id"], "skill_plot")
+
+
 if __name__ == "__main__":
     unittest.main()
