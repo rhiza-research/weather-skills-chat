@@ -360,7 +360,7 @@
 <FilesOverlay show={dragged} />
 
 {#if ToolServersModal}
-	<svelte:component this={ToolServersModal} bind:show={showTools} {selectedToolIds} />
+	<svelte:component this={ToolServersModal} bind:show={showTools} bind:selectedToolIds />
 {/if}
 
 {#if loaded}
@@ -1038,7 +1038,6 @@
 								<div class=" flex justify-between mt-1 mb-2.5 mx-0.5 max-w-full" dir="ltr">
 									<div class="ml-1 self-end flex items-end flex-1 min-w-0 max-w-[90%] gap-0.5">
 										<InputMenu
-											bind:selectedToolIds
 											{screenCaptureHandler}
 											{inputFilesHandler}
 											uploadFilesHandler={() => {
@@ -1109,7 +1108,7 @@
 										</InputMenu>
 
 										<div class="flex flex-wrap gap-1 items-center flex-1 min-w-0">
-											{#if toolServers.length + selectedToolIds.length > 0}
+											{#if toolServers.length + selectedToolIds.length + ($tools?.length ?? 0) > 0}
 												<Tooltip
 													content={$i18n.t('{{COUNT}} Available Tools', {
 														COUNT: toolServers.length + selectedToolIds.length

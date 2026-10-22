@@ -1,31 +1,14 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
 	import { flyAndScale } from '$lib/utils/transitions';
-	import { getContext, onMount, tick } from 'svelte';
+	import { getContext } from 'svelte';
 
-	import { config, user, tools as _tools, mobile } from '$lib/stores';
-
-	import { getToolSummary } from '$lib/apis/tools';
-	import {
-		dedupeToolsForSelection,
-		isSkillDefaultEnabled,
-		isSkillTool,
-		remapSelectedToolIdsToHighestSkills,
-		toolBaseName,
-		toolSelectionLabel,
-		toolSkillRepoRef,
-		toolSkillVersion
-	} from '$lib/utils/toolDisplay';
+	import { config, user } from '$lib/stores';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import DocumentArrowUpSolid from '$lib/components/icons/DocumentArrowUpSolid.svelte';
-	import Switch from '$lib/components/common/Switch.svelte';
-	import GlobeAltSolid from '$lib/components/icons/GlobeAltSolid.svelte';
-	import WrenchSolid from '$lib/components/icons/WrenchSolid.svelte';
 	import CameraSolid from '$lib/components/icons/CameraSolid.svelte';
-	import PhotoSolid from '$lib/components/icons/PhotoSolid.svelte';
-	import CommandLineSolid from '$lib/components/icons/CommandLineSolid.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -36,61 +19,12 @@
 	export let uploadGoogleDriveHandler: Function;
 	export let uploadOneDriveHandler: Function;
 
-	export let selectedToolIds: string[] = [];
-
 	export let onClose: Function;
 
-	let tools = {};
 	let show = false;
-	let toolQuery = '';
-	let toolSearchEl: HTMLInputElement | null = null;
-	let menuReady = false;
-
-	$: filteredToolIds = (() => {
-		const q = toolQuery.trim().toLowerCase();
-		const ids = Object.keys(tools);
-		if (!q) return ids;
-		return ids.filter((toolId) => toolBaseName(tools[toolId]).toLowerCase().includes(q));
-	})();
 
 	let fileUploadEnabled = true;
 	$: fileUploadEnabled = $user?.role === 'admin' || $user?.permissions?.chat?.file_upload;
-
-	const init = async () => {
-		if ($_tools === null) {
-			await _tools.set(await getToolSummary(localStorage.token));
-		}
-
-		const allTools = $_tools ?? [];
-		const visibleTools = dedupeToolsForSelection(allTools);
-		selectedToolIds = remapSelectedToolIdsToHighestSkills(selectedToolIds ?? [], allTools);
-
-		tools = visibleTools.reduce((a, tool) => {
-			a[tool.id] = {
-				...tool,
-				label: toolSelectionLabel(tool),
-				description: tool.meta?.description,
-				enabled: selectedToolIds.includes(tool.id)
-			};
-			return a;
-		}, {});
-	};
-
-	const openMenu = async () => {
-		if (menuReady) return;
-		menuReady = true;
-		toolQuery = '';
-		await init();
-		await tick();
-		toolSearchEl?.focus();
-	};
-
-	$: if (show) {
-		void openMenu();
-	} else if (menuReady) {
-		menuReady = false;
-		toolQuery = '';
-	}
 
 	const detectMobile = () => {
 		const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -137,83 +71,6 @@
 			align="start"
 			transition={flyAndScale}
 		>
-			{#if Object.keys(tools).length > 0}
-				<div class="px-2 pt-1 pb-1">
-					<input
-						bind:this={toolSearchEl}
-						bind:value={toolQuery}
-						type="search"
-						placeholder={$i18n.t('Search skills')}
-						class="w-full rounded-lg px-2.5 py-1.5 text-sm bg-gray-50 dark:bg-gray-900 outline-hidden border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
-						on:click|stopPropagation
-						on:pointerdown|stopPropagation
-						on:keydown|stopPropagation
-					/>
-				</div>
-				<div class="max-h-40 overflow-y-auto scrollbar-hidden">
-					{#each filteredToolIds as toolId}
-						{@const item = tools[toolId]}
-						{@const version = toolSkillVersion(item)}
-						{@const repoRef = toolSkillRepoRef(item)}
-						<button
-							class="flex w-full justify-between gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer rounded-xl"
-							on:click={() => {
-								tools[toolId].enabled = !tools[toolId].enabled;
-							}}
-						>
-							<div class="flex-1 min-w-0">
-								<Tooltip
-									content={item?.description || item?.label || ''}
-									placement="top-start"
-									className="flex flex-1 gap-2 items-center min-w-0"
-								>
-									<div class="shrink-0">
-										<WrenchSolid />
-									</div>
-
-									<div class="min-w-0 text-left">
-										<div class="truncate">{toolBaseName(item)}</div>
-										{#if isSkillTool(item) && (version || repoRef || !isSkillDefaultEnabled(item))}
-											<div class="truncate text-[10px] font-normal text-gray-500 dark:text-gray-400">
-												{#if version}<span>v{version}</span>{/if}
-												{#if version && repoRef}<span> · </span>{/if}
-												{#if repoRef}<span class="font-mono">{repoRef}</span>{/if}
-												{#if !isSkillDefaultEnabled(item)}
-													{#if version || repoRef}<span> · </span>{/if}
-													<span>off by default</span>
-												{/if}
-											</div>
-										{/if}
-									</div>
-								</Tooltip>
-							</div>
-
-							<div class=" shrink-0">
-								<Switch
-									state={item.enabled}
-									on:change={async (e) => {
-										const state = e.detail;
-										await tick();
-										if (state) {
-											selectedToolIds = [...selectedToolIds, toolId];
-										} else {
-											selectedToolIds = selectedToolIds.filter((id) => id !== toolId);
-										}
-									}}
-								/>
-							</div>
-						</button>
-					{/each}
-					{#if filteredToolIds.length === 0}
-						<div class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-							{$i18n.t('No skills match your search')}
-						</div>
-					{/if}
-				</div>
-
-				<hr class="border-black/5 dark:border-white/5 my-1" />
-			{/if}
-
 			<Tooltip
 				content={!fileUploadEnabled ? $i18n.t('You do not have permission to upload files') : ''}
 				className="w-full"

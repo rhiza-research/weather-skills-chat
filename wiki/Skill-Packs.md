@@ -33,6 +33,10 @@ The model can run a skill only when both the pack and the skill are on for the a
 
 When two packs offer a skill with the same name, the model runs the one with the highest version number.
 
+## Choosing skills in a chat
+
+A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
+
 ## When a skill runs
 
 The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. When a [[Tool Runner]] is on, the skill runs there instead of on the chat server. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
