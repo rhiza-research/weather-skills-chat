@@ -15,11 +15,6 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 router = APIRouter()
 
 
-@router.get("/ef")
-async def get_embeddings(request: Request):
-    return {"result": request.app.state.EMBEDDING_FUNCTION("hello world")}
-
-
 ############################
 # GetMemories
 ############################
