@@ -100,6 +100,8 @@ On every start, before it answers requests, the app can create public catalog mo
 |-|-|-|
 | `CATALOG_MODELS` | not set | Public models, as a JSON array of model objects, each with `id`, `name`, `base_model_id`, `meta`, and `params`, and optionally `access_control`, `is_active`, and `enabled_by_default`. Each `id` must be non-empty and listed once. A model whose `id` already exists is overwritten from the variable on every start, so changes made to it in the app last only until the next start. A model taken out of the variable is left as it is. |
 
+For a model served through OpenRouter, a catalog model's `params` can hold `provider`, OpenRouter's [provider routing preferences](https://openrouter.ai/docs/guides/routing/provider-selection), which the app sends unchanged with every request for that model. For example, `{"provider": {"quantizations": ["fp8"]}}` lets OpenRouter use only providers that serve the model at fp8. The field is sent whatever the connection is, so set it only on models served through OpenRouter.
+
 ## Sign-in
 
 | Env var | Default | Effect |
