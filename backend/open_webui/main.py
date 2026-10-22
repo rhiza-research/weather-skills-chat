@@ -1214,7 +1214,7 @@ async def chat_completion(
     organization_id: str = Depends(get_active_organization_id),
 ):
     # Before anything else: the error path below writes into this chat id.
-    chat = require_owned_chat(form_data.get("chat_id"), user)
+    chat = await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
     # Skills, model access and spend follow the chat's organization, not the
     # one the browser has active.
     organization_id = chat_organization_id(chat, user, organization_id)
@@ -1494,7 +1494,7 @@ generate_chat_completion = chat_completion
 async def chat_completed(
     request: Request, form_data: dict, user=Depends(get_verified_user)
 ):
-    require_owned_chat(form_data.get("chat_id"), user)
+    await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
@@ -1514,7 +1514,7 @@ async def chat_completed(
 async def chat_action(
     request: Request, action_id: str, form_data: dict, user=Depends(get_verified_user)
 ):
-    require_owned_chat(form_data.get("chat_id"), user)
+    await asyncio.to_thread(require_owned_chat, form_data.get("chat_id"), user)
     try:
         model_item = form_data.pop("model_item", {})
 
@@ -1545,7 +1545,7 @@ async def list_tasks_endpoint(user=Depends(get_verified_user)):
 
 
 @app.get("/api/tasks/chat/{chat_id}")
-async def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
+def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)):
     chat = Chats.get_chat_access_row(chat_id)
     if chat is None or chat.user_id != user.id:
         return {"task_ids": []}

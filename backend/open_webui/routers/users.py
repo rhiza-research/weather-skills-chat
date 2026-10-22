@@ -288,7 +288,7 @@ class UserResponse(BaseModel):
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
+def get_user_by_id(user_id: str, user=Depends(get_verified_user)):
     # Check if user_id is a shared chat
     # If it is, get the user_id from the chat
     if user_id.startswith("shared-"):

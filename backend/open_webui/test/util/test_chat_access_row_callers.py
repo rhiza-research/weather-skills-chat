@@ -70,6 +70,51 @@ class AccessOnlyCallersTest(unittest.TestCase):
                 self.assertFalse(called & FULL_CHAT_CALLS, f"{rel}:{name} loads the whole chat")
 
 
+# Access checks are DB reads (the access row, and organization membership for a
+# user who is not the owner). Async code must run them on a worker thread.
+ACCESS_CALLS = {
+    "get_chat_access_row",
+    "require_chat_read",
+    "require_chat_write",
+    "require_owned_chat",
+    "can_read_chat",
+    "can_write_chat",
+}
+ACCESS_FILES = [
+    "routers/chats.py",
+    "routers/artifacts.py",
+    "routers/tool_runner.py",
+    "routers/users.py",
+    "main.py",
+    "utils/chat_turns.py",
+    "utils/builtin_tools.py",
+    "utils/chat_realtime.py",
+]
+
+
+class AccessChecksOffTheLoopTest(unittest.TestCase):
+    def test_no_access_check_runs_directly_in_async_code(self):
+        offenders = []
+        for rel in ACCESS_FILES:
+            tree = ast.parse((ROOT / rel).read_text())
+            parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                if name not in ACCESS_CALLS:
+                    continue
+                scope = parents.get(node)
+                while scope is not None and not isinstance(
+                    scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+                ):
+                    scope = parents.get(scope)
+                if isinstance(scope, ast.AsyncFunctionDef):
+                    offenders.append(f"{rel}:{node.lineno} {name} in async {scope.name}")
+        self.assertEqual(offenders, [])
+
+
 class RequireChatAccessTest(unittest.TestCase):
     """The shared route checks read the access row, never the whole chat."""
 

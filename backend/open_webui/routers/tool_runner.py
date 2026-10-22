@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends
@@ -26,7 +27,7 @@ def _status_body(status_body: dict, *, started: bool = False) -> dict:
 async def get_tool_runner(id: str, user=Depends(get_verified_user)):
     if not tool_runner_enabled():
         return {"enabled": False, "state": "off"}
-    require_chat_read(id, user)
+    await asyncio.to_thread(require_chat_read, id, user)
     from open_webui.utils.chat_realtime import schedule_runner_metrics
     from open_webui.utils.skill_k8s_sandbox import runner_status
 
@@ -42,7 +43,7 @@ async def get_tool_runner(id: str, user=Depends(get_verified_user)):
 async def start_tool_runner(id: str, user=Depends(get_verified_user)):
     if not tool_runner_enabled():
         return {"enabled": False, "state": "off"}
-    require_chat_read(id, user)
+    await asyncio.to_thread(require_chat_read, id, user)
     from open_webui.utils.chat_realtime import emit_chat_runner, schedule_runner_metrics
     from open_webui.utils.skill_k8s_sandbox import runner_status, start_runner
 
