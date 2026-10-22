@@ -12,7 +12,7 @@ from unittest.mock import patch
 import httpx
 
 from perf_harness import LoopProbe, check_budget, db_delay, fs_delay, record
-from perf_harness.app_data import app_with, ensure_user, insert_chat
+from perf_harness.app_data import app_with, call_tool, ensure_user, insert_chat
 from perf_harness.data import big_chat, build_sandbox
 
 # Entries per chat in the 07:26 UTC burst, largest first (from prod logs).
@@ -66,7 +66,8 @@ def test_list_artifacts_tool_on_a_large_sandbox(tmp_path):
 
     async def run():
         async with LoopProbe() as probe:
-            out = await builtin_tools.list_artifacts(
+            out = await call_tool(
+                builtin_tools.list_artifacts,
                 __user__={"id": user.id}, __metadata__={"chat_id": chat_id}
             )
         assert "plots/" in out

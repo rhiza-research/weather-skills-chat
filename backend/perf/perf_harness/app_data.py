@@ -52,3 +52,13 @@ def asgi_client(app):
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://perf", timeout=120
     )
+
+
+async def call_tool(tool, **kwargs):
+    """Call a built-in tool the way the chat's tool loop does: through the tool
+    dispatcher, which runs a plain (non-async) tool in a worker thread."""
+    from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
+
+    extra = {k: v for k, v in kwargs.items() if k.startswith("__")}
+    args = {k: v for k, v in kwargs.items() if not k.startswith("__")}
+    return await get_async_tool_function_and_apply_extra_params(tool, extra)(**args)

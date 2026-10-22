@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from perf_harness import LoopProbe, check_budget, db_delay, fs_delay, record
-from perf_harness.app_data import ensure_user, insert_chat
+from perf_harness.app_data import call_tool, ensure_user, insert_chat
 from perf_harness.data import big_chat, png_with_provenance
 
 CALLS = 30
@@ -45,7 +45,8 @@ def test_create_folder_calls(tmp_path):
     async def run():
         async with LoopProbe() as probe:
             for i in range(CALLS):
-                out = await builtin_tools.create_folder(
+                out = await call_tool(
+                    builtin_tools.create_folder,
                     path=f"plots/week_{i}", __user__={"id": user.id}, __metadata__={"chat_id": chat_id}
                 )
                 assert "week_" in out
@@ -73,7 +74,8 @@ def test_copy_zarr_store_into_intermediate_results(tmp_path):
 
     async def run():
         async with LoopProbe() as probe:
-            out = await builtin_tools.copy_intermediate_result(
+            out = await call_tool(
+                builtin_tools.copy_intermediate_result,
                 path="runs/precip.zarr",
                 direction="in",
                 __user__={"id": user.id},
@@ -106,7 +108,8 @@ def test_display_image_while_the_skill_writes_it(tmp_path):
         writer = threading.Thread(target=skill_writes_later)
         async with LoopProbe() as probe:
             writer.start()
-            out = await builtin_tools.display_image(
+            out = await call_tool(
+                builtin_tools.display_image,
                 path="plots/weekly.png", __user__={"id": user.id}, __metadata__={"chat_id": chat_id}
             )
         writer.join()
@@ -155,7 +158,8 @@ def test_send_email_with_attachments(tmp_path):
 
     async def run():
         async with LoopProbe() as probe:
-            out = await builtin_tools.send_email(
+            out = await call_tool(
+                builtin_tools.send_email,
                 to=user.email,
                 subject="Weekly rainfall",
                 body="Plots attached.",
