@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import MagicMock, patch
 
-from open_webui.utils.chat_turns import messages_for_model
+from open_webui.utils.chat_turns import messages_for_model, store_refused_turn
 
 
 class MessagesForModelTest(unittest.TestCase):
@@ -167,6 +168,51 @@ class MessagesForModelTest(unittest.TestCase):
         }
         messages = messages_for_model(history, "a1")
         self.assertEqual(messages[0]["content"], "The user uploaded an image at `photo.png`.")
+
+
+
+class StoreRefusedTurnTest(unittest.TestCase):
+    turn = {
+        "expected_revision": 3,
+        "user_message": {"id": "u1", "parentId": None, "role": "user", "content": "Hi"},
+        "assistant_message": {
+            "id": "a1",
+            "parentId": "u1",
+            "role": "assistant",
+            "content": "",
+            "done": False,
+        },
+    }
+
+    @patch("open_webui.utils.chat_turns.can_write_chat", return_value=True)
+    @patch("open_webui.utils.chat_turns.Chats")
+    def test_reply_is_stored_finished_with_the_error(self, chats, _can_write):
+        chats.append_turn.return_value = (MagicMock(), "ok")
+
+        self.assertTrue(store_refused_turn("c1", self.turn, MagicMock(), "Limit reached."))
+
+        chat_id, user_message, assistant_message, expected = chats.append_turn.call_args.args
+        self.assertEqual(chat_id, "c1")
+        self.assertEqual(user_message["id"], "u1")
+        self.assertEqual(assistant_message["id"], "a1")
+        self.assertIs(assistant_message["done"], True)
+        self.assertEqual(assistant_message["error"], {"content": "Limit reached."})
+        self.assertEqual(expected, 3)
+
+    @patch("open_webui.utils.chat_turns.can_write_chat", return_value=False)
+    @patch("open_webui.utils.chat_turns.Chats")
+    def test_read_only_chat_is_not_written(self, chats, _can_write):
+        self.assertFalse(store_refused_turn("c1", self.turn, MagicMock(), "Limit reached."))
+        chats.append_turn.assert_not_called()
+
+    @patch("open_webui.utils.chat_turns.can_write_chat", return_value=True)
+    @patch("open_webui.utils.chat_turns.Chats")
+    def test_write_failure_does_not_raise(self, chats, _can_write):
+        chats.append_turn.side_effect = RuntimeError("database down")
+        self.assertFalse(store_refused_turn("c1", self.turn, MagicMock(), "Limit reached."))
+
+    def test_malformed_turn_is_ignored(self):
+        self.assertFalse(store_refused_turn("c1", {"user_message": {}}, MagicMock(), "x"))
 
 
 if __name__ == "__main__":
