@@ -14,7 +14,6 @@
 	import {
 		getArtifactContentUrl,
 		getArtifactViewUrl,
-		getZarrRenderUrl,
 		isHtmlArtifact,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
@@ -40,7 +39,6 @@
 	let copied = false;
 	let iframeElement: HTMLIFrameElement;
 	let files: any[] = [];
-	let selectedView: string | null = null;
 	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
 	let showImageModal = false;
@@ -86,7 +84,6 @@
 
 	const openImage = async (path: string) => {
 		selectedImage = path;
-		selectedView = null;
 		showImageModal = false;
 		showHtmlModal = false;
 		previewHtmlUrl = '';
@@ -102,21 +99,8 @@
 		modalAlt = path;
 	};
 
-	const openView = async (path: string, title: string = '') => {
-		selectedView = path;
-		selectedImage = null;
-		showImageModal = false;
-		showHtmlModal = false;
-		previewHtmlUrl = '';
-		previewModified = null;
-		const url = await loadPreview(getZarrRenderUrl($chatId, path));
-		if (!url) return;
-		modalAlt = title || path;
-	};
-
 	const clearPreview = () => {
 		selectedImage = null;
-		selectedView = null;
 		modalAlt = '';
 		showImageModal = false;
 		showHtmlModal = false;
@@ -133,7 +117,7 @@
 		}
 	};
 
-	$: previewTitle = selectedView || selectedImage || modalAlt || '';
+	$: previewTitle = selectedImage || modalAlt || '';
 
 	// The open file was rewritten (new list from chat:artifacts): reload it.
 	$: if (selectedImage && files) {
@@ -480,9 +464,7 @@
 			<ArtifactBrowser
 				{files}
 				{selectedImage}
-				{selectedView}
 				on:openImage={(e) => openImage(e.detail.path)}
-				on:openView={(e) => openView(e.detail.path, e.detail.title)}
 			/>
 		</div>
 

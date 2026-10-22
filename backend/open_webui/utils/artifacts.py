@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import logging
@@ -224,29 +225,9 @@ def is_zarr_store(path: Path) -> bool:
     return any((path / marker).exists() for marker in ZARR_MARKERS)
 
 
-def is_zarr_view(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    if path.name.endswith(".zarrview.json"):
-        return True
-    if path.suffix != ".json":
-        return False
-    try:
-        data = json.loads(path.read_text())
-    except Exception:
-        return False
-    return isinstance(data, dict) and data.get("type") == "zarr_view"
-
-
-def read_view(path: Path) -> dict:
-    return json.loads(path.read_text())
-
-
 def classify_entry(path: Path) -> str:
     if is_zarr_store(path):
         return "zarr"
-    if is_zarr_view(path):
-        return "zarr_view"
     if path.is_dir():
         return "directory"
     return "file"
@@ -620,9 +601,30 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
     return list(payload.get("crumbs") or [])
 
 
-def list_artifacts(chat_id: str) -> list[dict]:
+def list_artifacts(
+    chat_id: str,
+    path: str | None = None,
+    depth: int | None = None,
+    provenance: bool = True,
+) -> list[dict]:
+    """List a chat's sandbox. Blocks on JuiceFS; async code uses list_artifacts_async.
+
+    path: only the entry at this relative path and everything under it, exactly
+    as if the full listing were filtered by path. Folders that do not lead to
+    it are not walked. Paths in the result stay relative to the sandbox root.
+    depth: how many folder levels to list below path, or below the root
+    (1 = direct contents). Folders at the limit are listed with ``truncated``
+    set. None lists every level.
+    provenance: read provenance from images, HTML pages and Zarr stores. Each
+    read opens the file, so turning it off makes large listings much cheaper.
+    """
+    if depth is not None and depth < 1:
+        raise ValueError("depth must be at least 1")
     t0 = time.perf_counter()
     root = chat_sandbox(chat_id)
+    prefix = path or ""
+    base = prefix.rstrip("/")
+    base_levels = len(base.split("/")) if base else 0
     entries = []
 
     def walk(directory: Path):
@@ -631,6 +633,15 @@ def list_artifacts(chat_id: str) -> list[dict]:
             if path.name.startswith("."):
                 continue
             rel = path.relative_to(root).as_posix()
+            if prefix and rel != prefix and not rel.startswith(base + "/"):
+                # Outside the requested path: only walk on toward it.
+                if (
+                    prefix.startswith(rel + "/")
+                    and path.is_dir()
+                    and not is_zarr_store(path)
+                ):
+                    walk(path)
+                continue
             kind = classify_entry(path)
             if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
                 kind = "image"
@@ -647,35 +658,26 @@ def list_artifacts(chat_id: str) -> list[dict]:
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            if kind == "zarr_view":
-                try:
-                    spec = read_view(path)
-                    zarr_rel = spec.get("zarr") or ""
-                    target = resolve_in_sandbox(chat_id, zarr_rel)
-                    item["zarr"] = zarr_rel
-                    item["title"] = spec.get("title") or path.stem
-                    item["missing_zarr"] = not is_zarr_store(target)
-                except Exception:
-                    item["missing_zarr"] = True
-            if kind == "image" and path.suffix.lower() == ".png":
-                prov = provenance_for_png(path)
-                if prov:
-                    # crumbs kept for compact labels; branches carry full args.
-                    item["provenance"] = prov.get("crumbs") or []
-                    item["provenance_detail"] = prov
-            elif kind == "html":
-                prov = provenance_for_html(path)
-                if prov:
-                    item["provenance"] = prov.get("crumbs") or []
-                    item["provenance_detail"] = prov
-            elif kind == "zarr":
-                prov = provenance_for_zarr(path)
-                if prov:
-                    item["provenance"] = prov.get("crumbs") or []
-                    item["provenance_detail"] = prov
-            entries.append(item)
+            prov = None
+            if provenance:
+                if kind == "image" and path.suffix.lower() == ".png":
+                    prov = provenance_for_png(path)
+                elif kind == "html":
+                    prov = provenance_for_html(path)
+                elif kind == "zarr":
+                    prov = provenance_for_zarr(path)
+            if prov:
+                # crumbs kept for compact labels; branches carry full args.
+                item["provenance"] = prov.get("crumbs") or []
+                item["provenance_detail"] = prov
             # Walk directories, but do not descend into zarr stores.
-            if path.is_dir() and kind != "zarr":
+            descend = path.is_dir() and kind != "zarr"
+            level = rel.count("/") + 1 - base_levels
+            if descend and depth is not None and level >= depth:
+                item["truncated"] = True
+                descend = False
+            entries.append(item)
+            if descend:
                 walk(path)
 
     walk(root)
@@ -684,8 +686,22 @@ def list_artifacts(chat_id: str) -> list[dict]:
         time.perf_counter() - t0,
         chat_id=chat_id,
         n=len(entries),
+        depth=depth,
+        provenance=provenance,
     )
     return entries
+
+
+async def list_artifacts_async(
+    chat_id: str,
+    path: str | None = None,
+    depth: int | None = None,
+    provenance: bool = True,
+) -> list[dict]:
+    """list_artifacts on a worker thread, so the walk never blocks the event loop."""
+    return await asyncio.to_thread(
+        list_artifacts, chat_id, path=path, depth=depth, provenance=provenance
+    )
 
 
 def _copy_sandbox_entry(src: Path, dest: Path) -> None:
@@ -933,11 +949,3 @@ def extract_sandbox_archive(chat_id: str, data: bytes) -> list[str]:
             own_sandbox_path(dest)
             written.append(name)
     return written
-
-
-def write_json(chat_id: str, relpath: str, payload: dict) -> Path:
-    target = resolve_in_sandbox(chat_id, relpath)
-    make_sandbox_dir(target.parent, chat_sandbox(chat_id))
-    target.write_text(json.dumps(payload, indent=2))
-    own_sandbox_path(target)
-    return target

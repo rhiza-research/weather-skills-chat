@@ -492,51 +492,55 @@ CREATE_FOLDER_SPEC = {
 
 async def list_artifacts(
     path: Optional[str] = None,
+    depth: Optional[int] = None,
+    provenance: bool = False,
     __user__: dict = {},
     __metadata__: dict = None,
 ) -> str:
     """List files and folders in the current chat artifact sandbox."""
-    from open_webui.utils.artifacts import (
-        list_artifacts as _list,
-        resolve_in_sandbox,
-    )
+    from open_webui.utils.artifacts import list_artifacts_async, resolve_in_sandbox
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     if not chat_id or chat_id == "local":
         return "Cannot list artifacts in a temporary chat."
+    if depth is not None and depth < 1:
+        return "depth must be at least 1."
 
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
+    def readable() -> bool:
+        user = Users.get_user_by_id(__user__.get("id"))
+        chat = Chats.get_chat_access_row(chat_id)
+        return can_read_chat(user, chat)
+
+    if not await asyncio.to_thread(readable):
         return "You do not have access to this chat."
 
     prefix = (path or "").strip().lstrip("/")
     if prefix in (".",):
         prefix = ""
     if prefix:
-        try:
-            target = resolve_in_sandbox(chat_id, prefix)
-        except Exception as e:
-            return f"Invalid path: {e}"
-        if not target.exists():
-            return f"Path not found: `{prefix}`"
-        if not target.is_dir():
-            size = target.stat().st_size
-            return f"`{prefix}` (file, {size} bytes)"
+        # None when prefix is a folder to list; otherwise the reply.
+        def check_prefix() -> Optional[str]:
+            try:
+                target = resolve_in_sandbox(chat_id, prefix)
+            except Exception as e:
+                return f"Invalid path: {e}"
+            if not target.exists():
+                return f"Path not found: `{prefix}`"
+            if not target.is_dir():
+                return f"`{prefix}` (file, {target.stat().st_size} bytes)"
+            return None
+
+        reply = await asyncio.to_thread(check_prefix)
+        if reply is not None:
+            return reply
 
     try:
-        entries = _list(chat_id)
+        entries = await list_artifacts_async(
+            chat_id, path=prefix or None, depth=depth, provenance=provenance
+        )
     except Exception as e:
         return f"Failed to list artifacts: {e}"
-
-    if prefix:
-        prefix_slash = prefix.rstrip("/") + "/"
-        entries = [
-            e
-            for e in entries
-            if e.get("path") == prefix or (e.get("path") or "").startswith(prefix_slash)
-        ]
 
     if not entries:
         where = f" under `{prefix}`" if prefix else ""
@@ -551,11 +555,21 @@ async def list_artifacts(
         kind = item.get("kind") or ("directory" if item.get("is_dir") else "file")
         size = item.get("size")
         if kind in ("directory",) or item.get("is_dir"):
-            lines.append(f"- `{rel}/` ({kind})")
+            note = ", not expanded" if item.get("truncated") else ""
+            line = f"- `{rel}/` ({kind}{note})"
         elif size is not None:
-            lines.append(f"- `{rel}` ({kind}, {size} bytes)")
+            line = f"- `{rel}` ({kind}, {size} bytes)"
         else:
-            lines.append(f"- `{rel}` ({kind})")
+            line = f"- `{rel}` ({kind})"
+        crumbs = item.get("provenance")
+        if crumbs:
+            line += " — made by: " + " → ".join(crumbs)
+        lines.append(line)
+    if any(item.get("truncated") for item in entries):
+        lines.append(
+            "Folders marked not expanded are deeper than `depth`; "
+            "list one by passing it as `path`."
+        )
     lines.append(
         "Paths are relative to the chat sandbox (skills cwd). "
         "Use these paths with other tools (e.g. skills, read_artifact, display_image, execute_code)."
@@ -570,7 +584,9 @@ LIST_ARTIFACTS_SPEC = {
         "directory). Use when the user uploaded files, after skills write outputs, "
         "or to discover available paths before reading them with read_artifact "
         "or plotting/attaching them. "
-        "Optionally pass a relative folder path to list only that subtree."
+        "Optionally pass a relative folder path to list only that subtree, a depth "
+        "to limit how many folder levels are listed, and provenance to show which "
+        "skills produced each image, HTML page and Zarr store."
     ),
     "parameters": {
         "type": "object",
@@ -580,6 +596,21 @@ LIST_ARTIFACTS_SPEC = {
                 "description": (
                     "Optional relative folder under the sandbox to list "
                     "(e.g. `intermediate_results` or `plots`). Omit for the full tree."
+                ),
+            },
+            "depth": {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Optional number of folder levels to list below `path` "
+                    "(1 = only its direct contents). Omit to list every level."
+                ),
+            },
+            "provenance": {
+                "type": "boolean",
+                "description": (
+                    "Show the chain of skills that produced each image, HTML page "
+                    "and Zarr store. Slower on large sandboxes. Defaults to false."
                 ),
             },
         },

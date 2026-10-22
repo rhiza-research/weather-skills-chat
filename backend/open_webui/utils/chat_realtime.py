@@ -491,9 +491,9 @@ def schedule_artifacts(chat_id: str) -> None:
         try:
             while True:
                 await asyncio.sleep(ARTIFACT_DEBOUNCE_SECONDS)
-                from open_webui.utils.artifacts import list_artifacts
+                from open_webui.utils.artifacts import list_artifacts_async
 
-                files = await asyncio.to_thread(list_artifacts, chat_id)
+                files = await list_artifacts_async(chat_id)
                 await emit_chat_artifacts(chat_id, files)
                 if chat_id not in _artifact_dirty:
                     break

@@ -326,7 +326,7 @@ class TestChatRealtimeSync(_NoBackgroundPublish, AbstractPostgresTest):
 
         calls = {"n": 0}
 
-        def fake_list(_chat_id):
+        def fake_list(_chat_id, **_kwargs):
             calls["n"] += 1
             time.sleep(0.05)
             return [{"name": f"file-{calls['n']}.txt"}]

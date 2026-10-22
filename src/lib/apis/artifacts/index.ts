@@ -57,27 +57,11 @@ export const artifactPathForChat = (href: string, chatId: string | null | undefi
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?path=${encodeURIComponent(path)}&format=zip`;
 
-export const getZarrRenderUrl = (chatId: string, view: string) =>
-	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/render?view=${encodeURIComponent(view)}`;
-
 export const getZarrMeta = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(
 		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/meta?path=${encodeURIComponent(path)}`,
 		{ headers: { authorization: `Bearer ${token}` } }
 	);
-	if (!res.ok) throw await parseApiError(res);
-	return res.json();
-};
-
-export const createZarrView = async (token: string, chatId: string, view: object) => {
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/views`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify(view)
-	});
 	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };

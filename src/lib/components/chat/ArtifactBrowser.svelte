@@ -6,7 +6,6 @@
 
 	export let files: any[] = [];
 	export let selectedImage: string | null = null;
-	export let selectedView: string | null = null;
 
 	type TreeNode = {
 		name: string;
@@ -38,7 +37,6 @@
 	};
 
 	$: if (selectedImage) ensureAncestorsExpanded(selectedImage);
-	$: if (selectedView) ensureAncestorsExpanded(selectedView);
 
 	const isNavigableDir = (node: TreeNode) => {
 		const kind = node.file?.kind;
@@ -73,17 +71,9 @@
 			for (const child of list) sortNodes(child.children);
 		};
 
-		const zarrPaths = new Set(
-			(entries || []).filter((f) => f?.kind === 'zarr' && f.path).map((f) => f.path)
-		);
-
 		for (const file of entries || []) {
 			const path = file?.path;
 			if (!path) continue;
-			// Linked views are rendered under their zarr node.
-			if (file.kind === 'zarr_view' && file.zarr && zarrPaths.has(file.zarr)) {
-				continue;
-			}
 			const parts = path.split('/').filter(Boolean);
 			let acc = '';
 			for (let i = 0; i < parts.length; i++) {
@@ -119,13 +109,10 @@
 			<ArtifactTreeNode
 				{node}
 				depth={0}
-				{files}
 				{expanded}
 				{selectedImage}
-				{selectedView}
 				on:toggle={onToggle}
 				on:openImage
-				on:openView
 			/>
 		{/each}
 	</div>
