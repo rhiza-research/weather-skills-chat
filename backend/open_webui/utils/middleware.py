@@ -128,6 +128,56 @@ GENERATION_HEARTBEAT_INTERVAL_S = float(
 )
 
 
+# A streamed reply is serialized and sent at most this often; each delta still
+# updates the blocks. The browser replaces the whole message on each send.
+STREAM_EMIT_INTERVAL_S = 0.1
+# While reading a stream, hand the event loop to other tasks at least this often.
+STREAM_YIELD_INTERVAL_S = 0.01
+
+_DETAILS_OPEN = "<details"
+_DETAILS_CLOSE = "</details>"
+
+
+def repair_unclosed_details(content: str) -> str:
+    """Insert missing </details> before sibling <details> opens.
+
+    GPT reasoning blocks can be left open when the model switches to
+    tool_calls; nested-looking HTML then breaks the markdown details
+    tokenizer and raw tags render in the chat.
+
+    Runs on every send of a streamed reply, so it jumps from tag to tag
+    rather than walking the text one character at a time.
+    """
+    if not content or _DETAILS_OPEN not in content:
+        return content
+    out: list[str] = []
+    depth = 0
+    i = 0
+    while True:
+        next_open = content.find(_DETAILS_OPEN, i)
+        next_close = content.find(_DETAILS_CLOSE, i)
+        if next_open == -1 and next_close == -1:
+            out.append(content[i:])
+            break
+        if next_close == -1 or (next_open != -1 and next_open < next_close):
+            out.append(content[i:next_open])
+            if depth > 0:
+                out.append(f"\n{_DETAILS_CLOSE}\n")
+                depth = 0
+            out.append(_DETAILS_OPEN)
+            depth += 1
+            i = next_open + len(_DETAILS_OPEN)
+        else:
+            out.append(content[i:next_close])
+            out.append(_DETAILS_CLOSE)
+            depth = max(0, depth - 1)
+            i = next_close + len(_DETAILS_CLOSE)
+    while depth > 0:
+        out.append(f"\n{_DETAILS_CLOSE}")
+        depth -= 1
+    return "".join(out)
+
+
 def completion_revision(chat_id: str | None) -> int:
     """Revision after the turn's transcript write. The client adopts this
     from the same completion event that unlocks the next send."""
@@ -1891,42 +1941,6 @@ async def process_chat_response(
 
                 return repair_unclosed_details(content.strip())
 
-            def repair_unclosed_details(content: str) -> str:
-                """Insert missing </details> before sibling <details> opens.
-
-                GPT reasoning blocks can be left open when the model switches to
-                tool_calls; nested-looking HTML then breaks the markdown details
-                tokenizer and raw tags render in the chat.
-                """
-                if not content or "<details" not in content:
-                    return content
-                out: list[str] = []
-                depth = 0
-                i = 0
-                n = len(content)
-                open_tag = "<details"
-                close_tag = "</details>"
-                while i < n:
-                    if content.startswith(open_tag, i):
-                        if depth > 0:
-                            out.append(f"\n{close_tag}\n")
-                            depth = 0
-                        out.append(open_tag)
-                        depth += 1
-                        i += len(open_tag)
-                        continue
-                    if content.startswith(close_tag, i):
-                        out.append(close_tag)
-                        depth = max(0, depth - 1)
-                        i += len(close_tag)
-                        continue
-                    out.append(content[i])
-                    i += 1
-                while depth > 0:
-                    out.append(f"\n{close_tag}")
-                    depth -= 1
-                return "".join(out)
-
             def close_open_reasoning_block(content_blocks):
                 """End an in-flight reasoning block before tool calls / final text."""
                 if not content_blocks:
@@ -2255,8 +2269,37 @@ async def process_chat_response(
                         )
                         await heartbeat.start()
 
+                    # Each content delta updates the blocks. The whole message
+                    # is serialized and sent at most every STREAM_EMIT_INTERVAL_S,
+                    # and once more when the stream ends: serializing grows with
+                    # the message, so sending it per token is quadratic.
+                    last_emit = 0.0
+                    emit_pending = False
+                    last_yield = time.monotonic()
+
+                    async def emit_content():
+                        nonlocal last_emit, emit_pending
+                        data = {"content": serialize_content_blocks(content_blocks)}
+                        if ENABLE_REALTIME_CHAT_SAVE:
+                            await asyncio.to_thread(
+                                Chats.upsert_message_to_chat_by_id_and_message_id,
+                                metadata["chat_id"],
+                                metadata["message_id"],
+                                data,
+                                bump_revision=False,
+                            )
+                        await event_emitter({"type": "chat:completion", "data": data})
+                        last_emit = time.monotonic()
+                        emit_pending = False
+
                     try:
                         async for line in response.body_iterator:
+                            # Lines already buffered come back without waiting, so
+                            # a burst would otherwise hold the event loop until it
+                            # drains. Hand it over now and then.
+                            if time.monotonic() - last_yield >= STREAM_YIELD_INTERVAL_S:
+                                await asyncio.sleep(0)
+                                last_yield = time.monotonic()
                             line = (
                                 line.decode("utf-8")
                                 if isinstance(line, bytes)
@@ -2308,6 +2351,8 @@ async def process_chat_response(
                                             error = data.get("error", {})
                                             if error:
                                                 await heartbeat.mark_activity()
+                                                if emit_pending:
+                                                    await emit_content()
                                                 await event_emitter(
                                                     {
                                                         "type": "chat:completion",
@@ -2364,16 +2409,7 @@ async def process_chat_response(
                                                 close_open_reasoning_block(
                                                     content_blocks
                                                 )
-                                                await event_emitter(
-                                                    {
-                                                        "type": "chat:completion",
-                                                        "data": {
-                                                            "content": serialize_content_blocks(
-                                                                content_blocks
-                                                            )
-                                                        },
-                                                    }
-                                                )
+                                                await emit_content()
                                             await heartbeat.stop(clear=False)
                                             await preparing_tool_calls.start()
 
@@ -2453,12 +2489,6 @@ async def process_chat_response(
                                                 "content"
                                             ] += reasoning_content
 
-                                            data = {
-                                                "content": serialize_content_blocks(
-                                                    content_blocks
-                                                )
-                                            }
-
                                         if value:
                                             if (
                                                 content_blocks
@@ -2529,27 +2559,13 @@ async def process_chat_response(
                                                     )
                                                 )
 
-                                            data = {
-                                                "content": serialize_content_blocks(
-                                                    content_blocks
-                                                ),
-                                            }
-                                            if ENABLE_REALTIME_CHAT_SAVE:
-                                                await asyncio.to_thread(
-                                                    Chats.upsert_message_to_chat_by_id_and_message_id,
-                                                    metadata["chat_id"],
-                                                    metadata["message_id"],
-                                                    data,
-                                                    bump_revision=False,
-                                                )
-
                                         if reasoning_content or value:
-                                            await event_emitter(
-                                                {
-                                                    "type": "chat:completion",
-                                                    "data": data,
-                                                }
-                                            )
+                                            emit_pending = True
+                                            if (
+                                                time.monotonic() - last_emit
+                                                >= STREAM_EMIT_INTERVAL_S
+                                            ):
+                                                await emit_content()
                             except Exception as e:
                                 done = "data: [DONE]" in line
                                 if done:
@@ -2567,6 +2583,9 @@ async def process_chat_response(
                                             error=str(e),
                                         )
                                     continue
+
+                        if emit_pending:
+                            await emit_content()
 
                         if content_blocks:
                             # Clean up the last text block
