@@ -154,8 +154,8 @@ class ArtifactsRouteOptionsTest(SandboxCase):
     def setUp(self):
         super().setUp()
         self.route_patches = [
-            patch.object(artifacts_router, "Chats", MagicMock()),
-            patch.object(artifacts_router, "can_read_chat", return_value=True),
+            patch("open_webui.utils.organizations.Chats", MagicMock()),
+            patch("open_webui.utils.organizations.can_read_chat", return_value=True),
         ]
         for p in self.route_patches:
             p.start()
@@ -191,7 +191,7 @@ class ArtifactsRouteOptionsTest(SandboxCase):
         self.assertEqual(self.client.get(self.url("?depth=0")).status_code, 422)
 
     def test_unreadable_chat_is_refused(self):
-        with patch.object(artifacts_router, "can_read_chat", return_value=False):
+        with patch("open_webui.utils.organizations.can_read_chat", return_value=False):
             self.assertEqual(self.client.get(self.url()).status_code, 401)
 
 

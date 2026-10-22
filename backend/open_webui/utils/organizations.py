@@ -5,7 +5,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.automations import AutomationModel
-from open_webui.models.chats import ChatModel
+from open_webui.models.chats import ChatModel, Chats
 from open_webui.models.organizations import (
     ORG_KIND_PERSONAL,
     ORG_KIND_PLATFORM,
@@ -164,6 +164,29 @@ def can_write_chat(user: UserModel, chat: Optional[ChatModel]) -> bool:
     if chat is None:
         return False
     return chat.user_id == user.id
+
+
+# For routes. Both load only the chat's owner, organization and visibility;
+# the whole chat can be megabytes.
+def require_chat_read(chat_id: str, user: UserModel):
+    """The chat's access row, or 401 when the user cannot read the chat."""
+    chat = Chats.get_chat_access_row(chat_id)
+    if not can_read_chat(user, chat):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    return chat
+
+
+def require_chat_write(chat_id: str, user: UserModel):
+    """The chat's access row, or 401 when the user cannot change the chat."""
+    chat = Chats.get_chat_access_row(chat_id)
+    if not can_write_chat(user, chat):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    return chat
 
 
 def can_read_org_resource(user: UserModel, resource) -> bool:

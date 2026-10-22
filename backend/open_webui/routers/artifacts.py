@@ -33,34 +33,12 @@ from open_webui.utils.artifacts import (
     write_bytes,
 )
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.organizations import can_read_chat, can_write_chat
-from open_webui.models.chats import Chats
+from open_webui.utils.organizations import require_chat_read, require_chat_write
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 router = APIRouter()
-
-
-# The checks read only the owner, organization and visibility, so these load
-# just those columns; the full chat can be megabytes.
-def _readable(chat_id: str, user):
-    chat = Chats.get_chat_access_row(chat_id)
-    if not can_read_chat(user, chat):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
-        )
-    return chat
-
-
-def _writable(chat_id: str, user):
-    chat = Chats.get_chat_access_row(chat_id)
-    if not can_write_chat(user, chat):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-    return chat
 
 
 @router.get("/{chat_id}/artifacts")
@@ -70,7 +48,7 @@ async def get_artifacts(
     provenance: bool = True,
     user=Depends(get_verified_user),
 ):
-    await asyncio.to_thread(_readable, chat_id, user)
+    await asyncio.to_thread(require_chat_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
 
 
@@ -78,7 +56,7 @@ async def get_artifacts(
 def get_artifact_content(
     chat_id: str, path: str, user=Depends(get_verified_user)
 ):
-    _readable(chat_id, user)
+    require_chat_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -183,7 +161,7 @@ def _not_modified(request: Request, etag: str, last_modified: str) -> bool:
 def view_html_artifact(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
-    _readable(chat_id, user)
+    require_chat_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -217,7 +195,7 @@ def get_artifact_archive(
     format: str = Query("tar.gz"),
     user=Depends(get_verified_user),
 ):
-    _readable(chat_id, user)
+    require_chat_read(chat_id, user)
     fmt = (format or "tar.gz").lower().strip()
     if fmt not in ("tar.gz", "zip"):
         raise HTTPException(
@@ -257,7 +235,7 @@ async def upload_artifact_archive(
     file: UploadFile = File(...),
     user=Depends(get_verified_user),
 ):
-    await asyncio.to_thread(_writable, chat_id, user)
+    await asyncio.to_thread(require_chat_write, chat_id, user)
     data = await file.read()
     try:
         written = await asyncio.to_thread(extract_sandbox_archive, chat_id, data)
@@ -276,7 +254,7 @@ async def upload_artifact(
     file: UploadFile = File(...),
     user=Depends(get_verified_user),
 ):
-    await asyncio.to_thread(_writable, chat_id, user)
+    await asyncio.to_thread(require_chat_write, chat_id, user)
     data = await file.read()
     try:
         await asyncio.to_thread(write_bytes, chat_id, path, data)
@@ -290,7 +268,7 @@ async def upload_artifact(
 
 @router.get("/{chat_id}/artifacts/zarr/meta")
 def zarr_meta(chat_id: str, path: str, user=Depends(get_verified_user)):
-    _readable(chat_id, user)
+    require_chat_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:

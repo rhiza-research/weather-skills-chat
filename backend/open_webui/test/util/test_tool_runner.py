@@ -21,7 +21,7 @@ class ToolRunnerRoutesTest(IsolatedAsyncioTestCase):
             patch(
                 "open_webui.routers.tool_runner.tool_runner_enabled", return_value=True
             ),
-            patch("open_webui.routers.tool_runner._readable"),
+            patch("open_webui.routers.tool_runner.require_chat_read"),
             patch(
                 "open_webui.utils.skill_k8s_sandbox.runner_status",
                 new_callable=AsyncMock,
@@ -43,7 +43,7 @@ class ToolRunnerRoutesTest(IsolatedAsyncioTestCase):
             patch(
                 "open_webui.routers.tool_runner.tool_runner_enabled", return_value=True
             ),
-            patch("open_webui.routers.tool_runner._readable"),
+            patch("open_webui.routers.tool_runner.require_chat_read"),
             patch(
                 "open_webui.utils.skill_k8s_sandbox.runner_status",
                 new_callable=AsyncMock,
@@ -63,7 +63,7 @@ class ToolRunnerRoutesTest(IsolatedAsyncioTestCase):
             patch(
                 "open_webui.routers.tool_runner.tool_runner_enabled", return_value=True
             ),
-            patch("open_webui.routers.tool_runner._readable"),
+            patch("open_webui.routers.tool_runner.require_chat_read"),
             patch(
                 "open_webui.utils.skill_k8s_sandbox.runner_status",
                 new_callable=AsyncMock,

@@ -27,8 +27,8 @@ class HtmlViewRouteTest(unittest.TestCase):
         (root / "data.csv").write_bytes(b"a,b\n")
         self.patches = [
             patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts),
-            patch.object(artifacts_router, "Chats", MagicMock()),
-            patch.object(artifacts_router, "can_read_chat", return_value=True),
+            patch("open_webui.utils.organizations.Chats", MagicMock()),
+            patch("open_webui.utils.organizations.can_read_chat", return_value=True),
         ]
         for p in self.patches:
             p.start()
@@ -108,7 +108,7 @@ class HtmlViewRouteTest(unittest.TestCase):
         self.assertIn(res.status_code, (400, 404))
 
     def test_a_chat_the_user_cannot_read_is_refused(self):
-        with patch.object(artifacts_router, "can_read_chat", return_value=False):
+        with patch("open_webui.utils.organizations.can_read_chat", return_value=False):
             res = self.client.get("/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html")
         self.assertEqual(res.status_code, 401)
 

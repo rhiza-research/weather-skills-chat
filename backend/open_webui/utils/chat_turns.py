@@ -151,7 +151,7 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
             status.HTTP_400_BAD_REQUEST, detail="Missing assistant message"
         )
 
-    chat = Chats.get_chat_by_id(chat_id)
+    chat = Chats.get_chat_access_row(chat_id)
     if chat is None or not can_write_chat(user, chat):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Access prohibited")
 

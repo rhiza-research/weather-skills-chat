@@ -296,7 +296,7 @@ class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
             chat_id = "chat-zarr"
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
-                patch("open_webui.routers.artifacts._readable"),
+                patch("open_webui.routers.artifacts.require_chat_read"),
             ):
                 root = artifacts / chat_id
                 (root / "intermediate_results").mkdir(parents=True)

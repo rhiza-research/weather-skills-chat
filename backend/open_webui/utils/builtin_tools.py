@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, NamedTuple, Optional
 from pathlib import Path
 import asyncio
 import json
@@ -28,6 +28,34 @@ EMAIL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 EMAIL_ATTACHMENTS_MAX_TOTAL_BYTES = 25 * 1024 * 1024
 EMAIL_ATTACHMENTS_MAX_COUNT = 10
 WEB_SEARCH_PAGE_CHAR_LIMIT = 8000
+
+
+class ChatAccess(NamedTuple):
+    user: Any
+    chat: Any
+    readable: bool
+    writable: bool
+
+
+async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAccess:
+    """The user, the chat's access row, and whether the user may read or change it.
+
+    The lookups, and the organization check for a user who is not the owner,
+    are DB reads, so they run on a worker thread.
+    """
+
+    def check() -> ChatAccess:
+        user = Users.get_user_by_id(user_id) if user_id else None
+        chat = (
+            Chats.get_chat_access_row(chat_id)
+            if chat_id and chat_id != "local"
+            else None
+        )
+        if user is None:
+            return ChatAccess(None, chat, False, False)
+        return ChatAccess(user, chat, can_read_chat(user, chat), can_write_chat(user, chat))
+
+    return await asyncio.to_thread(check)
 
 
 async def create_automation(
@@ -62,12 +90,18 @@ async def create_automation(
             "Try cron like `0 12 * * *` or a phrase like `every day at noon`."
         )
 
-    user = Users.get_user_by_id(__user__.get("id"))
+    # The whole chat: the automation reuses its model. DB reads, so in a thread.
+    def load() -> tuple:
+        user = Users.get_user_by_id(__user__.get("id"))
+        if not user:
+            return None, None, False
+        chat = Chats.get_chat_by_id(chat_id)
+        return user, chat, can_read_chat(user, chat)
+
+    user, chat, readable = await asyncio.to_thread(load)
     if not user:
         return "User not found."
-
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
+    if not readable:
         return "You do not have access to this chat."
 
     recipe = (prompt or "").strip() or prompt_from_messages(__messages__ or [])
@@ -366,9 +400,8 @@ async def copy_intermediate_result(
     if not chat_id or chat_id == "local":
         return "Cannot copy intermediate results in a temporary chat."
 
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_write_chat(user, chat):
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.writable:
         return "You do not have write access to this chat."
 
     try:
@@ -451,9 +484,8 @@ async def create_folder(
     if not chat_id or chat_id == "local":
         return "Cannot create folders in a temporary chat."
 
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_write_chat(user, chat):
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.writable:
         return "You do not have write access to this chat."
 
     try:
@@ -507,12 +539,7 @@ async def list_artifacts(
     if depth is not None and depth < 1:
         return "depth must be at least 1."
 
-    def readable() -> bool:
-        user = Users.get_user_by_id(__user__.get("id"))
-        chat = Chats.get_chat_access_row(chat_id)
-        return can_read_chat(user, chat)
-
-    if not await asyncio.to_thread(readable):
+    if not (await _chat_access(__user__.get("id"), chat_id)).readable:
         return "You do not have access to this chat."
 
     prefix = (path or "").strip().lstrip("/")
@@ -725,9 +752,8 @@ async def display_image(
     if not chat_id or chat_id == "local":
         return "Cannot display an image in a temporary chat."
 
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.readable:
         return "You do not have access to this chat."
 
     rel = (path or "").strip().lstrip("/")
@@ -951,9 +977,9 @@ async def read_artifact(
     if not chat_id or chat_id == "local":
         return "Cannot read artifacts in a temporary chat. Save the chat first."
 
-    user = Users.get_user_by_id(__user__.get("id"))
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
+    access = await _chat_access(__user__.get("id"), chat_id)
+    user = access.user
+    if not access.readable:
         return "You do not have access to this chat."
 
     rel = (path or "").strip().lstrip("/")
@@ -1133,15 +1159,11 @@ async def list_email_recipients(
     __request__=None,
 ) -> str:
     """Return the current user's email and organization member emails allowed for send_email."""
-    user = Users.get_user_by_id(__user__.get("id"))
+    metadata = __metadata__ or {}
+    access = await _chat_access(__user__.get("id"), metadata.get("chat_id"))
+    user, chat = access.user, access.chat
     if not user:
         return "User not found."
-
-    metadata = __metadata__ or {}
-    chat_id = metadata.get("chat_id")
-    chat = (
-        Chats.get_chat_by_id(chat_id) if chat_id and chat_id != "local" else None
-    )
     directory = _email_recipient_directory(user.id, chat)
 
     lines: list[str] = []
@@ -1365,11 +1387,11 @@ async def send_email(
     if __request__ is None:
         return "Request context not available."
 
-    user = Users.get_user_by_id(__user__.get("id"))
+    access = await _chat_access(__user__.get("id"), chat_id)
+    user, chat = access.user, access.chat
     if not user:
         return "User not found."
-    chat = Chats.get_chat_by_id(chat_id)
-    if not can_read_chat(user, chat):
+    if not access.readable:
         return "You do not have access to this chat."
 
     try:
@@ -1867,14 +1889,13 @@ async def execute_code(
         )
 
     if input_paths or output_paths:
-        user = Users.get_user_by_id((__user__ or {}).get("id"))
-        chat = Chats.get_chat_by_id(chat_id) if chat_id else None
+        access = await _chat_access((__user__ or {}).get("id"), chat_id)
         if output_paths:
-            if not can_write_chat(user, chat):
+            if not access.writable:
                 return json.dumps(
                     {"error": "You do not have write access to this chat."}
                 )
-        elif not can_read_chat(user, chat):
+        elif not access.readable:
             return json.dumps({"error": "You do not have access to this chat."})
 
         try:
