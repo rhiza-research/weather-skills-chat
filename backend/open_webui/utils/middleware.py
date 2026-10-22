@@ -2273,7 +2273,8 @@ async def process_chat_response(
                     # is serialized and sent at most every STREAM_EMIT_INTERVAL_S,
                     # and once more when the stream ends: serializing grows with
                     # the message, so sending it per token is quadratic.
-                    last_emit = 0.0
+                    # The first delta always goes out at once.
+                    last_emit = float("-inf")
                     emit_pending = False
                     last_yield = time.monotonic()
 
