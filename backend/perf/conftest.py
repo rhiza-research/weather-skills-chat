@@ -17,3 +17,7 @@ if not os.environ.get("DATABASE_URL"):
 
 # perf_harness sits next to this file, whichever app checkout is on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Importing the app's config runs its database migrations. Do it before any
+# test reads or writes a model, so every test starts from the full schema.
+import open_webui.config  # noqa: E402,F401

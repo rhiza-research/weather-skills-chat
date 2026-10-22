@@ -35,6 +35,25 @@ def app_with(router, prefix: str, user):
     return app
 
 
+def main_app(user):
+    """The full app from main.py, serving every route as ``user``."""
+    import main
+    from open_webui.utils.auth import get_current_user, get_verified_user
+
+    main.app.dependency_overrides[get_verified_user] = lambda: user
+    main.app.dependency_overrides[get_current_user] = lambda: user
+    return main.app
+
+
+def asgi_client(app):
+    """An httpx client that runs ``app`` on the caller's event loop."""
+    import httpx
+
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://perf", timeout=120
+    )
+
+
 async def call_tool(tool, **kwargs):
     """Call a built-in tool the way the chat's tool loop does: through the tool
     dispatcher, which runs a plain (non-async) tool in a worker thread."""

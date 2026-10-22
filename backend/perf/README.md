@@ -18,8 +18,10 @@ of the app.
    real `time.sleep` inside the synchronous call: on the loop it stalls the
    loop, on a worker thread only that thread waits.
    - `db_delay()` sleeps before every SQL statement on any SQLAlchemy engine.
-   - `fs_delay(roots)` slows `os` path calls and `open()` for paths under
-     `roots` only, so pytest and the SQLite file keep local speed.
+   - `fs_delay(roots)` slows `os` path calls, `open()` and reads for paths
+     under `roots` only, so pytest and the SQLite file keep local speed.
+     Calls relative to an open directory (`dir_fd`, as `shutil.rmtree` makes)
+     count too while the delay is active.
 2. **A loop probe.** `perf_harness.LoopProbe` wakes every 5 ms and records how
    late each wake-up is. Lateness is time the loop spent on something else.
 3. **A scenario** drives the app through interfaces that exist across versions:
@@ -51,7 +53,10 @@ From production `chat-timing` logs (2026-10-21):
 | SQL statement | 4 ms | Small lookups average 4-5 ms in prod (`db.Models.get_model_by_id`, 882 calls, 4.6 ms). |
 | JuiceFS metadata call | 0.35 ms | `juicefs.chat_sandbox` makes ~26 metadata calls in 9.4 ms on average. |
 | JuiceFS file open | 1 ms | With both values, listing a 753-entry sandbox takes about as long as prod's 2.1 s. |
+| JuiceFS read | 5 ms per MB | A first read of large files in staging's artifact store ran at 60-256 MB/s. A file a skill just wrote on a runner is a first read on the chat server. |
+| SMTP send | 550 ms | Connect, TLS and EHLO to smtp.resend.com took 293 ms (median) from the staging pod; login and the message add a few ~55 ms round trips. |
 | Langfuse export | 55 ms and 200 ms | `client.flush()` waits for the HTTP export. From the staging pod, an export to Langfuse Cloud takes 55 ms when small and 357 ms for 900 KB. Each generation exports its input; prod requests were 439 KB at the median, about 200 ms. |
+| Langfuse client build | 555 ms | The first traced turn on staging after a restart spent 555 ms in `begin_chat_trace`, later turns 2-3 ms (2026-10-22). In a fresh process on the staging pod, importing the SDK took 955 ms and building the client 154 ms. |
 
 Model streams arrive as one buffered burst: the case that never yields.
 
@@ -60,17 +65,28 @@ Model streams arrive as one buffered burst: the case that never yields.
 | Test | Reproduces |
 |---|---|
 | `test_artifact_listing.py` | Recent-chats artifact prefetch burst (prod restart 07:26 UTC, 2026-10-21); the `list_artifacts` tool on a 753-entry sandbox. |
-| `test_langfuse_flush.py` | A 38-round traced agent turn, with small and median-size Langfuse exports. |
+| `test_langfuse_flush.py` | A 38-round traced agent turn, in app and OpenRouter tracing modes. |
+| `test_langfuse_first_trace.py` | The first traced chat turn after the app starts, which built the Langfuse client. |
 | `test_runner_pack_push.py` | A runner start pushing 9 skill packs from JuiceFS. |
-| `test_access_checks.py` | Message events, chat actions and tool calls checking access on a 1.5 MB chat. |
+| `test_access_checks.py` | Message events checking access on a 1.5 MB chat. |
 | `test_stream_reply.py` | The final reply of a 38-round agent turn, streamed as a buffered burst (prod restart 16:39 UTC, 2026-10-21). |
+| `test_chat_turn.py` | One chat turn end to end through `POST /api/chat/completions`: request preparation, 6 tool rounds and the reply, with a fake provider at the aiohttp level. |
+| `test_chat_open.py` | Opening a 1.5 MB chat (the chat, its tags, its tasks); pin and archive toggles. |
+| `test_chat_history.py` | History patches (message saves) on a 1.5 MB chat. |
+| `test_chat_clone_delete.py` | Cloning and deleting a chat with 300 files. |
+| `test_sandbox_tools.py` | Built-in tools in the sandbox: `create_folder`, copying a Zarr store to intermediate results, `display_image` while the skill writes the plot, `send_email` with attachments. |
+| `test_realtime.py` | A burst of 50 socket connects; chat-committed broadcasts for a 1.5 MB chat. Sending each broadcast to many websocket clients is not modelled. |
+| `test_health.py` | `/health/db` readiness checks while `/health` is probed, with a normal and a slow database. |
+| `test_email_sends.py` | Sending invitations. |
+| `test_page_load.py` | The 19 routes the browser fetches on page load, in 3 tabs, for an account with 60 chats, folders, pins and tags. |
 
-Costs these scenarios show are still on the loop:
+### Fixes not made yet
 
-- Routes that return a whole chat: FastAPI validates and serializes an `async def`
-  route's response on the loop (`test_chat_actions_on_a_large_chat`).
-- `chat_sandbox()` creates and re-owns the sandbox folders on JuiceFS on every
-  path lookup, on the loop in the built-in tools (`test_tool_calls_on_a_large_chat`).
+A scenario whose fix has not landed passes `pending="<fix>"` to
+`check_budget`. Over budget it is reported as an expected failure (xfail), so
+CI stays green and the numbers are still recorded. Once the fix brings it
+within budget the test fails with a reminder: remove `pending` so the budget
+is enforced from then on.
 
 ## Running
 
@@ -102,5 +118,7 @@ A PR that aims to make the backend faster or keep the loop free:
    kind of I/O is involved, with its calibration in the table above.
 2. Sets a budget that the old code fails and the new code meets with margin:
    CI runners are slower than a laptop and the numbers vary from run to run.
+   When the scenario lands before the fix, mark it `pending` until the fix
+   does.
 3. Runs `scripts/perf_compare.py <base> <branch>` and puts the table in the PR
    description.
