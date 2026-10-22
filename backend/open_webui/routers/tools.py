@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -124,6 +125,11 @@ async def _visible_tools(request: Request, user, organization_id: str):
             request.app.state.config.TOOL_SERVER_CONNECTIONS
         )
 
+    # The tool catalog, skill records and access checks are database reads.
+    return await asyncio.to_thread(_visible_tool_list, request, user, organization_id)
+
+
+def _visible_tool_list(request: Request, user, organization_id: str):
     tools = Tools.get_tools()
     for server in request.app.state.TOOL_SERVERS:
         tools.append(

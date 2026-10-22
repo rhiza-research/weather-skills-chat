@@ -83,7 +83,7 @@ def _require_writable_chat(chat_id: str, user):
 
 @router.get("/", response_model=list[ChatTitleIdResponse])
 @router.get("/list", response_model=list[ChatTitleIdResponse])
-async def get_session_user_chat_list(
+def get_session_user_chat_list(
     user=Depends(get_verified_user),
     page: Optional[int] = None,
     organization_id: str = Depends(get_active_organization_id),
@@ -368,7 +368,7 @@ async def get_chats_by_folder_id(folder_id: str, user=Depends(get_verified_user)
 
 
 @router.get("/pinned", response_model=list[ChatResponse])
-async def get_user_pinned_chats(
+def get_user_pinned_chats(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
@@ -410,7 +410,7 @@ async def get_user_archived_chats(user=Depends(get_verified_user)):
 
 
 @router.get("/all/tags", response_model=list[TagModel])
-async def get_all_user_tags(user=Depends(get_verified_user)):
+def get_all_user_tags(user=Depends(get_verified_user)):
     try:
         tags = Tags.get_tags_by_user_id(user.id)
         return tags

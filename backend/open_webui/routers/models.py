@@ -35,7 +35,7 @@ def _visible_models(user, organization_id: str) -> list[ModelUserResponse]:
 
 
 @router.get("/", response_model=list[ModelUserResponse])
-async def get_models(
+def get_models(
     id: Optional[str] = None,
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
