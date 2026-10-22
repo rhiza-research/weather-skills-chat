@@ -1565,22 +1565,17 @@ async def emit_chat_title_if_needed(
         )
 
 
-@dataclass
-class ResponseStart:
-    """The stream filters, and the reply's saved message once its model is stamped."""
-
-    filter_functions: list
-    message: Optional[dict]
-
-
 def start_chat_response(
     model: dict,
     chat_id: Optional[str] = None,
     message_id: Optional[str] = None,
     model_id: str = "",
-) -> ResponseStart:
+) -> tuple[list, Optional[dict]]:
     """Look up the model's stream filters; for a saved reply, stamp the model
     on its message and read the message back.
+
+    Returns the filter functions and the reply's saved message (None without
+    a saved reply).
 
     Synchronous: database reads and a write, so process_chat_response runs
     this in a thread.
@@ -1595,7 +1590,7 @@ def start_chat_response(
             chat_id, message_id, {"model": model_id}, bump_revision=False
         )
         message = Chats.get_message_by_id_and_message_id(chat_id, message_id)
-    return ResponseStart(filter_functions=filter_functions, message=message)
+    return filter_functions, message
 
 
 async def process_chat_response(
@@ -1805,14 +1800,13 @@ async def process_chat_response(
         if waiting_heartbeat is None:
             waiting_heartbeat = WaitingResponseHeartbeat(event_emitter)
 
-        start = await asyncio.to_thread(
+        filter_functions, saved_message = await asyncio.to_thread(
             start_chat_response,
             model,
             metadata["chat_id"],
             metadata["message_id"],
             model_id,
         )
-        filter_functions = start.filter_functions
 
         def split_content_and_whitespace(content):
             content_stripped = content.rstrip()
@@ -2223,7 +2217,7 @@ async def process_chat_response(
 
                 return content, content_blocks, end_flag
 
-            message = start.message
+            message = saved_message
 
             tool_calls = []
 
@@ -3450,9 +3444,7 @@ async def process_chat_response(
         return {"status": True}
 
     else:
-        filter_functions = (
-            await asyncio.to_thread(start_chat_response, model)
-        ).filter_functions
+        filter_functions, _ = await asyncio.to_thread(start_chat_response, model)
 
         # Fallback to the original response
         async def stream_wrapper(original_generator, events):

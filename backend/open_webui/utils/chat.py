@@ -9,7 +9,6 @@ import json
 import inspect
 import uuid
 import asyncio
-from dataclasses import dataclass
 
 from fastapi import Request, status
 from starlette.responses import Response, StreamingResponse, JSONResponse
@@ -378,18 +377,13 @@ async def _generate_chat_completion(
 chat_completion = generate_chat_completion
 
 
-@dataclass
-class OutletStart:
-    """The model a finished reply ran on, and its outlet filters."""
-
-    models: dict
-    model: dict
-    filter_functions: list
-    filter_error: Optional[Exception]  # looking up the filters failed
-
-
-def start_chat_outlet(request: Request, form_data: dict) -> OutletStart:
+def start_chat_outlet(
+    request: Request, form_data: dict
+) -> tuple[dict, dict, list, Optional[Exception]]:
     """Find the reply's model and look up its outlet filters.
+
+    Returns the models, the reply's model, its outlet filter functions, and the
+    error when looking up the filters failed.
 
     Synchronous: an uncached model and the filters are database reads, so
     chat_completed runs this in a thread. Raises Exception("Model not found").
@@ -418,17 +412,13 @@ def start_chat_outlet(request: Request, form_data: dict) -> OutletStart:
         filter_error = None
     except Exception as e:
         filter_functions, filter_error = [], e
-    return OutletStart(
-        models=models,
-        model=model,
-        filter_functions=filter_functions,
-        filter_error=filter_error,
-    )
+    return models, model, filter_functions, filter_error
 
 
 async def chat_completed(request: Request, form_data: dict, user: Any):
-    start = await asyncio.to_thread(start_chat_outlet, request, form_data)
-    models, model = start.models, start.model
+    models, model, filter_functions, filter_error = await asyncio.to_thread(
+        start_chat_outlet, request, form_data
+    )
     data = form_data
 
     try:
@@ -458,12 +448,12 @@ async def chat_completed(request: Request, form_data: dict, user: Any):
     }
 
     try:
-        if start.filter_error is not None:
-            raise start.filter_error
+        if filter_error is not None:
+            raise filter_error
 
         result, _ = await process_filter_functions(
             request=request,
-            filter_functions=start.filter_functions,
+            filter_functions=filter_functions,
             filter_type="outlet",
             form_data=data,
             extra_params=extra_params,

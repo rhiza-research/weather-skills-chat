@@ -18,22 +18,24 @@ class StartChatResponseTest(unittest.TestCase):
         with patch.object(middleware, "Chats", chats), patch.object(
             middleware, "get_sorted_filter_ids", return_value=[]
         ):
-            start = middleware.start_chat_response({"id": "m"}, "chat-1", "msg-1", "m")
+            filters, message = middleware.start_chat_response(
+                {"id": "m"}, "chat-1", "msg-1", "m"
+            )
 
         chats.upsert_message_to_chat_by_id_and_message_id.assert_called_once_with(
             "chat-1", "msg-1", {"model": "m"}, bump_revision=False
         )
-        self.assertEqual(start.message, {"content": "so far"})
-        self.assertEqual(start.filter_functions, [])
+        self.assertEqual(message, {"content": "so far"})
+        self.assertEqual(filters, [])
 
     def test_without_a_saved_reply_only_filters_are_read(self):
         chats = MagicMock()
         with patch.object(middleware, "Chats", chats), patch.object(
             middleware, "get_sorted_filter_ids", return_value=[]
         ):
-            start = middleware.start_chat_response({"id": "m"})
+            _, message = middleware.start_chat_response({"id": "m"})
         chats.upsert_message_to_chat_by_id_and_message_id.assert_not_called()
-        self.assertIsNone(start.message)
+        self.assertIsNone(message)
 
 
 class TurnEndTest(unittest.IsolatedAsyncioTestCase):
@@ -142,8 +144,8 @@ class OutletTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(chat, "get_sorted_filter_ids", side_effect=RuntimeError("db down")), patch.object(
             chat, "remember_catalog_model"
         ):
-            start = chat.start_chat_outlet(request, {"model": "m"})
-        self.assertIsInstance(start.filter_error, RuntimeError)
+            *_, filter_error = chat.start_chat_outlet(request, {"model": "m"})
+        self.assertIsInstance(filter_error, RuntimeError)
 
 
 class SkillRunTest(unittest.IsolatedAsyncioTestCase):
