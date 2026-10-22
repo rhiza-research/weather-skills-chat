@@ -25,6 +25,18 @@ from perf_harness.data import big_chat
 ROUNDS = 6
 REPLY_DELTAS = 120
 FIRST_BYTE_S = 0.05  # provider time to first byte; the loop is free meanwhile
+# Prod (2026-10-21 chat-timing logs): a 164-tool catalog, 65 tools enabled on a
+# chat with their modules already loaded, and 8 saved secrets.
+CATALOG_TOOLS = 164
+CHAT_TOOLS = 65
+SECRETS = 8
+
+TOOL_SOURCE = """
+class Tools:
+    def run_{i}(self, region: str = "") -> str:
+        \"\"\"Run step {i} for a region.\"\"\"
+        return region
+"""
 
 
 class _Content:
@@ -104,6 +116,35 @@ class FakeProvider:
         return False
 
 
+def _tools_and_secrets(app, user) -> list[str]:
+    """The catalog, the chat's enabled tools with warm modules, and saved secrets."""
+    from open_webui.models.secrets import SecretForm, Secrets
+    from open_webui.models.tools import ToolForm, ToolMeta, Tools
+    from open_webui.utils.plugin import load_tool_module_by_id
+
+    tool_ids = []
+    for i in range(CATALOG_TOOLS):
+        tool_id = f"perf_tool_{i}"
+        if Tools.get_tool_by_id(tool_id) is None:
+            spec = {
+                "name": f"run_{i}",
+                "description": f"Run step {i} for a region.",
+                "parameters": {"type": "object", "properties": {"region": {"type": "string"}}},
+            }
+            Tools.insert_new_tool(
+                "perf-admin",
+                ToolForm(id=tool_id, name=f"Step {i}", content=TOOL_SOURCE.format(i=i), meta=ToolMeta()),
+                [spec],
+            )
+        if i < CHAT_TOOLS:
+            tool_ids.append(tool_id)
+            app.state.TOOLS[tool_id], _ = load_tool_module_by_id(tool_id)
+    if len(Secrets.list_for_org(user.id, user.id)) < SECRETS:
+        for i in range(SECRETS):
+            Secrets.insert(user.id, SecretForm(name=f"PERF_KEY_{i}", value="v" * 32))
+    return tool_ids
+
+
 def _optional(stack, target, attribute, value):
     """Patch an attribute when this checkout of the app has it."""
     if hasattr(target, attribute):
@@ -133,6 +174,7 @@ def test_one_chat_turn_with_tool_rounds(tmp_path):
             user.id,
         )
     app = main.app
+    tool_ids = _tools_and_secrets(app, user)
     config = app.state.config
     config.OPENAI_API_BASE_URLS = ["https://provider.test/v1"]
     config.OPENAI_API_KEYS = ["perf-key"]
@@ -159,7 +201,7 @@ def test_one_chat_turn_with_tool_rounds(tmp_path):
         "background_tasks": {},
         "params": {"function_calling": "native"},
         "features": {},
-        "tool_ids": [],
+        "tool_ids": tool_ids,
     }
 
     async def run():
@@ -182,5 +224,9 @@ def test_one_chat_turn_with_tool_rounds(tmp_path):
         stats = asyncio.run(run())
 
     assert FakeProvider.calls == ROUNDS + 1, FakeProvider.calls
-    record(f"chat turn: {ROUNDS} tool rounds + reply, 1.5 MB chat", stats, model_calls=FakeProvider.calls)
+    record(
+        f"chat turn: {ROUNDS} tool rounds + reply, 1.5 MB chat, {CHAT_TOOLS} tools, {SECRETS} secrets",
+        stats,
+        model_calls=FakeProvider.calls,
+    )
     check_budget(stats, max_lag_ms=50, blocked_pct=5, pending="#4 per-message and per-round prep, #6 chat load logging")
