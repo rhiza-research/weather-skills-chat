@@ -111,7 +111,7 @@ class UnavailableToolTest(unittest.IsolatedAsyncioTestCase):
         content = await self._tool_result("plot")
         self.assertEqual(content, mw.unavailable_tool_message("plot"))
         self.assertIn("`plot` is not available", content)
-        self.assertIn("+ menu", content)
+        self.assertIn("wrench button", content)
 
     async def test_offered_tool_still_runs(self):
         self.assertEqual(await self._tool_result("echo"), "ok")

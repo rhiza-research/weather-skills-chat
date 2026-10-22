@@ -197,9 +197,9 @@ def unavailable_tool_message(tool_name: str) -> str:
     return (
         f"Error: {name} is not available for this message, so it did not run. "
         "Do not call it again in this reply. Tell the user it is not turned on "
-        "for this chat: they can turn it on in the + menu next to the message "
-        "box and send their message again. If it is not listed there, an "
-        "organization admin has to turn it on first."
+        "for this chat: they can turn it on in the tools list under the wrench "
+        "button next to the message box and send their message again. If it "
+        "is not listed there, an organization admin has to turn it on first."
     )
 
 
