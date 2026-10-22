@@ -66,7 +66,7 @@ class FollowupRefusedTest(unittest.IsolatedAsyncioTestCase):
         self.user = SimpleNamespace(
             id="u1", email="u@example.com", name="U", role="user"
         )
-        self.save_final_reply = AsyncMock(return_value=True)
+        self.save_final_reply = AsyncMock(return_value=1)
 
         patches = [
             patch.object(mw, "get_event_emitter", return_value=emit),

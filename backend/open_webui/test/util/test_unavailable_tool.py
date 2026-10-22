@@ -84,7 +84,7 @@ class UnavailableToolTest(unittest.IsolatedAsyncioTestCase):
             patch.object(mw, "generate_chat_completion", self.followup),
             patch(
                 "open_webui.utils.chat_realtime.save_final_reply",
-                AsyncMock(return_value=True),
+                AsyncMock(return_value=1),
             ),
         ]
         for p in patches:

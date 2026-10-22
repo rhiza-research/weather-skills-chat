@@ -577,14 +577,16 @@ REPLY_SAVE_FAILED_MESSAGE = (
 FINAL_SAVE_RETRY_SECONDS = (0.5, 2.0)
 
 
-async def save_final_reply(chat_id: str, message_id: str, patch: dict) -> bool:
+async def save_final_reply(chat_id: str, message_id: str, patch: dict) -> Optional[int]:
     """Save a finished reply, with its pending streamed parts, retrying a few times.
 
-    Never raises. False means every attempt failed; the caller tells the user
-    with REPLY_SAVE_FAILED_MESSAGE instead of reporting a failed generation.
+    Returns the chat revision the save produced, which the client adopts from
+    the completion event; 0 when there is no saved chat to write. Never
+    raises. None means every attempt failed; the caller tells the user with
+    REPLY_SAVE_FAILED_MESSAGE instead of reporting a failed generation.
     """
     if not chat_id or chat_id == "local" or not message_id:
-        return True
+        return 0
     key = (chat_id, message_id)
     task = _update_tasks.pop(key, None)
     if task is not None and task is not asyncio.current_task() and not task.done():
@@ -594,10 +596,10 @@ async def save_final_reply(chat_id: str, message_id: str, patch: dict) -> bool:
     attempts = len(FINAL_SAVE_RETRY_SECONDS) + 1
     for attempt in range(attempts):
         try:
-            await asyncio.to_thread(
+            chat = await asyncio.to_thread(
                 Chats.save_reply, chat_id, message_id, patch, updates
             )
-            return True
+            return chat_revision(chat) if chat is not None else 0
         except Exception:
             log.warning(
                 "Saving reply failed (attempt %s of %s) chat_id=%s message_id=%s",
@@ -615,7 +617,7 @@ async def save_final_reply(chat_id: str, message_id: str, patch: dict) -> bool:
         chat_id,
         message_id,
     )
-    return False
+    return None
 
 
 def register() -> None:

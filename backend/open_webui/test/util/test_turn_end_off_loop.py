@@ -111,6 +111,12 @@ class TurnEndTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await middleware.completion_revision("chat-1"), 7)
         self.assertIsNot(ran_on["thread"], loop_thread)
 
+    async def test_the_revision_the_save_wrote_is_used_without_a_read(self):
+        chats = MagicMock()
+        with patch.object(middleware, "Chats", chats):
+            self.assertEqual(await middleware.completion_revision("chat-1", 7), 7)
+        chats.get_chat_revision.assert_not_called()
+
 
 class OutletTest(unittest.IsolatedAsyncioTestCase):
     async def test_model_and_filters_are_looked_up_on_a_worker_thread(self):

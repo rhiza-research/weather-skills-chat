@@ -114,7 +114,7 @@ class StreamEmitTest(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(mw, "get_sorted_filter_ids", return_value=[]),
             patch.object(mw, "get_active_status_by_user_id", return_value=True),
-            patch("open_webui.utils.chat_realtime.save_final_reply", AsyncMock(return_value=True)),
+            patch("open_webui.utils.chat_realtime.save_final_reply", AsyncMock(return_value=1)),
         ]
         for p in patches:
             p.start()

@@ -160,7 +160,7 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
                 patch(
                     "open_webui.utils.chat_realtime.save_final_reply",
                     new_callable=AsyncMock,
-                    return_value=True,
+                    return_value=1,
                 )
             )
             stack.enter_context(

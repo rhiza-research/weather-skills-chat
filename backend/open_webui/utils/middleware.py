@@ -179,9 +179,17 @@ def repair_unclosed_details(content: str) -> str:
     return "".join(out)
 
 
-async def completion_revision(chat_id: str | None) -> int:
+async def completion_revision(
+    chat_id: str | None, written: Optional[int] = None
+) -> int:
     """Revision after the turn's transcript write. The client adopts this
-    from the same completion event that unlocks the next send."""
+    from the same completion event that unlocks the next send.
+
+    written is the revision the turn's final save produced, so no write
+    landing after it can be adopted in its place. The revision is read back
+    only when the turn made no final save (realtime saves) or it failed."""
+    if written is not None:
+        return written
     if not chat_id:
         return 0
     try:
@@ -1721,11 +1729,12 @@ async def process_chat_response(
                         save_final_reply,
                     )
 
-                    saved = await save_final_reply(
+                    revision = await save_final_reply(
                         metadata["chat_id"],
                         metadata["message_id"],
                         {"content": content, "done": True},
                     )
+                    saved = revision is not None
 
                     await event_emitter(
                         {
@@ -1734,7 +1743,9 @@ async def process_chat_response(
                                 "done": True,
                                 "content": content,
                                 "title": title,
-                                "revision": await completion_revision(metadata["chat_id"]),
+                                "revision": await completion_revision(
+                                    metadata["chat_id"], revision
+                                ),
                                 **(
                                     {}
                                     if saved
@@ -3303,19 +3314,22 @@ async def process_chat_response(
                     reply["error"] = {"content": followup_error}
                 turn.finish_reply(metadata["message_id"], final_content)
 
-                saved = True
+                saved, revision = True, None
                 if not ENABLE_REALTIME_CHAT_SAVE or followup_error:
                     # A failed save is reported on the reply, not as a failed
                     # generation: the model finished, the database did not.
-                    saved = await save_final_reply(
+                    revision = await save_final_reply(
                         metadata["chat_id"], metadata["message_id"], reply
                     )
+                    saved = revision is not None
 
                 data = {
                     "done": True,
                     "content": final_content,
                     "title": title,
-                    "revision": await completion_revision(metadata["chat_id"]),
+                    "revision": await completion_revision(
+                        metadata["chat_id"], revision
+                    ),
                 }
                 if followup_error:
                     data["error"] = {"content": followup_error}
@@ -3357,18 +3371,21 @@ async def process_chat_response(
                     save_final_reply,
                 )
 
-                saved = await save_final_reply(
+                revision = await save_final_reply(
                     metadata["chat_id"],
                     metadata["message_id"],
                     {"content": cancelled_content, "done": True},
                 )
+                saved = revision is not None
                 await event_emitter(
                     {
                         "type": "chat:completion",
                         "data": {
                             "content": cancelled_content,
                             "done": True,
-                            "revision": await completion_revision(metadata["chat_id"]),
+                            "revision": await completion_revision(
+                                metadata["chat_id"], revision
+                            ),
                             **(
                                 {}
                                 if saved
@@ -3403,7 +3420,7 @@ async def process_chat_response(
                 }
                 from open_webui.utils.chat_realtime import save_final_reply
 
-                await save_final_reply(
+                revision = await save_final_reply(
                     metadata["chat_id"],
                     metadata["message_id"],
                     {"content": failed_content, "done": True, "error": error_payload},
@@ -3416,7 +3433,9 @@ async def process_chat_response(
                                 "content": failed_content,
                                 "done": True,
                                 "error": error_payload,
-                                "revision": await completion_revision(metadata["chat_id"]),
+                                "revision": await completion_revision(
+                                    metadata["chat_id"], revision
+                                ),
                             },
                         }
                     )
