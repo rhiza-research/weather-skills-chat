@@ -517,7 +517,7 @@ async def get_user_chat_list_by_tag_name(
 
 
 @router.get("/{id}", response_model=Optional[ChatResponse])
-async def get_chat_by_id(id: str, user=Depends(get_verified_user)):
+def get_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     return ChatResponse(**chat.model_dump())
 
@@ -745,7 +745,7 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
 
 
 @router.get("/{id}/pinned", response_model=Optional[bool])
-async def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
+def get_pinned_status_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     return chat.pinned
 
@@ -1005,7 +1005,7 @@ async def update_chat_folder_id_by_id(
 
 
 @router.get("/{id}/tags", response_model=list[TagModel])
-async def get_chat_tags_by_id(id: str, user=Depends(get_verified_user)):
+def get_chat_tags_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_readable_chat(id, user)
     if chat:
         tags = chat.meta.get("tags", [])
