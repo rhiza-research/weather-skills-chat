@@ -37,25 +37,26 @@ class ChatAccess(NamedTuple):
     writable: bool
 
 
-async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAccess:
+def _load_chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAccess:
     """The user, the chat's access row, and whether the user may read or change it.
 
     The lookups, and the organization check for a user who is not the owner,
-    are DB reads, so they run on a worker thread.
+    are DB reads: call from a worker thread.
     """
+    user = Users.get_user_by_id(user_id) if user_id else None
+    chat = (
+        Chats.get_chat_access_row(chat_id)
+        if chat_id and chat_id != "local"
+        else None
+    )
+    if user is None:
+        return ChatAccess(None, chat, False, False)
+    return ChatAccess(user, chat, can_read_chat(user, chat), can_write_chat(user, chat))
 
-    def check() -> ChatAccess:
-        user = Users.get_user_by_id(user_id) if user_id else None
-        chat = (
-            Chats.get_chat_access_row(chat_id)
-            if chat_id and chat_id != "local"
-            else None
-        )
-        if user is None:
-            return ChatAccess(None, chat, False, False)
-        return ChatAccess(user, chat, can_read_chat(user, chat), can_write_chat(user, chat))
 
-    return await asyncio.to_thread(check)
+async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAccess:
+    """_load_chat_access for tools that stay async."""
+    return await asyncio.to_thread(_load_chat_access, user_id, chat_id)
 
 
 async def create_automation(
@@ -385,7 +386,7 @@ SECRETS_PAGE_SPEC = {
 }
 
 
-async def copy_intermediate_result(
+def copy_intermediate_result(
     path: str,
     direction: str,
     destination: Optional[str] = None,
@@ -400,7 +401,7 @@ async def copy_intermediate_result(
     if not chat_id or chat_id == "local":
         return "Cannot copy intermediate results in a temporary chat."
 
-    access = await _chat_access(__user__.get("id"), chat_id)
+    access = _load_chat_access(__user__.get("id"), chat_id)
     if not access.writable:
         return "You do not have write access to this chat."
 
@@ -471,7 +472,7 @@ COPY_INTERMEDIATE_RESULT_SPEC = {
 }
 
 
-async def create_folder(
+def create_folder(
     path: str,
     __user__: dict = {},
     __metadata__: dict = None,
@@ -484,7 +485,7 @@ async def create_folder(
     if not chat_id or chat_id == "local":
         return "Cannot create folders in a temporary chat."
 
-    access = await _chat_access(__user__.get("id"), chat_id)
+    access = _load_chat_access(__user__.get("id"), chat_id)
     if not access.writable:
         return "You do not have write access to this chat."
 
@@ -522,7 +523,7 @@ CREATE_FOLDER_SPEC = {
 }
 
 
-async def list_artifacts(
+def list_artifacts(
     path: Optional[str] = None,
     depth: Optional[int] = None,
     provenance: bool = False,
@@ -530,7 +531,7 @@ async def list_artifacts(
     __metadata__: dict = None,
 ) -> str:
     """List files and folders in the current chat artifact sandbox."""
-    from open_webui.utils.artifacts import list_artifacts_async, resolve_in_sandbox
+    from open_webui.utils.artifacts import list_artifacts as _list, resolve_in_sandbox
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
@@ -539,7 +540,7 @@ async def list_artifacts(
     if depth is not None and depth < 1:
         return "depth must be at least 1."
 
-    if not (await _chat_access(__user__.get("id"), chat_id)).readable:
+    if not _load_chat_access(__user__.get("id"), chat_id).readable:
         return "You do not have access to this chat."
 
     prefix = (path or "").strip().lstrip("/")
@@ -558,14 +559,12 @@ async def list_artifacts(
                 return f"`{prefix}` (file, {target.stat().st_size} bytes)"
             return None
 
-        reply = await asyncio.to_thread(check_prefix)
+        reply = check_prefix()
         if reply is not None:
             return reply
 
     try:
-        entries = await list_artifacts_async(
-            chat_id, path=prefix or None, depth=depth, provenance=provenance
-        )
+        entries = _list(chat_id, path=prefix or None, depth=depth, provenance=provenance)
     except Exception as e:
         return f"Failed to list artifacts: {e}"
 
@@ -692,7 +691,7 @@ def refresh_sandbox_lookup(path: Path) -> None:
         pass
 
 
-async def wait_for_sandbox_image(
+def wait_for_sandbox_image(
     target: Path,
     suffix: str,
     *,
@@ -711,10 +710,10 @@ async def wait_for_sandbox_image(
             pass
         if time.monotonic() >= deadline:
             return None
-        await asyncio.sleep(interval_s)
+        time.sleep(interval_s)
 
 
-async def wait_for_sandbox_html(
+def wait_for_sandbox_html(
     target: Path,
     *,
     timeout_s: float = DISPLAY_IMAGE_WAIT_S,
@@ -734,10 +733,10 @@ async def wait_for_sandbox_html(
             pass
         if time.monotonic() >= deadline:
             return False
-        await asyncio.sleep(interval_s)
+        time.sleep(interval_s)
 
 
-async def display_image(
+def display_image(
     path: str,
     __user__: dict = {},
     __metadata__: dict = None,
@@ -752,7 +751,7 @@ async def display_image(
     if not chat_id or chat_id == "local":
         return "Cannot display an image in a temporary chat."
 
-    access = await _chat_access(__user__.get("id"), chat_id)
+    access = _load_chat_access(__user__.get("id"), chat_id)
     if not access.readable:
         return "You do not have access to this chat."
 
@@ -767,7 +766,7 @@ async def display_image(
 
     if target.suffix.lower() in DISPLAY_HTML_SUFFIXES:
         # Shown to the user in a sandboxed frame; nothing is sent to the model.
-        if not await wait_for_sandbox_html(
+        if not wait_for_sandbox_html(
             target, timeout_s=DISPLAY_IMAGE_WAIT_S, interval_s=DISPLAY_IMAGE_POLL_S
         ):
             return f"File not found: `{rel}`"
@@ -784,7 +783,7 @@ async def display_image(
             f"an .html page (got `{target.suffix or 'no extension'}`)."
         )
 
-    data = await wait_for_sandbox_image(target, target.suffix)
+    data = wait_for_sandbox_image(target, target.suffix)
     if data is None:
         return f"Image not found: `{rel}`"
 
@@ -908,6 +907,15 @@ async def _insert_rag_for_file(
 async def _rag_from_artifact_file(
     request, user, rel: str, target: Path, messages: list, model_id: Optional[str]
 ) -> str:
+    # Parsing the file and embedding it are slow and synchronous.
+    file_item = await asyncio.to_thread(_artifact_file_item, request, user, rel, target)
+    if isinstance(file_item, str):
+        return file_item
+    return await _insert_rag_for_file(request, user, file_item, messages, model_id)
+
+
+def _artifact_file_item(request, user, rel: str, target: Path):
+    """The parsed file as a RAG file item, or a message when it has no text."""
     from langchain_core.documents import Document
 
     from open_webui.routers.retrieval import save_docs_to_vector_db
@@ -955,9 +963,7 @@ async def _rag_from_artifact_file(
             "id": collection_name,
             "collection_name": collection_name,
         }
-    return await _insert_rag_for_file(
-        request, user, file_item, messages, model_id
-    )
+    return file_item
 
 
 async def read_artifact(
@@ -986,34 +992,39 @@ async def read_artifact(
     if not rel:
         return "Provide a relative path to a file in the chat sandbox."
 
-    try:
-        target = resolve_in_sandbox(chat_id, rel)
-    except Exception as e:
-        return f"Invalid path: {e}"
+    # The file target, or why it cannot be read.
+    def locate():
+        try:
+            target = resolve_in_sandbox(chat_id, rel)
+        except Exception as e:
+            return None, f"Invalid path: {e}"
+        refresh_sandbox_lookup(target)
+        if not target.exists():
+            return None, f"Path not found: `{rel}`"
+        kind = classify_entry(target)
+        if kind == "zarr":
+            return None, (
+                f"`{rel}` is a Zarr store. Do not send it with read_artifact; "
+                "use a skill to read or plot it."
+            )
+        if target.is_dir() or kind == "directory":
+            return None, (
+                f"`{rel}` is a folder. List it with list_artifacts, or pass a "
+                "file path to read_artifact."
+            )
+        return target, None
 
-    refresh_sandbox_lookup(target)
-    if not target.exists():
-        return f"Path not found: `{rel}`"
-
-    kind = classify_entry(target)
-    if kind == "zarr":
-        return (
-            f"`{rel}` is a Zarr store. Do not send it with read_artifact; "
-            "use a skill to read or plot it."
-        )
-    if target.is_dir() or kind == "directory":
-        return (
-            f"`{rel}` is a folder. List it with list_artifacts, or pass a "
-            "file path to read_artifact."
-        )
+    target, problem = await asyncio.to_thread(locate)
+    if problem:
+        return problem
 
     denied = await _user_approved_artifact_read(rel, __event_call__)
     if denied:
         return denied
 
     if DISPLAY_IMAGE_TYPES.get(target.suffix.lower()):
-        shown = await display_image(
-            path=rel, __user__=__user__, __metadata__=__metadata__
+        shown = await asyncio.to_thread(
+            display_image, path=rel, __user__=__user__, __metadata__=__metadata__
         )
         if isinstance(shown, list) and shown:
             shown = [
@@ -1370,7 +1381,7 @@ def _send_via_smtp(
         return False, str(e)
 
 
-async def send_email(
+def send_email(
     to: list[str] | str,
     subject: str,
     body: str,
@@ -1387,7 +1398,7 @@ async def send_email(
     if __request__ is None:
         return "Request context not available."
 
-    access = await _chat_access(__user__.get("id"), chat_id)
+    access = _load_chat_access(__user__.get("id"), chat_id)
     user, chat = access.user, access.chat
     if not user:
         return "User not found."
@@ -1428,9 +1439,7 @@ async def send_email(
     if not from_email:
         return "Email delivery is not configured (missing EMAIL_TOOL_FROM_EMAIL)."
 
-    share_link = await asyncio.to_thread(
-        _ensure_chat_share_link, chat_id, getattr(config, "WEBUI_URL", "")
-    )
+    share_link = _ensure_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
     footer = (
         "\n\n---\n"
         f"This email was generated from Weather Skills Chat by user {user.email}. "
@@ -1450,8 +1459,7 @@ async def send_email(
         return str(e)
 
     sender_name = f"Weather Skills Chat ({(user.name or user.email).strip()})"
-    ok, detail = await asyncio.to_thread(
-        _send_via_smtp,
+    ok, detail = _send_via_smtp(
         host=smtp_host,
         port=smtp_port,
         username=smtp_user,
@@ -1848,6 +1856,35 @@ def _as_path_list(value) -> list[str]:
     return paths
 
 
+def _check_code_artifacts(chat_id, input_paths, output_paths):
+    """Normalized input and output paths, or why the inputs cannot be copied."""
+    from open_webui.utils.artifacts import (
+        EXECUTE_CODE_MAX_ARCHIVE_BYTES,
+        normalize_sandbox_relpath,
+        resolve_in_sandbox,
+        sandbox_tree_size,
+    )
+
+    try:
+        input_paths = [normalize_sandbox_relpath(p) for p in input_paths]
+        output_paths = [normalize_sandbox_relpath(p) for p in output_paths]
+        total = 0
+        for rel in input_paths:
+            target = resolve_in_sandbox(chat_id, rel)
+            if not target.exists():
+                return input_paths, output_paths, f"Artifact not found: {rel}"
+            total += sandbox_tree_size(target)
+            if total > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
+                return (
+                    input_paths,
+                    output_paths,
+                    f"Input files exceed the {EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit",
+                )
+    except ValueError as e:
+        return input_paths, output_paths, str(e)
+    return input_paths, output_paths, None
+
+
 async def execute_code(
     code: str,
     inputs: Optional[list[str]] = None,
@@ -1898,33 +1935,12 @@ async def execute_code(
         elif not access.readable:
             return json.dumps({"error": "You do not have access to this chat."})
 
-        try:
-            from open_webui.utils.artifacts import (
-                EXECUTE_CODE_MAX_ARCHIVE_BYTES,
-                normalize_sandbox_relpath,
-                resolve_in_sandbox,
-                sandbox_tree_size,
-            )
-
-            input_paths = [normalize_sandbox_relpath(p) for p in input_paths]
-            output_paths = [normalize_sandbox_relpath(p) for p in output_paths]
-            total = 0
-            for rel in input_paths:
-                target = resolve_in_sandbox(chat_id, rel)
-                if not target.exists():
-                    return json.dumps({"error": f"Artifact not found: {rel}"})
-                total += sandbox_tree_size(target)
-                if total > EXECUTE_CODE_MAX_ARCHIVE_BYTES:
-                    return json.dumps(
-                        {
-                            "error": (
-                                "Input files exceed the "
-                                f"{EXECUTE_CODE_MAX_ARCHIVE_BYTES} byte limit"
-                            )
-                        }
-                    )
-        except ValueError as e:
-            return json.dumps({"error": str(e)})
+        # Sizing the inputs walks every file on JuiceFS.
+        input_paths, output_paths, problem = await asyncio.to_thread(
+            _check_code_artifacts, chat_id, input_paths, output_paths
+        )
+        if problem:
+            return json.dumps({"error": problem})
 
     try:
         if engine == "pyodide":
@@ -2002,8 +2018,8 @@ async def execute_code(
                 }
             )
 
-        stdout = _rewrite_png_data_uris(output.get("stdout") or "")
-        result = _rewrite_png_data_uris(output.get("result") or "")
+        stdout = await asyncio.to_thread(_rewrite_png_data_uris, output.get("stdout") or "")
+        result = await asyncio.to_thread(_rewrite_png_data_uris, output.get("result") or "")
         stderr = output.get("stderr") or ""
         payload = {
             "status": "error" if stderr else "success",

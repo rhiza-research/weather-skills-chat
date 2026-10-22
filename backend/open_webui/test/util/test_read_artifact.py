@@ -197,7 +197,6 @@ class ReadArtifactToolTest(unittest.IsolatedAsyncioTestCase):
                 patch("open_webui.utils.builtin_tools.can_read_chat", return_value=True),
                 patch(
                     "open_webui.utils.builtin_tools.display_image",
-                    new_callable=AsyncMock,
                     return_value=["Showing `photo.png`.", "data:image/png;base64,fromdisk"],
                 ) as display,
             ):
@@ -220,8 +219,8 @@ class ReadArtifactToolTest(unittest.IsolatedAsyncioTestCase):
                     "data:image/png;base64,fromdisk",
                 ],
             )
-            display.assert_awaited_once()
-            self.assertEqual(display.await_args.kwargs["path"], "photo.png")
+            display.assert_called_once()
+            self.assertEqual(display.call_args.kwargs["path"], "photo.png")
 
     async def test_approved_csv_indexes_from_sandbox(self):
         with tempfile.TemporaryDirectory() as tmp:

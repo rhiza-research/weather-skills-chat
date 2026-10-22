@@ -1,9 +1,11 @@
 import asyncio
+import functools
 import io
 import json
 import logging
 import os
 import shutil
+import stat
 import tarfile
 import time
 import zipfile
@@ -65,17 +67,44 @@ def make_sandbox_dir(path: Path, root: Path) -> Path:
     return path
 
 
+@functools.lru_cache(maxsize=8)
+def _artifacts_root(artifacts_dir: Path) -> Path:
+    """ARTIFACTS_DIR with symlinks resolved, once per process, not per lookup."""
+    return artifacts_dir.resolve()
+
+
+def _sandbox_prepared(root: Path) -> bool:
+    """One stat: intermediate_results exists with the runner's owner and mode.
+
+    chat_sandbox creates it last, so it also means the chat folder is ready.
+    Sandboxes made before folders were re-owned fail this and are repaired.
+    """
+    try:
+        info = os.stat(root / INTERMEDIATE_RESULTS_DIRNAME)
+    except OSError:
+        return False
+    return (
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == SANDBOX_OWNER_UID
+        and stat.S_IMODE(info.st_mode) == SANDBOX_DIR_MODE
+    )
+
+
 def chat_sandbox(chat_id: str) -> Path:
     t0 = time.perf_counter()
-    root = (ARTIFACTS_DIR / chat_id).resolve()
-    existed = root.exists()
-    make_sandbox_dir(root, root)
-    make_sandbox_dir(root / INTERMEDIATE_RESULTS_DIRNAME, root)
+    chat_id = str(chat_id)
+    if not chat_id or "/" in chat_id or "\\" in chat_id or chat_id in (".", ".."):
+        raise ValueError("Invalid chat id")
+    root = _artifacts_root(ARTIFACTS_DIR) / chat_id
+    prepared = _sandbox_prepared(root)
+    if not prepared:
+        make_sandbox_dir(root, root)
+        make_sandbox_dir(root / INTERMEDIATE_RESULTS_DIRNAME, root)
     log_timing(
         "juicefs.chat_sandbox",
         time.perf_counter() - t0,
         chat_id=chat_id,
-        existed=existed,
+        prepared=prepared,
     )
     return root
 
