@@ -394,7 +394,7 @@ async def set_banners(
 
 
 @router.get("/banners", response_model=list[BannerModel])
-async def get_banners(
+def get_banners(
     request: Request,
     user=Depends(get_verified_user),
 ):

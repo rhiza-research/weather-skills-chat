@@ -20,7 +20,7 @@ CREDIT_REQUEST_FAILED = "Your request could not be sent. Please try again later.
 
 
 @router.get("/me", response_model=UsageMeModel)
-async def get_my_usage(
+def get_my_usage(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):

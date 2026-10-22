@@ -69,7 +69,7 @@ class SessionUserResponse(Token, UserResponse):
 
 
 @router.get("/", response_model=SessionUserResponse)
-async def get_session_user(
+def get_session_user(
     request: Request, response: Response, user=Depends(get_current_user)
 ):
     expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)

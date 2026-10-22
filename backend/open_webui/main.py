@@ -1128,7 +1128,7 @@ if audit_level != AuditLevel.NONE:
 
 
 @app.get("/api/models")
-async def get_models(
+def get_models(
     request: Request,
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
@@ -1571,7 +1571,7 @@ def list_tasks_by_chat_id_endpoint(chat_id: str, user=Depends(get_verified_user)
 
 
 @app.get("/api/app_config")
-async def get_app_config():
+def get_app_config():
     onboarding = Users.get_num_users() == 0
     return {
         **({"onboarding": True} if onboarding else {}),
@@ -1600,7 +1600,7 @@ async def get_app_config():
 
 
 @app.get("/api/v1/user_config")
-async def get_user_config(user=Depends(get_verified_user)):
+def get_user_config(user=Depends(get_verified_user)):
     return {
         "features": {
             "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,
