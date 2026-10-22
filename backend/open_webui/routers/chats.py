@@ -674,10 +674,13 @@ async def send_chat_message_event_by_id(
 ############################
 
 
-@router.delete("/{id}", response_model=bool)
-async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified_user)):
+def _clear_chat_for_delete(id: str, user, user_permissions):
+    """Check the delete is allowed, then drop the chat's tags, automation links
+    and files, and return the chat. Reads the database and walks the files on
+    JuiceFS: run in a thread.
+    """
     if user.role != "admin" and not has_permission(
-        user.id, "chat.delete", request.app.state.config.USER_PERMISSIONS
+        user.id, "chat.delete", user_permissions
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -702,6 +705,14 @@ async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified
         delete_sandbox(id)
     except Exception:
         log.exception("Failed to delete chat artifacts")
+    return chat
+
+
+@router.delete("/{id}", response_model=bool)
+async def delete_chat_by_id(request: Request, id: str, user=Depends(get_verified_user)):
+    chat = await asyncio.to_thread(
+        _clear_chat_for_delete, id, user, request.app.state.config.USER_PERMISSIONS
+    )
 
     from open_webui.utils.chat_realtime import publish_chat_removed
 
@@ -763,7 +774,7 @@ class CloneForm(BaseModel):
 async def clone_chat_by_id(
     form_data: CloneForm, id: str, user=Depends(get_verified_user)
 ):
-    chat = _require_readable_chat(id, user)
+    chat = await asyncio.to_thread(_require_readable_chat, id, user)
     updated_chat = {
         **chat.chat,
         "originalChatId": chat.id,
@@ -786,7 +797,8 @@ async def clone_chat_by_id(
     try:
         from open_webui.utils.artifacts import copy_sandbox
 
-        copy_sandbox(source_id, chat.id)
+        # Copies every file of the chat on JuiceFS.
+        await asyncio.to_thread(copy_sandbox, source_id, chat.id)
     except Exception:
         log.exception("Failed to copy chat artifacts")
     return ChatResponse(**chat.model_dump())
@@ -801,9 +813,9 @@ async def clone_chat_by_id(
 async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 
     if user.role == "admin":
-        chat = Chats.get_chat_by_id(id)
+        chat = await asyncio.to_thread(Chats.get_chat_by_id, id)
     else:
-        chat = Chats.get_chat_by_share_id(id)
+        chat = await asyncio.to_thread(Chats.get_chat_by_share_id, id)
 
     if chat:
         updated_chat = {
@@ -820,7 +832,7 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
         try:
             from open_webui.utils.artifacts import copy_sandbox
 
-            copy_sandbox(source_id, chat.id)
+            await asyncio.to_thread(copy_sandbox, source_id, chat.id)
         except Exception:
             log.exception("Failed to copy shared chat artifacts")
         return ChatResponse(**chat.model_dump())
