@@ -56,6 +56,7 @@ From production `chat-timing` logs (2026-10-21):
 | JuiceFS read | 5 ms per MB | A first read of large files in staging's artifact store ran at 60-256 MB/s. A file a skill just wrote on a runner is a first read on the chat server. |
 | SMTP send | 550 ms | Connect, TLS and EHLO to smtp.resend.com took 293 ms (median) from the staging pod; login and the message add a few ~55 ms round trips. |
 | Langfuse export | 55 ms and 200 ms | `client.flush()` waits for the HTTP export. From the staging pod, an export to Langfuse Cloud takes 55 ms when small and 357 ms for 900 KB. Each generation exports its input; prod requests were 439 KB at the median, about 200 ms. |
+| Langfuse client build | 555 ms | The first traced turn on staging after a restart spent 555 ms in `begin_chat_trace`, later turns 2-3 ms (2026-10-22). In a fresh process on the staging pod, importing the SDK took 955 ms and building the client 154 ms. |
 
 Model streams arrive as one buffered burst: the case that never yields.
 
@@ -65,6 +66,7 @@ Model streams arrive as one buffered burst: the case that never yields.
 |---|---|
 | `test_artifact_listing.py` | Recent-chats artifact prefetch burst (prod restart 07:26 UTC, 2026-10-21); the `list_artifacts` tool on a 753-entry sandbox. |
 | `test_langfuse_flush.py` | A 38-round traced agent turn, in app and OpenRouter tracing modes. |
+| `test_langfuse_first_trace.py` | The first traced chat turn after the app starts, which built the Langfuse client. |
 | `test_runner_pack_push.py` | A runner start pushing 9 skill packs from JuiceFS. |
 | `test_access_checks.py` | Message events checking access on a 1.5 MB chat. |
 | `test_stream_reply.py` | The final reply of a 38-round agent turn, streamed as a buffered burst (prod restart 16:39 UTC, 2026-10-21). |
