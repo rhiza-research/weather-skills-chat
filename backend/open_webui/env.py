@@ -570,6 +570,18 @@ OTEL_TRACES_SAMPLER = os.environ.get(
 ).lower()
 
 ####################################
+# LOOP WATCHDOG
+####################################
+
+LOOP_WATCHDOG_ENABLED = os.getenv("LOOP_WATCHDOG_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# The event loop held this long without yielding is logged as a stall.
+LOOP_WATCHDOG_STALL_MS = int(os.getenv("LOOP_WATCHDOG_STALL_MS", "250") or "250")
+
+####################################
 # LANGFUSE
 ####################################
 
