@@ -55,6 +55,7 @@ ARG USE_OLLAMA
 ARG USE_CUDA_VER
 ARG USE_EMBEDDING_MODEL
 ARG USE_RERANKING_MODEL
+ARG USE_TIKTOKEN_ENCODING_NAME
 ARG UID
 ARG GID
 
@@ -68,13 +69,8 @@ ENV ENV=prod \
     USE_EMBEDDING_MODEL_DOCKER=${USE_EMBEDDING_MODEL} \
     USE_RERANKING_MODEL_DOCKER=${USE_RERANKING_MODEL}
 
-## Basis URL Config ##
-ENV OLLAMA_BASE_URL="/ollama" \
-    OPENAI_API_BASE_URL=""
-
-## API Key and Security Config ##
-ENV OPENAI_API_KEY="" \
-    WEBUI_SECRET_KEY="" \
+## Security Config ##
+ENV WEBUI_SECRET_KEY="" \
     SCARF_NO_ANALYTICS=true \
     DO_NOT_TRACK=true \
     ANONYMIZED_TELEMETRY=false
@@ -84,20 +80,20 @@ ENV OPENAI_API_KEY="" \
 ENV MODEL_CACHE_DIR="/app/backend/cache"
 
 ## whisper TTS model settings ##
-ENV WHISPER_MODEL="base" \
-    WHISPER_MODEL_DIR="/app/backend/cache/whisper/models"
+# USE_EMBEDDING_MODEL, USE_TIKTOKEN_ENCODING_NAME and WHISPER_MODEL are build arguments: they only
+# choose which models are baked into the image. At runtime the app uses RAG_EMBEDDING_MODEL,
+# TIKTOKEN_ENCODING_NAME and WHISPER_MODEL, whose code defaults match these build defaults.
+ARG WHISPER_MODEL="base"
+ENV WHISPER_MODEL_DIR="/app/backend/cache/whisper/models"
 
 ## RAG Embedding model settings ##
 # Model is baked into the image at build time; skip HuggingFace hub checks on every start.
-ENV RAG_EMBEDDING_MODEL="$USE_EMBEDDING_MODEL_DOCKER" \
-    RAG_RERANKING_MODEL="$USE_RERANKING_MODEL_DOCKER" \
-    RAG_EMBEDDING_MODEL_AUTO_UPDATE=false \
+ENV RAG_EMBEDDING_MODEL_AUTO_UPDATE=false \
     RAG_RERANKING_MODEL_AUTO_UPDATE=false \
     SENTENCE_TRANSFORMERS_HOME="/app/backend/cache/embedding/models"
 
 ## Tiktoken model settings ##
-ENV TIKTOKEN_ENCODING_NAME="cl100k_base" \
-    TIKTOKEN_CACHE_DIR="/app/backend/cache/tiktoken"
+ENV TIKTOKEN_CACHE_DIR="/app/backend/cache/tiktoken"
 
 ## Hugging Face download cache ##
 ENV HF_HOME="/app/backend/cache/embedding/models" \
@@ -172,9 +168,9 @@ RUN export UV_PYTHON_DOWNLOADS=never && \
     else \
     uv pip install --python "$VIRTUAL_ENV/bin/python" torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir; \
     fi && \
-    python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
+    python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['USE_EMBEDDING_MODEL'], device='cpu')" && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])" && \
-    python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['TIKTOKEN_ENCODING_NAME'])" && \
+    python -c "import os; import tiktoken; tiktoken.get_encoding(os.environ['USE_TIKTOKEN_ENCODING_NAME'])" && \
     mkdir -p /app/backend/cache /app/backend/data && \
     chown -R $UID:$GID /app/.venv /app/backend/cache /app/backend/data && \
     # The project files are not kept in the runtime image: skills run under /app, and uv reads
@@ -194,6 +190,10 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
+
+# The sandbox emulator. The app does not read it: weather-skills-eval copies it out of this image
+# onto a sandbox runner container. emulator.py loads local_runtime.py from its own folder.
+COPY sandbox/emulator/emulator.py sandbox/emulator/local_runtime.py /app/sandbox/emulator/
 
 EXPOSE 8080
 

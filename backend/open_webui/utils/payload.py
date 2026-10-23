@@ -97,6 +97,8 @@ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
         "stop": lambda x: [bytes(s, "utf-8").decode("unicode_escape") for s in x],
         "logit_bias": lambda x: x,
         "response_format": dict,
+        # OpenRouter provider routing, e.g. {"quantizations": ["fp8"]}
+        "provider": dict,
     }
     return apply_model_params_to_body(params, form_data, mappings)
 
