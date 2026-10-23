@@ -37,6 +37,21 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 
 Chat and [[Tool Runner]] container logs go to Cloud Logging in the cluster project.
 
+## Event-loop watchdog
+
+The chat server answers every request, socket, and health check from one event loop. When something holds that loop, everything else waits, and a hold longer than the liveness probe's timeout restarts the pod. The watchdog writes these holds to the server log:
+
+- Each stall: a hold at least as long as the stall threshold, with how long it lasted.
+- The code holding the loop, as a stack trace taken while the stall is still happening.
+- Once a minute, a summary: the longest hold and the share of that minute the loop was held.
+
+It costs about 0.2% of one CPU core when the server is idle, and adds no delay that could be measured under load, so it is meant to stay on in production.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `LOOP_WATCHDOG_ENABLED` | `true` | Turns the watchdog on or off |
+| `LOOP_WATCHDOG_STALL_MS` | `250` | How long the loop must be held, in milliseconds, to be logged as a stall |
+
 ## How settings are read
 
 Many settings can be changed by an admin while the app runs, and the app stores the new value. When a setting's variable is present in the server's environment, the environment always wins, even when its value is empty, and changes made in the app are ignored. When the variable is absent, the app uses the stored value, unless `ENABLE_PERSISTENT_CONFIG` is false, in which case it uses the built-in default. `ENABLE_PERSISTENT_CONFIG` is true by default.

@@ -405,7 +405,12 @@ from open_webui.utils.langfuse_tracing import (
     get_client as get_langfuse_client,
     shutdown_langfuse,
 )
-from open_webui.env import LANGFUSE_ENABLED
+from open_webui.env import (
+    LANGFUSE_ENABLED,
+    LOOP_WATCHDOG_ENABLED,
+    LOOP_WATCHDOG_STALL_MS,
+)
+from open_webui.utils.loop_watchdog import LoopWatchdog
 from open_webui.utils.access_control import visible_in_organization
 from open_webui.utils.catalog import (
     can_create_private,
@@ -552,6 +557,10 @@ async def lifespan(app: FastAPI):
 
     # Chat writes run in worker threads; their broadcasts run on this loop.
     set_main_loop(asyncio.get_running_loop())
+    watchdog = None
+    if LOOP_WATCHDOG_ENABLED:
+        watchdog = LoopWatchdog(stall_s=LOOP_WATCHDOG_STALL_MS / 1000)
+        watchdog.start()
     if RESET_CONFIG_ON_START:
         reset_config()
 
@@ -579,6 +588,8 @@ async def lifespan(app: FastAPI):
     yield
     shutdown_langfuse()
     shutdown_scheduler()
+    if watchdog:
+        await watchdog.stop()
 
 
 app = FastAPI(
