@@ -307,7 +307,7 @@ class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
                 (zarr / "precip" / ".zarray").write_text("{}")
 
                 resp = get_artifact_content(
-                    chat_id, "gambia_imerg_last_week.zarr", user=MagicMock()
+                    chat_id, "gambia_imerg_last_week.zarr", request=MagicMock(), user=MagicMock()
                 )
                 self.assertEqual(resp.media_type, "application/zip")
                 self.assertIn(
