@@ -125,6 +125,10 @@
 	let user = null;
 	export let placeholder = '';
 
+	// Sends waiting for the running reply to finish, oldest first, shown above the chat bar.
+	export let queuedSends: string[] = [];
+	export let onDeleteQueuedSend: Function = () => {};
+
 	let visionCapableModels = [];
 	$: visionCapableModels = [...(atSelectedModel ? [atSelectedModel] : selectedModels)].filter(
 		(model) => $models.find((m) => m.id === model)?.info?.meta?.capabilities?.vision ?? true
@@ -488,6 +492,36 @@
 							filesInputElement.value = '';
 						}}
 					/>
+
+					{#if queuedSends.length > 0}
+						<div
+							id="queued-sends"
+							class="mx-1 mb-1.5 rounded-2xl border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+						>
+							<div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+								{$i18n.t('Queued — sends one at a time as each reply is done')}
+							</div>
+							{#each queuedSends as queued, idx}
+								<div class="queued-send flex items-start gap-2 pt-1">
+									<div
+										class="flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap break-words dark:text-gray-200"
+									>
+										{queued}
+									</div>
+									<Tooltip content={$i18n.t('Delete queued send')}>
+										<button
+											type="button"
+											class="shrink-0 rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition"
+											aria-label={$i18n.t('Delete queued send')}
+											on:click={() => onDeleteQueuedSend(idx)}
+										>
+											<XMark className="size-4" />
+										</button>
+									</Tooltip>
+								</div>
+							{/each}
+						</div>
+					{/if}
 
 					{#if recording}
 						<VoiceRecording
@@ -1227,9 +1261,34 @@
 										{/if}
 
 										{#if (taskIds && taskIds.length > 0) || isReplyRunning(history?.messages?.[history?.currentId])}
-											<div class=" flex items-center">
+											<div class=" flex items-center gap-1">
+												{#if prompt !== ''}
+													<Tooltip content={$i18n.t('Queue send')}>
+														<button
+															id="queue-send-button"
+															class="bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full p-1.5"
+															type="submit"
+															aria-label={$i18n.t('Queue send')}
+														>
+															<svg
+																xmlns="http://www.w3.org/2000/svg"
+																viewBox="0 0 16 16"
+																fill="currentColor"
+																class="size-5"
+															>
+																<path
+																	fill-rule="evenodd"
+																	d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
+																	clip-rule="evenodd"
+																/>
+															</svg>
+														</button>
+													</Tooltip>
+												{/if}
 												<Tooltip content={$i18n.t('Stop')}>
 													<button
+														type="button"
+														aria-label={$i18n.t('Stop')}
 														class="bg-white hover:bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5"
 														on:click={() => {
 															stopResponse();
