@@ -54,7 +54,7 @@ async def get_artifacts(
 
 @router.get("/{chat_id}/artifacts/content")
 def get_artifact_content(
-    chat_id: str, path: str, user=Depends(get_verified_user)
+    chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
     require_chat_read(chat_id, user)
     try:
@@ -82,10 +82,25 @@ def get_artifact_content(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
+    # The chat shows images by fetching this. Same policy as HTML views: the
+    # browser keeps a copy and asks before each use, and an unchanged file
+    # answers 304 with no body.
+    st = target.stat()
+    etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+    last_modified = formatdate(st.st_mtime, usegmt=True)
+    headers = {
+        "Cache-Control": "private, no-cache",
+        "ETag": etag,
+        "Last-Modified": last_modified,
+    }
+    if _not_modified(request, etag, last_modified):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return FileResponse(
         target,
         filename=target.name,
         content_disposition_type="attachment",
+        headers=headers,
+        stat_result=st,
     )
 
 

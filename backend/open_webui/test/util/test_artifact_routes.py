@@ -20,6 +20,7 @@ from open_webui.utils.artifacts import list_artifacts
 from open_webui.utils.auth import get_verified_user
 
 CHAT = "chat-r"
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 
 class ArtifactRoutesTest(unittest.TestCase):
@@ -30,6 +31,7 @@ class ArtifactRoutesTest(unittest.TestCase):
         (root / "plots").mkdir(parents=True)
         (root / "plots" / "map.html").write_text("<html></html>")
         (root / "notes.csv").write_text("a,b\n")
+        (root / "plots" / "map.png").write_bytes(PNG)
         (root / "old.zarrview.json").write_text('{"type": "zarr_view", "zarr": "x.zarr"}')
         self.chats = MagicMock()
         self.chats.get_chat_access_row.return_value = ChatAccessRow(
@@ -86,6 +88,39 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         res = self.client.get(self.url("/view/plots/map.html"))
         self.assertEqual(res.status_code, 200)
+
+    def test_unchanged_file_answers_304_without_a_body(self):
+        first = self.client.get(self.url("/content?path=plots/map.png"))
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.content, PNG)
+        self.assertEqual(first.headers["cache-control"], "private, no-cache")
+        etag = first.headers["etag"]
+        again = self.client.get(
+            self.url("/content?path=plots/map.png"), headers={"If-None-Match": etag}
+        )
+        self.assertEqual(again.status_code, 304)
+        self.assertEqual(again.content, b"")
+        self.assertEqual(again.headers["etag"], etag)
+        self.assertEqual(again.headers["cache-control"], "private, no-cache")
+        since = self.client.get(
+            self.url("/content?path=plots/map.png"),
+            headers={"If-Modified-Since": first.headers["last-modified"]},
+        )
+        self.assertEqual(since.status_code, 304)
+
+    def test_a_rewritten_file_gets_a_new_etag(self):
+        import os
+
+        etag = self.client.get(self.url("/content?path=plots/map.png")).headers["etag"]
+        target = self.artifacts / CHAT / "plots" / "map.png"
+        target.write_bytes(PNG + b"new")
+        os.utime(target, (target.stat().st_atime, target.stat().st_mtime + 5))
+        res = self.client.get(
+            self.url("/content?path=plots/map.png"), headers={"If-None-Match": etag}
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertNotEqual(res.headers["etag"], etag)
+        self.assertEqual(res.content, PNG + b"new")
 
     def test_archive_upload_extracts_off_the_loop(self):
         buf = io.BytesIO()
