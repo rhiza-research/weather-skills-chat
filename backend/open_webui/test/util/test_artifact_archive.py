@@ -21,7 +21,6 @@ from open_webui.utils.artifacts import (
     pack_sandbox_archive,
     pack_sandbox_zip,
     write_bytes,
-    write_json,
 )
 
 
@@ -249,12 +248,10 @@ class SandboxWriterOwnTest(unittest.TestCase):
                 "open_webui.utils.artifacts.os.chown"
             ) as chown:
                 write_bytes("chat-1", "notes.csv", b"a")
-                write_json("chat-1", "view.zarrview.json", {"ok": True})
                 create_folder("chat-1", "plots/weekly")
         owned = {Path(call.args[0]) for call in chown.call_args_list}
         uids = {call.args[1] for call in chown.call_args_list}
         self.assertTrue(any(path.name == "notes.csv" for path in owned))
-        self.assertTrue(any(path.name == "view.zarrview.json" for path in owned))
         self.assertTrue(any(path.name == "weekly" for path in owned))
         self.assertEqual(uids, {SANDBOX_OWNER_UID})
 
@@ -299,7 +296,7 @@ class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
             chat_id = "chat-zarr"
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
-                patch("open_webui.routers.artifacts._readable"),
+                patch("open_webui.routers.artifacts.require_chat_read"),
             ):
                 root = artifacts / chat_id
                 (root / "intermediate_results").mkdir(parents=True)
@@ -309,8 +306,8 @@ class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
                 (zarr / "precip").mkdir()
                 (zarr / "precip" / ".zarray").write_text("{}")
 
-                resp = await get_artifact_content(
-                    chat_id, "gambia_imerg_last_week.zarr", user=MagicMock()
+                resp = get_artifact_content(
+                    chat_id, "gambia_imerg_last_week.zarr", request=MagicMock(), user=MagicMock()
                 )
                 self.assertEqual(resp.media_type, "application/zip")
                 self.assertIn(

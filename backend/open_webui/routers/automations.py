@@ -48,7 +48,7 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
 
 
 @router.get("/", response_model=list[AutomationModel])
-async def list_automations(
+def list_automations(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):

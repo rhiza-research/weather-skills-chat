@@ -2,6 +2,8 @@
 
 An organization is a space that people share. Chats, automations, secrets, preferences, folders, skill packs, knowledge bases, models, and usage all belong to an organization. The app works in one active organization at a time, and everything a user sees and does happens in it. Users who belong to several organizations switch between them.
 
+A chat stays in the organization it was created in. Its replies use that organization's skills, secrets, preferences, models, and limits, even when the user has another organization active. When the user is no longer a member of that organization, or it is inactive, the active organization is used instead.
+
 ## Kinds of organization
 
 | Kind | What it is | Members |
@@ -28,7 +30,7 @@ Admins and owners can change the organization's name, description, logo, and def
 
 A platform admin is an admin or owner of the platform organization. Platform admins activate new organizations, see every organization, set organization spending limits, manage the public catalog, and can add and remove members in any organization.
 
-The Open WebUI admin role, including the admin settings, applies only while the platform organization is active. In any other organization, a platform admin works with the role their membership there gives them. An existing Open WebUI admin account is added to the platform organization as an admin on its next request.
+The Open WebUI admin role, including the admin settings, applies only while the platform organization is active. A platform admin who opens an admin page while another organization is active, for example from a link in an email, is switched to the platform organization, and the page reloads there. In any other organization, a platform admin works with the role their membership there gives them. An existing Open WebUI admin account is added to the platform organization as an admin on its next request.
 
 ## Catalog
 

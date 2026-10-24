@@ -122,7 +122,7 @@ def _sibling_name_taken(folder: FolderModel, name: str, parent_id: Optional[str]
 
 
 @router.get("/", response_model=list[FolderModel])
-async def get_folders(
+def get_folders(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):

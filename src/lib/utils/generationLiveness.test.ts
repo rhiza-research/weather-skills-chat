@@ -4,6 +4,7 @@ import {
 	SERVER_UNREACHABLE_MESSAGE,
 	clearSpinningToolCalls,
 	formatGenerationRequestError,
+	isReplyRunning,
 	isServerUnreachableError
 } from './generationLiveness';
 
@@ -53,4 +54,13 @@ test('clearSpinningToolCalls marks incomplete reasoning details done', () => {
 	const out = clearSpinningToolCalls(input);
 	expect(out).toContain('type="reasoning" done="true"');
 	expect(out).not.toContain('done="false"');
+});
+
+test('only an unfinished assistant reply counts as running', () => {
+	expect(isReplyRunning({ role: 'assistant', done: false })).toBe(true);
+	expect(isReplyRunning({ role: 'assistant' })).toBe(true);
+	expect(isReplyRunning({ role: 'assistant', done: true })).toBe(false);
+	// A chat whose reply was never stored ends on the user message.
+	expect(isReplyRunning({ role: 'user' })).toBe(false);
+	expect(isReplyRunning(undefined)).toBe(false);
 });

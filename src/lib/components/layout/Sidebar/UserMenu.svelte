@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
-	import { createEventDispatcher, getContext } from 'svelte';
+	import { createEventDispatcher, getContext, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import ArchiveBox from '$lib/components/icons/ArchiveBox.svelte';
@@ -25,7 +25,7 @@
 	import { createOrganization } from '$lib/apis/organizations';
 	import { getMyUsage } from '$lib/apis/usage';
 	import { isWorkspaceManagerContext } from '$lib/utils/organizationContext';
-	import { formatCreditAmount, usageBarPercent } from '$lib/utils/usage';
+	import { formatCreditAmount, usageBarPercent, usageMeters } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
 
@@ -36,6 +36,16 @@
 	const dispatch = createEventDispatcher();
 
 	let showOrgPicker = false;
+	let orgListElement: HTMLElement | null = null;
+
+	// A long list opens scrolled to the active organization.
+	$: if (showOrgPicker) {
+		tick().then(() =>
+			orgListElement
+				?.querySelector('[data-active="true"]')
+				?.scrollIntoView({ block: 'nearest' })
+		);
+	}
 	let showRequestForm = false;
 	let requestName = '';
 	let requestDescription = '';
@@ -165,23 +175,27 @@
 
 			{#if showOrgPicker}
 				<div class="px-1 pb-1">
-					{#each $organizations ?? [] as org}
-						<button
-							class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
-							$activeOrganizationId
-								? 'bg-gray-50 dark:bg-gray-800 font-medium'
-								: 'text-gray-600 dark:text-gray-300'}"
-							on:click={() => selectOrg(org.id)}
-						>
-							{#if org.logo}
-								<img src={org.logo} alt="" class="size-5 rounded-full object-cover shrink-0" />
-							{/if}
-							<span class="truncate flex-1">{org.name}</span>
-							{#if org.id === $activeOrganizationId}
-								<Check className="size-4 shrink-0" strokeWidth="2.5" />
-							{/if}
-						</button>
-					{/each}
+					<!-- Users in many organizations: the list scrolls past about eight rows. -->
+					<div bind:this={orgListElement} class="max-h-64 overflow-y-auto overscroll-contain">
+						{#each $organizations ?? [] as org}
+							<button
+								class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
+								$activeOrganizationId
+									? 'bg-gray-50 dark:bg-gray-800 font-medium'
+									: 'text-gray-600 dark:text-gray-300'}"
+								data-active={org.id === $activeOrganizationId}
+								on:click={() => selectOrg(org.id)}
+							>
+								{#if org.logo}
+									<img src={org.logo} alt="" class="size-5 rounded-full object-cover shrink-0" />
+								{/if}
+								<span class="truncate flex-1">{org.name}</span>
+								{#if org.id === $activeOrganizationId}
+									<Check className="size-4 shrink-0" strokeWidth="2.5" />
+								{/if}
+							</button>
+						{/each}
+					</div>
 					<button
 						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300"
 						on:click={(e) => {
@@ -235,24 +249,27 @@
 							})}
 						{/if}
 					</div>
-					<div class="text-xs font-medium tabular-nums">
-						{formatCreditAmount(usage.cost_usd, '0.00')}{#if usage.effective_limit_usd != null}
-							/ {formatCreditAmount(usage.effective_limit_usd)}{/if}{' '}{$i18n.t('credits')}
-					</div>
-					{#if usage.effective_limit_usd != null}
-						<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-							<div
-								class="h-full rounded-full {usage.over_limit
-									? 'bg-red-500'
-									: 'bg-gray-900 dark:bg-white'}"
-								style="width: {usageBarPercent(
-									usage.cost_usd,
-									usage.effective_limit_usd,
-									usage.over_limit
-								)}%"
-							></div>
+					{#each usageMeters(usage) as meter (meter.scope)}
+						{#if meter.scope === 'member'}
+							<div class="mt-2 text-[11px] uppercase tracking-wide text-gray-400">
+								{$i18n.t('Your usage')}
+							</div>
+						{/if}
+						<div class="text-xs font-medium tabular-nums">
+							{formatCreditAmount(meter.spend, '0.00')}{#if meter.limit != null}
+								/ {formatCreditAmount(meter.limit)}{/if}{' '}{$i18n.t('credits')}
 						</div>
-					{/if}
+						{#if meter.limit != null}
+							<div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+								<div
+									class="h-full rounded-full {meter.over
+										? 'bg-red-500'
+										: 'bg-gray-900 dark:bg-white'}"
+									style="width: {usageBarPercent(meter.spend, meter.limit, meter.over)}%"
+								></div>
+							</div>
+						{/if}
+					{/each}
 					{#if usage.over_limit && usage.message}
 						<div class="mt-1 text-[11px] text-red-600 leading-snug">{usage.message}</div>
 					{/if}

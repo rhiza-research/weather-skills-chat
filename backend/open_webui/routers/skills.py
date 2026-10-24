@@ -102,7 +102,7 @@ def _raise_install_error(exc: Exception):
 
 
 @router.get("/")
-async def list_skill_packs(
+def list_skill_packs(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):

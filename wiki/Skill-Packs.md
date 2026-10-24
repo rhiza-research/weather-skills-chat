@@ -29,9 +29,15 @@ Only one install, update, or delete runs at a time on each server. Starting anot
 
 Packs follow the catalog rules on [[Organizations]]: a platform admin decides whether a public pack starts on or off and can withdraw it everywhere, and each organization's admins can turn it on or off for their organization. The same controls exist for each skill inside a pack, so an organization can use a pack but leave some of its skills off.
 
-The model can run a skill only when both the pack and the skill are on for the active organization.
+The model can run a skill only when both the pack and the skill are on for the chat's organization (see [[Organizations]]).
 
 When two packs offer a skill with the same name, the model runs the one with the highest version number.
+
+## Choosing skills in a chat
+
+A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
+
+If the model calls a skill that is off for the message, the skill does not run, and the model is told to tell the user to turn it on there and send the message again.
 
 ## When a skill runs
 

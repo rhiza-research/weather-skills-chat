@@ -42,6 +42,13 @@ export const formatGenerationRequestError = (error: unknown): string => {
 	return String(error ?? 'Unknown error');
 };
 
+/**
+ * An assistant reply still being written. A user message has no `done` flag,
+ * so a chat that ends on one is idle, not waiting on a reply.
+ */
+export const isReplyRunning = (message: { role?: string; done?: boolean } | null | undefined) =>
+	message?.role === 'assistant' && message.done !== true;
+
 /** Mark incomplete tool/reasoning/code details as done so spinners stop. */
 export const clearSpinningToolCalls = (content: string) => {
 	if (typeof content !== 'string') {

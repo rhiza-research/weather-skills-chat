@@ -10,6 +10,7 @@
 - [[Secrets]]
 - [[Preferences]]
 - [[Live Chat Updates]]
+- [[Queued Messages]]
 - [[Notifications]]
 - [[Tracing]]
 - [[Deployment]]

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Optional
 
@@ -113,9 +114,13 @@ def record_provider_usage(usage: Optional[dict], context: dict) -> None:
         log.exception("Failed to record usage event")
 
 
-def bind_usage_to_response(response: Any, context: dict) -> Any:
+async def bind_usage_to_response(response: Any, context: dict) -> Any:
+    """Record the call's usage: now for a full response, at the end of a stream.
+
+    Recording writes to the database, so it runs in a thread.
+    """
     if isinstance(response, dict):
-        record_provider_usage(response.get("usage"), context)
+        await asyncio.to_thread(record_provider_usage, response.get("usage"), context)
         return response
     if isinstance(response, StreamingResponse):
         return StreamingResponse(
@@ -140,7 +145,7 @@ async def _record_usage_stream(iterator, context: dict):
                 ingest_sse_chunk(state, chunk)
                 yield chunk
         if state.get("usage"):
-            record_provider_usage(state.get("usage"), context)
+            await asyncio.to_thread(record_provider_usage, state.get("usage"), context)
     except Exception:
         raise
 

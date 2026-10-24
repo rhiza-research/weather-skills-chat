@@ -51,12 +51,14 @@
 		getTimeRange
 	} from '$lib/utils';
 	import { chatScrollFor, onChatTailRequest, rememberChatScroll } from '$lib/chat/scroll';
+	import { MAX_QUEUED_SENDS, readQueuedSends, writeQueuedSends } from '$lib/chat/queuedSend';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 	import {
 		GENERATION_HEARTBEAT_ACTION,
 		GENERATION_LOST_MESSAGE,
 		clearSpinningToolCalls,
-		formatGenerationRequestError
+		formatGenerationRequestError,
+		isReplyRunning
 	} from '$lib/utils/generationLiveness';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
 	import {
@@ -119,6 +121,7 @@
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 	import { revealApp } from '$lib/utils/splash';
+	import { createPromptQueue } from '$lib/utils/eventPrompts';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -174,7 +177,24 @@
 	let eventConfirmationInput = false;
 	let eventConfirmationInputPlaceholder = '';
 	let eventConfirmationInputValue = '';
-	let eventCallback = null;
+	const eventPrompts = createPromptQueue<Record<string, any>>();
+
+	const showEventPrompt = (data) => {
+		eventConfirmationInput = data.input;
+		eventConfirmationTitle = data.title ?? '';
+		eventConfirmationMessage = data.message ?? '';
+		eventConfirmationInputPlaceholder = data.placeholder ?? '';
+		eventConfirmationInputValue = data.value ?? '';
+		showEventConfirmation = true;
+	};
+
+	const answerEventPrompt = async (value) => {
+		const next = eventPrompts.answer(value);
+		if (!next) return;
+		// Let the dialog close before it opens for the next prompt.
+		await tick();
+		showEventPrompt(next.data);
+	};
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
 	let artifactsBumpTimer: ReturnType<typeof setTimeout> | null = null;
@@ -202,6 +222,12 @@
 
 	let taskIds = null;
 	let stopRequested = false;
+
+	// Messages the user sent while a reply was still running, oldest first; one
+	// is sent each time a reply is done.
+	let queuedSends: string[] = [];
+	// The message another tab already sent the queue after; wait for the next turn.
+	let queueWaitsAfter: string | null = null;
 
 	// Chat Input
 	let prompt = '';
@@ -299,6 +325,8 @@
 		showOverview.set(false);
 		showCallOverlay.set(false);
 
+		queuedSends = readQueuedSends(id);
+		queueWaitsAfter = null;
 		prompt = '';
 		files = [];
 		selectedToolIds = [];
@@ -488,17 +516,10 @@
 			} else {
 				toast.info(toastContent);
 			}
-		} else if (type === 'confirmation') {
-			eventCallback = cb;
-
-			eventConfirmationInput = false;
-			showEventConfirmation = true;
-
-			eventConfirmationTitle = data.title;
-			eventConfirmationMessage = data.message;
+		} else if (type === 'confirmation' || type === 'input') {
+			const prompt = { data: { ...data, input: type === 'input' }, respond: (v) => cb?.(v) };
+			if (eventPrompts.push(prompt)) showEventPrompt(prompt.data);
 		} else if (type === 'execute') {
-			eventCallback = cb;
-
 			try {
 				const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
 				const result = await asyncFunction();
@@ -509,16 +530,6 @@
 			} catch (error) {
 				console.error('Error executing code:', error);
 			}
-		} else if (type === 'input') {
-			eventCallback = cb;
-
-			eventConfirmationInput = true;
-			showEventConfirmation = true;
-
-			eventConfirmationTitle = data.title;
-			eventConfirmationMessage = data.message;
-			eventConfirmationInputPlaceholder = data.placeholder;
-			eventConfirmationInputValue = data?.value ?? '';
 		} else {
 			console.log('Unknown message type', data);
 		}
@@ -1009,6 +1020,8 @@
 			currentId: null
 		};
 
+		queuedSends = [];
+		queueWaitsAfter = null;
 		chatFiles = [];
 		params = {};
 
@@ -1906,13 +1919,12 @@
 	// Chat functions
 	//////////////////////////
 
-	const submitPrompt = async (userPrompt, { _raw = false } = {}) => {
+	// Toasts why and returns false when the prompt cannot be sent now.
+	const canSubmit = (userPrompt, sendFiles) => {
 		if (!chatWritable) {
 			toast.error($i18n.t('Clone this chat to continue it.'));
-			return;
+			return false;
 		}
-		console.log('submitPrompt', userPrompt, $chatId);
-
 		const messages = createMessagesList(history, history.currentId);
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
@@ -1921,49 +1933,59 @@
 			selectedModels = _selectedModels;
 		}
 
-		if (userPrompt === '' && files.length === 0) {
+		if (userPrompt === '' && sendFiles.length === 0) {
 			toast.error($i18n.t('Please enter a prompt'));
-			return;
+			return false;
 		}
 		if (selectedModels.includes('')) {
 			toast.error($i18n.t('Model not selected'));
-			return;
+			return false;
 		}
 
-		if (messages.length != 0 && messages.at(-1).done != true) {
+		if (isReplyRunning(messages.at(-1))) {
 			// Response not done
-			return;
+			return false;
 		}
 		if (messages.length != 0 && messages.at(-1).error && !messages.at(-1).content) {
 			// Error in response
 			toast.error($i18n.t(`Oops! There was an error in the previous response.`));
-			return;
+			return false;
 		}
 		if (
-			files.length > 0 &&
-			files.filter((file) => file.status === 'uploading').length > 0
+			sendFiles.length > 0 &&
+			sendFiles.filter((file) => file.status === 'uploading').length > 0
 		) {
 			toast.error(
 				$i18n.t(`Oops! There are files still uploading. Please wait for the upload to complete.`)
 			);
-			return;
+			return false;
 		}
 		if (
 			($config?.file?.max_count ?? null) !== null &&
-			files.length + chatFiles.length > $config?.file?.max_count
+			sendFiles.length + chatFiles.length > $config?.file?.max_count
 		) {
 			toast.error(
 				$i18n.t(`You can only chat with a maximum of {{maxCount}} file(s) at a time.`, {
 					maxCount: $config?.file?.max_count
 				})
 			);
-			return;
+			return false;
 		}
 
-		prompt = '';
+		return true;
+	};
+
+	// A queued send leaves the chat bar's draft and attachments alone.
+	const submitPrompt = async (userPrompt, { _raw = false, queued = false } = {}) => {
+		const sendFiles = queued ? [] : files;
+		console.log('submitPrompt', userPrompt, $chatId);
+		if (!canSubmit(userPrompt, sendFiles)) return;
+		const messages = createMessagesList(history, history.currentId);
+
+		if (!queued) prompt = '';
 
 		// Reset chat input textarea
-		if (!($settings?.richTextInput ?? true)) {
+		if (!queued && !($settings?.richTextInput ?? true)) {
 			const chatInputElement = document.getElementById('chat-input');
 
 			if (chatInputElement) {
@@ -1973,7 +1995,7 @@
 		}
 
 		pendingArtifactFiles = [];
-		for (const item of files) {
+		for (const item of sendFiles) {
 			if (item.sandboxPath) continue;
 			if (item.sourceFile instanceof File) {
 				pendingArtifactFiles.push(item.sourceFile);
@@ -1985,7 +2007,7 @@
 		}
 
 		const _files = JSON.parse(
-			JSON.stringify(files, (key, value) => (key === 'sourceFile' ? undefined : value))
+			JSON.stringify(sendFiles, (key, value) => (key === 'sourceFile' ? undefined : value))
 		);
 		chatFiles.push(
 			..._files.filter(
@@ -1999,8 +2021,10 @@
 				array.findIndex((i) => JSON.stringify(i) === JSON.stringify(item)) === index
 		);
 
-		files = [];
-		prompt = '';
+		if (!queued) {
+			files = [];
+			prompt = '';
+		}
 
 		// Create user message
 		let userMessageId = uuidv4();
@@ -2025,13 +2049,69 @@
 		}
 
 		// focus on chat input
-		const chatInput = document.getElementById('chat-input');
-		chatInput?.focus();
+		if (!queued) document.getElementById('chat-input')?.focus();
 
 		saveSessionSelectedModels();
 
 		await sendPrompt(history, userPrompt, userMessageId, { newChat: true });
 	};
+
+	$: replyRunning =
+		(taskIds?.length ?? 0) > 0 || isReplyRunning(history?.messages?.[history?.currentId]);
+
+	const setQueuedSends = (prompts: string[]) => {
+		queuedSends = prompts;
+		writeQueuedSends($chatId, prompts);
+	};
+
+	const queueSend = (userPrompt: string) => {
+		if (queuedSends.length >= MAX_QUEUED_SENDS) {
+			toast.error($i18n.t('Only {{count}} sends can be queued.', { count: MAX_QUEUED_SENDS }));
+			return;
+		}
+		if (files.length > 0) {
+			toast.error($i18n.t('Attachments cannot be queued. Send them when the reply is done.'));
+			return;
+		}
+		setQueuedSends([...queuedSends, userPrompt]);
+		prompt = '';
+	};
+
+	const deleteQueuedSend = (idx: number) => {
+		setQueuedSends(queuedSends.filter((_, i) => i !== idx));
+	};
+
+	const sendQueued = () => {
+		const [userPrompt, ...rest] = queuedSends;
+		// Another open tab of this chat may have sent it already.
+		if ($chatId !== 'local') {
+			const stored = readQueuedSends($chatId);
+			if (stored[0] !== userPrompt) {
+				queuedSends = stored;
+				queueWaitsAfter = history.currentId;
+				return;
+			}
+		}
+		if (!canSubmit(userPrompt, [])) {
+			// e.g. the reply before it failed: give the whole queue back to the chat
+			// bar, in order, so nothing more is sent after a failure.
+			prompt = [...queuedSends, prompt].filter(Boolean).join('\n');
+			setQueuedSends([]);
+			return;
+		}
+		setQueuedSends(rest);
+		submitPrompt(userPrompt, { queued: true });
+	};
+
+	$: if (
+		queuedSends.length > 0 &&
+		!loading &&
+		$chatId &&
+		!replyRunning &&
+		history.currentId !== queueWaitsAfter
+	) {
+		sendQueued();
+	}
 
 	const sendPrompt = async (
 		_history,
@@ -2704,6 +2784,8 @@
 			_chatId = chat.id;
 			putChat(chat, null);
 			await chatId.set(_chatId);
+			// Sends queued before the chat had an id are stored now.
+			if (queuedSends.length > 0) writeQueuedSends(_chatId, queuedSends);
 
 			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
 			chats.update((list) => {
@@ -2797,16 +2879,8 @@
 	input={eventConfirmationInput}
 	inputPlaceholder={eventConfirmationInputPlaceholder}
 	inputValue={eventConfirmationInputValue}
-	on:confirm={(e) => {
-		if (e.detail) {
-			eventCallback?.(e.detail);
-		} else {
-			eventCallback?.(true);
-		}
-	}}
-	on:cancel={() => {
-		eventCallback?.(false);
-	}}
+	on:confirm={(e) => answerEventPrompt(e.detail ? e.detail : true)}
+	on:cancel={() => answerEventPrompt(false)}
 />
 
 <div
@@ -3011,14 +3085,16 @@
 										await uploadGoogleDriveFile(data);
 									}
 								}}
+								{queuedSends}
+								onDeleteQueuedSend={deleteQueuedSend}
 								on:submit={async (e) => {
 									if (e.detail || files.length > 0) {
 										await tick();
-										submitPrompt(
-											($settings?.richTextInput ?? true)
-												? e.detail.replaceAll('\n\n', '\n')
-												: e.detail
-										);
+										const userPrompt = ($settings?.richTextInput ?? true)
+											? e.detail.replaceAll('\n\n', '\n')
+											: e.detail;
+										if (replyRunning) queueSend(userPrompt);
+										else submitPrompt(userPrompt);
 									}
 								}}
 							/>

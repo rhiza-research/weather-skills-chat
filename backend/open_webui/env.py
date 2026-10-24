@@ -570,6 +570,18 @@ OTEL_TRACES_SAMPLER = os.environ.get(
 ).lower()
 
 ####################################
+# LOOP WATCHDOG
+####################################
+
+LOOP_WATCHDOG_ENABLED = os.getenv("LOOP_WATCHDOG_ENABLED", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# The event loop held this long without yielding is logged as a stall.
+LOOP_WATCHDOG_STALL_MS = int(os.getenv("LOOP_WATCHDOG_STALL_MS", "250") or "250")
+
+####################################
 # LANGFUSE
 ####################################
 
@@ -580,6 +592,10 @@ LANGFUSE_HOST = (
     or os.environ.get("LANGFUSE_HOST")
     or "https://cloud.langfuse.com"
 ).strip()
+# The Langfuse SDK reads the same variable; "default" is its fallback.
+LANGFUSE_TRACING_ENVIRONMENT = (
+    os.environ.get("LANGFUSE_TRACING_ENVIRONMENT") or ""
+).strip() or "default"
 _langfuse_flag = os.environ.get("LANGFUSE_ENABLED") or os.environ.get(
     "LANGFUSE_TRACING_ENABLED"
 )

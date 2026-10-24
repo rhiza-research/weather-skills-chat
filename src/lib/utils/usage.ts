@@ -103,6 +103,42 @@ export const remainingUsd = (
 	return Math.max(0, Number(limit) - Number(used || 0));
 };
 
+export type UsageMeter = {
+	scope: 'organization' | 'member';
+	spend: number;
+	limit: number | null;
+	over: boolean;
+};
+
+type UsageForMeters = {
+	cost_usd?: number | null;
+	org_cost_usd?: number | null;
+	org_limit_usd?: number | null;
+	user_limit_usd?: number | null;
+};
+
+/**
+ * What the usage counter shows: the organization's spend against its limit,
+ * since that is what the organization limit is checked against, and the
+ * user's own spend when they also have a member limit.
+ */
+export const usageMeters = (usage: UsageForMeters): UsageMeter[] => {
+	const meter = (
+		scope: UsageMeter['scope'],
+		spend: number | null | undefined,
+		limit: number | null | undefined
+	): UsageMeter => {
+		const value = Number(spend || 0);
+		const cap = limit == null ? null : Number(limit);
+		return { scope, spend: value, limit: cap, over: cap != null && value >= cap };
+	};
+	const meters = [meter('organization', usage.org_cost_usd, usage.org_limit_usd)];
+	if (usage.user_limit_usd != null) {
+		meters.push(meter('member', usage.cost_usd, usage.user_limit_usd));
+	}
+	return meters;
+};
+
 export const usageBarPercent = (
 	spend: number | null | undefined,
 	cap: number | null | undefined,

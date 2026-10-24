@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import Collapsible from './Collapsible.svelte';
+	import { toolUsageLine } from '$lib/chat/toolUsage';
 
 	const i18n = getContext('i18n');
 
@@ -27,6 +28,7 @@
 	}
 
 	$: text = outputText(result);
+	$: usageLine = result?.kind === 'structured' ? toolUsageLine(result.extra?.tool_resource_usage) : '';
 
 	let CodeBlockComponent = null;
 	const loadCodeBlock = async () => {
@@ -102,6 +104,9 @@
 					<p class="m-0 text-sm text-gray-500 dark:text-gray-400">
 						{$i18n.t('No output.')}
 					</p>
+				{/if}
+				{#if usageLine}
+					<p class="m-0 mt-1.5 font-sans text-xs text-gray-500 dark:text-gray-400">{usageLine}</p>
 				{/if}
 			</div>
 		</Collapsible>

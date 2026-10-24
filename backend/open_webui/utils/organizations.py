@@ -5,7 +5,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.automations import AutomationModel
-from open_webui.models.chats import ChatModel
+from open_webui.models.chats import ChatModel, Chats
 from open_webui.models.organizations import (
     ORG_KIND_PERSONAL,
     ORG_KIND_PLATFORM,
@@ -51,6 +51,19 @@ def is_org_admin(organization_id: str, user_id: str) -> bool:
 
 def is_platform_admin(user_id: str) -> bool:
     return is_at_least(PLATFORM_ORG_ID, user_id, "admin")
+
+
+def admin_emails(organization_id: str, exclude: str = "") -> list[str]:
+    """Addresses of the organization's owners and admins, without ``exclude``."""
+    skip = (exclude or "").strip().lower()
+    out: list[str] = []
+    for member in Organizations.get_members(organization_id):
+        if ROLE_RANK.get(member.role, 0) < ROLE_RANK["admin"]:
+            continue
+        addr = (member.email or "").strip().lower()
+        if addr and addr != skip and addr not in out:
+            out.append(addr)
+    return out
 
 
 def effective_user_role(user: UserModel, organization_id: Optional[str] = None) -> str:
@@ -153,6 +166,29 @@ def can_write_chat(user: UserModel, chat: Optional[ChatModel]) -> bool:
     return chat.user_id == user.id
 
 
+# For routes. Both load only the chat's owner, organization and visibility;
+# the whole chat can be megabytes.
+def require_chat_read(chat_id: str, user: UserModel):
+    """The chat's access row, or 401 when the user cannot read the chat."""
+    chat = Chats.get_chat_access_row(chat_id)
+    if not can_read_chat(user, chat):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    return chat
+
+
+def require_chat_write(chat_id: str, user: UserModel):
+    """The chat's access row, or 401 when the user cannot change the chat."""
+    chat = Chats.get_chat_access_row(chat_id)
+    if not can_write_chat(user, chat):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    return chat
+
+
 def can_read_org_resource(user: UserModel, resource) -> bool:
     if resource is None:
         return False
@@ -236,3 +272,35 @@ def get_active_organization_id(
             detail="Organization is not active",
         )
     return org.id
+
+
+def chat_organization_id(chat, user: UserModel, active_organization_id: str) -> str:
+    """Organization a saved chat's messages run in.
+
+    A chat belongs to the organization it was created in, whichever one the
+    browser has active. Keeps the active organization when there is no saved
+    chat or the user is no longer a member of an active chat organization.
+    """
+    chat_org_id = getattr(chat, "organization_id", None)
+    if not chat_org_id or chat_org_id == active_organization_id:
+        return active_organization_id
+    org, member = Organizations.get_organization_for_member(chat_org_id, user.id)
+    if org and member and org.active:
+        return chat_org_id
+    return active_organization_id
+
+
+def request_organization_id(request) -> Optional[str]:
+    """Organization a chat request runs in.
+
+    The chat route and automations put it in request.state.metadata. The
+    X-Organization-Id header is the fallback for requests without it.
+    """
+    metadata = getattr(getattr(request, "state", None), "metadata", None)
+    if isinstance(metadata, dict) and metadata.get("organization_id"):
+        return metadata["organization_id"]
+    headers = getattr(request, "headers", None)
+    raw = headers.get("X-Organization-Id") if headers is not None else None
+    if not isinstance(raw, str):
+        return None
+    return raw.strip() or None

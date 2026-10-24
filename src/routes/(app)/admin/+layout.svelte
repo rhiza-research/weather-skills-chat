@@ -2,9 +2,10 @@
 	import { onMount, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 
-	import { WEBUI_NAME, showSidebar, user } from '$lib/stores';
+	import { WEBUI_NAME, organizations, showSidebar, user } from '$lib/stores';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { page } from '$app/stores';
+	import { platformAdminMembership } from '$lib/utils/organizationContext';
 
 	const i18n = getContext('i18n');
 
@@ -12,6 +13,14 @@
 
 	onMount(async () => {
 		if ($user?.role !== 'admin') {
+			// A platform admin who opens an admin link in another organization
+			// reloads into the platform organization instead of being sent away.
+			const platform = platformAdminMembership($organizations);
+			if (platform?.id && localStorage.getItem('activeOrganizationId') !== platform.id) {
+				localStorage.setItem('activeOrganizationId', platform.id);
+				location.reload();
+				return;
+			}
 			await goto('/');
 		}
 		loaded = true;
