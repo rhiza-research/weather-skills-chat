@@ -912,6 +912,35 @@ def prepare_provider_call(
     return url, key, payload, chat_id
 
 
+# A 429 the provider says will clear within PROVIDER_429_MAX_WAIT_S seconds is
+# resent after that wait, up to PROVIDER_429_RETRIES times. OpenRouter returns
+# these when its credit check is briefly slow. A longer wait is a real rate
+# limit and fails at once.
+PROVIDER_429_RETRIES = 2
+PROVIDER_429_MAX_WAIT_S = 15
+
+
+async def _short_retry_after(r) -> Optional[float]:
+    """Seconds to wait before resending a 429, or None when it should not be resent."""
+    if r.status != 429:
+        return None
+    value = r.headers.get("Retry-After")
+    if value is None:
+        # OpenRouter puts the wait in the body's error metadata.
+        try:
+            body = await r.json()
+            value = body["error"]["metadata"]["headers"]["Retry-After"]
+        except Exception:
+            return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= seconds <= PROVIDER_429_MAX_WAIT_S:
+        return seconds
+    return None
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
@@ -936,41 +965,57 @@ async def generate_chat_completion(
             trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
         )
 
-        t_post = time.perf_counter()
-        r = await session.request(
-            method="POST",
-            url=f"{url}/chat/completions",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                **(
-                    {
-                        "HTTP-Referer": "https://weather-skills.sheerwater.rhizaresearch.org/",
-                        "X-Title": "Weather Skills",
-                    }
-                    if "openrouter.ai" in url
-                    else {}
-                ),
-                **(
-                    {
-                        "X-OpenWebUI-User-Name": user.name,
-                        "X-OpenWebUI-User-Id": user.id,
-                        "X-OpenWebUI-User-Email": user.email,
-                        "X-OpenWebUI-User-Role": user.role,
-                    }
-                    if ENABLE_FORWARD_USER_INFO_HEADERS
-                    else {}
-                ),
-            },
-        )
-        log_timing(
-            "openai.provider_post_until_headers",
-            time.perf_counter() - t_post,
-            chat_id=chat_id,
-            status=r.status,
-            sse="text/event-stream" in (r.headers.get("Content-Type") or ""),
-        )
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            **(
+                {
+                    "HTTP-Referer": "https://weather-skills.sheerwater.rhizaresearch.org/",
+                    "X-Title": "Weather Skills",
+                }
+                if "openrouter.ai" in url
+                else {}
+            ),
+            **(
+                {
+                    "X-OpenWebUI-User-Name": user.name,
+                    "X-OpenWebUI-User-Id": user.id,
+                    "X-OpenWebUI-User-Email": user.email,
+                    "X-OpenWebUI-User-Role": user.role,
+                }
+                if ENABLE_FORWARD_USER_INFO_HEADERS
+                else {}
+            ),
+        }
+
+        for attempt in range(PROVIDER_429_RETRIES + 1):
+            t_post = time.perf_counter()
+            r = await session.request(
+                method="POST",
+                url=f"{url}/chat/completions",
+                data=payload,
+                headers=headers,
+            )
+            log_timing(
+                "openai.provider_post_until_headers",
+                time.perf_counter() - t_post,
+                chat_id=chat_id,
+                status=r.status,
+                sse="text/event-stream" in (r.headers.get("Content-Type") or ""),
+            )
+            if attempt == PROVIDER_429_RETRIES:
+                break
+            delay = await _short_retry_after(r)
+            if delay is None:
+                break
+            log.warning(
+                "Upstream chat completion 429, retrying in %ss chat_id=%s attempt=%s",
+                delay,
+                chat_id,
+                attempt + 1,
+            )
+            r.close()
+            await asyncio.sleep(delay)
 
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):
