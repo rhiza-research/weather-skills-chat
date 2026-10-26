@@ -5,6 +5,7 @@
 	import ChevronRight from '../icons/ChevronRight.svelte';
 	import { getArtifactArchiveUrl, getArtifactContentUrl } from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
+	import { htmlHasFigureJson } from '$lib/chat/artifactsList';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -16,6 +17,7 @@
 		children: any[];
 	};
 	export let depth = 0;
+	export let files: any[] = [];
 	export let expanded: Set<string> = new Set();
 	export let selectedImage: string | null = null;
 
@@ -138,7 +140,7 @@
 			: 'hover:bg-black/5 dark:hover:bg-white/5'}"
 	>
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1" style={pad}>
-			{#if file.kind === 'image' || file.kind === 'html'}
+			{#if file.kind === 'image' || (file.kind === 'html' && !htmlHasFigureJson(file, files))}
 				<button
 					type="button"
 					class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
@@ -154,7 +156,7 @@
 				</div>
 			{/if}
 			<div class="flex gap-1 shrink-0">
-				{#if file.kind === 'image' || file.kind === 'html'}
+				{#if file.kind === 'image' || (file.kind === 'html' && !htmlHasFigureJson(file, files))}
 					<button
 						type="button"
 						class="underline"
