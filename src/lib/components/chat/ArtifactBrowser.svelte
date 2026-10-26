@@ -89,7 +89,8 @@
 		return root.children;
 	};
 
-	$: tree = buildTree(files);
+	// Figure JSON is an implementation detail of its HTML artifact.
+	$: tree = buildTree((files || []).filter((file) => !file?.path?.endsWith('.plotly.json')));
 
 	const onToggle = (e: CustomEvent<{ path: string }>) => {
 		const path = e.detail?.path;
@@ -109,6 +110,7 @@
 			<ArtifactTreeNode
 				{node}
 				depth={0}
+				{files}
 				{expanded}
 				{selectedImage}
 				on:toggle={onToggle}

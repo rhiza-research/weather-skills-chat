@@ -5,7 +5,7 @@
 	import ChevronRight from '../icons/ChevronRight.svelte';
 	import { getArtifactArchiveUrl, getArtifactContentUrl } from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
-	import { htmlHasFigureJson } from '$lib/chat/artifactsList';
+	import { figureJsonPath, htmlHasFigureJson } from '$lib/chat/artifactsList';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -42,6 +42,14 @@
 	const kindLabel = (file) => {
 		if (!file) return 'folder';
 		return file.kind || (file.is_dir ? 'folder' : 'file');
+	};
+
+	// Open the figure JSON when the skill wrote one beside the HTML.
+	const openFile = (file) => {
+		const path =
+			file?.kind === 'html' && htmlHasFigureJson(file, files) ? figureJsonPath(file.path) : null;
+		if (path) dispatch('openFigure', { path, title: file.path });
+		else dispatch('openImage', { path: file.path });
 	};
 
 	const toggle = () => {
@@ -140,11 +148,11 @@
 			: 'hover:bg-black/5 dark:hover:bg-white/5'}"
 	>
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1" style={pad}>
-			{#if file.kind === 'image' || (file.kind === 'html' && !htmlHasFigureJson(file, files))}
+			{#if file.kind === 'image' || file.kind === 'html'}
 				<button
 					type="button"
 					class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
-					on:click={() => dispatch('openImage', { path: file.path })}
+					on:click={() => openFile(file)}
 				>
 					<span class="truncate">{node.name}</span>
 					<span class="text-gray-400 shrink-0">{file.kind}</span>
@@ -156,11 +164,11 @@
 				</div>
 			{/if}
 			<div class="flex gap-1 shrink-0">
-				{#if file.kind === 'image' || (file.kind === 'html' && !htmlHasFigureJson(file, files))}
+				{#if file.kind === 'image' || file.kind === 'html'}
 					<button
 						type="button"
 						class="underline"
-						on:click={() => dispatch('openImage', { path: file.path })}
+						on:click={() => openFile(file)}
 					>
 						{$i18n.t('Open')}
 					</button>
@@ -184,15 +192,6 @@
 						{$i18n.t('Download')}
 					</button>
 				{:else if !file.is_dir}
-					{#if node.name.endsWith('.plotly.json')}
-						<button
-							type="button"
-							class="underline"
-							on:click={() => dispatch('openFigure', { path: file.path })}
-						>
-							{$i18n.t('Open')}
-						</button>
-					{/if}
 					<a
 						class="underline"
 						href={getArtifactContentUrl($chatId, file.path)}

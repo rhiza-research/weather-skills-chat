@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onDestroy, getContext, createEventDispatcher } from 'svelte';
+	import { onDestroy, getContext, createEventDispatcher, tick } from 'svelte';
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
@@ -29,7 +29,7 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
-	import PlotlyFigure from '../common/PlotlyFigure.svelte';
+	import FigureHost from '../common/FigureHost.svelte';
 
 	export let history;
 	let messages = [];
@@ -43,6 +43,7 @@
 	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
 	let figure: any = null;
+	let figureHost: any;
 	let showImageModal = false;
 	// HTML artifacts (Plotly figures) load straight from the view route in a
 	// sandboxed frame, not as a blob.
@@ -102,11 +103,15 @@
 		modalAlt = path;
 	};
 
-	const openFigure = async (path: string) => {
-		revokePreview();
-		selectedImage = path;
+	const openFigure = async (path: string, title: string = '') => {
+		if (previewUrl) {
+			URL.revokeObjectURL(previewUrl);
+			previewUrl = null;
+		}
+		previewHtmlUrl = '';
+		selectedImage = null;
 		previewModified = fileModified(path);
-		modalAlt = path;
+		modalAlt = title || path;
 		const res = await fetch(getArtifactContentUrl($chatId, path), {
 			headers: { authorization: `Bearer ${localStorage.token}` }
 		});
@@ -115,6 +120,8 @@
 			return;
 		}
 		figure = await res.json();
+		await tick();
+		figureHost?.render(figure);
 	};
 
 	const clearPreview = () => {
@@ -424,7 +431,7 @@
 			</div>
 			{#if figure}
 				<div class="flex-1 min-h-0 w-full px-2 pb-2 bg-white dark:bg-gray-900">
-					<PlotlyFigure {figure} />
+					<FigureHost bind:this={figureHost} />
 				</div>
 			{:else if previewHtmlUrl}
 				<div
@@ -491,7 +498,7 @@
 				{files}
 				{selectedImage}
 				on:openImage={(e) => openImage(e.detail.path)}
-				on:openFigure={(e) => openFigure(e.detail.path)}
+				on:openFigure={(e) => openFigure(e.detail.path, e.detail.title)}
 			/>
 		</div>
 
