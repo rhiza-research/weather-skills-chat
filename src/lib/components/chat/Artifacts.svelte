@@ -29,6 +29,7 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
+	import PlotlyFigure from '../common/PlotlyFigure.svelte';
 
 	export let history;
 	let messages = [];
@@ -41,6 +42,7 @@
 	let files: any[] = [];
 	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
+	let figure: any = null;
 	let showImageModal = false;
 	// HTML artifacts (Plotly figures) load straight from the view route in a
 	// sandboxed frame, not as a blob.
@@ -63,6 +65,7 @@
 	let loadedArtifactKey = '';
 
 	const revokePreview = () => {
+		figure = null;
 		if (previewUrl) {
 			URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
@@ -99,6 +102,21 @@
 		modalAlt = path;
 	};
 
+	const openFigure = async (path: string) => {
+		revokePreview();
+		selectedImage = path;
+		previewModified = fileModified(path);
+		modalAlt = path;
+		const res = await fetch(getArtifactContentUrl($chatId, path), {
+			headers: { authorization: `Bearer ${localStorage.token}` }
+		});
+		if (!res.ok) {
+			toast.error($i18n.t('Could not load preview'));
+			return;
+		}
+		figure = await res.json();
+	};
+
 	const clearPreview = () => {
 		selectedImage = null;
 		modalAlt = '';
@@ -128,12 +146,14 @@
 			previewModified = modified;
 			if (isHtmlArtifact(selectedImage)) {
 				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
+			} else if (selectedImage.endsWith('.plotly.json')) {
+				openFigure(selectedImage);
 			} else {
 				loadPreview(getArtifactContentUrl($chatId, selectedImage));
 			}
 		}
 	}
-	$: hasPreview = !!previewUrl || !!previewHtmlUrl;
+	$: hasPreview = !!previewUrl || !!previewHtmlUrl || !!figure;
 
 	const closePanel = () => {
 		showArtifacts.set(false);
@@ -380,16 +400,18 @@
 					{previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
-					<Tooltip content={$i18n.t('Open in full screen')}>
-						<button
-							type="button"
-							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
-							on:click={expandPreview}
-							aria-label="Expand image"
-						>
-							<ArrowsPointingOut className="size-3.5" />
-						</button>
-					</Tooltip>
+					{#if !figure}
+						<Tooltip content={$i18n.t('Open in full screen')}>
+							<button
+								type="button"
+								class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+								on:click={expandPreview}
+								aria-label="Expand image"
+							>
+								<ArrowsPointingOut className="size-3.5" />
+							</button>
+						</Tooltip>
+					{/if}
 					<button
 						type="button"
 						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
@@ -400,7 +422,11 @@
 					</button>
 				</div>
 			</div>
-			{#if previewHtmlUrl}
+			{#if figure}
+				<div class="flex-1 min-h-0 w-full px-2 pb-2 bg-white dark:bg-gray-900">
+					<PlotlyFigure {figure} />
+				</div>
+			{:else if previewHtmlUrl}
 				<div
 					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
 				>
@@ -465,6 +491,7 @@
 				{files}
 				{selectedImage}
 				on:openImage={(e) => openImage(e.detail.path)}
+				on:openFigure={(e) => openFigure(e.detail.path)}
 			/>
 		</div>
 

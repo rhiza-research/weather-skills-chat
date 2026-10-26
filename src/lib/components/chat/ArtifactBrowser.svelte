@@ -113,6 +113,7 @@
 				{selectedImage}
 				on:toggle={onToggle}
 				on:openImage
+				on:openFigure
 			/>
 		{/each}
 	</div>

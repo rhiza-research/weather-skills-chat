@@ -98,6 +98,7 @@
 					{selectedImage}
 					on:toggle
 					on:openImage
+					on:openFigure
 				/>
 			{/each}
 		{/if}
@@ -181,6 +182,15 @@
 						{$i18n.t('Download')}
 					</button>
 				{:else if !file.is_dir}
+					{#if node.name.endsWith('.plotly.json')}
+						<button
+							type="button"
+							class="underline"
+							on:click={() => dispatch('openFigure', { path: file.path })}
+						>
+							{$i18n.t('Open')}
+						</button>
+					{/if}
 					<a
 						class="underline"
 						href={getArtifactContentUrl($chatId, file.path)}
