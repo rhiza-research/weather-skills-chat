@@ -104,6 +104,7 @@
 				<svelte:self
 					node={child}
 					depth={depth + 1}
+					{files}
 					{expanded}
 					{selectedImage}
 					on:toggle
