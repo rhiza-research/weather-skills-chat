@@ -6,7 +6,7 @@ An automation sends the same prompt as a new chat on a schedule, for example a w
 
 - A name.
 - The prompt each run sends.
-- The model to use.
+- The model to use. "Default model" uses the organization's default model, or the app's default when the organization has none.
 - A schedule, or no schedule for an automation that only runs when someone presses Run.
 - Whether scheduled runs are enabled.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.
