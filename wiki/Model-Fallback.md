@@ -13,7 +13,7 @@ The Helm chart passes only one provider key, so the backup connection's key is e
 
 ## Choosing a model's fallback
 
-Anyone who can edit a model sets its fallback in the model editor, under **Fallback Model**, below the base model. The list shows only models from other connections, as `connection/model-id`. A fallback from the same connection as the base model is refused when the model is saved.
+Anyone who can edit a model sets its fallback in the model editor, under **Fallback Model**, below the base model. The list shows only models from other connections, as `connection/model-id`. A fallback from the same connection as the base model is refused when the model is saved. The base model and fallback lists are in alphabetical order, and typing in them filters the models shown.
 
 The editor suggests a fallback by name:
 

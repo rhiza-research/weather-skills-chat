@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	bareModelName,
 	fallbackOptions,
+	matchesSearch,
+	modelSelectItems,
 	providerModelLabel,
 	suggestFallback,
 	type ListedModel
@@ -75,5 +77,26 @@ describe('suggestFallback', () => {
 	it('suggests nothing when no other connection has the model', () => {
 		expect(suggestFallback([openrouter('openai/gpt-5')], 'openai/gpt-5')).toBeNull();
 		expect(suggestFallback(models, 'weather-pipe')).toBeNull();
+	});
+});
+
+describe('modelSelectItems', () => {
+	it('labels models by connection and sorts them alphabetically', () => {
+		expect(modelSelectItems(models).map((item) => item.label)).toEqual([
+			'openrouter.ai/anthropic/claude-sonnet-4.5',
+			'openrouter.ai/openai/gpt-5',
+			'requesty/anthropic/claude-sonnet-4-5-20250929',
+			'requesty/bedrock/claude-sonnet-4-5',
+			'requesty/openai/gpt-5',
+			'Weather pipe'
+		]);
+	});
+});
+
+describe('matchesSearch', () => {
+	it('matches every typed word anywhere in the label, ignoring case', () => {
+		expect(matchesSearch('requesty/anthropic/claude-sonnet-4-5', 'Sonnet req')).toBe(true);
+		expect(matchesSearch('requesty/anthropic/claude-sonnet-4-5', 'sonnet openrouter')).toBe(false);
+		expect(matchesSearch('openrouter.ai/openai/gpt-5', '  ')).toBe(true);
 	});
 });

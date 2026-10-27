@@ -53,3 +53,21 @@ export const suggestFallback = (models: ListedModel[], baseId: string | null): s
 	const sameVendor = matches.find((m) => vendor(upstreamId(m)) === baseVendor);
 	return (sameVendor ?? matches[0])?.id ?? null;
 };
+
+export type SelectItem = { value: string | null; label: string };
+
+/** Select items for `models`, labelled `connection/model-id` and sorted by label. */
+export const modelSelectItems = (models: ListedModel[]): SelectItem[] =>
+	models
+		.map((m) => ({ value: m.id, label: providerModelLabel(m) }))
+		.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+
+/** Whether every word typed appears in `label`, ignoring case. */
+export const matchesSearch = (label: string, query: string): boolean => {
+	const text = label.toLowerCase();
+	return query
+		.toLowerCase()
+		.split(/\s+/)
+		.filter(Boolean)
+		.every((word) => text.includes(word));
+};

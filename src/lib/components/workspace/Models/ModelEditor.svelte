@@ -12,11 +12,8 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import { toast } from 'svelte-sonner';
-	import {
-		fallbackOptions,
-		providerModelLabel,
-		suggestFallback
-	} from '$lib/utils/modelFallback';
+	import SearchableSelect from '$lib/components/common/SearchableSelect.svelte';
+	import { fallbackOptions, modelSelectItems, suggestFallback } from '$lib/utils/modelFallback';
 
 	const i18n = getContext('i18n');
 
@@ -127,6 +124,13 @@
 
 		if (name === '') {
 			toast.error('Model Name is required.');
+		}
+
+		// The base model list is not a form field, so the form cannot require it.
+		if (preset && !info.base_model_id) {
+			toast.error($i18n.t('Select a base model'));
+			loading = false;
+			return;
 		}
 
 		if (!info.meta || typeof info.meta !== 'object') {
@@ -506,25 +510,21 @@
 							<div class=" text-sm font-semibold mb-1">{$i18n.t('Base Model (From)')}</div>
 
 							<div>
-								<select
-									class="text-sm w-full bg-transparent outline-hidden"
-									placeholder="Select a base model (e.g. llama3, gpt-4o)"
+								<SearchableSelect
 									bind:value={info.base_model_id}
+									items={modelSelectItems(
+										modelOptions.filter(
+											(m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena'
+										)
+									)}
+									placeholder={$i18n.t('Select a base model')}
+									searchPlaceholder={$i18n.t('Search models')}
+									noResults={$i18n.t('No results found')}
 									on:change={(e) => {
-										addUsage(e.target.value);
+										addUsage(e.detail);
 										suggestFallbackModel();
 									}}
-									required
-								>
-									<option value={null} class=" text-gray-900"
-										>{$i18n.t('Select a base model')}</option
-									>
-									{#each modelOptions.filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
-										<option value={baseModelOption.id} class=" text-gray-900"
-											>{providerModelLabel(baseModelOption)}</option
-										>
-									{/each}
-								</select>
+								/>
 							</div>
 						</div>
 
@@ -532,21 +532,20 @@
 							<div class=" text-sm font-semibold mb-1">{$i18n.t('Fallback Model')}</div>
 
 							<div>
-								<select
-									class="text-sm w-full bg-transparent outline-hidden"
+								<SearchableSelect
 									bind:value={fallbackModelId}
+									items={[
+										{ value: null, label: $i18n.t('None') },
+										...modelSelectItems(fallbackOptions(modelOptions, info.base_model_id))
+									]}
+									placeholder={$i18n.t('None')}
+									searchPlaceholder={$i18n.t('Search models')}
+									noResults={$i18n.t('No results found')}
+									disabled={!info.base_model_id}
 									on:change={() => {
 										fallbackNote = null;
 									}}
-									disabled={!info.base_model_id}
-								>
-									<option value={null} class=" text-gray-900">{$i18n.t('None')}</option>
-									{#each fallbackOptions(modelOptions, info.base_model_id) as fallbackOption}
-										<option value={fallbackOption.id} class=" text-gray-900"
-											>{providerModelLabel(fallbackOption)}</option
-										>
-									{/each}
-								</select>
+								/>
 							</div>
 
 							<div class="text-xs text-gray-500 mt-1">
