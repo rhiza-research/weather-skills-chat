@@ -70,36 +70,55 @@ def prefer_incoming_tool_version(incoming, existing) -> bool:
     return incoming_parsed > existing_parsed
 
 
-def _best_by_name(skills: list[dict]) -> dict[str, dict]:
-    """Highest-version enabled record for each skill name."""
-    best_by_name: dict[str, dict] = {}
+def newest_skill_per_name(skills: list[dict]) -> dict[str, dict]:
+    """The highest-version record for each skill name.
+
+    ``skills`` items are ``{id, skill_name, version}`` records the user can
+    use. On equal versions the first record wins.
+    """
+    newest: dict[str, dict] = {}
     for skill in skills:
-        if skill.get("enabled") is False:
-            continue
         name = skill.get("skill_name")
         if not name:
             continue
-        current = best_by_name.get(name)
+        current = newest.get(name)
         if current is None or prefer_incoming_tool_version(
             skill.get("version"), current.get("version")
         ):
-            best_by_name[name] = skill
-    return best_by_name
+            newest[name] = skill
+    return newest
 
 
-def resolve_skill_names(tool_ids: list[str], skills: list[dict]) -> list[str]:
-    """Replace each skill name with the tool ID of its newest usable copy.
+def resolve_tool_selection(entries: list[str], skills: list[dict]) -> list[str]:
+    """Tool IDs to offer for a selection of skill names and tool IDs.
 
-    ``skills`` are the records the user can access, as for
-    ``resolve_tool_ids_by_skill_version``. Tool IDs, and names with no
-    usable copy, pass through unchanged.
+    A skill name becomes its newest copy in ``skills``. A skill ID becomes a
+    same-named copy with a higher version, if there is one. Other tool IDs,
+    and names with no copy, pass through unchanged.
     """
-    best_by_name = _best_by_name(skills)
+    by_id = {s["id"]: s for s in skills if s.get("id")}
+    newest = newest_skill_per_name(skills)
+
     resolved: list[str] = []
-    for tool_id in tool_ids:
-        best = best_by_name.get(tool_id)
-        if best:
-            tool_id = best["id"]
+    for entry in entries:
+        tool_id = entry
+        if entry in newest:
+            tool_id = newest[entry]["id"]
+        elif entry in by_id:
+            skill = by_id[entry]
+            best = newest.get(skill.get("skill_name") or "")
+            if best and prefer_incoming_tool_version(
+                best.get("version"), skill.get("version")
+            ):
+                log.info(
+                    "Using %s@%s instead of %s@%s for skill %s",
+                    best.get("id"),
+                    best.get("version"),
+                    entry,
+                    skill.get("version"),
+                    skill.get("skill_name"),
+                )
+                tool_id = best["id"]
         if tool_id not in resolved:
             resolved.append(tool_id)
     return resolved
@@ -119,48 +138,6 @@ def tool_ids_with_skill_names(tool_ids: list[str], catalog: list) -> list[str]:
         if entry not in entries:
             entries.append(entry)
     return entries
-
-
-def resolve_tool_ids_by_skill_version(
-    tool_ids: list[str],
-    skills: list[dict],
-) -> list[str]:
-    """Replace enabled skill tool IDs with a same-named higher-version copy.
-
-    ``skills`` items are ``{id, skill_name, version, enabled?}`` records the
-    user can access. Equal versions keep the originally requested tool.
-    Unknown IDs (builtin servers, missing rows) pass through unchanged.
-
-    Globally disabled skills (``enabled is False``) are never chosen as an
-    upgrade target. If the user explicitly selected a disabled skill ID, that
-    ID is kept as-is so the chat bar can still opt in.
-    """
-    by_id = {s["id"]: s for s in skills if s.get("id")}
-    best_by_name = _best_by_name(skills)
-
-    resolved: list[str] = []
-    seen: set[str] = set()
-    for tool_id in tool_ids:
-        skill = by_id.get(tool_id)
-        if skill and skill.get("enabled") is not False:
-            best = best_by_name.get(skill.get("skill_name") or "")
-            if best and prefer_incoming_tool_version(
-                best.get("version"), skill.get("version")
-            ):
-                log.info(
-                    "Using %s@%s instead of %s@%s for skill %s",
-                    best.get("id"),
-                    best.get("version"),
-                    tool_id,
-                    skill.get("version"),
-                    skill.get("skill_name"),
-                )
-                tool_id = best["id"]
-        if tool_id in seen:
-            continue
-        seen.add(tool_id)
-        resolved.append(tool_id)
-    return resolved
 
 
 def register_tool_by_function_name(

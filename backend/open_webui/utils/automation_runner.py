@@ -94,18 +94,9 @@ def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[st
 
 def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[list[str]]:
     if automation.tool_ids is not None:
-        ids = list(automation.tool_ids)
-        if user is not None:
-            # Skills are saved by name: run the newest copy the user can use
-            # in this organization, as a chat does.
-            from open_webui.utils.skill_version import resolve_skill_names
-            from open_webui.utils.tools import accessible_skill_records
-
-            records = accessible_skill_records(
-                user, organization_id=getattr(automation, "organization_id", None)
-            )
-            ids = resolve_skill_names(ids, records)
-        return ids
+        # Skill names, which payload prep resolves to the newest copy in the
+        # automation's organization, as it does for a chat.
+        return list(automation.tool_ids)
     # Default: every tool/skill the owner can use in this organization.
     if user is not None:
         ids = _accessible_tool_ids(
