@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { onMount, getContext, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { toast } from 'svelte-sonner';
@@ -22,6 +22,7 @@
 	let runs = [];
 	let showForm = false;
 	let editingId = null;
+	let formEl: HTMLFormElement;
 	let form = emptyForm();
 
 	function emptyForm() {
@@ -116,7 +117,7 @@
 		runs = await getAutomationRuns(localStorage.token, automation.id).catch(() => []);
 	};
 
-	const openEdit = (automation) => {
+	const openEdit = async (automation) => {
 		editingId = automation.id;
 		form = {
 			name: automation.name,
@@ -130,6 +131,8 @@
 			features: automation.features ?? null
 		};
 		showForm = true;
+		await tick();
+		formEl?.scrollIntoView({ behavior: 'smooth' });
 	};
 
 	const closeForm = () => {
@@ -249,6 +252,7 @@
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
 		{#if showForm}
 			<form
+				bind:this={formEl}
 				class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex flex-col gap-2"
 				on:submit|preventDefault={submit}
 			>
