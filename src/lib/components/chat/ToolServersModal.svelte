@@ -29,7 +29,9 @@
 	let expanded: Record<string, boolean> = {};
 	let opened = false;
 
-	$: visibleTools = dedupeToolsForSelection($tools ?? []);
+	$: visibleTools = dedupeToolsForSelection($tools ?? []).sort((a, b) =>
+		toolBaseName(a).localeCompare(toolBaseName(b))
+	);
 
 	$: q = query.trim().toLowerCase();
 	$: filteredTools = q
