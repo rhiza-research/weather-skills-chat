@@ -70,6 +70,57 @@ def prefer_incoming_tool_version(incoming, existing) -> bool:
     return incoming_parsed > existing_parsed
 
 
+def _best_by_name(skills: list[dict]) -> dict[str, dict]:
+    """Highest-version enabled record for each skill name."""
+    best_by_name: dict[str, dict] = {}
+    for skill in skills:
+        if skill.get("enabled") is False:
+            continue
+        name = skill.get("skill_name")
+        if not name:
+            continue
+        current = best_by_name.get(name)
+        if current is None or prefer_incoming_tool_version(
+            skill.get("version"), current.get("version")
+        ):
+            best_by_name[name] = skill
+    return best_by_name
+
+
+def resolve_skill_names(tool_ids: list[str], skills: list[dict]) -> list[str]:
+    """Replace each skill name with the tool ID of its newest usable copy.
+
+    ``skills`` are the records the user can access, as for
+    ``resolve_tool_ids_by_skill_version``. Tool IDs, and names with no
+    usable copy, pass through unchanged.
+    """
+    best_by_name = _best_by_name(skills)
+    resolved: list[str] = []
+    for tool_id in tool_ids:
+        best = best_by_name.get(tool_id)
+        if best:
+            tool_id = best["id"]
+        if tool_id not in resolved:
+            resolved.append(tool_id)
+    return resolved
+
+
+def tool_ids_with_skill_names(tool_ids: list[str], catalog: list) -> list[str]:
+    """Replace skill tool IDs with skill names, so a later run can use the
+    newest copy. Other tool IDs, and entries not in ``catalog``, are kept."""
+    names_by_id = {}
+    for tool in catalog:
+        manifest = (tool.meta.manifest if tool.meta else None) or {}
+        if manifest.get("kind") == "skill" and manifest.get("skill_name"):
+            names_by_id[tool.id] = manifest["skill_name"]
+    entries: list[str] = []
+    for tool_id in tool_ids:
+        entry = names_by_id.get(tool_id, tool_id)
+        if entry not in entries:
+            entries.append(entry)
+    return entries
+
+
 def resolve_tool_ids_by_skill_version(
     tool_ids: list[str],
     skills: list[dict],
@@ -85,18 +136,7 @@ def resolve_tool_ids_by_skill_version(
     ID is kept as-is so the chat bar can still opt in.
     """
     by_id = {s["id"]: s for s in skills if s.get("id")}
-    best_by_name: dict[str, dict] = {}
-    for skill in skills:
-        if skill.get("enabled") is False:
-            continue
-        name = skill.get("skill_name")
-        if not name:
-            continue
-        current = best_by_name.get(name)
-        if current is None or prefer_incoming_tool_version(
-            skill.get("version"), current.get("version")
-        ):
-            best_by_name[name] = skill
+    best_by_name = _best_by_name(skills)
 
     resolved: list[str] = []
     seen: set[str] = set()

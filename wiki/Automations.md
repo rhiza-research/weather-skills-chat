@@ -10,6 +10,8 @@ An automation sends the same prompt as a new chat on a schedule, for example a w
 - A schedule, or no schedule for an automation that only runs when someone presses Run.
 - Whether scheduled runs are enabled.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.
+
+Skills are kept by name, not as a particular copy of a skill. Each run uses the copy of each named skill that its user can use in the automation's organization, picked the way a chat picks it on [[Skill Packs]]. Updating or reinstalling a skill pack, or adding a newer version of a skill, does not remove it from automations. A skill that the organization no longer has is left out of the run.
 - The organization it belongs to, and whether it is private or shared with the organization. Sharing is described on [[Organizations]].
 
 When the model creates an automation from a chat, it copies the chat's selected tools and features. If the model passes no prompt, the `create_automation` tool builds one from the chat's earlier user messages, leaving out the latest one. When the chat has only one user message, that message becomes the prompt. A chat with no requests yet produces no automation, and the model asks the user what the task should be.

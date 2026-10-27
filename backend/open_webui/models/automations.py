@@ -5,6 +5,8 @@ from typing import Optional
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, JSONField, get_db
+from open_webui.models.tools import Tools
+from open_webui.utils.skill_version import tool_ids_with_skill_names
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Boolean, Column, Text, or_
 
@@ -25,6 +27,8 @@ class Automation(Base):
     organization_id = Column(Text, nullable=False)
     visibility = Column(Text, nullable=False, default="private")
     source_chat_id = Column(Text, nullable=True)
+    # Skills by name, other tools by ID. Each run uses the newest copy of a
+    # skill usable in the organization. Null offers every usable tool.
     tool_ids = Column(JSONField, nullable=True)
     features = Column(JSONField, nullable=True)
     created_at = Column(BigInteger)
@@ -102,6 +106,12 @@ class AutomationUpdateForm(BaseModel):
     features: Optional[dict] = None
 
 
+def _with_skill_names(tool_ids: Optional[list[str]]) -> Optional[list[str]]:
+    if tool_ids is None:
+        return None
+    return tool_ids_with_skill_names(tool_ids, Tools.get_tool_catalog())
+
+
 class AutomationTable:
     def insert_new_automation(
         self, user_id: str, form_data: AutomationForm
@@ -123,7 +133,7 @@ class AutomationTable:
                     else (form_data.visibility or "private")
                 ),
                 source_chat_id=form_data.source_chat_id,
-                tool_ids=form_data.tool_ids,
+                tool_ids=_with_skill_names(form_data.tool_ids),
                 features=form_data.features,
                 created_at=now,
                 updated_at=now,
@@ -170,6 +180,8 @@ class AutomationTable:
         self, id: str, form_data: AutomationUpdateForm
     ) -> Optional[AutomationModel]:
         updates = form_data.model_dump(exclude_unset=True)
+        if "tool_ids" in updates:
+            updates["tool_ids"] = _with_skill_names(updates["tool_ids"])
         if "name" in updates and updates["name"] is not None:
             updates["name"] = updates["name"].strip()
         updates["updated_at"] = int(time.time())
