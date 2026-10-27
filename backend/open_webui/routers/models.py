@@ -34,6 +34,18 @@ def _visible_models(user, organization_id: str) -> list[ModelUserResponse]:
     return Models.list_for_organization(organization_id)
 
 
+def _check_fallback_model(request: Request, form_data: ModelForm) -> None:
+    from open_webui.routers.openai import fallback_model_error
+
+    error = fallback_model_error(
+        request,
+        form_data.base_model_id or form_data.id,
+        getattr(form_data.meta, "fallback_model_id", None),
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+
 @router.get("/", response_model=list[ModelUserResponse])
 def get_models(
     id: Optional[str] = None,
@@ -71,6 +83,7 @@ async def create_new_model(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.MODEL_ID_TAKEN,
         )
+    _check_fallback_model(request, form_data)
 
     form_data.organization_id = org_id
     form_data.visibility = visibility
@@ -200,6 +213,7 @@ async def update_model_by_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+    _check_fallback_model(request, form_data)
 
     form_data.organization_id = model.organization_id
     form_data.visibility = model.visibility

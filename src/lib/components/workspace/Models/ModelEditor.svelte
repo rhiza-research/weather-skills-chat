@@ -12,6 +12,11 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import { toast } from 'svelte-sonner';
+	import {
+		fallbackOptions,
+		providerModelLabel,
+		suggestFallback
+	} from '$lib/utils/modelFallback';
 
 	const i18n = getContext('i18n');
 
@@ -84,6 +89,18 @@
 	let filterIds = [];
 	let actionIds = [];
 
+	// The model a call is resent to when the base model's provider fails.
+	let fallbackModelId: string | null = null;
+	// 'suggested' after a name match filled it in, 'no-match' when none did.
+	let fallbackNote: 'suggested' | 'no-match' | null = null;
+
+	$: modelOptions = baseModels.length ? baseModels : ($models ?? []);
+
+	const suggestFallbackModel = () => {
+		fallbackModelId = suggestFallback(modelOptions, info.base_model_id);
+		fallbackNote = fallbackModelId ? 'suggested' : info.base_model_id ? 'no-match' : null;
+	};
+
 	const addUsage = (base_model_id) => {
 		const baseModel = ($models ?? []).find((m) => m.id === base_model_id);
 
@@ -122,6 +139,10 @@
 		}
 
 		info.meta.capabilities = capabilities;
+
+		if (preset) {
+			info.meta.fallback_model_id = fallbackModelId ?? null;
+		}
 
 		if (enableDescription) {
 			const description = (info.meta?.description ?? '').trim();
@@ -227,6 +248,10 @@
 					}
 				}
 
+				if ('fallback_model_id' in model.meta) {
+					fallbackModelId = model.meta.fallback_model_id ?? null;
+				}
+
 				params = { ...params, ...model?.params };
 				params.stop = params?.stop
 					? (typeof params.stop === 'string' ? params.stop.split(',') : (params?.stop ?? [])).join(
@@ -278,6 +303,11 @@
 					delete info.user;
 					delete info.created_at;
 					delete info.updated_at;
+				}
+
+				// A model saved before backups existed gets a suggestion to confirm.
+				if (preset && !('fallback_model_id' in model.meta)) {
+					suggestFallbackModel();
 				}
 				}
 			} catch (error) {
@@ -482,18 +512,55 @@
 									bind:value={info.base_model_id}
 									on:change={(e) => {
 										addUsage(e.target.value);
+										suggestFallbackModel();
 									}}
 									required
 								>
 									<option value={null} class=" text-gray-900"
 										>{$i18n.t('Select a base model')}</option
 									>
-									{#each (baseModels.length ? baseModels : ($models ?? [])).filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
+									{#each modelOptions.filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
 										<option value={baseModelOption.id} class=" text-gray-900"
-											>{baseModelOption.name}</option
+											>{providerModelLabel(baseModelOption)}</option
 										>
 									{/each}
 								</select>
+							</div>
+						</div>
+
+						<div class="my-1">
+							<div class=" text-sm font-semibold mb-1">{$i18n.t('Fallback Model')}</div>
+
+							<div>
+								<select
+									class="text-sm w-full bg-transparent outline-hidden"
+									bind:value={fallbackModelId}
+									on:change={() => {
+										fallbackNote = null;
+									}}
+									disabled={!info.base_model_id}
+								>
+									<option value={null} class=" text-gray-900">{$i18n.t('None')}</option>
+									{#each fallbackOptions(modelOptions, info.base_model_id) as fallbackOption}
+										<option value={fallbackOption.id} class=" text-gray-900"
+											>{providerModelLabel(fallbackOption)}</option
+										>
+									{/each}
+								</select>
+							</div>
+
+							<div class="text-xs text-gray-500 mt-1">
+								{#if fallbackNote === 'suggested'}
+									{$i18n.t(
+										'Suggested because the model name matches. Check it is the right model before saving.'
+									)}
+								{:else if fallbackNote === 'no-match'}
+									{$i18n.t('No model with this name on another connection.')}
+								{:else}
+									{$i18n.t(
+										"Replies switch to this model when the base model's provider is not responding."
+									)}
+								{/if}
 							</div>
 						</div>
 					{/if}

@@ -58,7 +58,7 @@ Many settings can be changed by an admin while the app runs, and the app stores 
 
 ## Model providers
 
-The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings.
+The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings. A second provider can serve as a backup when the first stops answering. See [[Model Fallback]].
 
 | Env var | Default | Effect |
 |-|-|-|
