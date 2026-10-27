@@ -8,6 +8,7 @@
 		isSkillDefaultEnabled,
 		isSkillTool,
 		remapSelectedToolIdsToHighestSkills,
+		sortToolsByName,
 		toolBaseName,
 		toolSkillRepoRef,
 		toolSkillVersion
@@ -29,9 +30,7 @@
 	let expanded: Record<string, boolean> = {};
 	let opened = false;
 
-	$: visibleTools = dedupeToolsForSelection($tools ?? []).sort((a, b) =>
-		toolBaseName(a).localeCompare(toolBaseName(b))
-	);
+	$: visibleTools = sortToolsByName(dedupeToolsForSelection($tools ?? []));
 
 	$: q = query.trim().toLowerCase();
 	$: filteredTools = q

@@ -6,6 +6,7 @@ import {
 	isSkillDefaultEnabled,
 	parseGitOrgRepo,
 	remapSelectedToolIdsToHighestSkills,
+	sortToolsByName,
 	toolSelectionLabel,
 	toolSkillRepoRef
 } from './toolDisplay';
@@ -76,6 +77,13 @@ describe('dedupeToolsForSelection', () => {
 	it('keeps the first entry when versions are equal', () => {
 		const tools = [skill('a', 'plot', '1.0.0', 'main'), skill('b', 'plot', '1.0.0', 'old')];
 		expect(dedupeToolsForSelection(tools).map((t) => t.id)).toEqual(['a']);
+	});
+});
+
+describe('sortToolsByName', () => {
+	it('orders tools alphabetically by display name', () => {
+		const tools = [skill('a', 'plot', '1.0.0'), skill('b', 'clip-region', '0.3.0')];
+		expect(sortToolsByName(tools).map((t) => t.id)).toEqual(['b', 'a']);
 	});
 });
 
