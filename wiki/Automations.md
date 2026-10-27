@@ -1,6 +1,6 @@
 # Automations
 
-An automation sends the same prompt as a new chat on a schedule, for example a weekly rainfall summary every Monday morning. Users manage automations on the Automations page. The model can also turn the current chat into an automation with the `create_automation` tool on [[Built-in Tools]].
+An automation sends the same prompt as a new chat on a schedule, for example a weekly rainfall summary every Monday morning. Users manage automations on the Automations page. In a chat, the model can also turn the current chat into an automation, and list, change, or delete automations, with the automation tools on [[Built-in Tools]].
 
 ## What an automation holds
 
