@@ -7,12 +7,20 @@ import redis
 
 from datetime import datetime
 from pathlib import Path
-from typing import Generic, Optional, TypeVar
+from typing import Annotated, Any, Generic, Optional, TypeVar
 from urllib.parse import urlparse
 
 import requests
-from pydantic import BaseModel
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    StringConstraints,
+    TypeAdapter,
+    ValidationError,
+    with_config,
+)
 from sqlalchemy import JSON, Column, DateTime, Integer, func
+from typing_extensions import NotRequired, TypedDict
 
 from open_webui.env import (
     DATA_DIR,
@@ -187,6 +195,73 @@ def persistent_config_env_is_set(env_name: str) -> bool:
     Unset keys fall through to the database (if persistence is on) then the default.
     """
     return env_name in os.environ
+
+
+def env_json(env_name: str, default, schema, expected: str):
+    """Read a structured setting from its variable as JSON.
+
+    The parsed value is returned as given; ``schema`` only checks it, so an
+    explicit value is never rewritten or swapped for ``default``. Bad input
+    raises, which stops startup, instead of running with a value nobody set.
+    """
+    if env_name not in os.environ:
+        return default
+    try:
+        value = json.loads(os.environ[env_name])
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{env_name} is not valid JSON: {e}") from e
+    try:
+        TypeAdapter(schema).validate_python(value, strict=True)
+    except ValidationError as e:
+        raise ValueError(f"{env_name} must be {expected}: {e}") from e
+    return value
+
+
+def env_list(env_name: str, allow_empty: bool = False) -> Optional[list[str]]:
+    """Split a `;`-separated variable into trimmed entries, or None when it is unset.
+
+    allow_empty: True for keys, where an empty entry is a connection with no key.
+        False for addresses, where an empty entry, from an empty value or a
+        stray `;`, stops startup because it would be a connection with no address.
+    """
+    if env_name not in os.environ:
+        return None
+    entries = [entry.strip() for entry in os.environ[env_name].split(";")]
+    if not allow_empty and not all(entries):
+        if len(entries) == 1:
+            raise ValueError(f"{env_name} is empty; set it to an address")
+        raise ValueError(f"{env_name} has an empty entry; remove the extra ;")
+    return entries
+
+
+# The singular aliases may be deprecated in favor of the plural names later.
+def env_list_or_alias(
+    env_name: str, alias: str, allow_empty: bool = False
+) -> tuple[str, Optional[list[str]]]:
+    """Read a `;`-separated setting from its own name or from its alias.
+
+    Returns the name that was used (``env_name`` when neither is set) and the
+    entries from ``env_list``, or None when unset. Either name pins the setting
+    and is parsed the same way. When both are set, ``env_name`` wins.
+    The warning names variables only, never their values, since these hold keys.
+    """
+    if env_name in os.environ and alias in os.environ:
+        log.warning(f"{env_name} and {alias} are both set; using {env_name}")
+    used = alias if alias in os.environ and env_name not in os.environ else env_name
+    return used, env_list(used, allow_empty)
+
+
+def check_connection_config_indices(configs, base_urls) -> None:
+    """Refuse per-connection settings for a connection that has no address."""
+    if not persistent_config_env_is_set(configs.env_name):
+        return
+    count = len(base_urls.value)
+    for key in configs.value:
+        if int(key) >= count:
+            raise ValueError(
+                f"{configs.env_name} has settings for connection {key}, but "
+                f"{base_urls.env_name} has {count} address(es), numbered from 0"
+            )
 
 
 class PersistentConfig(Generic[T]):
@@ -498,7 +573,7 @@ OAUTH_EMAIL_CLAIM = PersistentConfig(
 OAUTH_GROUPS_CLAIM = PersistentConfig(
     "OAUTH_GROUPS_CLAIM",
     "oauth.oidc.group_claim",
-    os.environ.get("OAUTH_GROUP_CLAIM", "groups"),
+    os.environ.get("OAUTH_GROUPS_CLAIM", "groups"),
 )
 
 ENABLE_OAUTH_ROLE_MANAGEMENT = PersistentConfig(
@@ -805,53 +880,40 @@ ENABLE_OLLAMA_API = PersistentConfig(
     os.environ.get("ENABLE_OLLAMA_API", "False").lower() == "true",
 )
 
-OLLAMA_API_BASE_URL = os.environ.get(
-    "OLLAMA_API_BASE_URL", "http://localhost:11434/api"
+# No default server: the app connects only to Ollama addresses that are set.
+OLLAMA_BASE_URLS_ENV, OLLAMA_BASE_URLS = env_list_or_alias(
+    "OLLAMA_BASE_URLS", "OLLAMA_BASE_URL"
+)
+if OLLAMA_BASE_URLS is None:
+    OLLAMA_BASE_URLS = []
+OLLAMA_BASE_URLS = [url[:-1] if url.endswith("/") else url for url in OLLAMA_BASE_URLS]
+# Checked again after stripping, so an address of only `/` is refused too.
+if not all(OLLAMA_BASE_URLS):
+    raise ValueError(f"{OLLAMA_BASE_URLS_ENV} has an address that is only /")
+# Named by whichever variable was used, so that one pins the setting.
+OLLAMA_BASE_URLS = PersistentConfig(
+    OLLAMA_BASE_URLS_ENV, "ollama.base_urls", OLLAMA_BASE_URLS
 )
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "")
-if OLLAMA_BASE_URL:
-    # Remove trailing slash
-    OLLAMA_BASE_URL = (
-        OLLAMA_BASE_URL[:-1] if OLLAMA_BASE_URL.endswith("/") else OLLAMA_BASE_URL
-    )
-
-
-K8S_FLAG = os.environ.get("K8S_FLAG", "")
-USE_OLLAMA_DOCKER = os.environ.get("USE_OLLAMA_DOCKER", "false")
-
-if OLLAMA_BASE_URL == "" and OLLAMA_API_BASE_URL != "":
-    OLLAMA_BASE_URL = (
-        OLLAMA_API_BASE_URL[:-4]
-        if OLLAMA_API_BASE_URL.endswith("/api")
-        else OLLAMA_API_BASE_URL
-    )
-
-if ENV == "prod":
-    if OLLAMA_BASE_URL == "/ollama" and not K8S_FLAG:
-        if USE_OLLAMA_DOCKER.lower() == "true":
-            # if you use all-in-one docker container (Open WebUI + Ollama)
-            # with the docker build arg USE_OLLAMA=true (--build-arg="USE_OLLAMA=true") this only works with http://localhost:11434
-            OLLAMA_BASE_URL = "http://localhost:11434"
-        else:
-            OLLAMA_BASE_URL = "http://host.docker.internal:11434"
-    elif K8S_FLAG:
-        OLLAMA_BASE_URL = "http://ollama-service.open-webui.svc.cluster.local:11434"
-
-
-OLLAMA_BASE_URLS = os.environ.get("OLLAMA_BASE_URLS", "")
-OLLAMA_BASE_URLS = OLLAMA_BASE_URLS if OLLAMA_BASE_URLS != "" else OLLAMA_BASE_URL
-
-OLLAMA_BASE_URLS = [url.strip() for url in OLLAMA_BASE_URLS.split(";")]
-OLLAMA_BASE_URLS = PersistentConfig(
-    "OLLAMA_BASE_URLS", "ollama.base_urls", OLLAMA_BASE_URLS
+# Per-connection settings, keyed by the connection's position in the URL list.
+CONNECTION_CONFIGS_SCHEMA = dict[
+    Annotated[str, StringConstraints(pattern=r"^\d+$")], dict[str, Any]
+]
+CONNECTION_CONFIGS_EXPECTED = (
+    'a JSON object keyed by connection index ("0", "1", ...) whose values are objects'
 )
 
 OLLAMA_API_CONFIGS = PersistentConfig(
     "OLLAMA_API_CONFIGS",
     "ollama.api_configs",
-    {},
+    env_json(
+        "OLLAMA_API_CONFIGS",
+        {},
+        CONNECTION_CONFIGS_SCHEMA,
+        CONNECTION_CONFIGS_EXPECTED,
+    ),
 )
+check_connection_config_indices(OLLAMA_API_CONFIGS, OLLAMA_BASE_URLS)
 
 ####################################
 # OPENAI_API
@@ -865,42 +927,54 @@ ENABLE_OPENAI_API = PersistentConfig(
 )
 
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_API_BASE_URL = os.environ.get("OPENAI_API_BASE_URL", "")
+# An empty key is a connection with no key, as the admin settings save it.
+OPENAI_API_KEYS_ENV, OPENAI_API_KEYS = env_list_or_alias(
+    "OPENAI_API_KEYS", "OPENAI_API_KEY", allow_empty=True
+)
+OPENAI_API_BASE_URLS_ENV, OPENAI_API_BASE_URLS = env_list_or_alias(
+    "OPENAI_API_BASE_URLS", "OPENAI_API_BASE_URL"
+)
+# An empty or blank key value means no key for every address.
+if OPENAI_API_KEYS == [""] and OPENAI_API_BASE_URLS is not None:
+    OPENAI_API_KEYS = [""] * len(OPENAI_API_BASE_URLS)
+if (
+    OPENAI_API_KEYS is not None
+    and OPENAI_API_BASE_URLS is not None
+    and len(OPENAI_API_KEYS) != len(OPENAI_API_BASE_URLS)
+):
+    def entries(count: int) -> str:
+        return f"{count} entry" if count == 1 else f"{count} entries"
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_API_BASE_URL = os.environ.get("GEMINI_API_BASE_URL", "")
+    raise ValueError(
+        f"{OPENAI_API_BASE_URLS_ENV} has {entries(len(OPENAI_API_BASE_URLS))} and "
+        f"{OPENAI_API_KEYS_ENV} has {entries(len(OPENAI_API_KEYS))}; "
+        "they must have one key per address"
+    )
 
-
-if OPENAI_API_BASE_URL == "":
-    OPENAI_API_BASE_URL = "https://api.openai.com/v1"
-
-OPENAI_API_KEYS = os.environ.get("OPENAI_API_KEYS", "")
-OPENAI_API_KEYS = OPENAI_API_KEYS if OPENAI_API_KEYS != "" else OPENAI_API_KEY
-
-OPENAI_API_KEYS = [url.strip() for url in OPENAI_API_KEYS.split(";")]
+# Each is named by whichever variable was used, so that one pins the setting.
+if OPENAI_API_KEYS is None:
+    OPENAI_API_KEYS = [""]
 OPENAI_API_KEYS = PersistentConfig(
-    "OPENAI_API_KEYS", "openai.api_keys", OPENAI_API_KEYS
+    OPENAI_API_KEYS_ENV, "openai.api_keys", OPENAI_API_KEYS
 )
 
-OPENAI_API_BASE_URLS = os.environ.get("OPENAI_API_BASE_URLS", "")
-OPENAI_API_BASE_URLS = (
-    OPENAI_API_BASE_URLS if OPENAI_API_BASE_URLS != "" else OPENAI_API_BASE_URL
-)
-
-OPENAI_API_BASE_URLS = [
-    url.strip() if url != "" else "https://api.openai.com/v1"
-    for url in OPENAI_API_BASE_URLS.split(";")
-]
+if OPENAI_API_BASE_URLS is None:
+    OPENAI_API_BASE_URLS = ["https://api.openai.com/v1"]
 OPENAI_API_BASE_URLS = PersistentConfig(
-    "OPENAI_API_BASE_URLS", "openai.api_base_urls", OPENAI_API_BASE_URLS
+    OPENAI_API_BASE_URLS_ENV, "openai.api_base_urls", OPENAI_API_BASE_URLS
 )
 
 OPENAI_API_CONFIGS = PersistentConfig(
     "OPENAI_API_CONFIGS",
     "openai.api_configs",
-    {},
+    env_json(
+        "OPENAI_API_CONFIGS",
+        {},
+        CONNECTION_CONFIGS_SCHEMA,
+        CONNECTION_CONFIGS_EXPECTED,
+    ),
 )
+check_connection_config_indices(OPENAI_API_CONFIGS, OPENAI_API_BASE_URLS)
 
 # Get the actual OpenAI API key based on the base URL
 OPENAI_API_KEY = ""
@@ -917,10 +991,24 @@ OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 ####################################
 
 
+@with_config(ConfigDict(extra="forbid"))
+class ToolServerConnectionEntry(TypedDict):
+    url: str
+    path: str
+    auth_type: NotRequired[Optional[str]]
+    key: NotRequired[Optional[str]]
+    config: NotRequired[Optional[dict[str, Any]]]
+
+
 TOOL_SERVER_CONNECTIONS = PersistentConfig(
     "TOOL_SERVER_CONNECTIONS",
     "tool_server.connections",
-    [],
+    env_json(
+        "TOOL_SERVER_CONNECTIONS",
+        [],
+        list[ToolServerConnectionEntry],
+        'a JSON array of objects, each with string "url" and "path"',
+    ),
 )
 
 ####################################
@@ -960,33 +1048,45 @@ DEFAULT_MODELS = PersistentConfig(
     "DEFAULT_MODELS", "ui.default_models", os.environ.get("DEFAULT_MODELS", None)
 )
 
+
+@with_config(ConfigDict(extra="forbid"))
+class PromptSuggestionEntry(TypedDict):
+    title: list[str]
+    content: str
+
+
 DEFAULT_PROMPT_SUGGESTIONS = PersistentConfig(
     "DEFAULT_PROMPT_SUGGESTIONS",
     "ui.prompt_suggestions",
-    [
-        {
-            "title": ["Download a forecast", "for the next two weeks"],
-            "content": "Download a two-week precipitation forecast for Kenya and plot it.",
-        },
-        {
-            "title": ["Show observations", "from CHIRPS or IMERG"],
-            "content": "Fetch recent CHIRPS rainfall observations for Ethiopia and show a map.",
-        },
-        {
-            "title": ["Compare forecast vs observations", "for last month"],
-            "content": "Compare last month's forecast precipitation against CHIRPS observations for Ghana.",
-        },
-        {
-            "title": ["Plot a time series", "of rainfall for a country"],
-            "content": "Plot a daily rainfall time series for Uganda over the last 30 days.",
-        },
-    ],
+    env_json(
+        "DEFAULT_PROMPT_SUGGESTIONS",
+        [
+            {
+                "title": ["Download a forecast", "for the next two weeks"],
+                "content": "Download a two-week precipitation forecast for Kenya and plot it.",
+            },
+            {
+                "title": ["Show observations", "from CHIRPS or IMERG"],
+                "content": "Fetch recent CHIRPS rainfall observations for Ethiopia and show a map.",
+            },
+            {
+                "title": ["Compare forecast vs observations", "for last month"],
+                "content": "Compare last month's forecast precipitation against CHIRPS observations for Ghana.",
+            },
+            {
+                "title": ["Plot a time series", "of rainfall for a country"],
+                "content": "Plot a daily rainfall time series for Uganda over the last 30 days.",
+            },
+        ],
+        list[PromptSuggestionEntry],
+        'a JSON array of objects, each with a "title" array of strings and a string "content"',
+    ),
 )
 
 MODEL_ORDER_LIST = PersistentConfig(
     "MODEL_ORDER_LIST",
     "ui.model_order_list",
-    [],
+    env_json("MODEL_ORDER_LIST", [], list[str], "a JSON array of model id strings"),
 )
 
 DEFAULT_USER_ROLE = PersistentConfig(
@@ -1155,7 +1255,12 @@ DEFAULT_USER_PERMISSIONS = {
 USER_PERMISSIONS = PersistentConfig(
     "USER_PERMISSIONS",
     "user.permissions",
-    DEFAULT_USER_PERMISSIONS,
+    env_json(
+        "USER_PERMISSIONS",
+        DEFAULT_USER_PERMISSIONS,
+        dict[str, dict[str, bool]],
+        "a JSON object of permission groups, each an object of true or false flags",
+    ),
 )
 
 ENABLE_CHANNELS = PersistentConfig(
@@ -1170,10 +1275,24 @@ ENABLE_EVALUATION_ARENA_MODELS = PersistentConfig(
     "evaluation.arena.enable",
     os.environ.get("ENABLE_EVALUATION_ARENA_MODELS", "True").lower() == "true",
 )
+
+
+@with_config(ConfigDict(extra="forbid"))
+class ArenaModelEntry(TypedDict):
+    id: str
+    name: str
+    meta: dict[str, Any]
+
+
 EVALUATION_ARENA_MODELS = PersistentConfig(
     "EVALUATION_ARENA_MODELS",
     "evaluation.arena.models",
-    [],
+    env_json(
+        "EVALUATION_ARENA_MODELS",
+        [],
+        list[ArenaModelEntry],
+        'a JSON array of objects, each with string "id" and "name" and an object "meta"',
+    ),
 )
 
 DEFAULT_ARENA_MODEL = {
@@ -1259,14 +1378,21 @@ class BannerModel(BaseModel):
     timestamp: int
 
 
-try:
-    banners = json.loads(os.environ.get("WEBUI_BANNERS", "[]"))
-    banners = [BannerModel(**banner) for banner in banners]
-except Exception as e:
-    log.exception(f"Error loading WEBUI_BANNERS: {e}")
-    banners = []
+class BannerEntry(BannerModel):
+    model_config = ConfigDict(extra="forbid")
 
-WEBUI_BANNERS = PersistentConfig("WEBUI_BANNERS", "ui.banners", banners)
+
+WEBUI_BANNERS = PersistentConfig(
+    "WEBUI_BANNERS",
+    "ui.banners",
+    env_json(
+        "WEBUI_BANNERS",
+        [],
+        list[BannerEntry],
+        'a JSON array of objects, each with string "id", "type" and "content", '
+        'a true or false "dismissible", an integer "timestamp" and an optional string "title"',
+    ),
+)
 
 
 SHOW_ADMIN_DETAILS = PersistentConfig(
@@ -1617,48 +1743,32 @@ RENDERING_PROMPT = PersistentConfig(
 CODE_INTERPRETER_JUPYTER_URL = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_URL",
     "code_interpreter.jupyter.url",
-    os.environ.get(
-        "CODE_INTERPRETER_JUPYTER_URL", os.environ.get("CODE_EXECUTION_JUPYTER_URL", "")
-    ),
+    os.environ.get("CODE_INTERPRETER_JUPYTER_URL", ""),
 )
 
 CODE_INTERPRETER_JUPYTER_AUTH = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_AUTH",
     "code_interpreter.jupyter.auth",
-    os.environ.get(
-        "CODE_INTERPRETER_JUPYTER_AUTH",
-        os.environ.get("CODE_EXECUTION_JUPYTER_AUTH", ""),
-    ),
+    os.environ.get("CODE_INTERPRETER_JUPYTER_AUTH", ""),
 )
 
 CODE_INTERPRETER_JUPYTER_AUTH_TOKEN = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_AUTH_TOKEN",
     "code_interpreter.jupyter.auth_token",
-    os.environ.get(
-        "CODE_INTERPRETER_JUPYTER_AUTH_TOKEN",
-        os.environ.get("CODE_EXECUTION_JUPYTER_AUTH_TOKEN", ""),
-    ),
+    os.environ.get("CODE_INTERPRETER_JUPYTER_AUTH_TOKEN", ""),
 )
 
 
 CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD",
     "code_interpreter.jupyter.auth_password",
-    os.environ.get(
-        "CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD",
-        os.environ.get("CODE_EXECUTION_JUPYTER_AUTH_PASSWORD", ""),
-    ),
+    os.environ.get("CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD", ""),
 )
 
 CODE_INTERPRETER_JUPYTER_TIMEOUT = PersistentConfig(
     "CODE_INTERPRETER_JUPYTER_TIMEOUT",
     "code_interpreter.jupyter.timeout",
-    int(
-        os.environ.get(
-            "CODE_INTERPRETER_JUPYTER_TIMEOUT",
-            os.environ.get("CODE_EXECUTION_JUPYTER_TIMEOUT", "60"),
-        )
-    ),
+    int(os.environ.get("CODE_INTERPRETER_JUPYTER_TIMEOUT", "60")),
 )
 
 EMAIL_TOOL_SMTP_HOST = PersistentConfig(
@@ -1744,7 +1854,6 @@ if VECTOR_DB == "chroma":
     else:
         CHROMA_HTTP_HEADERS = None
     CHROMA_HTTP_SSL = os.environ.get("CHROMA_HTTP_SSL", "false").lower() == "true"
-# this uses the model defined in the Dockerfile ENV variable. If you dont use docker or docker based deployments such as k8s, the default embedding model will be used (sentence-transformers/all-MiniLM-L6-v2)
 
 # Milvus
 
@@ -1943,10 +2052,7 @@ RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
 RAG_EMBEDDING_BATCH_SIZE = PersistentConfig(
     "RAG_EMBEDDING_BATCH_SIZE",
     "rag.embedding_batch_size",
-    int(
-        os.environ.get("RAG_EMBEDDING_BATCH_SIZE")
-        or os.environ.get("RAG_EMBEDDING_OPENAI_BATCH_SIZE", "1")
-    ),
+    int(os.environ.get("RAG_EMBEDDING_BATCH_SIZE", "1")),
 )
 
 RAG_EMBEDDING_QUERY_PREFIX = os.environ.get("RAG_EMBEDDING_QUERY_PREFIX", None)
@@ -2051,7 +2157,7 @@ RAG_OPENAI_API_KEY = PersistentConfig(
 RAG_OLLAMA_BASE_URL = PersistentConfig(
     "RAG_OLLAMA_BASE_URL",
     "rag.ollama.url",
-    os.getenv("RAG_OLLAMA_BASE_URL", OLLAMA_BASE_URL),
+    os.getenv("RAG_OLLAMA_BASE_URL", ""),
 )
 
 RAG_OLLAMA_API_KEY = PersistentConfig(
@@ -2129,11 +2235,16 @@ WEB_SEARCH_RESULT_COUNT = PersistentConfig(
 WEB_SEARCH_DOMAIN_FILTER_LIST = PersistentConfig(
     "WEB_SEARCH_DOMAIN_FILTER_LIST",
     "rag.web.search.domain.filter_list",
-    [
-        # "wikipedia.com",
-        # "wikimedia.org",
-        # "wikidata.org",
-    ],
+    env_json(
+        "WEB_SEARCH_DOMAIN_FILTER_LIST",
+        [
+            # "wikipedia.com",
+            # "wikimedia.org",
+            # "wikidata.org",
+        ],
+        list[str],
+        "a JSON array of domain strings",
+    ),
 )
 
 WEB_SEARCH_CONCURRENT_REQUESTS = PersistentConfig(
@@ -2525,10 +2636,24 @@ COMFYUI_WORKFLOW = PersistentConfig(
     os.getenv("COMFYUI_WORKFLOW", COMFYUI_DEFAULT_WORKFLOW),
 )
 
+
+@with_config(ConfigDict(extra="forbid"))
+class ComfyUINodeEntry(TypedDict):
+    type: NotRequired[Optional[str]]
+    node_ids: NotRequired[list[str]]
+    key: NotRequired[Optional[str]]
+    value: NotRequired[Optional[str]]
+
+
 COMFYUI_WORKFLOW_NODES = PersistentConfig(
-    "COMFYUI_WORKFLOW",
+    "COMFYUI_WORKFLOW_NODES",
     "image_generation.comfyui.nodes",
-    [],
+    env_json(
+        "COMFYUI_WORKFLOW_NODES",
+        [],
+        list[ComfyUINodeEntry],
+        'a JSON array of objects with optional "type", "node_ids", "key" and "value"',
+    ),
 )
 
 IMAGES_OPENAI_API_BASE_URL = PersistentConfig(
@@ -2545,12 +2670,12 @@ IMAGES_OPENAI_API_KEY = PersistentConfig(
 IMAGES_GEMINI_API_BASE_URL = PersistentConfig(
     "IMAGES_GEMINI_API_BASE_URL",
     "image_generation.gemini.api_base_url",
-    os.getenv("IMAGES_GEMINI_API_BASE_URL", GEMINI_API_BASE_URL),
+    os.getenv("IMAGES_GEMINI_API_BASE_URL", ""),
 )
 IMAGES_GEMINI_API_KEY = PersistentConfig(
     "IMAGES_GEMINI_API_KEY",
     "image_generation.gemini.api_key",
-    os.getenv("IMAGES_GEMINI_API_KEY", GEMINI_API_KEY),
+    os.getenv("IMAGES_GEMINI_API_KEY", ""),
 )
 
 IMAGE_SIZE = PersistentConfig(
@@ -2757,7 +2882,7 @@ LDAP_SEARCH_BASE = PersistentConfig(
 LDAP_SEARCH_FILTERS = PersistentConfig(
     "LDAP_SEARCH_FILTER",
     "ldap.server.search_filter",
-    os.environ.get("LDAP_SEARCH_FILTER", os.environ.get("LDAP_SEARCH_FILTERS", "")),
+    os.environ.get("LDAP_SEARCH_FILTER", ""),
 )
 
 LDAP_USE_TLS = PersistentConfig(

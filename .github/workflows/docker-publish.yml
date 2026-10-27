@@ -115,3 +115,10 @@ jobs:
           fi
           git commit -m "chore: pin image to ${IMAGE_TAG} [skip ci]"
           git push --force origin "HEAD:${DEPLOY_BRANCH}"
+
+      # :prod is the image that the prod branch's Chart.appVersion pins.
+      - name: Tag image prod
+        if: steps.deploy.outputs.branch == 'prod'
+        env:
+          IMAGE: ghcr.io/rhiza-research/weather-skills-chat
+        run: docker buildx imagetools create --tag "${IMAGE}:prod" "${IMAGE}:${IMAGE_TAG}"
