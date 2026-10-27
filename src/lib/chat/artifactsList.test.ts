@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
-import { htmlHasFigureJson, shouldLoadArtifactList } from './artifactsList';
+import { htmlHasFigureJson, isFigureJson, shouldLoadArtifactList } from './artifactsList';
 
 const artifactsSource = readFileSync(
 	resolve(dirname(fileURLToPath(import.meta.url)), '../components/chat/Artifacts.svelte'),
@@ -35,4 +35,16 @@ test('an HTML figure with a JSON sibling is opened from the JSON', () => {
 	expect(htmlHasFigureJson(files[2], files)).toBe(false);
 	expect(htmlHasFigureJson(files[1], files)).toBe(false);
 	expect(htmlHasFigureJson({ path: 'plot.png', kind: 'image' }, files)).toBe(false);
+});
+
+test('a figure JSON is hidden only beside its HTML artifact', () => {
+	const files = [
+		{ path: 'rain.html', kind: 'html' },
+		{ path: 'rain.plotly.json', kind: 'file' },
+		{ path: 'orphan.plotly.json', kind: 'file' }
+	];
+	expect(isFigureJson(files[1], files)).toBe(true);
+	expect(isFigureJson(files[2], files)).toBe(false);
+	expect(isFigureJson(files[0], files)).toBe(false);
+	expect(isFigureJson({ path: 'other.plotly.json', kind: 'file' }, files)).toBe(false);
 });

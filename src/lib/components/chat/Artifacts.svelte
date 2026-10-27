@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onDestroy, getContext, createEventDispatcher, tick } from 'svelte';
+	import { onDestroy, getContext, createEventDispatcher } from 'svelte';
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
@@ -17,7 +17,7 @@
 		isHtmlArtifact,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
-	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
+	import { figureJsonPath, shouldLoadArtifactList } from '$lib/chat/artifactsList';
 	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
@@ -43,7 +43,7 @@
 	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
 	let figure: any = null;
-	let figureHost: any;
+	let figurePane: HTMLDivElement;
 	let showImageModal = false;
 	// HTML artifacts (Plotly figures) load straight from the view route in a
 	// sandboxed frame, not as a blob.
@@ -104,24 +104,24 @@
 	};
 
 	const openFigure = async (path: string, title: string = '') => {
-		if (previewUrl) {
-			URL.revokeObjectURL(previewUrl);
-			previewUrl = null;
-		}
-		previewHtmlUrl = '';
-		selectedImage = null;
-		previewModified = fileModified(path);
-		modalAlt = title || path;
-		const res = await fetch(getArtifactContentUrl($chatId, path), {
-			headers: { authorization: `Bearer ${localStorage.token}` }
-		});
-		if (!res.ok) {
+		let data: any;
+		try {
+			const res = await fetch(getArtifactContentUrl($chatId, path), {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(String(res.status));
+			data = await res.json();
+		} catch {
 			toast.error($i18n.t('Could not load preview'));
 			return;
 		}
-		figure = await res.json();
-		await tick();
-		figureHost?.render(figure);
+		revokePreview();
+		previewHtmlUrl = '';
+		const name = title || path;
+		selectedImage = name;
+		previewModified = fileModified(name);
+		modalAlt = name;
+		figure = data;
 	};
 
 	const clearPreview = () => {
@@ -135,7 +135,9 @@
 	};
 
 	const expandPreview = () => {
-		if (previewHtmlUrl) {
+		if (figure) {
+			figurePane?.requestFullscreen();
+		} else if (previewHtmlUrl) {
 			showHtmlModal = true;
 		} else if (previewUrl) {
 			showImageModal = true;
@@ -151,10 +153,10 @@
 			previewModified = modified;
 		} else if (modified && modified !== previewModified) {
 			previewModified = modified;
-			if (isHtmlArtifact(selectedImage)) {
+			if (figure) {
+				openFigure(figureJsonPath(selectedImage), selectedImage);
+			} else if (isHtmlArtifact(selectedImage)) {
 				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
-			} else if (selectedImage.endsWith('.plotly.json')) {
-				openFigure(selectedImage);
 			} else {
 				loadPreview(getArtifactContentUrl($chatId, selectedImage));
 			}
@@ -407,18 +409,16 @@
 					{previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
-					{#if !figure}
-						<Tooltip content={$i18n.t('Open in full screen')}>
-							<button
-								type="button"
-								class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
-								on:click={expandPreview}
-								aria-label="Expand image"
-							>
-								<ArrowsPointingOut className="size-3.5" />
-							</button>
-						</Tooltip>
-					{/if}
+					<Tooltip content={$i18n.t('Open in full screen')}>
+						<button
+							type="button"
+							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							on:click={expandPreview}
+							aria-label="Expand image"
+						>
+							<ArrowsPointingOut className="size-3.5" />
+						</button>
+					</Tooltip>
 					<button
 						type="button"
 						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
@@ -430,13 +430,14 @@
 				</div>
 			</div>
 			{#if figure}
-				<div class="flex-1 min-h-0 w-full px-2 pb-2 bg-white dark:bg-gray-900">
-					<FigureHost bind:this={figureHost} />
+				<div
+					class="flex-1 min-h-0 w-full px-2 pb-2 bg-white dark:bg-gray-900"
+					bind:this={figurePane}
+				>
+					<FigureHost {figure} />
 				</div>
 			{:else if previewHtmlUrl}
-				<div
-					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
-				>
+				<div class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2">
 					<div
 						class="h-full w-full overflow-hidden rounded border border-gray-100 dark:border-gray-800"
 					>
@@ -476,12 +477,7 @@
 				>
 					{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
 				</button>
-				<input
-					bind:this={fileInput}
-					type="file"
-					class="hidden"
-					on:change={onUpload}
-				/>
+				<input bind:this={fileInput} type="file" class="hidden" on:change={onUpload} />
 				<button
 					type="button"
 					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -617,9 +613,7 @@
 						class="w-full border-0 h-full rounded-none"
 						sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
 							? ' allow-forms'
-							: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)
-							? ' allow-same-origin'
-							: ''}"
+							: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false) ? ' allow-same-origin' : ''}"
 						on:load={iframeLoadHandler}
 					></iframe>
 				{:else if contents[selectedContentIdx].type === 'svg'}

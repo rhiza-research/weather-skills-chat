@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import ArtifactTreeNode from './ArtifactTreeNode.svelte';
+	import { isFigureJson } from '$lib/chat/artifactsList';
 
 	const i18n = getContext('i18n');
 
@@ -89,8 +90,7 @@
 		return root.children;
 	};
 
-	// Figure JSON is an implementation detail of its HTML artifact.
-	$: tree = buildTree((files || []).filter((file) => !file?.path?.endsWith('.plotly.json')));
+	$: tree = buildTree((files || []).filter((file) => !isFigureJson(file, files)));
 
 	const onToggle = (e: CustomEvent<{ path: string }>) => {
 		const path = e.detail?.path;

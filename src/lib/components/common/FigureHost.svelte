@@ -3,32 +3,24 @@
 	// @ts-ignore: the dist bundle ships no types
 	import plotlyUrl from 'plotly.js-dist-min/plotly.min.js?url';
 
+	export let figure: any = null;
+
 	let frame: HTMLIFrameElement;
 	let src = '';
 	let ready = false;
-	let pending: any = null;
-	let seq = 0;
+	let shown: any = null;
 
-	export function render(value: any) {
-		if (!ready) {
-			pending = value;
-			return;
-		}
-		if (!frame?.contentWindow) return;
-		frame.contentWindow.postMessage({ type: 'figure', id: ++seq, figure: value }, '*');
-	};
+	// The host keeps one Plotly and repaints on each new figure.
+	$: if (ready && figure && figure !== shown && frame?.contentWindow) {
+		shown = figure;
+		frame.contentWindow.postMessage({ type: 'figure', figure }, '*');
+	}
 
 	const onMessage = (event: MessageEvent) => {
 		if (event.source !== frame?.contentWindow) return;
 		const data = event.data;
-		if (data?.type === 'ready') {
-			ready = true;
-			const value = pending;
-			pending = null;
-			if (value) render(value);
-		} else if (data?.type === 'error') {
-			console.error('figure host:', data.message);
-		}
+		if (data?.type === 'ready') ready = true;
+		else if (data?.type === 'error') console.error('figure host:', data.message);
 	};
 
 	onMount(() => {
@@ -37,7 +29,6 @@
 		addEventListener('message', onMessage);
 	});
 	onDestroy(() => removeEventListener('message', onMessage));
-
 </script>
 
 <iframe
