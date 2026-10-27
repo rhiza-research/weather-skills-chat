@@ -16,11 +16,11 @@ When the model creates an automation from a chat, it copies the chat's selected 
 
 ## Schedules
 
-A schedule is a five-field cron expression or one of these phrases:
+A schedule is a five-field cron expression or one of these phrases. Days of the week follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday.
 
 - `hourly` or `every hour`
 - `daily`, `every day`, or `everyday`, which run at midnight
-- `weekly` or `every week`, which run once a week at midnight
+- `weekly` or `every week`, which run on Sunday at midnight
 - `every day at noon` or `every day at midnight`
 - `every day at` a time, such as `every day at 7am` or `daily at 6:30pm`
 - `weekly on` a weekday `at` a time, such as `weekly on Monday at 9am`
