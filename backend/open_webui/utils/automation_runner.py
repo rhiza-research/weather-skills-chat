@@ -201,6 +201,15 @@ async def _stream_automation_chat(
     await save_final_reply(chat_id, assistant_id, {"done": True})
 
 
+def _first_model_id(*model_lists: Optional[str]) -> Optional[str]:
+    """First id in the first non-empty comma-separated model list."""
+    for models in model_lists:
+        for model_id in (models or "").split(","):
+            if model_id.strip():
+                return model_id.strip()
+    return None
+
+
 async def execute_automation(
     request, automation_id: str, triggered_by: str, *, wait: bool = True
 ):
@@ -222,6 +231,15 @@ async def execute_automation(
         raise ValueError("Automation owner not found")
 
     model_id = automation.model
+    if not model_id:
+        from open_webui.models.organizations import Organizations
+
+        org = Organizations.get_organization_by_id(
+            automation.organization_id or owner_id
+        )
+        model_id = _first_model_id(
+            org and org.default_models, request.app.state.config.DEFAULT_MODELS
+        )
     model = remember_catalog_model(request, model_id)
     if model is None:
         raise ValueError(f"Model not found: {model_id}")
@@ -242,7 +260,7 @@ async def execute_automation(
     )
     title = f"{automation.name} — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     user_message = _new_message("user", automation.prompt)
-    assistant = _new_message("assistant", "", automation.model)
+    assistant = _new_message("assistant", "", model_id)
     assistant["parentId"] = user_message["id"]
     user_message["childrenIds"] = [assistant["id"]]
     history = {
@@ -254,7 +272,7 @@ async def execute_automation(
     }
     chat_blob = {
         "title": title,
-        "models": [automation.model] if automation.model else [],
+        "models": [model_id],
         "history": history,
         "messages": [user_message, assistant],
     }
