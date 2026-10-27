@@ -175,6 +175,9 @@ export const dedupeToolsForSelection = <T extends ToolWithId>(tools: T[]): T[] =
 	return result;
 };
 
+export const sortToolsByName = <T extends ToolLike>(tools: T[]): T[] =>
+	[...tools].sort((a, b) => toolBaseName(a).localeCompare(toolBaseName(b)));
+
 /**
  * Map selected tool ids onto the highest-version skill when a lower
  * duplicate was previously selected.
