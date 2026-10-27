@@ -49,22 +49,15 @@ async def _run_job(automation_id: str):
 
 
 def cron_trigger(cron: str, timezone=None) -> CronTrigger:
-    """Trigger for a standard 5-field cron string.
+    """CronTrigger.from_crontab, with day-of-week read as cron reads it.
 
-    CronTrigger.from_crontab reads day-of-week 0 as Monday, so that field is
-    translated first.
+    APScheduler 3 numbers weekdays from Monday, even in crontab expressions
+    (agronholm/apscheduler#286, fixed only in 4.0), so the field is
+    translated to day names first.
     """
-    values = cron.split()
-    if len(values) != 5:
-        raise ValueError(f"Wrong number of fields; got {len(values)}, expected 5")
-    minute, hour, day, month, day_of_week = values
-    return CronTrigger(
-        minute=minute,
-        hour=hour,
-        day=day,
-        month=month,
-        day_of_week=apscheduler_day_of_week(day_of_week),
-        timezone=timezone,
+    *fields, day_of_week = cron.split()
+    return CronTrigger.from_crontab(
+        " ".join([*fields, apscheduler_day_of_week(day_of_week)]), timezone=timezone
     )
 
 
