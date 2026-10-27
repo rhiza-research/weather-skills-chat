@@ -1,0 +1,57 @@
+name: Experiment - build hash and layer cache
+
+# Throwaway: does a backend-only push with a new commit hash reuse the cached frontend build?
+# Builds only; no image is pushed.
+
+on:
+  push:
+    branches:
+      - exp-build-hash
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  CACHE_SCOPE: exp-build-hash-${{ github.run_id }}
+
+jobs:
+  cold:
+    name: 1 cold (writes cache)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}
+          cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+
+  backend:
+    name: 2 backend change, new build hash
+    needs: cold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo '# cache experiment' >> backend/open_webui/main.py
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}-backend
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
