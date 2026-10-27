@@ -40,9 +40,6 @@ COPY static ./static
 # Tailwind scans the repository, and generates rules for class names it finds in swagger-ui's files,
 # so they are copied at the same path to keep the built CSS the same.
 COPY backend/open_webui/static/swagger-ui ./backend/open_webui/static/swagger-ui
-# Declared here so a new hash does not rerun npm ci.
-ARG BUILD_HASH
-ENV APP_BUILD_HASH=${BUILD_HASH}
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN npm run build
 
@@ -202,7 +199,7 @@ HEALTHCHECK CMD curl --silent --fail http://localhost:${PORT:-8080}/health | jq 
 USER $UID:$GID
 
 ARG BUILD_HASH
-ENV WEBUI_BUILD_VERSION=${BUILD_HASH}
+ENV WEBUI_BUILD_HASH=${BUILD_HASH}
 ENV DOCKER=true
 
 CMD [ "bash", "start.sh"]

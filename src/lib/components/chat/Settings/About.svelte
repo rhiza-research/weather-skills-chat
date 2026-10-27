@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getOllamaVersion } from '$lib/apis/ollama';
-	import { WEBUI_BUILD_HASH, runningReleaseLabel } from '$lib/constants';
+	import { runningReleaseLabel } from '$lib/constants';
 	import { WEBUI_NAME, config } from '$lib/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { onMount, getContext } from 'svelte';
@@ -27,7 +27,7 @@
 			</div>
 			<div class="flex w-full justify-between items-center">
 				<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-					<Tooltip content={WEBUI_BUILD_HASH}>
+					<Tooltip content={$config?.build_hash}>
 						{runningReleaseLabel($config?.image_tag)}
 					</Tooltip>
 				</div>
