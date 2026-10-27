@@ -1,0 +1,119 @@
+name: Experiment - Docker layer cache
+
+# Throwaway: measures Docker Publish's image build with the GitHub Actions layer cache.
+# Builds only; no image is pushed. Each job runs on a fresh runner, like separate pushes.
+
+on:
+  push:
+    branches:
+      - exp-docker-cache
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  CACHE_SCOPE: exp-docker-cache-${{ github.run_id }}
+
+jobs:
+  cold:
+    name: 1 cold (writes cache)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}
+          cache-to: type=gha,scope=${{ env.CACHE_SCOPE }},mode=max
+
+  unchanged:
+    name: 2 nothing changed
+    needs: cold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+
+  backend:
+    name: 3 backend change
+    needs: cold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo '# cache experiment' >> backend/open_webui/main.py
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}-backend
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+
+  frontend:
+    name: 4 frontend change
+    needs: cold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo '// cache experiment' >> src/lib/constants.ts
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}-frontend
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
+
+  backend-same-hash:
+    name: 5 backend change, same build hash
+    needs: cold
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo '# cache experiment' >> backend/open_webui/main.py
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            USE_CUDA=false
+            USE_OLLAMA=false
+            BUILD_HASH=${{ github.sha }}
+          cache-from: type=gha,scope=${{ env.CACHE_SCOPE }}
