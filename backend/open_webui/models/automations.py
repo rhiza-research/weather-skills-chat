@@ -8,7 +8,7 @@ from open_webui.internal.db import Base, JSONField, get_db
 from open_webui.models.tools import Tools
 from open_webui.utils.skill_version import tool_ids_with_skill_names
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, Text, or_
+from sqlalchemy import BigInteger, Boolean, Column, Text, func, or_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -49,6 +49,21 @@ class AutomationRun(Base):
     started_at = Column(BigInteger)
     finished_at = Column(BigInteger)
     triggered_by = Column(Text, nullable=True)
+
+
+class AutomationUserState(Base):
+    """One user's view of a task: pinned in their sidebar, and the last run seen.
+
+    No row means pinned with nothing seen.
+    """
+
+    __tablename__ = "automation_user_state"
+
+    user_id = Column(Text, primary_key=True)
+    automation_id = Column(Text, primary_key=True, index=True)
+    pinned = Column(Boolean, nullable=False, default=True)
+    seen_run_id = Column(Text, nullable=True)
+    updated_at = Column(BigInteger)
 
 
 class AutomationModel(BaseModel):
@@ -197,6 +212,7 @@ class AutomationTable:
     def delete_automation(self, id: str) -> bool:
         with get_db() as db:
             db.query(AutomationRun).filter_by(automation_id=id).delete()
+            db.query(AutomationUserState).filter_by(automation_id=id).delete()
             deleted = db.query(Automation).filter_by(id=id).delete()
             db.commit()
             return deleted > 0
@@ -274,11 +290,105 @@ class AutomationRunTable:
             )
             return [AutomationRunModel.model_validate(row) for row in rows]
 
+    def get_latest_runs(self, automation_ids: list[str]) -> dict[str, AutomationRunModel]:
+        """Each task's most recent run, by task id. Tasks never run are left out."""
+        if not automation_ids:
+            return {}
+        with get_db() as db:
+            newest = (
+                db.query(
+                    AutomationRun.automation_id,
+                    func.max(AutomationRun.started_at).label("started_at"),
+                )
+                .filter(AutomationRun.automation_id.in_(automation_ids))
+                .group_by(AutomationRun.automation_id)
+                .subquery()
+            )
+            rows = (
+                db.query(AutomationRun)
+                .join(
+                    newest,
+                    (AutomationRun.automation_id == newest.c.automation_id)
+                    & (AutomationRun.started_at == newest.c.started_at),
+                )
+                .all()
+            )
+            return {
+                row.automation_id: AutomationRunModel.model_validate(row) for row in rows
+            }
+
+    def mark_interrupted(self) -> int:
+        """End every run still marked running as an error.
+
+        Only safe while one process runs tasks: at its startup, nothing else
+        can be running them.
+        """
+        with get_db() as db:
+            count = (
+                db.query(AutomationRun)
+                .filter(AutomationRun.status == "running")
+                .update(
+                    {
+                        "status": "error",
+                        "error": "Interrupted by a server restart",
+                        "finished_at": int(time.time()),
+                    }
+                )
+            )
+            db.commit()
+            return count
+
     def clear_chat_id(self, chat_id: str) -> None:
         with get_db() as db:
             db.query(AutomationRun).filter_by(chat_id=chat_id).update({"chat_id": None})
             db.commit()
 
 
+class AutomationUserStateTable:
+    def get_states(
+        self, user_id: str, automation_ids: list[str]
+    ) -> dict[str, AutomationUserState]:
+        if not automation_ids:
+            return {}
+        with get_db() as db:
+            rows = (
+                db.query(AutomationUserState)
+                .filter(
+                    AutomationUserState.user_id == user_id,
+                    AutomationUserState.automation_id.in_(automation_ids),
+                )
+                .all()
+            )
+            for row in rows:
+                db.expunge(row)
+            return {row.automation_id: row for row in rows}
+
+    def set_state(
+        self,
+        user_id: str,
+        automation_id: str,
+        pinned: Optional[bool] = None,
+        seen_run_id: Optional[str] = None,
+    ) -> None:
+        with get_db() as db:
+            row = (
+                db.query(AutomationUserState)
+                .filter_by(user_id=user_id, automation_id=automation_id)
+                .first()
+            )
+            if row is None:
+                row = AutomationUserState(
+                    user_id=user_id, automation_id=automation_id, pinned=True
+                )
+                db.add(row)
+            if pinned is not None:
+                row.pinned = pinned
+            if seen_run_id is not None:
+                row.seen_run_id = seen_run_id
+            row.updated_at = int(time.time())
+            db.commit()
+
+
 Automations = AutomationTable()
 AutomationRuns = AutomationRunTable()
+AutomationUserStates = AutomationUserStateTable()

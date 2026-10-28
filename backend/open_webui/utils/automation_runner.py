@@ -86,6 +86,37 @@ async def _notify_chat_created(user_ids: list[str], chat_id: str, title: str) ->
         log.exception("Failed to notify clients of new automation chat")
 
 
+async def _emit_run_event(user_ids: list[str], payload: dict) -> None:
+    from open_webui.socket.main import USER_POOL, sio
+
+    for user_id in user_ids:
+        for sid in list(USER_POOL.get(user_id, []) or []):
+            await sio.emit("automation:run", payload, to=sid)
+
+
+async def notify_run(automation, run) -> None:
+    """Tell everyone who can see a task that one of its runs started or ended."""
+    try:
+        user_ids = [automation.user_id]
+        if automation.visibility == "organization" and automation.organization_id:
+            from open_webui.models.organizations import Organizations
+
+            members = await asyncio.to_thread(
+                Organizations.get_members, automation.organization_id
+            )
+            user_ids.extend(m.user_id for m in members or [])
+        await _emit_run_event(
+            [user_id for user_id in dict.fromkeys(user_ids) if user_id],
+            {
+                "automation_id": automation.id,
+                "organization_id": automation.organization_id,
+                "run": run.model_dump(),
+            },
+        )
+    except Exception:
+        log.exception("Failed to notify clients of an automation run")
+
+
 def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[str]:
     """Tool/skill IDs the user can use in this organization.
 
@@ -315,6 +346,7 @@ async def execute_automation(
         if not chat:
             raise ValueError("Failed to create chat")
         run = AutomationRuns.update_run(run.id, chat_id=chat.id)
+        await notify_run(automation, run)
 
         notify_ids = [owner_id]
         if automation.visibility == "organization" and automation.organization_id:
@@ -347,7 +379,7 @@ async def execute_automation(
                     features=features,
                     organization_id=org_id,
                 )
-                finish_run(run.id)
+                await notify_run(automation, finish_run(run.id))
             except Exception as e:
                 log.exception("Automation run failed")
                 if isinstance(e, HTTPException) and isinstance(e.detail, str):
@@ -356,7 +388,7 @@ async def execute_automation(
                     error_content = e.detail
                 else:
                     error_content = str(e)
-                finish_run(run.id, error=error_content)
+                await notify_run(automation, finish_run(run.id, error=error_content))
                 from open_webui.utils.chat_realtime import save_final_reply
 
                 await save_final_reply(
@@ -375,5 +407,5 @@ async def execute_automation(
         return run
     except Exception as e:
         log.exception("Automation run failed")
-        finish_run(run.id, error=str(e))
+        await notify_run(automation, finish_run(run.id, error=str(e)))
         raise

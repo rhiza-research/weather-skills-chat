@@ -48,6 +48,7 @@
 	import { bestMatchingLanguage } from '$lib/utils';
 	import { getAllTags } from '$lib/apis/chats';
 	import { applyChatListRow } from '$lib/chat/listRow';
+	import { applyRunEvent } from '$lib/utils/scheduledTaskStore';
 	import {
 		applyCachedStreamEvent,
 		dropChat,
@@ -499,6 +500,8 @@
 			if (!row?.id) return;
 			chatRunner.set(row);
 		};
+		const onAutomationRun = (event) =>
+			applyRunEvent(localStorage.token, event, get(chatId) || '');
 		const onChatEvict = (row) => {
 			if (!row?.id) return;
 			dropChat(row.id);
@@ -518,6 +521,7 @@
 			liveSocket.off('chat:artifacts', onChatArtifacts);
 			liveSocket.off('chat:runner', onChatRunner);
 			liveSocket.off('chat:evict', onChatEvict);
+			liveSocket.off('automation:run', onAutomationRun);
 			if (get(user)) {
 				liveSocket.on('chat-events', chatEventHandler);
 				liveSocket.on('chat:list', onChatList);
@@ -525,6 +529,7 @@
 				liveSocket.on('chat:artifacts', onChatArtifacts);
 				liveSocket.on('chat:runner', onChatRunner);
 				liveSocket.on('chat:evict', onChatEvict);
+				liveSocket.on('automation:run', onAutomationRun);
 				setOpenChat(get(chatId));
 			}
 		};

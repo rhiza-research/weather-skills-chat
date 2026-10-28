@@ -12,6 +12,7 @@
 	} from '$lib/apis/automations';
 	import { getChatById } from '$lib/apis/chats';
 	import { canManageTask, taskFromChat } from '$lib/utils/scheduledTasks';
+	import { loadScheduledTasks } from '$lib/utils/scheduledTaskStore';
 	import TaskEditor from '$lib/components/scheduledTasks/TaskEditor.svelte';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
@@ -75,6 +76,7 @@
 		if (!confirm($i18n.t('Delete this scheduled task and its run history?'))) return;
 		try {
 			await deleteAutomationById(localStorage.token, task.id);
+			await loadScheduledTasks(localStorage.token);
 			goto('/scheduled-tasks');
 		} catch (error) {
 			toast.error(`${error}`);
@@ -144,6 +146,7 @@
 					{isPersonal}
 					{canManage}
 					onSaved={(saved) => {
+						loadScheduledTasks(localStorage.token);
 						if (isNew) goto(`/scheduled-tasks/${saved.id}`);
 						else task = saved;
 					}}

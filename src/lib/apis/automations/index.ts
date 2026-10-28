@@ -52,3 +52,12 @@ export const runAutomationById = async (token: string, id: string) =>
 
 export const getAutomationRuns = async (token: string, id: string) =>
 	request(token, `/automations/${id}/runs`);
+
+export const setAutomationPinned = async (token: string, id: string, pinned: boolean) =>
+	request(token, `/automations/${id}/pin`, { method: 'POST', body: JSON.stringify({ pinned }) });
+
+export const markAutomationRunSeen = async (token: string, id: string, runId: string) =>
+	request(token, `/automations/${id}/seen`, {
+		method: 'POST',
+		body: JSON.stringify({ run_id: runId })
+	});

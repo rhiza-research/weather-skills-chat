@@ -41,6 +41,8 @@ export const chatTitle = writable('');
 
 export const chats = writable(null);
 export const pinnedChats = writable([]);
+// Scheduled tasks in the active organization, with each one's last run.
+export const scheduledTasks = writable(null);
 export const tags = writable([]);
 export const teams = writable([]);
 export const organizations = writable([]);

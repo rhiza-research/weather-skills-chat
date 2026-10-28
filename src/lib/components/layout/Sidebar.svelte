@@ -56,6 +56,7 @@
 	import Plus from '../icons/Plus.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
+	import ScheduledTasks from './Sidebar/ScheduledTasks.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
 
@@ -818,6 +819,10 @@
 				? 'opacity-20'
 				: ''}"
 		>
+			{#if !search}
+				<ScheduledTasks />
+			{/if}
+
 			<Folder
 				collapsible={!search}
 				className="px-2 mt-0.5"
