@@ -19,7 +19,7 @@ Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carr
 - Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A Zarr store is downloaded as a zip of that store.
 - The chat's owner can upload a single file. It replaces an existing file with the same name. Files and folders the chat server creates or uploads stay writable by skills.
 - Results that code run in the browser copies back into the chat (see [[Built-in Tools]]) can only be written inside the chat's files, and lose any provenance in their images and Zarr stores.
-- Dropping a file or image onto the chat bar attaches it to the next message. It appears in the bar while it is prepared. Sending the message copies it into that chat's files. The model is told the path; that line is not shown in the chat. The model does not see the contents until it asks to read that path with `read_artifact` on [[Built-in Tools]], and the user approves, or Read files is on for the chat.
+- Dropping a file or image onto the chat bar attaches it to the next message. It appears in the bar while it is prepared. Sending the message copies it into that chat's files. The model is told the path; that line is not shown in the chat. The model does not see the contents until it asks to read that path with `read_artifact` on [[Built-in Tools]], and the user approves, unless the chat allows the agent to read files.
 
 Archive downloads have a size limit, and so do the files copied into and out of code run in the browser on [[Built-in Tools]].
 

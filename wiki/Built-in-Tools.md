@@ -15,7 +15,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | `list_preferences` | Read the user's saved [[Preferences]]. |
 | `create_preference` | Save a new preference. The model is told to ask the user first. |
 | `list_artifacts` | List the chat's files, or one folder of them. The model can limit how many folder levels are listed, and can ask which skills produced each image, HTML page, and Zarr store. |
-| `read_artifact` | Send a file from the chat's files to the model. The user approves each read in a popup, unless **Read files** is on (see below). Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
+| `read_artifact` | Send a file from the chat's files to the model. The user approves each read in a popup, unless the user has allowed it to read files (see below). Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
 | `create_folder` | Create a folder in the chat's files. |
 | `copy_intermediate_result` | Copy a file or folder between the chat's files and its intermediate results folder, which skills use to pass data from one step to the next. |
 | `display_image` | Show an image from the chat's files in the conversation, for the user. It also shows an `.html` page, such as an interactive Plotly figure, in a sandboxed frame with a button to open it full screen. If a skill in the same turn writes that file, the display waits for the skill. To send an image to the model, use `read_artifact`; the model cannot see an HTML page. |
@@ -28,7 +28,7 @@ The scheduled task tools act as the user, so the model can change or delete only
 
 ## Reading chat files
 
-The **Read files** button in the chat bar, off by default, decides whether the model may read the chat's files with `read_artifact` without asking. When it is off, each read waits for the user to approve it in a popup. When it is on, the model reads files without asking. Scheduled tasks have the same switch on their page. No one is present to approve a read during a run, so a task with Read files off cannot read its files.
+A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to approve it in a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking. Scheduled tasks have the same switch, called **Read files**, on their page. No one is present to approve a read during a run, so a task with Read files off cannot read its files.
 
 ## Running code
 

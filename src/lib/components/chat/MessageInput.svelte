@@ -1212,8 +1212,8 @@
 
 												<Tooltip
 													content={readArtifactsEnabled
-														? $i18n.t('Agent reads chat files without asking')
-														: $i18n.t('Agent asks before reading chat files')}
+														? $i18n.t('Agent allowed to read files')
+														: $i18n.t('Agent asks before reading files')}
 													placement="top"
 												>
 													<button
@@ -1227,7 +1227,9 @@
 													>
 														<Eye className="size-5" strokeWidth="1.75" />
 														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
-															>{$i18n.t('Read files')}</span
+															>{readArtifactsEnabled
+																? $i18n.t('Agent allowed to read files')
+																: $i18n.t('Agent asks before reading files')}</span
 														>
 													</button>
 												</Tooltip>
