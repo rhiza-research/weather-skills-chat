@@ -128,7 +128,7 @@
 									class="text-gray-500"
 									on:click={() => setTaskPinned(localStorage.token, task.id, !task.pinned)}
 								>
-									{task.pinned ? $i18n.t('Remove from sidebar') : $i18n.t('Show in sidebar')}
+									{task.pinned ? $i18n.t('Unpin') : $i18n.t('Pin to sidebar')}
 								</button>
 								{#if canManageTask(task, $user?.id, currentOrg?.role)}
 									<Switch state={task.enabled} on:change={(e) => setEnabled(task, e.detail)} />
