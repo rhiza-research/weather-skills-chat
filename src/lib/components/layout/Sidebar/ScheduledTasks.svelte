@@ -149,7 +149,20 @@
 						on:click={() => openTask(task)}
 					>
 						<TaskImage {task} className="size-5 rounded text-[10px]" />
-						<span class="truncate">{task.name}</span>
+						<Tooltip
+							content={task.enabled
+								? task.name
+								: `${task.name} (${$i18n.t('scheduled runs off')})`}
+							className="min-w-0"
+							placement="top-start"
+							tippyOptions={{ delay: [250, 0], showOnCreate: true }}
+						>
+							<div
+								class="truncate {task.enabled ? '' : 'text-gray-400 dark:text-gray-500'}"
+							>
+								{task.name}
+							</div>
+						</Tooltip>
 						<TaskDot {dot} />
 					</button>
 					<div class="invisible group-hover:visible shrink-0 flex items-center">

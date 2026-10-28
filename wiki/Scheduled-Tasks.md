@@ -28,7 +28,7 @@ The sidebar has a Scheduled tasks section listing the tasks the user can see in 
 
 Tasks are sorted by most recent run by default. The sort button in the section's header sorts them by name or by newest task instead. The choice is remembered in that browser.
 
-Clicking a task opens the chat of its latest run. A task that has never run opens its page.
+Clicking a task opens the chat of its latest run. A task that has never run opens its page. A task whose scheduled runs are off is greyed out, in the sidebar and on the Scheduled tasks page.
 
 A dot beside a task shows its latest run:
 
