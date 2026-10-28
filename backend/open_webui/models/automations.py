@@ -41,8 +41,11 @@ class AutomationRun(Base):
     id = Column(Text, unique=True, primary_key=True)
     automation_id = Column(Text, nullable=False)
     chat_id = Column(Text, nullable=True)
+    # running, then success or failure as the model reported it, unknown when
+    # it did not report, or error when the run itself broke.
     status = Column(Text, nullable=False)
     error = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
     started_at = Column(BigInteger)
     finished_at = Column(BigInteger)
     triggered_by = Column(Text, nullable=True)
@@ -75,6 +78,7 @@ class AutomationRunModel(BaseModel):
     chat_id: Optional[str] = None
     status: str
     error: Optional[str] = None
+    summary: Optional[str] = None
     started_at: Optional[int] = None
     finished_at: Optional[int] = None
     triggered_by: Optional[str] = None
@@ -235,6 +239,7 @@ class AutomationRunTable:
         status: Optional[str] = None,
         chat_id: Optional[str] = None,
         error: Optional[str] = None,
+        summary: Optional[str] = None,
         finished: bool = False,
     ) -> Optional[AutomationRunModel]:
         updates = {}
@@ -244,6 +249,8 @@ class AutomationRunTable:
             updates["chat_id"] = chat_id
         if error is not None:
             updates["error"] = error
+        if summary is not None:
+            updates["summary"] = summary
         if finished:
             updates["finished_at"] = int(time.time())
         with get_db() as db:

@@ -14,7 +14,7 @@ An automation sends the same prompt as a new chat on a schedule, for example a w
 Skills are kept by name, not as a particular copy of a skill. Each run uses the copy of each named skill that its user can use in the automation's organization, picked the way a chat picks it on [[Skill Packs]]. Updating or reinstalling a skill pack, or adding a newer version of a skill, does not remove it from automations. A skill that the organization no longer has is left out of the run.
 - The organization it belongs to, and whether it is private or shared with the organization. Sharing is described on [[Organizations]].
 
-When the model creates an automation from a chat, it copies the chat's selected tools and features. If the model passes no prompt, the `create_automation` tool builds one from the chat's earlier user messages, leaving out the latest one. When the chat has only one user message, that message becomes the prompt. A chat with no requests yet produces no automation, and the model asks the user what the task should be.
+When the model creates an automation from a chat, it copies the chat's selected tools and features. If the model passes no prompt, the `create_scheduled_task` tool builds one from the chat's earlier user messages, leaving out the latest one. When the chat has only one user message, that message becomes the prompt. A chat with no requests yet produces no automation, and the model asks the user what the task should be.
 
 ## Schedules
 
@@ -35,9 +35,20 @@ A run starts on schedule, or when someone presses Run.
 2. The run checks that this person may use the model and is under the spending limits on [[Usage and Spending Caps]]. If not, no chat is created.
 3. The run creates a new chat for that person in the automation's organization, with the automation's visibility. The chat is titled with the automation's name and the date. When the automation is shared, every member sees the new chat appear.
 4. The prompt is sent with the automation's tools and features. Skills in that run use the chat's [[Tool Runner]] when runners are on. No one is present to answer follow-up questions from the model.
-5. The run is recorded with its outcome and a link to its chat.
+5. The run is recorded with its result and a link to its chat.
 
-A manual run opens its chat right away, so the person who pressed Run can watch the reply arrive. Each automation keeps a history of its recent runs, with links to their chats.
+A manual run opens its chat right away, so the person who pressed Run can watch the reply arrive. Each automation keeps a history of its recent runs, with their results and links to their chats.
+
+## Run results
+
+The model is told to report, when it finishes, whether it did what the prompt asked, with a short summary. Each run ends with one of these results:
+
+- **Success**: the model reported that it did the task.
+- **Failure**: the model reported that it could not do the task, for example because the data it needed was missing. The run itself worked.
+- **Unknown**: the run finished, but the model did not report a result.
+- **Error**: the run itself broke, for example because the model could not be reached. The error is shown with the run.
+
+The model's summary is shown with the run, next to a success or failure.
 
 ## Who can do what
 
