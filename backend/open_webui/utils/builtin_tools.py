@@ -11,16 +11,27 @@ from uuid import uuid4
 import smtplib
 from email.message import EmailMessage
 
-from open_webui.models.automations import AutomationForm, Automations
+from open_webui.models.automations import (
+    AutomationForm,
+    AutomationRuns,
+    Automations,
+    AutomationUpdateForm,
+)
 from open_webui.models.chats import Chats
 from open_webui.models.organizations import ORG_KIND_PERSONAL, Organizations
 from open_webui.models.users import Users
-from open_webui.utils.automation_scheduler import sync_automation_job
+from open_webui.utils.automation_scheduler import (
+    remove_automation_job,
+    sync_automation_job,
+)
 from open_webui.utils.schedule import parse_schedule, prompt_from_messages
 from open_webui.utils.organizations import (
+    can_manage_automation,
     can_read_chat,
+    can_view_automation,
     can_write_chat,
     is_member,
+    resolve_visibility,
 )
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -199,6 +210,242 @@ CREATE_AUTOMATION_SPEC = {
             },
         },
         "required": ["name", "schedule"],
+    },
+}
+
+
+AUTOMATION_PROMPT_PREVIEW_CHARS = 200
+
+
+def _format_time(epoch: Optional[int]) -> str:
+    if not epoch:
+        return "never"
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(epoch))
+
+
+def _describe_automation(automation, user_id: str, full: bool) -> str:
+    runs = AutomationRuns.get_runs(automation.id, limit=1)
+    last = runs[0] if runs else None
+    last_run = "never run"
+    if last:
+        last_run = f"{last.status} at {_format_time(last.started_at)}"
+        if last.error:
+            last_run += f": {last.error}"
+    prompt = automation.prompt or ""
+    if not full and len(prompt) > AUTOMATION_PROMPT_PREVIEW_CHARS:
+        prompt = prompt[:AUTOMATION_PROMPT_PREVIEW_CHARS].rstrip() + "…"
+    lines = [
+        f"### {automation.name}",
+        f"- id: `{automation.id}`",
+        f"- schedule: `{automation.cron or 'none (runs only when someone presses Run)'}`"
+        + ("" if automation.enabled else " (scheduled runs are off)"),
+        f"- model: {automation.model or 'default'}",
+        "- shared with the organization"
+        if automation.visibility == "organization"
+        else "- private",
+    ]
+    if automation.user_id != user_id:
+        owner = Users.get_user_by_id(automation.user_id)
+        lines.append(f"- owner: {owner.name if owner else automation.user_id}")
+    lines.append(f"- last run: {last_run}")
+    lines.append(f"- prompt: {prompt}")
+    return "\n".join(lines)
+
+
+async def list_automations(
+    automation_id: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """List the automations in this chat's organization, or show one in full.
+
+    :param automation_id: Optional automation id to show with its whole prompt
+    """
+    metadata = __metadata__ or {}
+    user_id = __user__.get("id")
+
+    def load() -> str:
+        user = Users.get_user_by_id(user_id)
+        if not user:
+            return "User not found."
+        if automation_id:
+            automation = Automations.get_automation_by_id(automation_id)
+            if not can_view_automation(user, automation):
+                return "Automation not found."
+            return _describe_automation(automation, user.id, full=True)
+        organization_id = metadata.get("organization_id") or user.id
+        automations = Automations.get_automations_for_user(user.id, organization_id)
+        if not automations:
+            return "There are no automations in this organization."
+        return "\n\n".join(
+            _describe_automation(a, user.id, full=False) for a in automations
+        )
+
+    return await asyncio.to_thread(load)
+
+
+LIST_AUTOMATIONS_SPEC = {
+    "name": "list_automations",
+    "description": (
+        "List the scheduled automations in this organization that the user can see, "
+        "with each one's id, schedule, model, sharing, last run, and the start of "
+        "its prompt. Pass automation_id to show one automation's whole prompt."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "automation_id": {
+                "type": "string",
+                "description": "Optional automation id to show in full",
+            },
+        },
+    },
+}
+
+
+def _managed_automation(user_id: Optional[str], automation_id: str):
+    """(user, automation, error). DB reads: call from a worker thread."""
+    user = Users.get_user_by_id(user_id) if user_id else None
+    if not user:
+        return None, None, "User not found."
+    automation = Automations.get_automation_by_id(automation_id)
+    if not can_view_automation(user, automation):
+        return user, None, "Automation not found."
+    if not can_manage_automation(user, automation):
+        return user, automation, (
+            "You cannot change this automation. Only its owner, or an "
+            "organization admin for a shared automation, can."
+        )
+    return user, automation, None
+
+
+async def update_automation(
+    automation_id: str,
+    name: Optional[str] = None,
+    schedule: Optional[str] = None,
+    prompt: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    __user__: dict = {},
+) -> str:
+    """Change an automation's name, schedule, prompt, or organization.
+
+    :param automation_id: The automation to change, from list_automations
+    :param name: New short title
+    :param schedule: New cron (0 12 * * *) or a phrase like "every day at noon"
+    :param prompt: New task the automation runs, in full
+    :param organization_id: Organization id to move the automation to
+    """
+    form = AutomationUpdateForm()
+    if name is not None:
+        if not name.strip():
+            return "The name cannot be empty."
+        form.name = name
+    if schedule is not None:
+        cron = parse_schedule(schedule)
+        if not cron:
+            return (
+                "I could not understand that schedule. "
+                "Try cron like `0 12 * * *` or a phrase like `every day at noon`."
+            )
+        form.cron = cron
+    if prompt is not None:
+        if not prompt.strip():
+            return "The prompt cannot be empty."
+        form.prompt = prompt
+
+    def save() -> str:
+        user, automation, error = _managed_automation(__user__.get("id"), automation_id)
+        if error:
+            return error
+        if organization_id is not None and organization_id != automation.organization_id:
+            if not is_member(organization_id, user.id):
+                return "You are not a member of that organization."
+            form.organization_id = organization_id
+            # Sharing does not carry into a personal organization.
+            form.visibility = resolve_visibility(organization_id, automation.visibility)
+        if not form.model_fields_set:
+            return "Nothing to change. Pass a new name, schedule, prompt, or organization."
+        updated = Automations.update_automation(automation.id, form)
+        if not updated:
+            return "Failed to update the automation."
+        sync_automation_job(updated)
+        return "Updated the automation.\n\n" + _describe_automation(
+            updated, user.id, full=False
+        )
+
+    return await asyncio.to_thread(save)
+
+
+UPDATE_AUTOMATION_SPEC = {
+    "name": "update_automation",
+    "description": (
+        "Change an existing automation's name, schedule, prompt, or organization. "
+        "Get its id from list_automations. Only pass the fields to change. "
+        "A new prompt replaces the old one, so pass the whole task."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "automation_id": {
+                "type": "string",
+                "description": "The automation to change, from list_automations",
+            },
+            "name": {"type": "string", "description": "New short title"},
+            "schedule": {
+                "type": "string",
+                "description": (
+                    "New cron expression (0 12 * * *) or a phrase such as "
+                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                ),
+            },
+            "prompt": {
+                "type": "string",
+                "description": "New task the automation runs, in full",
+            },
+            "organization_id": {
+                "type": "string",
+                "description": "Organization id to move the automation to",
+            },
+        },
+        "required": ["automation_id"],
+    },
+}
+
+
+async def delete_automation(automation_id: str, __user__: dict = {}) -> str:
+    """Delete an automation, its schedule, and its run history.
+
+    :param automation_id: The automation to delete, from list_automations
+    """
+
+    def delete() -> str:
+        _user, automation, error = _managed_automation(__user__.get("id"), automation_id)
+        if error:
+            return error
+        remove_automation_job(automation.id)
+        if not Automations.delete_automation(automation.id):
+            return "Failed to delete the automation."
+        return f"Deleted automation **{automation.name}** and its run history."
+
+    return await asyncio.to_thread(delete)
+
+
+DELETE_AUTOMATION_SPEC = {
+    "name": "delete_automation",
+    "description": (
+        "Delete an automation, its schedule, and its run history. This cannot be "
+        "undone. Only call it when the user asks to delete that automation. "
+        "Get its id from list_automations."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "automation_id": {
+                "type": "string",
+                "description": "The automation to delete, from list_automations",
+            },
+        },
+        "required": ["automation_id"],
     },
 }
 
@@ -2328,7 +2575,6 @@ def get_builtin_tools(extra_params: dict) -> dict:
 
     tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
-        "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
         "secrets_page": _tool(secrets_page, SECRETS_PAGE_SPEC),
         "list_preferences": _tool(list_preferences, LIST_PREFERENCES_SPEC),
         "create_preference": _tool(create_preference, CREATE_PREFERENCE_SPEC),
@@ -2344,7 +2590,18 @@ def get_builtin_tools(extra_params: dict) -> dict:
         ),
         "send_email": _tool(send_email, SEND_EMAIL_SPEC),
     }
-    features = (extra_params.get("__metadata__") or {}).get("features") or {}
+    metadata = extra_params.get("__metadata__") or {}
+    # An automation run has no one present to ask, so it cannot change automations.
+    if not metadata.get("headless"):
+        tools.update(
+            {
+                "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
+                "list_automations": _tool(list_automations, LIST_AUTOMATIONS_SPEC),
+                "update_automation": _tool(update_automation, UPDATE_AUTOMATION_SPEC),
+                "delete_automation": _tool(delete_automation, DELETE_AUTOMATION_SPEC),
+            }
+        )
+    features = metadata.get("features") or {}
     if isinstance(features, dict) and features.get("code_interpreter"):
         tools["execute_code"] = _tool(execute_code, EXECUTE_CODE_SPEC)
     if isinstance(features, dict) and features.get("web_search"):
