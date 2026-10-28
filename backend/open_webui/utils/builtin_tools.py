@@ -528,7 +528,9 @@ REPORT_TASK_RESULT_SPEC = {
         "If you never call it, the run's result is shown as unknown. Optionally "
         "pass `image`, a path to a PNG, JPEG, GIF, or WebP in the chat's files "
         "that best shows what this run produced, such as the map it made; it "
-        "becomes the task's picture. Leave it out to keep the current picture."
+        "becomes the task's picture. When the run made or showed an image that "
+        "represents its result, pass it, so the user can recognize the task at "
+        "a glance. Leave it out to keep the current picture."
     ),
     "parameters": {
         "type": "object",
