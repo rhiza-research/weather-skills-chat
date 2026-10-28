@@ -983,11 +983,10 @@ def prepare_provider_call(
 
 
 # A model with a backup has its call resent to the backup whenever its provider
-# fails before the reply starts: no connection, a timeout, any error status, or
-# an error or dropped connection ahead of the first streamed content. Providers
-# disagree on what a status means (OpenRouter reports a spent key limit as 403)
-# and the backup has its own key, account and models, so even a rejected
-# request gets one more try there.
+# fails before replying: no connection, a timeout, or any error status.
+# Providers disagree on what a status means (OpenRouter reports a spent key
+# limit as 403) and the backup has its own key, account and models, so even a
+# rejected request gets one more try there.
 PROVIDER_CONNECT_TIMEOUT_S = 10
 # After a failure of the provider itself, calls for models with a backup go to
 # the backup first for this long. Models without a backup keep calling the
@@ -1154,10 +1153,9 @@ async def _send_provider_call(call: ProviderCall, user):
 
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):
-            head = await _read_stream_head(r.content, chat_id)
             streaming = True
             return StreamingResponse(
-                _replay_stream(head, r.content),
+                r.content,
                 status_code=r.status,
                 headers=dict(r.headers),
                 background=BackgroundTask(
@@ -1176,8 +1174,6 @@ async def _send_provider_call(call: ProviderCall, user):
 
             r.raise_for_status()
             return response
-    except HTTPException:
-        raise
     except Exception as e:
         log.exception(e)
 
@@ -1189,8 +1185,7 @@ async def _send_provider_call(call: ProviderCall, user):
             detail = response
 
         raise HTTPException(
-            # A stream can drop after a 200; that is still the provider failing.
-            status_code=r.status if r and r.status >= 400 else 500,
+            status_code=r.status if r else 500,
             detail=detail if detail else "Open WebUI: Server Connection Error",
         )
     finally:
@@ -1198,67 +1193,6 @@ async def _send_provider_call(call: ProviderCall, user):
             if r:
                 r.close()
             await session.close()
-
-
-def _starts_reply(event: dict) -> bool:
-    """Whether a streamed chunk carries content, a tool call, or an ending."""
-    for choice in event.get("choices") or []:
-        if choice.get("finish_reason"):
-            return True
-        delta = choice.get("delta") or choice.get("message") or {}
-        if any(value for key, value in delta.items() if key != "role"):
-            return True
-    return False
-
-
-async def _read_stream_head(content, chat_id) -> list[bytes]:
-    """Read a streamed reply's lines up to the first that starts the reply.
-
-    Nothing has reached the user before then, so an error event or a stream
-    that ends first raises HTTPException and the call can still go to the
-    backup.
-    """
-    head = []
-    async for line in content:
-        head.append(line)
-        text = line.decode("utf-8", "replace").strip()
-        if not text.startswith("data:"):
-            continue
-        data = text[len("data:") :].strip()
-        if data == "[DONE]":
-            return head
-        try:
-            event = json.loads(data)
-        except ValueError:
-            return head
-        if not isinstance(event, dict):
-            return head
-        error = event.get("error")
-        if error:
-            log.error("Upstream chat completion stream error: %s", error)
-            if not isinstance(error, dict):
-                error = {"message": error}
-            code = error.get("code")
-            if not (isinstance(code, int) and 400 <= code < 600):
-                code = 502
-            raise HTTPException(
-                status_code=code, detail=str(error.get("message", error))
-            )
-        if _starts_reply(event):
-            return head
-    log.error(
-        "Upstream chat completion stream ended before replying chat_id=%s", chat_id
-    )
-    raise HTTPException(
-        status_code=502, detail="The provider ended the reply before it started."
-    )
-
-
-async def _replay_stream(head: list[bytes], content):
-    for line in head:
-        yield line
-    async for line in content:
-        yield line
 
 
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])

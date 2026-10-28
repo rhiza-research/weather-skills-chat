@@ -24,7 +24,7 @@ It picks the model with the same name on another connection, preferring one from
 
 ## When replies switch
 
-A model call switches to the fallback whenever the model's provider fails before the reply starts to appear. For example, the provider:
+A model call switches to the fallback whenever the model's provider fails before the reply starts to appear. For example, when the provider:
 
 - cannot be reached or does not answer in time
 - reports a server error
@@ -32,7 +32,6 @@ A model call switches to the fallback whenever the model's provider fails before
 - reports that it is out of credits
 - is rate limiting the app
 - refuses the request
-- starts a reply, then reports an error or drops the connection before any text or skill call arrives
 
 A provider that fails after the reply has started to appear is not switched.
 
