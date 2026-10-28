@@ -24,11 +24,11 @@ People who can view a task but not change it see its settings without being able
 
 ## In the sidebar
 
-The sidebar has a Scheduled tasks section listing the tasks the user can see in the active organization, one row per task, shared tasks included. Every task starts pinned there. A task's menu in the sidebar can unpin it, run it now, or open it for editing; a user pins it again from the Scheduled tasks page. Pinning is per user and does not change the sidebar for anyone else. The section scrolls when it holds more tasks than fit, and can be collapsed.
+The sidebar has a Scheduled tasks section listing the active tasks the user can see in the active organization, one row per task, shared tasks included. A task whose scheduled runs are off is left out of the sidebar. Every task starts pinned there. A task's menu in the sidebar can unpin it, run it now, or open it for editing; a user pins it again from the Scheduled tasks page. Pinning is per user and does not change the sidebar for anyone else. The section scrolls when it holds more tasks than fit, and can be collapsed.
 
 Tasks are sorted by most recent run by default. The sort button in the section's header sorts them by name or by newest task instead. The choice is remembered in that browser.
 
-Clicking a task opens the chat of its latest run. A task that has never run opens its page. A task whose scheduled runs are off is greyed out, in the sidebar and on the Scheduled tasks page.
+Clicking a task opens the chat of its latest run. A task that has never run opens its page. On the Scheduled tasks page, a task whose scheduled runs are off is greyed out.
 
 A dot beside a task shows its latest run:
 
