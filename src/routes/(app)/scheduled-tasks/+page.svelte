@@ -108,16 +108,27 @@
 					</div>
 					{#each section.items as task (task.id)}
 						<div
-							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3"
+							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3 {task.enabled
+								? ''
+								: 'bg-gray-50 dark:bg-gray-900/50'}"
 						>
 							<a class="min-w-0 flex-1 flex gap-3" href={`/scheduled-tasks/${task.id}`}>
 								<TaskImage {task} className="size-14 rounded-lg text-lg" />
 								<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2 font-medium">
-									<span class="truncate">{task.name}</span>
+									<span class="truncate {task.enabled ? '' : 'text-gray-400 dark:text-gray-500'}"
+										>{task.name}</span
+									>
 									<TaskDot dot={taskDot(task)} />
 								</div>
 								<div class="text-xs text-gray-500" title={task.cron ?? ''}>
+									{#if !task.enabled}
+										<span
+											class="mr-1 rounded px-1 py-px bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+										>
+											{$i18n.t('Off')}
+										</span>
+									{/if}
 									{task.cron ? describeSchedule(task.cron) : $i18n.t('Runs only when started')}
 								</div>
 								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{task.prompt}</div>
