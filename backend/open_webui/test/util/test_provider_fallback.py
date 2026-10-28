@@ -54,12 +54,52 @@ class _FakeSession:
         pass
 
 
+class _FakeContent:
+    """The lines of a streamed reply, then optionally a dropped connection.
+
+    Like aiohttp's StreamReader, a second loop over it carries on where the
+    first stopped.
+    """
+
+    def __init__(self, lines, then=None):
+        self.lines = list(lines)
+        self.then = then
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.lines:
+            return self.lines.pop(0)
+        if self.then is not None:
+            raise self.then
+        raise StopAsyncIteration
+
+
 def _ok(text="Rain outlook"):
     return _FakeResponse(200, {"choices": [{"message": {"content": text}}]})
 
 
 def _error(status, message="upstream failed", headers=None):
     return _FakeResponse(status, {"error": {"message": message}}, headers)
+
+
+def _event(body):
+    return f"data: {json.dumps(body)}\n".encode()
+
+
+def _delta(**delta):
+    return _event({"choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
+
+
+def _stream(*lines, then=None):
+    response = _FakeResponse(200, None, {"Content-Type": "text/event-stream"})
+    response.content = _FakeContent(lines, then)
+    return response
+
+
+async def _read(response):
+    return [line async for line in response.body_iterator]
 
 
 def _fake_prepare(fallback):
@@ -170,14 +210,111 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
 
-    async def test_bad_request_is_not_resent(self):
-        self.replies[PRIMARY] += [_error(400, "Bad request")]
+    async def test_rejected_key_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [_error(401, "Missing Authentication header")]
+        self.replies[BACKUP] += [_ok()]
+
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
+
+    async def test_spent_key_limit_is_resent_and_marks_the_primary_down(self):
+        self.replies[PRIMARY] += [_error(403, "Key limit exceeded (monthly limit)")]
+        self.replies[BACKUP] += [_ok(), _ok()]
+
+        await self._call()
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP, BACKUP])
+
+    async def test_rejected_request_is_resent_but_does_not_mark_the_primary_down(self):
+        self.replies[PRIMARY] += [_error(400, "Bad request"), _ok()]
+        self.replies[BACKUP] += [_ok()]
+
+        await self._call()
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP, PRIMARY])
+
+    async def test_request_rejected_by_both_raises_the_primary_error(self):
+        self.replies[PRIMARY] += [_error(400, "Prompt is too long")]
+        self.replies[BACKUP] += [_error(400, "Context length exceeded")]
 
         with self.assertRaises(HTTPException) as caught:
             await self._call()
 
         self.assertEqual(caught.exception.status_code, 400)
+        self.assertIn("Prompt is too long", caught.exception.detail)
+
+    async def test_error_event_before_the_reply_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [
+            _stream(
+                b": OPENROUTER PROCESSING\n",
+                b"\n",
+                _delta(role="assistant", content=""),
+                b"\n",
+                _event({"error": {"code": 502, "message": "Provider returned error"}}),
+            )
+        ]
+        self.replies[BACKUP] += [
+            _stream(_delta(content="From backup"), b"data: [DONE]\n")
+        ]
+
+        response = await self._call()
+
+        self.assertEqual(
+            await _read(response),
+            [_delta(content="From backup"), b"data: [DONE]\n"],
+        )
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
+
+    async def test_stream_that_drops_before_the_reply_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [
+            _stream(
+                b": OPENROUTER PROCESSING\n",
+                then=aiohttp.ClientPayloadError("connection reset"),
+            )
+        ]
+        self.replies[BACKUP] += [_stream(_delta(content="From backup"))]
+
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
+
+    async def test_stream_that_ends_before_the_reply_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [_stream(b": OPENROUTER PROCESSING\n")]
+        self.replies[BACKUP] += [_stream(_delta(content="From backup"))]
+
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
+
+    async def test_started_stream_is_passed_through_whole(self):
+        lines = [
+            b": OPENROUTER PROCESSING\n",
+            _delta(role="assistant", content=""),
+            b"\n",
+            _delta(content="Rain"),
+            b"\n",
+            _event({"error": {"code": 502, "message": "Provider disconnected"}}),
+        ]
+        self.replies[PRIMARY] += [_stream(*lines)]
+
+        response = await self._call()
+
+        self.assertEqual(await _read(response), lines)
         self.assertEqual([url for url, _ in self.sent], [PRIMARY])
+
+    async def test_stream_starting_with_a_tool_call_is_passed_through(self):
+        lines = [
+            _delta(tool_calls=[{"index": 0, "function": {"name": "plot"}}]),
+            b"data: [DONE]\n",
+        ]
+        self.replies[PRIMARY] += [_stream(*lines)]
+
+        response = await self._call()
+
+        self.assertEqual(await _read(response), lines)
 
     async def test_model_without_backup_fails_as_before(self):
         self._without_backup()
