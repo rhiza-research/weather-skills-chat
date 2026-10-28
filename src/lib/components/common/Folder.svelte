@@ -162,6 +162,17 @@
 					</div>
 				</button>
 
+				{#if $$slots.actions}
+					<!-- svelte-ignore a11y-click-events-have-key-events -->
+					<div
+						class="absolute z-10 right-2 self-center flex items-center text-gray-500 dark:text-gray-400"
+						on:pointerup|stopPropagation
+						on:click|stopPropagation
+					>
+						<slot name="actions" />
+					</div>
+				{/if}
+
 				{#if onAdd}
 					<button
 						class="absolute z-10 right-2 invisible group-hover:visible self-center flex items-center dark:text-gray-300"
