@@ -1372,9 +1372,21 @@ async def read_artifact(
     if problem:
         return problem
 
-    denied = await _user_approved_artifact_read(rel, __event_call__)
-    if denied:
-        return denied
+    # The Read files switch: on reads without asking. Off asks the user in a
+    # chat; a scheduled task has no one to ask, so off refuses.
+    features = metadata.get("features") or {}
+    if isinstance(features, dict) and features.get("read_artifacts"):
+        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    elif metadata.get("headless"):
+        return (
+            "Reading files is off for this scheduled task, so the file was not "
+            "sent. Turn on Read files for the task to allow it."
+        )
+    else:
+        denied = await _user_approved_artifact_read(rel, __event_call__)
+        if denied:
+            return denied
+        allowed_note = f"The user approved reading `{rel}`."
 
     if DISPLAY_IMAGE_TYPES.get(target.suffix.lower()):
         shown = await asyncio.to_thread(
@@ -1383,7 +1395,7 @@ async def read_artifact(
         if isinstance(shown, list) and shown:
             shown = [
                 (
-                    f"The user approved reading `{rel}`. "
+                    f"{allowed_note} "
                     "The image is attached as a vision input after this tool result."
                 ),
                 *shown[1:],
@@ -1405,7 +1417,7 @@ async def read_artifact(
             __messages__ or [],
             model_id,
         )
-        return f"The user approved reading `{rel}`.\n\n{context}"
+        return f"{allowed_note}\n\n{context}"
     except Exception as e:
         return f"Failed to read `{rel}`: {e}"
 
@@ -1415,7 +1427,8 @@ READ_ARTIFACT_SPEC = {
     "description": (
         "Read a file from the current chat artifact sandbox and send its "
         "contents to yourself. Files in the sandbox are not in your context "
-        "until you call this. The user must approve each read in a popup. "
+        "until you call this. Unless Read files is turned on, the user must "
+        "approve each read in a popup, and a scheduled task cannot read files. "
         "Images are sent as images; other files are indexed and matching "
         "text is inserted into context. Pass a relative path such as "
         "`photo.png` or `stations.csv`. Folders and Zarr stores cannot be "

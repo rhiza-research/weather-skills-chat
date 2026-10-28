@@ -12,6 +12,7 @@
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
 	import CommandLine from '$lib/components/icons/CommandLine.svelte';
 	import Photo from '$lib/components/icons/Photo.svelte';
+	import Eye from '$lib/components/icons/Eye.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -65,7 +66,9 @@
 			label: $i18n.t('Generate images'),
 			icon: Photo,
 			shown: allowed('image_generation', 'enable_image_generation')
-		}
+		},
+		// No one is present during a run, so off means the task cannot read its files.
+		{ key: 'read_artifacts', label: $i18n.t('Read files'), icon: Eye, shown: true }
 	].filter((toggle) => toggle.shown || form.features?.[toggle.key]);
 
 	const toggleFeature = (key: string) => {

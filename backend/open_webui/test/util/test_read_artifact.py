@@ -363,3 +363,59 @@ class ReadArtifactToolTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(file_item["name"], "notes.csv")
             self.assertIn("collection_name", file_item)
             self.assertNotEqual(file_item.get("context"), "full")
+
+
+class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
+    """The Read files switch: on reads without asking, off asks in a chat and
+    refuses in a scheduled task, which has no one to ask."""
+
+    async def _read(self, metadata, event_call):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            root = artifacts / "chat-switch"
+            root.mkdir(parents=True)
+            (root / "photo.png").write_bytes(PNG)
+            with (
+                patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
+                patch("open_webui.utils.builtin_tools.Users") as users,
+                patch("open_webui.utils.builtin_tools.Chats"),
+                patch("open_webui.utils.builtin_tools.can_read_chat", return_value=True),
+                patch(
+                    "open_webui.utils.builtin_tools.display_image",
+                    return_value=["Showing `photo.png`.", "data:image/png;base64,x"],
+                ),
+            ):
+                users.get_user_by_id.return_value = MagicMock(id="u1")
+                return await read_artifact(
+                    path="photo.png",
+                    __user__={"id": "u1"},
+                    __metadata__={"chat_id": "chat-switch", **metadata},
+                    __event_call__=event_call,
+                )
+
+    async def test_on_reads_without_asking(self):
+        event_call = AsyncMock(return_value=False)
+        out = await self._read({"features": {"read_artifacts": True}}, event_call)
+        event_call.assert_not_awaited()
+        self.assertEqual(out[1], "data:image/png;base64,x")
+        self.assertIn("without asking", out[0])
+
+    async def test_on_reads_in_a_scheduled_task(self):
+        event_call = AsyncMock(return_value={"error": "unavailable"})
+        out = await self._read(
+            {"headless": True, "features": {"read_artifacts": True}}, event_call
+        )
+        event_call.assert_not_awaited()
+        self.assertEqual(out[1], "data:image/png;base64,x")
+
+    async def test_off_asks_in_a_chat(self):
+        event_call = AsyncMock(return_value=True)
+        out = await self._read({"features": {"read_artifacts": False}}, event_call)
+        event_call.assert_awaited_once()
+        self.assertIn("approved", out[0])
+
+    async def test_off_refuses_in_a_scheduled_task(self):
+        event_call = AsyncMock(return_value={"error": "unavailable"})
+        out = await self._read({"headless": True}, event_call)
+        event_call.assert_not_awaited()
+        self.assertIn("Read files", out)
