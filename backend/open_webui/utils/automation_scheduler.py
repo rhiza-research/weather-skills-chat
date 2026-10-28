@@ -8,6 +8,7 @@ from starlette.requests import Request
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.automations import Automations
 from open_webui.utils.automation_runner import execute_automation
+from open_webui.utils.schedule import apscheduler_day_of_week
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -47,6 +48,19 @@ async def _run_job(automation_id: str):
         log.exception("Scheduled automation %s failed", automation_id)
 
 
+def cron_trigger(cron: str, timezone=None) -> CronTrigger:
+    """CronTrigger.from_crontab, with day-of-week read as cron reads it.
+
+    APScheduler 3 numbers weekdays from Monday, even in crontab expressions
+    (agronholm/apscheduler#286, fixed only in 4.0), so the field is
+    translated to day names first.
+    """
+    *fields, day_of_week = cron.split()
+    return CronTrigger.from_crontab(
+        " ".join([*fields, apscheduler_day_of_week(day_of_week)]), timezone=timezone
+    )
+
+
 def sync_automation_job(automation) -> None:
     job_id = _job_id(automation.id)
     if scheduler.get_job(job_id):
@@ -54,7 +68,7 @@ def sync_automation_job(automation) -> None:
     if not automation.enabled or not automation.cron:
         return
     try:
-        trigger = CronTrigger.from_crontab(automation.cron)
+        trigger = cron_trigger(automation.cron)
     except Exception:
         log.exception("Invalid cron for automation %s: %s", automation.id, automation.cron)
         return
