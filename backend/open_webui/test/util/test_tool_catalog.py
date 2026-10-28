@@ -196,6 +196,33 @@ class GetToolsCatalogTest(unittest.TestCase):
         self.assertEqual(tools["plot"]["tool_id"], "skill_plot__v1")
 
 
+class GetToolsResolvedSelectionTest(unittest.TestCase):
+    def test_a_selection_resolved_by_the_caller_is_used_as_given(self):
+        # Payload prep resolves and passes its skill records; get_tools does
+        # not resolve again.
+        user = SimpleNamespace(id="alice", role="user", settings=None)
+        catalog = [_skill("skill_plot", "plot", "1.0.0"), _skill("skill_plot_2", "plot", "1.0.1")]
+        module = SimpleNamespace(plot=lambda: None)
+        request = MagicMock()
+        request.state.metadata = {"organization_id": "org-k"}
+        request.app.state.TOOLS = {"skill_plot": module, "skill_plot_2": module}
+        records = [
+            {"id": "skill_plot", "skill_name": "plot", "version": "1.0.0"},
+            {"id": "skill_plot_2", "skill_name": "plot", "version": "1.0.1"},
+        ]
+        with patch("open_webui.utils.tools.accessible_skill_records") as mock_records:
+            tools = get_tools(
+                request,
+                ["skill_plot"],
+                user,
+                {"__user__": {"id": "alice"}},
+                catalog=catalog,
+                skill_records=records,
+            )
+        mock_records.assert_not_called()
+        self.assertEqual(tools["plot"]["tool_id"], "skill_plot")
+
+
 class GetToolsOrganizationTest(unittest.TestCase):
     """Skills come from the request's organization, not the raw header."""
 

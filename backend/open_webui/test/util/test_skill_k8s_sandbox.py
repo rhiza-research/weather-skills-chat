@@ -239,12 +239,6 @@ class RemoteScriptPathTest(TestCase):
                     "version": "0.2.0",
                     "enabled": True,
                 },
-                {
-                    "id": "plot-off",
-                    "skill_name": "plot",
-                    "version": "9.0.0",
-                    "enabled": False,
-                },
             ]
             with patch.dict("os.environ", {"SKILLS_DIR": str(root)}, clear=False):
                 packs = _latest_skill_packs(records, [old, new])

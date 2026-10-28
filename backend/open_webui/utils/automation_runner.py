@@ -94,6 +94,8 @@ def _accessible_tool_ids(user, organization_id: Optional[str] = None) -> list[st
 
 def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[list[str]]:
     if automation.tool_ids is not None:
+        # Skill names, which payload prep resolves to the newest copy in the
+        # automation's organization, as it does for a chat.
         return list(automation.tool_ids)
     # Default: every tool/skill the owner can use in this organization.
     if user is not None:

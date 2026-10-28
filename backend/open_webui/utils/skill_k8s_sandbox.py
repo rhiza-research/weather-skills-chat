@@ -989,20 +989,9 @@ def _tool_skill_dir(tool) -> str:
 
 def _latest_skill_packs(records: list[dict], catalog: list) -> list[Path]:
     """Pack directory for each active skill, keeping only its newest version."""
-    from open_webui.utils.skill_version import prefer_incoming_tool_version
+    from open_webui.utils.skill_version import newest_skill_per_name
 
-    best: dict[str, dict] = {}
-    for record in records:
-        if record.get("enabled") is False:
-            continue
-        name = record.get("skill_name")
-        if not name:
-            continue
-        current = best.get(name)
-        if current is None or prefer_incoming_tool_version(
-            record.get("version"), current.get("version")
-        ):
-            best[name] = record
+    best = newest_skill_per_name(records)
     by_id = {tool.id: tool for tool in catalog}
     packs: dict[str, Path] = {}
     for record in best.values():

@@ -1065,7 +1065,7 @@ def load_payload_context(
     tool_ids = metadata.get("tool_ids", None)
     tools = {}
     if tool_ids:
-        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+        from open_webui.utils.skill_version import resolve_tool_selection
         from open_webui.utils.tools import accessible_skill_records
         from open_webui.models.tools import Tools
         from open_webui.utils.organizations import request_organization_id
@@ -1077,9 +1077,9 @@ def load_payload_context(
             user, organization_id=org_id, catalog=catalog
         )
         clock.mark("accessible_skill_records", n=len(skill_records))
-        tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), skill_records
-        )
+        # The one place a request's skill names and IDs become the copies
+        # it runs; get_tools uses these as given.
+        tool_ids = resolve_tool_selection(list(tool_ids), skill_records)
         clock.mark("resolve_tool_ids", n=len(tool_ids))
         tools = get_tools(
             request,
