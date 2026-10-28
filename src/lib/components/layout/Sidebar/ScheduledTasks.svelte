@@ -56,7 +56,8 @@
 	}
 
 	$: pinned = sortTasks(
-		($scheduledTasks ?? []).filter((task) => task.pinned),
+		// Tasks whose scheduled runs are off stay on the Scheduled tasks page only.
+		($scheduledTasks ?? []).filter((task) => task.pinned && task.enabled),
 		sortBy
 	);
 
@@ -149,7 +150,14 @@
 						on:click={() => openTask(task)}
 					>
 						<TaskImage {task} className="size-5 rounded text-[10px]" />
-						<span class="truncate">{task.name}</span>
+						<Tooltip
+							content={task.name}
+							className="min-w-0"
+							placement="top-start"
+							tippyOptions={{ delay: [250, 0], showOnCreate: true }}
+						>
+							<div class="truncate">{task.name}</div>
+						</Tooltip>
 						<TaskDot {dot} />
 					</button>
 					<div class="invisible group-hover:visible shrink-0 flex items-center">

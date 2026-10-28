@@ -6,7 +6,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Bookmark from '$lib/components/icons/Bookmark.svelte';
 	import BookmarkSlash from '$lib/components/icons/BookmarkSlash.svelte';
-	import Bolt from '$lib/components/icons/Bolt.svelte';
+	import Play from '$lib/components/icons/Play.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
 
 	const i18n = getContext('i18n');
@@ -45,7 +45,7 @@
 				{/if}
 			</DropdownMenu.Item>
 			<DropdownMenu.Item class={itemClass} on:click={onRun}>
-				<Bolt className="size-4" strokeWidth="2" />
+				<Play strokeWidth="2" />
 				<div class="flex items-center">{$i18n.t('Run now')}</div>
 			</DropdownMenu.Item>
 			<DropdownMenu.Item class={itemClass} on:click={onEdit}>
