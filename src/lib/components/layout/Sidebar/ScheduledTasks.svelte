@@ -56,7 +56,8 @@
 	}
 
 	$: pinned = sortTasks(
-		($scheduledTasks ?? []).filter((task) => task.pinned),
+		// Tasks whose scheduled runs are off stay on the Scheduled tasks page only.
+		($scheduledTasks ?? []).filter((task) => task.pinned && task.enabled),
 		sortBy
 	);
 
@@ -150,18 +151,12 @@
 					>
 						<TaskImage {task} className="size-5 rounded text-[10px]" />
 						<Tooltip
-							content={task.enabled
-								? task.name
-								: `${task.name} (${$i18n.t('scheduled runs off')})`}
+							content={task.name}
 							className="min-w-0"
 							placement="top-start"
 							tippyOptions={{ delay: [250, 0], showOnCreate: true }}
 						>
-							<div
-								class="truncate {task.enabled ? '' : 'text-gray-400 dark:text-gray-500'}"
-							>
-								{task.name}
-							</div>
+							<div class="truncate">{task.name}</div>
 						</Tooltip>
 						<TaskDot {dot} />
 					</button>
