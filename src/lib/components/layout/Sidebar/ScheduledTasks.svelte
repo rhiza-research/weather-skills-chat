@@ -5,6 +5,7 @@
 	import { sortTasks, taskDot, type TaskSort } from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks, markTaskSeen, setTaskPinned } from '$lib/utils/scheduledTaskStore';
 	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
+	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import Pencil from '$lib/components/icons/Pencil.svelte';
@@ -107,6 +108,7 @@
 							class="flex-1 min-w-0 flex items-center gap-2 text-left"
 							on:click={() => openTask(task)}
 						>
+							<TaskImage {task} className="size-5 rounded text-[10px]" />
 							<span class="truncate">{task.name}</span>
 							<TaskDot {dot} />
 						</button>

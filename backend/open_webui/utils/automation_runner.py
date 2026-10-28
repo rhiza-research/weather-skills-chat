@@ -28,26 +28,41 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 
-# What report_task_result recorded, by run id, until the run finishes.
+# What report_task_result recorded, by run id, until the run finishes: the
+# status and summary, and the picture for the task when the report named one.
 _reports: dict[str, tuple[str, str]] = {}
+_report_images: dict[str, bytes] = {}
 
 
-def record_report(run_id: str, status: str, summary: str) -> None:
+def record_report(
+    run_id: str, status: str, summary: str, image: Optional[bytes] = None
+) -> None:
     """Keep the model's latest report for a run. A later report replaces it."""
     _reports[run_id] = (status, summary)
+    if image is None:
+        _report_images.pop(run_id, None)
+    else:
+        _report_images[run_id] = image
 
 
 def finish_run(run_id: str, error: Optional[str] = None):
-    """End a run as error if it broke, else as the model reported, else unknown."""
+    """End a run as error if it broke, else as the model reported, else unknown.
+
+    A reported image becomes the task's picture unless the run broke.
+    """
     reported = _reports.pop(run_id, None)
+    image = _report_images.pop(run_id, None)
     if error is not None:
         return AutomationRuns.update_run(
             run_id, status="error", error=error, finished=True
         )
     status, summary = reported or ("unknown", None)
-    return AutomationRuns.update_run(
+    run = AutomationRuns.update_run(
         run_id, status=status, summary=summary, finished=True
     )
+    if run and image is not None:
+        Automations.set_image(run.automation_id, image)
+    return run
 
 
 def _new_message(role: str, content: str, model: Optional[str] = None) -> dict:

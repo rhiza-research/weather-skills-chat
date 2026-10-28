@@ -14,6 +14,7 @@
 	import { canManageTask, taskDot } from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks, setTaskPinned } from '$lib/utils/scheduledTaskStore';
 	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
+	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 
@@ -109,7 +110,9 @@
 						<div
 							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3"
 						>
-							<a class="min-w-0 flex-1" href={`/scheduled-tasks/${task.id}`}>
+							<a class="min-w-0 flex-1 flex gap-3" href={`/scheduled-tasks/${task.id}`}>
+								<TaskImage {task} className="size-14 rounded-lg text-lg" />
+								<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2 font-medium">
 									<span class="truncate">{task.name}</span>
 									<TaskDot dot={taskDot(task)} />
@@ -118,6 +121,7 @@
 									{task.cron || $i18n.t('Runs only when started')}
 								</div>
 								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{task.prompt}</div>
+								</div>
 							</a>
 							<div class="flex items-center gap-3 text-xs shrink-0">
 								<button
