@@ -90,6 +90,7 @@
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
+	export let builtinFeatures: Record<string, boolean> = {};
 
 	$: onChange({
 		prompt,
@@ -97,7 +98,8 @@
 		selectedToolIds,
 		imageGenerationEnabled,
 		webSearchEnabled,
-		codeInterpreterEnabled
+		codeInterpreterEnabled,
+		builtinFeatures
 	});
 
 	let showTools = false;
@@ -365,7 +367,13 @@
 <FilesOverlay show={dragged} />
 
 {#if ToolServersModal}
-	<svelte:component this={ToolServersModal} bind:show={showTools} bind:selectedToolIds />
+	<svelte:component
+	this={ToolServersModal}
+	bind:show={showTools}
+	bind:selectedToolIds
+	bind:builtinFeatures
+	builtinGroups={['email', 'scheduled_tasks', 'preferences']}
+/>
 {/if}
 
 {#if loaded}

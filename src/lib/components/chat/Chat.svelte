@@ -208,6 +208,8 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
+	// Built-in tool groups the user turned off or on; missing means on.
+	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
 	let tags = [];
@@ -333,6 +335,7 @@
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
+		builtinFeatures = {};
 
 		try {
 			const ok = await loadChat(id);
@@ -362,6 +365,7 @@
 					webSearchEnabled = input.webSearchEnabled;
 					imageGenerationEnabled = input.imageGenerationEnabled;
 					codeInterpreterEnabled = input.codeInterpreterEnabled;
+					builtinFeatures = input.builtinFeatures ?? {};
 				} catch (e) {}
 			}
 
@@ -653,6 +657,7 @@
 				webSearchEnabled = input.webSearchEnabled;
 				imageGenerationEnabled = input.imageGenerationEnabled;
 				codeInterpreterEnabled = input.codeInterpreterEnabled;
+				builtinFeatures = input.builtinFeatures ?? {};
 			} catch (e) {
 				prompt = '';
 				files = [];
@@ -660,6 +665,7 @@
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
 				codeInterpreterEnabled = false;
+				builtinFeatures = {};
 			}
 		}
 
@@ -2394,7 +2400,10 @@
 						$config?.features?.enable_web_search &&
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
-							: false
+							: false,
+					email: builtinFeatures.email !== false,
+					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
+					preferences: builtinFeatures.preferences !== false
 				},
 				variables: {
 					...getPromptVariables(
@@ -3061,6 +3070,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								toolServers={$toolServers}
@@ -3117,6 +3127,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								transparentBackground={$settings?.backgroundImageUrl ?? false}

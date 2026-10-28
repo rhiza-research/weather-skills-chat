@@ -36,6 +36,7 @@
 	export let selectedToolIds = [];
 	export let imageGenerationEnabled = false;
 	export let codeInterpreterEnabled = false;
+	export let builtinFeatures: Record<string, boolean> = {};
 	export let webSearchEnabled = false;
 
 	export let toolServers = [];
@@ -186,6 +187,7 @@
 					bind:selectedToolIds
 					bind:imageGenerationEnabled
 					bind:codeInterpreterEnabled
+					bind:builtinFeatures
 					bind:webSearchEnabled
 					bind:atSelectedModel
 					{toolServers}

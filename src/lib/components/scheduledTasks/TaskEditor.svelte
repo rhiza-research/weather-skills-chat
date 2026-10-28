@@ -112,7 +112,13 @@
 	};
 </script>
 
-<ToolServersModal bind:show={showTools} bind:selectedToolIds />
+<!-- A run never gets the scheduled task tools, so only these can be switched. -->
+<ToolServersModal
+	bind:show={showTools}
+	bind:selectedToolIds
+	bind:builtinFeatures={form.features}
+	builtinGroups={['email', 'preferences']}
+/>
 
 <form class="flex flex-col gap-3" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">

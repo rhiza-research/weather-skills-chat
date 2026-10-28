@@ -27,7 +27,8 @@ export const taskFromChat = (chatId: string, chat) => {
 			features = {
 				web_search: !!input.webSearchEnabled,
 				image_generation: !!input.imageGenerationEnabled,
-				code_interpreter: !!input.codeInterpreterEnabled
+				code_interpreter: !!input.codeInterpreterEnabled,
+				...(input.builtinFeatures ?? {})
 			};
 		}
 	} catch {

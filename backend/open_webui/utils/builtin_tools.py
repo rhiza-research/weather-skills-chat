@@ -1918,101 +1918,26 @@ async def list_available_tools(
 
     lines = []
 
-    # Builtins are always on for every chat turn.
-    lines.append("## Built-in tools (always available)")
-    lines.append(
-        _tool_summary_line(
-            "list_available_tools",
-            "List tools/skills available in this chat, or all tools you can access.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_scheduled_task",
-            "Create a scheduled task from the current chat.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "secrets_page",
-            "Link to the secrets page with a secret name already filled in.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_preferences",
-            "Read saved preferences for this organization.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_preference",
-            "Save a preference after the user agrees. Ask them first.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "copy_intermediate_result",
-            "Copy a file/folder into or out of intermediate_results.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_folder",
-            "Create a folder in the chat artifact sandbox for organizing outputs.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_artifacts",
-            "List files/folders in the chat artifact sandbox.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "read_artifact",
-            "Ask the user for permission, then send a sandbox file to yourself.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_email_recipients",
-            "List your email and organization member emails allowed for send_email.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "send_email",
-            "Email results to yourself or people in your organizations; optional artifact sandbox attachments.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "display_image",
-            "Show a sandbox image inline, or link it with a relative markdown path. Do not do both.",
-            kind="builtin",
-        )
-    )
-    features = metadata.get("features") or {}
-    if isinstance(features, dict) and features.get("code_interpreter"):
-        lines.append(
-            _tool_summary_line(
-                "execute_code",
-                "Run Python in Pyodide. Can copy artifact files into /mnt and back out.",
-                kind="builtin",
-            )
-        )
+    # The built-in tools this chat or run is offered.
+    offered = get_builtin_tools({"__metadata__": metadata})
+    lines.append("## Built-in tools")
+    for name, description in (
+        ("list_available_tools", "List tools/skills available in this chat, or all tools you can access."),
+        ("create_scheduled_task", "Create a scheduled task from the current chat."),
+        ("secrets_page", "Link to the secrets page with a secret name already filled in."),
+        ("list_preferences", "Read saved preferences for this organization."),
+        ("create_preference", "Save a preference after the user agrees. Ask them first."),
+        ("copy_intermediate_result", "Copy a file/folder into or out of intermediate_results."),
+        ("create_folder", "Create a folder in the chat artifact sandbox for organizing outputs."),
+        ("list_artifacts", "List files/folders in the chat artifact sandbox."),
+        ("read_artifact", "Ask the user for permission, then send a sandbox file to yourself."),
+        ("list_email_recipients", "List your email and organization member emails allowed for send_email."),
+        ("send_email", "Email results to yourself or people in your organizations; optional artifact sandbox attachments."),
+        ("display_image", "Show a sandbox image inline, or link it with a relative markdown path. Do not do both."),
+        ("execute_code", "Run Python in Pyodide. Can copy artifact files into /mnt and back out."),
+    ):
+        if name in offered:
+            lines.append(_tool_summary_line(name, description, kind="builtin"))
 
     selected_ids = list(metadata.get("tool_ids") or [])
     catalog = Tools.get_tool_catalog()
@@ -2667,6 +2592,32 @@ async def web_search(
     return json.dumps({"results": results}, ensure_ascii=False)
 
 
+# Built-in tools a chat or scheduled task can turn off, by feature name. Each
+# group is on unless its feature is false, so older chats and tasks keep it.
+BUILTIN_TOOL_GROUPS = {
+    "email": ("list_email_recipients", "send_email"),
+    "scheduled_tasks": (
+        "create_scheduled_task",
+        "list_scheduled_tasks",
+        "update_scheduled_task",
+        "delete_scheduled_task",
+    ),
+    "preferences": ("list_preferences", "create_preference"),
+}
+
+
+def _turned_off_builtins(metadata: dict) -> set[str]:
+    features = metadata.get("features") or {}
+    if not isinstance(features, dict):
+        return set()
+    return {
+        name
+        for group, names in BUILTIN_TOOL_GROUPS.items()
+        if features.get(group) is False
+        for name in names
+    }
+
+
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
@@ -2719,6 +2670,8 @@ def get_builtin_tools(extra_params: dict) -> dict:
                 ),
             }
         )
+    for name in _turned_off_builtins(metadata):
+        tools.pop(name, None)
     features = metadata.get("features") or {}
     if isinstance(features, dict) and features.get("code_interpreter"):
         tools["execute_code"] = _tool(execute_code, EXECUTE_CODE_SPEC)
