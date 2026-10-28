@@ -215,3 +215,24 @@ export const remapSelectedToolIdsToHighestSkills = (
 /** IDs to enable in chat. `$tools` is already the org-usable set. */
 export const defaultEnabledToolIds = (allTools: ToolWithId[]): string[] =>
 	dedupeToolsForSelection(allTools).map((t) => t.id);
+
+/**
+ * Tool IDs to select for a scheduled task. It saves skills by name and other
+ * tools by ID; a name or an old skill ID becomes the newest copy's ID. Entries
+ * with no match are kept so saving the task does not drop them. A task with no
+ * list selects what a new chat selects.
+ */
+export const taskToolIds = (entries: string[] | null, allTools: ToolWithId[]): string[] => {
+	if (entries === null) {
+		return defaultEnabledToolIds(allTools);
+	}
+	const idByName = new Map<string, string>();
+	for (const tool of dedupeToolsForSelection(allTools)) {
+		const key = skillDedupeKey(tool);
+		if (key) {
+			idByName.set(key, tool.id);
+		}
+	}
+	const named = entries.map((entry) => idByName.get(entry.trim().toLowerCase()) ?? entry);
+	return remapSelectedToolIdsToHighestSkills(named, allTools);
+};

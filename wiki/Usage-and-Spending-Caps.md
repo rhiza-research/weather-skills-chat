@@ -4,7 +4,7 @@ Weather Skills Chat records the tokens and cost of every model call, and stops n
 
 ## What is recorded
 
-Every model call made for a chat, for an [[Automations]] run, or for the app's background tasks, such as titling a chat, is recorded with its organization, user, chat, model, tokens, and cost. The cost is the amount the model provider reports. The app does not estimate costs, so calls to a provider that reports no cost count as free.
+Every model call made for a chat, for a [[Scheduled Tasks]] run, or for the app's background tasks, such as titling a chat, is recorded with its organization, user, chat, model, tokens, and cost. The cost is the amount the model provider reports. The app does not estimate costs, so calls to a provider that reports no cost count as free.
 
 Usage is totaled per user and per organization for each calendar month, in UTC.
 
@@ -15,7 +15,7 @@ There are two limits, and a call must be under both.
 - The organization limit applies to the whole organization. New personal and workspace organizations start at 300 US dollars a month. The platform organization has no limit. Only platform admins set or remove organization limits.
 - The member limit applies to one person in one organization. It starts with no limit. Organization admins set it, and it cannot be higher than the organization limit.
 
-When a limit is reached, the model stops answering new requests in that organization until the next month or until an admin raises the limit, and the user is told whether the organization or their own limit was reached. The refused message stays in the chat with that error, so the user can retry it once the limit is raised. A reply that is still running when the limit is reached stops before its next model call, for example after a skill finishes. It keeps what it has written and the skills it has run, and shows the same message. An automation run that starts while a limit is reached creates no chat.
+When a limit is reached, the model stops answering new requests in that organization until the next month or until an admin raises the limit, and the user is told whether the organization or their own limit was reached. The refused message stays in the chat with that error, so the user can retry it once the limit is raised. A reply that is still running when the limit is reached stops before its next model call, for example after a skill finishes. It keeps what it has written and the skills it has run, and shows the same message. A scheduled task run that starts while a limit is reached creates no chat.
 
 A limit can also be set when someone is invited. See [[Invitations]].
 

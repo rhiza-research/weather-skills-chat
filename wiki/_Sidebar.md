@@ -6,7 +6,7 @@
 - [[Organizations]]
 - [[Usage and Spending Caps]]
 - [[Invitations]]
-- [[Automations]]
+- [[Scheduled Tasks]]
 - [[Secrets]]
 - [[Preferences]]
 - [[Live Chat Updates]]

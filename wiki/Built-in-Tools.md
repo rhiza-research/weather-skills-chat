@@ -7,7 +7,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_automation` | Turn the current chat into a scheduled chat. See [[Automations]]. |
+| `create_automation` | Turn the current chat into a scheduled task. See [[Scheduled Tasks]]. |
 | `list_automations` | List the automations in the chat's organization that the user can see, with each one's schedule, model, sharing, last run, and the start of its prompt, or show one automation's whole prompt. |
 | `update_automation` | Change an automation's name, schedule, prompt, or organization. |
 | `delete_automation` | Delete an automation and its run history. The model is told to do this only when the user asks. |
@@ -24,7 +24,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 
 The chat's files are described on [[Chat Artifacts]]. The file tools, `send_email`, and `create_automation` do not work in temporary chats.
 
-The automation tools act as the user, so the model can change or delete only the automations the user could change on the Automations page. An [[Automations]] run is not given the automation tools, so a scheduled chat cannot create, change, or delete automations.
+The automation tools act as the user, so the model can change or delete only the automations the user could change on the Scheduled tasks page. A [[Scheduled Tasks]] run is not given the automation tools, so a scheduled chat cannot create, change, or delete automations.
 
 ## Running code
 
