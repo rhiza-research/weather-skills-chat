@@ -44,14 +44,17 @@ Opening a finished run clears its dot for that user, as does having the run's ch
 
 ## Schedules
 
-A schedule is a five-field cron expression or one of these phrases. Days of the week follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday.
+Schedules run in UTC. They are shown in English, such as "At 06:00 AM, only on Monday and Thursday (UTC)". The task page has a **Show cron** button for the cron expression behind it. While a schedule is being typed, the page shows how it will be read, or says when it is not understood.
 
-- `hourly` or `every hour`
-- `daily`, `every day`, or `everyday`, which run at midnight
-- `weekly` or `every week`, which run on Sunday at midnight
-- `every day at noon` or `every day at midnight`
-- `every day at` a time, such as `every day at 7am` or `daily at 6:30pm`
-- `weekly on` a weekday `at` a time, such as `weekly on Monday at 9am`
+A schedule is a five-field cron expression or a phrase. Days of the week in cron follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday. A phrase names days, then an optional time; with no time, it runs at midnight. Some examples:
+
+- `hourly`, `every 15 minutes`, `every 2 hours`
+- `daily`, `every day at noon`, `daily at 6:30pm`
+- `every weekday at 7am`, `every weekend at 10am`
+- `every monday and thursday at 6am`, `mon, wed and fri at 7:15`
+- `weekly`, which runs on Sunday at midnight, or `weekly on Monday at 9am`
+- `monthly`, which runs on the 1st at midnight, or `monthly on the 15th at 9am`
+- the time first: `at 9am every day`
 
 ## What a run does
 

@@ -5,7 +5,7 @@
 	import { DropdownMenu } from 'bits-ui';
 	import { activeOrganizationId, chatId, mobile, scheduledTasks, showSidebar } from '$lib/stores';
 	import { runAutomationById } from '$lib/apis/automations';
-	import { sortTasks, taskDot, type TaskSort } from '$lib/utils/scheduledTasks';
+	import { describeSchedule, sortTasks, taskDot, type TaskSort } from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks, markTaskSeen, setTaskPinned } from '$lib/utils/scheduledTaskStore';
 	import { flyAndScale } from '$lib/utils/transitions';
 	import Folder from '$lib/components/common/Folder.svelte';
@@ -146,6 +146,7 @@
 				>
 					<button
 						class="flex-1 min-w-0 flex items-center gap-2 text-left"
+						title={describeSchedule(task.cron)}
 						on:click={() => openTask(task)}
 					>
 						<TaskImage {task} className="size-5 rounded text-[10px]" />

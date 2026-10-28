@@ -68,7 +68,7 @@ def sync_automation_job(automation) -> None:
     if not automation.enabled or not automation.cron:
         return
     try:
-        trigger = cron_trigger(automation.cron)
+        trigger = cron_trigger(automation.cron, timezone="UTC")
     except Exception:
         log.exception("Invalid cron for automation %s: %s", automation.id, automation.cron)
         return

@@ -11,7 +11,7 @@
 		scheduledTasks
 	} from '$lib/stores';
 	import { runAutomationById, updateAutomationById } from '$lib/apis/automations';
-	import { canManageTask, taskDot } from '$lib/utils/scheduledTasks';
+	import { canManageTask, describeSchedule, taskDot } from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks, setTaskPinned } from '$lib/utils/scheduledTaskStore';
 	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
 	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
@@ -117,8 +117,8 @@
 									<span class="truncate">{task.name}</span>
 									<TaskDot dot={taskDot(task)} />
 								</div>
-								<div class="text-xs text-gray-500">
-									{task.cron || $i18n.t('Runs only when started')}
+								<div class="text-xs text-gray-500" title={task.cron ?? ''}>
+									{task.cron ? describeSchedule(task.cron) : $i18n.t('Runs only when started')}
 								</div>
 								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{task.prompt}</div>
 								</div>
