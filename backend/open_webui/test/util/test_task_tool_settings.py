@@ -16,11 +16,10 @@ from open_webui.utils.builtin_tools import (
 )
 
 
-def _request(enabled=("web_search", "code_interpreter", "image_generation")):
+def _request(enabled=("web_search", "code_interpreter")):
     config = SimpleNamespace(
         ENABLE_WEB_SEARCH="web_search" in enabled,
         ENABLE_CODE_INTERPRETER="code_interpreter" in enabled,
-        ENABLE_IMAGE_GENERATION="image_generation" in enabled,
         USER_PERMISSIONS={},
     )
     return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(config=config)))
@@ -110,7 +109,6 @@ class TaskToolSettingsTest(unittest.IsolatedAsyncioTestCase):
             skills=["smap-fetch", "my_tool"],
             web_search=False,
             code_interpreter=True,
-            image_generation=True,
             read_files=True,
             email=False,
             preferences=False,
@@ -124,7 +122,6 @@ class TaskToolSettingsTest(unittest.IsolatedAsyncioTestCase):
             {
                 "web_search": False,
                 "code_interpreter": True,
-                "image_generation": True,
                 "read_artifacts": True,
                 "email": False,
                 "preferences": False,
@@ -182,6 +179,13 @@ class TaskToolSettingsTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("code", result.lower())
         self.assertEqual(Automations.get_automations_for_user(self.owner, self.org), [])
+
+    def test_image_generation_is_not_a_setting(self):
+        for spec in (
+            builtin_tools.CREATE_SCHEDULED_TASK_SPEC,
+            builtin_tools.UPDATE_SCHEDULED_TASK_SPEC,
+        ):
+            self.assertNotIn("image_generation", spec["parameters"]["properties"])
 
     async def test_a_personal_task_cannot_be_shared(self):
         self.personal_orgs.add(self.org)

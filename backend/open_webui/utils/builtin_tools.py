@@ -85,7 +85,6 @@ def _time_limit_problem(minutes: Optional[int]) -> Optional[str]:
 TASK_FEATURE_ARGS = {
     "web_search": "web_search",
     "code_interpreter": "code_interpreter",
-    "image_generation": "image_generation",
     "read_files": "read_artifacts",
     "email": "email",
     "preferences": "preferences",
@@ -96,7 +95,6 @@ TASK_FEATURE_ARGS = {
 _GATED_TASK_FEATURES = {
     "web_search": ("ENABLE_WEB_SEARCH", "Web search"),
     "code_interpreter": ("ENABLE_CODE_INTERPRETER", "Running code"),
-    "image_generation": ("ENABLE_IMAGE_GENERATION", "Image generation"),
 }
 
 
@@ -182,7 +180,6 @@ async def create_scheduled_task(
     skills: Optional[list[str]] = None,
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
-    image_generation: Optional[bool] = None,
     read_files: Optional[bool] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
@@ -292,7 +289,6 @@ async def create_scheduled_task(
             shared=shared,
             web_search=web_search,
             code_interpreter=code_interpreter,
-            image_generation=image_generation,
             read_files=read_files,
             email=email,
             preferences=preferences,
@@ -343,7 +339,6 @@ TASK_SETTING_PROPERTIES = {
     },
     "web_search": _switch("Allow the agent to search the web"),
     "code_interpreter": _switch("Allow the agent to write and run its own code"),
-    "image_generation": _switch("Allow the agent to generate images"),
     "read_files": _switch(
         "Allow the agent to read the run's files. A run has no one to ask, so "
         "with this off it cannot read them."
@@ -423,7 +418,6 @@ def _describe_task_features(features: Optional[dict]) -> str:
         for flag, label in (
             ("web_search", "web search"),
             ("code_interpreter", "running code"),
-            ("image_generation", "image generation"),
             ("read_artifacts", "read files"),
         )
         if features.get(flag)
@@ -552,7 +546,6 @@ async def update_scheduled_task(
     skills: Optional[list[str]] = None,
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
-    image_generation: Optional[bool] = None,
     read_files: Optional[bool] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
@@ -623,8 +616,7 @@ async def update_scheduled_task(
                 shared=shared,
                 web_search=web_search,
                 code_interpreter=code_interpreter,
-                image_generation=image_generation,
-                read_files=read_files,
+                    read_files=read_files,
                 email=email,
                 preferences=preferences,
             ),
