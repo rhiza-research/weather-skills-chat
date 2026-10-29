@@ -6,7 +6,6 @@
 	import { createAutomation, updateAutomationById } from '$lib/apis/automations';
 	import { taskToolIds } from '$lib/utils/toolDisplay';
 
-	import Switch from '$lib/components/common/Switch.svelte';
 	import ToolServersModal from '$lib/components/chat/ToolServersModal.svelte';
 	import Wrench from '$lib/components/icons/Wrench.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
@@ -36,7 +35,6 @@
 			prompt: source?.prompt ?? '',
 			model: source?.model ?? '',
 			cron: source?.cron ?? 'every day at noon',
-			enabled: source?.enabled ?? true,
 			visibility: source?.visibility ?? 'private',
 			source_chat_id: source?.source_chat_id ?? null,
 			tool_ids: source?.tool_ids ?? null,
@@ -102,7 +100,6 @@
 				prompt: form.prompt,
 				model: form.model || null,
 				cron: form.cron || '',
-				enabled: form.enabled,
 				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: toolsReady ? selectedToolIds : form.tool_ids,
 				features: form.features
@@ -111,6 +108,8 @@
 				? await updateAutomationById(localStorage.token, task.id, payload)
 				: await createAutomation(localStorage.token, {
 						...payload,
+						// New tasks start on; the Scheduled tasks page turns them on and off.
+						enabled: true,
 						source_chat_id: form.source_chat_id
 					});
 			toast.success(task ? $i18n.t('Scheduled task saved') : $i18n.t('Scheduled task created'));
@@ -207,17 +206,8 @@
 		</div>
 	</div>
 
-	<div class="flex flex-wrap items-center gap-4">
-		<div class="flex items-center gap-2 text-sm">
-			<Switch
-				state={form.enabled}
-				disabled={!canManage}
-				on:change={(e) => (form.enabled = e.detail)}
-			/>
-			<span>{$i18n.t('Run on schedule')}</span>
-		</div>
-
-		{#if !isPersonal}
+	{#if !isPersonal}
+		<div>
 			<select
 				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-1.5 text-sm"
 				bind:value={form.visibility}
@@ -226,8 +216,8 @@
 				<option value="private">{$i18n.t('Private')}</option>
 				<option value="organization">{$i18n.t('Shared with the organization')}</option>
 			</select>
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	{#if task?.cron}
 		<div class="text-xs text-gray-500">
