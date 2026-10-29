@@ -37,6 +37,7 @@
 	export let imageGenerationEnabled = false;
 	export let codeInterpreterEnabled = false;
 	export let readArtifactsEnabled = false;
+	export let builtinFeatures: Record<string, boolean> = {};
 	export let webSearchEnabled = false;
 
 	export let toolServers = [];
@@ -188,6 +189,7 @@
 					bind:imageGenerationEnabled
 					bind:codeInterpreterEnabled
 					bind:readArtifactsEnabled
+					bind:builtinFeatures
 					bind:webSearchEnabled
 					bind:atSelectedModel
 					{toolServers}

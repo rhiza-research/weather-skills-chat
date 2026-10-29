@@ -22,6 +22,10 @@
 
 	export let show = false;
 	export let selectedToolIds: string[] = [];
+	/** Feature flags for built-in tools; a group is on unless its flag is false. */
+	export let builtinFeatures: Record<string, boolean> = {};
+	/** Which built-in groups to offer switches for. */
+	export let builtinGroups: string[] = [];
 
 	const i18n = getContext('i18n');
 
@@ -59,6 +63,29 @@
 	} else if (!show && opened) {
 		opened = false;
 	}
+
+	$: builtinOptions = [
+		{
+			key: 'email',
+			name: $i18n.t('Email'),
+			description: $i18n.t('Send email, with files from the chat attached.')
+		},
+		{
+			key: 'scheduled_tasks',
+			name: $i18n.t('Scheduled tasks'),
+			description: $i18n.t('Create, list, change, and delete scheduled tasks.')
+		},
+		{
+			key: 'preferences',
+			name: $i18n.t('Preferences'),
+			description: $i18n.t('Read and save preferences for this organization.')
+		}
+	].filter((option) => builtinGroups.includes(option.key));
+
+	const setBuiltinEnabled = (key: string, enabled: boolean) => {
+		if (enabled === (builtinFeatures?.[key] !== false)) return;
+		builtinFeatures = { ...(builtinFeatures ?? {}), [key]: enabled };
+	};
 
 	// Switch dispatches its state on mount too, so only write when it changes.
 	const setToolEnabled = (toolId: string, enabled: boolean) => {
@@ -103,10 +130,36 @@
 			/>
 		</div>
 
+		{#if builtinOptions.length > 0}
+			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
+				<div class=" text-base font-medium self-center">{$i18n.t('Built-in')}</div>
+			</div>
+			<div class="px-3 pb-2 w-full flex flex-col">
+				{#each builtinOptions as option (option.key)}
+					<div
+						class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition flex items-center gap-2"
+					>
+						<div class="flex-1 min-w-0">
+							<div class="text-sm font-medium dark:text-gray-100 text-gray-800">
+								{option.name}
+							</div>
+							<div class="text-xs text-gray-500">{option.description}</div>
+						</div>
+						<div class="shrink-0">
+							<Switch
+								state={builtinFeatures?.[option.key] !== false}
+								on:change={(e) => setBuiltinEnabled(option.key, e.detail)}
+							/>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
 		{#if visibleTools.length > 0}
-			{#if $toolServers.length > 0}
+			{#if builtinOptions.length > 0 || $toolServers.length > 0}
 				<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-					<div class=" text-base font-medium self-center">{$i18n.t('Tools')}</div>
+					<div class=" text-base font-medium self-center">{$i18n.t('Skills and tools')}</div>
 				</div>
 			{/if}
 

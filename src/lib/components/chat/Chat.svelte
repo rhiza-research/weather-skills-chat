@@ -209,6 +209,8 @@
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
 	let readArtifactsEnabled = false;
+	// Built-in tool groups the user turned off or on; missing means on.
+	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
 	let tags = [];
@@ -335,6 +337,7 @@
 		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
 		readArtifactsEnabled = false;
+		builtinFeatures = {};
 
 		try {
 			const ok = await loadChat(id);
@@ -365,6 +368,7 @@
 					imageGenerationEnabled = input.imageGenerationEnabled;
 					codeInterpreterEnabled = input.codeInterpreterEnabled;
 					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
+					builtinFeatures = input.builtinFeatures ?? {};
 				} catch (e) {}
 			}
 
@@ -655,6 +659,7 @@
 				imageGenerationEnabled = input.imageGenerationEnabled;
 				codeInterpreterEnabled = input.codeInterpreterEnabled;
 				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
+				builtinFeatures = input.builtinFeatures ?? {};
 			} catch (e) {
 				prompt = '';
 				files = [];
@@ -663,6 +668,7 @@
 				imageGenerationEnabled = false;
 				codeInterpreterEnabled = false;
 				readArtifactsEnabled = false;
+				builtinFeatures = {};
 			}
 		}
 
@@ -2398,7 +2404,10 @@
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
 							: false,
-					read_artifacts: readArtifactsEnabled
+					read_artifacts: readArtifactsEnabled,
+					email: builtinFeatures.email !== false,
+					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
+					preferences: builtinFeatures.preferences !== false
 				},
 				variables: {
 					...getPromptVariables(
@@ -3066,6 +3075,7 @@
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
 								bind:readArtifactsEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								toolServers={$toolServers}
@@ -3123,6 +3133,7 @@
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
 								bind:readArtifactsEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								transparentBackground={$settings?.backgroundImageUrl ?? false}
