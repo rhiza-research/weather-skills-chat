@@ -57,6 +57,7 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
 	import ScheduledTasks from './Sidebar/ScheduledTasks.svelte';
+	import OrganizationRow from './Sidebar/OrganizationRow.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
 
@@ -822,6 +823,8 @@
 			{#if !search}
 				<ScheduledTasks />
 			{/if}
+
+			<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
 
 			<Folder
 				collapsible={!search}

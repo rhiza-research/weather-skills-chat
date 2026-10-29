@@ -23,4 +23,4 @@ The person opens the link and accepts.
 - A person with an account must be signed in to that account. Someone signed in as a different person cannot accept it.
 - An organization invitation adds the person to the organization with the invited role. A platform admin invitation makes the person a platform admin. A platform user invitation activates an account that is waiting for approval.
 
-Accepting applies the spending limit and signs the person in. A used, expired, or canceled invitation cannot be accepted.
+Accepting applies the spending limit and signs the person in. Accepting an organization invitation opens the app in that organization. A used, expired, or canceled invitation cannot be accepted.

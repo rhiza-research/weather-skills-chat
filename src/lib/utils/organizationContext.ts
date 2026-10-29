@@ -56,3 +56,21 @@ export const reloadOrganizationCatalog = async (token: string) => {
 	await models.set(nextModels);
 	await tools.set(nextTools);
 };
+
+/**
+ * After accepting an invitation to an organization, open the app in it.
+ *
+ * The membership list loaded before accepting does not have the new
+ * organization yet, and the app falls back to the personal organization when
+ * the active one is not in the list, so the list is cleared for the app to
+ * reload. A platform invitation has no organization and changes nothing.
+ */
+export const openInvitedOrganization = (
+	organizationId: string | null | undefined,
+	storage: Pick<Storage, 'setItem'> = localStorage
+) => {
+	if (!organizationId) return;
+	organizations.set(null);
+	activeOrganizationId.set(organizationId);
+	storage.setItem('activeOrganizationId', organizationId);
+};
