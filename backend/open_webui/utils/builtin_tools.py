@@ -81,16 +81,117 @@ def _time_limit_problem(minutes: Optional[int]) -> Optional[str]:
     return None
 
 
+# The tool arguments that set a task's feature flags, by the flag they set.
+TASK_FEATURE_ARGS = {
+    "web_search": "web_search",
+    "code_interpreter": "code_interpreter",
+    "image_generation": "image_generation",
+    "read_files": "read_artifacts",
+    "email": "email",
+    "preferences": "preferences",
+}
+
+# Features an admin turns on for the app and users need permission for, as
+# the task page and chat bar offer them.
+_GATED_TASK_FEATURES = {
+    "web_search": ("ENABLE_WEB_SEARCH", "Web search"),
+    "code_interpreter": ("ENABLE_CODE_INTERPRETER", "Running code"),
+    "image_generation": ("ENABLE_IMAGE_GENERATION", "Image generation"),
+}
+
+
+def _apply_task_settings(
+    form,
+    user,
+    organization_id: str,
+    request,
+    current_features: Optional[dict],
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    shared: Optional[bool] = None,
+    **features: Optional[bool],
+) -> Optional[str]:
+    """Set the passed settings on a task form, or say why one cannot be used.
+
+    Checks them as the task page does. DB reads: call from a worker thread.
+    """
+    from open_webui.utils.access_control import has_permission
+    from open_webui.utils.automation_runner import _accessible_tool_ids
+    from open_webui.utils.models import check_model_access, remember_catalog_model
+    from open_webui.utils.organizations import is_personal_org
+    from open_webui.utils.tools import accessible_skill_records
+
+    if model is not None:
+        entry = remember_catalog_model(request, model) if request is not None else None
+        try:
+            if entry is None:
+                raise ValueError(model)
+            check_model_access(user, entry, organization_id)
+        except Exception:
+            return f"The model `{model}` is not available in this organization."
+        form.model = model
+
+    if skills is not None:
+        known = {
+            record["skill_name"]
+            for record in accessible_skill_records(user, organization_id)
+        } | set(_accessible_tool_ids(user, organization_id))
+        unknown = [skill for skill in skills if skill not in known]
+        if unknown:
+            return (
+                "These skills or tools are not available: "
+                + ", ".join(f"`{skill}`" for skill in unknown)
+                + ". list_available_tools with scope `all` lists the ones there are."
+            )
+        form.tool_ids = list(skills)
+
+    chosen = {
+        TASK_FEATURE_ARGS[arg]: value for arg, value in features.items() if value is not None
+    }
+    if chosen:
+        config = _request_config(request)
+        for feature, (setting, label) in _GATED_TASK_FEATURES.items():
+            if not chosen.get(feature) or config is None:
+                continue
+            permitted = user.role == "admin" or has_permission(
+                user.id, f"features.{feature}", getattr(config, "USER_PERMISSIONS", {})
+            )
+            if not getattr(config, setting, False) or not permitted:
+                return f"{label} is not available to this user, so it cannot be turned on."
+        form.features = {**(current_features or {}), **chosen}
+
+    if shared is not None:
+        if shared and is_personal_org(organization_id):
+            return "A task in a personal organization cannot be shared."
+        form.visibility = "organization" if shared else "private"
+    return None
+
+
+def _task_settings_args(**kwargs) -> dict:
+    """The settings arguments to pass on, without the unset ones."""
+    return {key: value for key, value in kwargs.items() if value is not None}
+
+
 async def create_scheduled_task(
     name: str,
     schedule: str,
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
     time_limit_minutes: Optional[int] = None,
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    web_search: Optional[bool] = None,
+    code_interpreter: Optional[bool] = None,
+    image_generation: Optional[bool] = None,
+    read_files: Optional[bool] = None,
+    email: Optional[bool] = None,
+    preferences: Optional[bool] = None,
+    shared: Optional[bool] = None,
     __user__: dict = {},
     __messages__: list = None,
     __metadata__: dict = None,
     __model__: dict = None,
+    __request__=None,
 ) -> str:
     """Create a scheduled task from the current chat.
 
@@ -102,6 +203,11 @@ async def create_scheduled_task(
     :param prompt: Optional restatement of the task. If omitted, prior user turns are used.
     :param organization_id: Optional organization id. Defaults to the current chat's organization.
     :param time_limit_minutes: Optional limit on how long each run may take
+    :param model: Optional model id. Defaults to this chat's model.
+    :param skills: Optional skill names and tool ids. Defaults to this chat's.
+    :param web_search: Optional; defaults to this chat's setting, as do the
+        other switches
+    :param shared: Optional; whether the organization shares the task
     """
     if problem := _time_limit_problem(time_limit_minutes):
         return problem
@@ -159,22 +265,43 @@ async def create_scheduled_task(
     if features is not None and not isinstance(features, dict):
         features = None
 
-    automation = Automations.insert_new_automation(
-        user.id,
-        AutomationForm(
-            name=name.strip() or "Scheduled chat",
-            prompt=recipe,
-            model=model_id,
-            cron=cron,
-            enabled=True,
-            organization_id=organization_id,
-            visibility=getattr(chat, "visibility", "private"),
-            source_chat_id=chat_id,
-            tool_ids=tool_ids,
-            features=features,
-            timeout_minutes=time_limit_minutes,
+    form = AutomationForm(
+        name=name.strip() or "Scheduled chat",
+        prompt=recipe,
+        model=model_id,
+        cron=cron,
+        enabled=True,
+        organization_id=organization_id,
+        visibility=getattr(chat, "visibility", "private"),
+        source_chat_id=chat_id,
+        tool_ids=tool_ids,
+        features=features,
+        timeout_minutes=time_limit_minutes,
+    )
+    # Anything passed replaces what was copied from the chat.
+    problem = await asyncio.to_thread(
+        _apply_task_settings,
+        form,
+        user,
+        organization_id,
+        __request__,
+        features,
+        **_task_settings_args(
+            model=model,
+            skills=skills,
+            shared=shared,
+            web_search=web_search,
+            code_interpreter=code_interpreter,
+            image_generation=image_generation,
+            read_files=read_files,
+            email=email,
+            preferences=preferences,
         ),
     )
+    if problem:
+        return problem
+
+    automation = Automations.insert_new_automation(user.id, form)
     if not automation:
         return "Failed to create the scheduled task."
     sync_automation_job(automation)
@@ -194,10 +321,46 @@ async def create_scheduled_task(
     )
 
 
+def _switch(description: str) -> dict:
+    return {"type": "boolean", "description": description}
+
+
+# Settings both create_scheduled_task and update_scheduled_task take, matching
+# what the task page sets. Create defaults each one to the current chat's.
+TASK_SETTING_PROPERTIES = {
+    "model": {
+        "type": "string",
+        "description": "Model id to run the task with",
+    },
+    "skills": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "Skill names and tool ids the task may use, replacing the current "
+            "list; an empty list allows none. Each run uses the newest copy of a "
+            "named skill."
+        ),
+    },
+    "web_search": _switch("Allow the agent to search the web"),
+    "code_interpreter": _switch("Allow the agent to write and run its own code"),
+    "image_generation": _switch("Allow the agent to generate images"),
+    "read_files": _switch(
+        "Allow the agent to read the run's files. A run has no one to ask, so "
+        "with this off it cannot read them."
+    ),
+    "email": _switch("Allow the agent to send email"),
+    "preferences": _switch("Allow the agent to read and save preferences"),
+    "shared": _switch(
+        "Share the task with the organization; not possible in a personal one"
+    ),
+}
+
+
 CREATE_SCHEDULED_TASK_SPEC = {
     "name": "create_scheduled_task",
     "description": (
-        "Create a scheduled task from the current chat. "
+        "Create a scheduled task from the current chat. It copies this chat's "
+        "model, skills, and switches unless they are passed. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
         "Scheduled tasks run headless: no user is present to answer follow-up questions."
@@ -231,6 +394,7 @@ CREATE_SCHEDULED_TASK_SPEC = {
                     f"A run past it is stopped as an error. Defaults to {DEFAULT_RUN_TIMEOUT_MINUTES}."
                 ),
             },
+            **TASK_SETTING_PROPERTIES,
         },
         "required": ["name", "schedule"],
     },
@@ -244,6 +408,32 @@ def _format_time(epoch: Optional[int]) -> str:
     if not epoch:
         return "never"
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(epoch))
+
+
+def _describe_task_tools(tool_ids: Optional[list[str]]) -> str:
+    if tool_ids is None:
+        return "every skill and tool the user can use"
+    return ", ".join(tool_ids) or "none"
+
+
+def _describe_task_features(features: Optional[dict]) -> str:
+    features = features or {}
+    on = [
+        label
+        for flag, label in (
+            ("web_search", "web search"),
+            ("code_interpreter", "running code"),
+            ("image_generation", "image generation"),
+            ("read_artifacts", "read files"),
+        )
+        if features.get(flag)
+    ]
+    off = [
+        f"{label} off"
+        for flag, label in (("email", "email"), ("preferences", "preferences"))
+        if features.get(flag) is False
+    ]
+    return "; ".join(part for part in (", ".join(on), ", ".join(off)) if part) or "none"
 
 
 def _describe_task(automation, user_id: str, full: bool) -> str:
@@ -277,6 +467,10 @@ def _describe_task(automation, user_id: str, full: bool) -> str:
     if automation.user_id != user_id:
         owner = Users.get_user_by_id(automation.user_id)
         lines.append(f"- owner: {owner.name if owner else automation.user_id}")
+    lines.append(f"- skills and tools: {_describe_task_tools(automation.tool_ids)}")
+    lines.append(f"- features: {_describe_task_features(automation.features)}")
+    if automation.image_updated_at:
+        lines.append("- has a picture")
     lines.append(f"- last run: {last_run}")
     lines.append(f"- prompt: {prompt}")
     return "\n".join(lines)
@@ -354,9 +548,21 @@ async def update_scheduled_task(
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
     time_limit_minutes: Optional[int] = None,
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    web_search: Optional[bool] = None,
+    code_interpreter: Optional[bool] = None,
+    image_generation: Optional[bool] = None,
+    read_files: Optional[bool] = None,
+    email: Optional[bool] = None,
+    preferences: Optional[bool] = None,
+    shared: Optional[bool] = None,
+    enabled: Optional[bool] = None,
+    remove_picture: Optional[bool] = None,
     __user__: dict = {},
+    __request__=None,
 ) -> str:
-    """Change a scheduled task's name, schedule, prompt, organization, or time limit.
+    """Change any of a scheduled task's settings. Only the ones passed change.
 
     :param task_id: The scheduled task to change, from list_scheduled_tasks
     :param name: New short title
@@ -364,8 +570,16 @@ async def update_scheduled_task(
     :param prompt: New task to run, in full
     :param organization_id: Organization id to move the scheduled task to
     :param time_limit_minutes: New limit on how long each run may take
+    :param model: New model id
+    :param skills: New skill names and tool ids, replacing the old ones
+    :param web_search: Turn web search on or off, as for the other switches
+    :param shared: Whether the organization shares the task
+    :param enabled: Whether scheduled runs are on
+    :param remove_picture: Remove the task's picture
     """
     form = AutomationUpdateForm()
+    if enabled is not None:
+        form.enabled = enabled
     if time_limit_minutes is not None:
         if problem := _time_limit_problem(time_limit_minutes):
             return problem
@@ -397,12 +611,35 @@ async def update_scheduled_task(
             form.organization_id = organization_id
             # Sharing does not carry into a personal organization.
             form.visibility = resolve_visibility(organization_id, automation.visibility)
-        if not form.model_fields_set:
-            return (
-                "Nothing to change. Pass a new name, schedule, prompt, "
-                "organization, or time limit."
-            )
-        updated = Automations.update_automation(automation.id, form)
+        problem = _apply_task_settings(
+            form,
+            user,
+            form.organization_id or automation.organization_id,
+            __request__,
+            automation.features,
+            **_task_settings_args(
+                model=model,
+                skills=skills,
+                shared=shared,
+                web_search=web_search,
+                code_interpreter=code_interpreter,
+                image_generation=image_generation,
+                read_files=read_files,
+                email=email,
+                preferences=preferences,
+            ),
+        )
+        if problem:
+            return problem
+        if not form.model_fields_set and not remove_picture:
+            return "Nothing to change. Pass the settings to change."
+        if remove_picture:
+            Automations.set_image(automation.id, None)
+        updated = (
+            Automations.update_automation(automation.id, form)
+            if form.model_fields_set
+            else Automations.get_automation_by_id(automation.id)
+        )
         if not updated:
             return "Failed to update the scheduled task."
         sync_automation_job(updated)
@@ -416,8 +653,9 @@ async def update_scheduled_task(
 UPDATE_SCHEDULED_TASK_SPEC = {
     "name": "update_scheduled_task",
     "description": (
-        "Change an existing scheduled task's name, schedule, prompt, organization, "
-        "or time limit. "
+        "Change any of an existing scheduled task's settings: the same ones "
+        "create_scheduled_task takes, plus turning scheduled runs on or off and "
+        "removing its picture. "
         "Get its id from list_scheduled_tasks. Only pass the fields to change. "
         "A new prompt replaces the old one, so pass the whole task."
     ),
@@ -451,6 +689,9 @@ UPDATE_SCHEDULED_TASK_SPEC = {
                     f"A run past it is stopped as an error. Tasks without one use {DEFAULT_RUN_TIMEOUT_MINUTES}."
                 ),
             },
+            **TASK_SETTING_PROPERTIES,
+            "enabled": _switch("Turn the task's scheduled runs on or off"),
+            "remove_picture": _switch("Remove the task's picture"),
         },
         "required": ["task_id"],
     },
