@@ -64,3 +64,17 @@ class CronTriggerWeekdayTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SchedulesRunInUtcTest(unittest.TestCase):
+    def test_jobs_use_utc_whatever_the_machine_zone(self):
+        from unittest.mock import patch
+
+        from open_webui.utils import automation_scheduler
+
+        task = type("Task", (), {"id": "t1", "enabled": True, "cron": "0 6 * * 1"})()
+        with patch.object(automation_scheduler.scheduler, "get_job", return_value=None), patch.object(
+            automation_scheduler.scheduler, "add_job"
+        ) as add_job:
+            automation_scheduler.sync_automation_job(task)
+        self.assertEqual(str(add_job.call_args.kwargs["trigger"].timezone), "UTC")

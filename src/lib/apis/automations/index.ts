@@ -68,3 +68,10 @@ export const getAutomationImageUrl = (id: string, version: number) =>
 
 export const deleteAutomationImage = async (token: string, id: string) =>
 	request(token, `/automations/${id}/image`, { method: 'DELETE' });
+
+/** The cron a schedule phrase would save as, or null when it is not understood. */
+export const previewSchedule = async (token: string, schedule: string) =>
+	request(token, '/automations/schedule', {
+		method: 'POST',
+		body: JSON.stringify({ schedule })
+	});
