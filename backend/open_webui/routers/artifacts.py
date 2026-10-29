@@ -7,6 +7,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+import brotli
 from fastapi import (
     APIRouter,
     Depends,
@@ -34,6 +35,7 @@ from open_webui.utils.artifacts import (
 )
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.organizations import require_chat_read, require_chat_write
+from open_webui.utils.precompressed_static import accepts_brotli
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -149,6 +151,14 @@ def _gzip_stream(chunks):
     yield compressor.flush()
 
 
+def _brotli_stream(chunks):
+    compressor = brotli.Compressor(quality=5)
+    for chunk in chunks:
+        if out := compressor.process(chunk):
+            yield out
+    yield compressor.finish()
+
+
 def _view_validators(target: Path) -> tuple[str, str]:
     st = target.stat()
     # Weak: the gzipped and plain bodies differ byte for byte.
@@ -195,7 +205,11 @@ def view_html_artifact(
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     body = _html_with_size_report(target)
-    if "gzip" in request.headers.get("accept-encoding", "").lower():
+    accept = request.headers.get("accept-encoding", "")
+    if accepts_brotli(accept):
+        headers["Content-Encoding"] = "br"
+        body = _brotli_stream(body)
+    elif "gzip" in accept.lower():
         headers["Content-Encoding"] = "gzip"
         body = _gzip_stream(body)
     return StreamingResponse(
