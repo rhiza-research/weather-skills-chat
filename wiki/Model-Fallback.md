@@ -1,6 +1,6 @@
 # Model Fallback
 
-A model can have a fallback model from a second provider. When the model's own provider stops answering, its replies switch to the fallback without the user noticing. The reply looks the same and the model picker does not change.
+A model can have a fallback model from a second provider. When the model's own provider fails, its replies switch to the fallback without the user noticing. The reply looks the same and the model picker does not change.
 
 ## Setting up a second provider
 
@@ -24,18 +24,18 @@ It picks the model with the same name on another connection, preferring one from
 
 ## When replies switch
 
-A model call switches to the fallback when the model's provider:
+A model call switches to the fallback whenever the model's provider fails before the reply starts to appear. For example, when the provider:
 
 - cannot be reached or does not answer in time
 - reports a server error
+- rejects the app's API key, or the key's spending limit is used up
 - reports that it is out of credits
 - is rate limiting the app
+- refuses the request
 
-A request the provider rejects as invalid does not switch, because the fallback would reject it too.
+A provider that fails after the reply has started to appear is not switched.
 
-A call only switches before the reply starts to appear. A provider that fails partway through a reply is not switched.
-
-Once a reply has switched, the rest of that reply, including every skill or tool round, stays on the fallback. The next reply starts on the model's own provider again, unless that provider failed within the last minute. For that minute, replies for models with a fallback start on the fallback. Replies for models without a fallback keep calling the provider.
+Once a reply has switched, the rest of that reply, including every skill or tool round, stays on the fallback. The next reply starts on the model's own provider again, unless that provider itself failed within the last minute. For that minute, replies for models with a fallback start on the fallback. Replies for models without a fallback keep calling the provider. A request the provider refuses as invalid, too large or for an unknown model still switches, but does not count as the provider failing.
 
 If the fallback fails too, the call goes back to the model's own provider. If both fail, the user sees the error from the model's own provider.
 

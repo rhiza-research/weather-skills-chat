@@ -263,13 +263,6 @@
 					showSidebar.set(false);
 				}
 			}}
-			on:dblclick={() => {
-				if (!isMine) {
-					return;
-				}
-				chatTitle = title;
-				confirmEdit = true;
-			}}
 			on:mouseenter={(e) => {
 				mouseOver = true;
 			}}

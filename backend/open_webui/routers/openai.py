@@ -982,21 +982,25 @@ def prepare_provider_call(
     return ProviderCall(url, key, payload, chat_id, idx, fallback_model_id)
 
 
-# A model with a backup has its call resent to the backup when its provider
-# fails before replying: no connection, a timeout, a server error, no credits,
-# or a rate limit. A request the provider rejected as invalid would fail the
-# same way on the backup, so it is not.
+# A model with a backup has its call resent to the backup whenever its provider
+# fails before replying: no connection, a timeout, or any error status.
+# Providers disagree on what a status means (OpenRouter reports a spent key
+# limit as 403) and the backup has its own key, account and models, so even a
+# rejected request gets one more try there.
 PROVIDER_CONNECT_TIMEOUT_S = 10
-# After such a failure, calls for models with a backup go to the backup first
-# for this long. Models without a backup keep calling the provider.
+# After a failure of the provider itself, calls for models with a backup go to
+# the backup first for this long. Models without a backup keep calling the
+# provider.
 PROVIDER_DOWN_S = 60
+# Statuses that reject one request rather than show the provider failing.
+REQUEST_ERROR_STATUSES = (400, 404, 413, 422)
 
 # Provider URL -> time.monotonic() until which it counts as down.
 _provider_down_until: dict[str, float] = {}
 
 
-def _can_fall_back(status_code: int) -> bool:
-    return status_code >= 500 or status_code in (402, 408, 429)
+def _provider_failed(status_code: int) -> bool:
+    return status_code not in REQUEST_ERROR_STATUSES
 
 
 def _reply_backups(request) -> Optional[set]:
@@ -1064,9 +1068,8 @@ async def generate_chat_completion(
         try:
             response = await _send_provider_call(attempt, user)
         except HTTPException as e:
-            if not _can_fall_back(e.status_code):
-                raise
-            _provider_down_until[attempt.url] = time.monotonic() + PROVIDER_DOWN_S
+            if _provider_failed(e.status_code):
+                _provider_down_until[attempt.url] = time.monotonic() + PROVIDER_DOWN_S
             log.warning(
                 "Provider %s failed with %s for %s chat_id=%s",
                 attempt.url,
