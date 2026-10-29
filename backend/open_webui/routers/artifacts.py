@@ -7,6 +7,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+import brotli
 from fastapi import (
     APIRouter,
     Depends,
@@ -34,6 +35,7 @@ from open_webui.utils.artifacts import (
 )
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.organizations import require_chat_read, require_chat_write
+from open_webui.utils.precompressed_static import accepts_brotli
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -86,7 +88,16 @@ def get_artifact_content(
     # browser keeps a copy and asks before each use, and an unchanged file
     # answers 304 with no body.
     st = target.stat()
-    etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+    # A figure's JSON ships a brotli copy beside it; use it while it is current.
+    served = target.with_name(target.name + ".br")
+    use_br = (
+        target.name.endswith(".plotly.json")
+        and accepts_brotli(request.headers.get("accept-encoding"))
+        and served.is_file()
+        and served.stat().st_mtime >= st.st_mtime
+    )
+    # Weak: the brotli and plain bodies differ byte for byte.
+    etag = f'{"W/" if use_br else ""}"{st.st_mtime_ns:x}-{st.st_size:x}"'
     last_modified = formatdate(st.st_mtime, usegmt=True)
     headers = {
         "Cache-Control": "private, no-cache",
@@ -95,12 +106,14 @@ def get_artifact_content(
     }
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    if use_br:
+        headers |= {"Content-Encoding": "br", "Vary": "Accept-Encoding"}
     return FileResponse(
-        target,
+        served if use_br else target,
         filename=target.name,
         content_disposition_type="attachment",
         headers=headers,
-        stat_result=st,
+        stat_result=served.stat() if use_br else st,
     )
 
 
@@ -149,6 +162,14 @@ def _gzip_stream(chunks):
     yield compressor.flush()
 
 
+def _brotli_stream(chunks):
+    compressor = brotli.Compressor(quality=5)
+    for chunk in chunks:
+        if out := compressor.process(chunk):
+            yield out
+    yield compressor.finish()
+
+
 def _view_validators(target: Path) -> tuple[str, str]:
     st = target.stat()
     # Weak: the gzipped and plain bodies differ byte for byte.
@@ -195,7 +216,11 @@ def view_html_artifact(
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     body = _html_with_size_report(target)
-    if "gzip" in request.headers.get("accept-encoding", "").lower():
+    accept = request.headers.get("accept-encoding", "")
+    if accepts_brotli(accept):
+        headers["Content-Encoding"] = "br"
+        body = _brotli_stream(body)
+    elif "gzip" in accept.lower():
         headers["Content-Encoding"] = "gzip"
         body = _gzip_stream(body)
     return StreamingResponse(

@@ -122,6 +122,37 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.assertNotEqual(res.headers["etag"], etag)
         self.assertEqual(res.content, PNG + b"new")
 
+    def test_figure_json_is_served_brotli_when_accepted(self):
+        import os
+
+        import brotli
+
+        root = self.artifacts / CHAT / "plots"
+        (root / "map.plotly.json").write_bytes(b'{"data": []}')
+        (root / "map.plotly.json.br").write_bytes(brotli.compress(b'{"data": []}'))
+        url = self.url("/content?path=plots/map.plotly.json")
+        res = self.client.get(url, headers={"Accept-Encoding": "br, gzip"})
+        self.assertEqual(res.headers["content-encoding"], "br")
+        self.assertEqual(res.headers["content-type"], "application/json")
+        self.assertEqual(res.content, b'{"data": []}')  # decoded by the client
+        self.assertTrue(res.headers["etag"].startswith('W/"'))
+        # Without br support, or once the JSON is newer than its copy, plain JSON.
+        plain = self.client.get(url, headers={"Accept-Encoding": "gzip"})
+        self.assertNotIn("content-encoding", plain.headers)
+        self.assertEqual(plain.content, b'{"data": []}')
+        target = root / "map.plotly.json"
+        os.utime(target, (target.stat().st_atime, target.stat().st_mtime + 5))
+        stale = self.client.get(url, headers={"Accept-Encoding": "br"})
+        self.assertEqual(stale.content, b'{"data": []}')
+
+    def test_figure_json_brotli_copy_is_not_listed(self):
+        root = self.artifacts / CHAT / "plots"
+        (root / "map.plotly.json").write_bytes(b"{}")
+        (root / "map.plotly.json.br").write_bytes(b"br")
+        names = [e["name"] for e in list_artifacts(CHAT)]
+        self.assertIn("map.plotly.json", names)
+        self.assertNotIn("map.plotly.json.br", names)
+
     def test_archive_upload_extracts_off_the_loop(self):
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:

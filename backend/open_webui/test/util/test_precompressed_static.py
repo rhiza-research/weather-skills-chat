@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from brotli import compress
 from starlette.applications import Starlette
 from starlette.routing import Mount
 from starlette.testclient import TestClient
@@ -33,7 +34,7 @@ class PrecompressedStaticFilesTest(unittest.TestCase):
 			root = Path(tmp)
 			original = b"const answer = 42;\n" * 40
 			(root / "app.js").write_bytes(original)
-			(root / "app.js.br").write_bytes(b"compressed-body")
+			(root / "app.js.br").write_bytes(compress(original))
 			client = TestClient(
 				Starlette(
 					routes=[Mount("/", PrecompressedStaticFiles(directory=root, html=True))]
@@ -45,7 +46,7 @@ class PrecompressedStaticFilesTest(unittest.TestCase):
 			self.assertEqual(brotli.headers["content-encoding"], "br")
 			self.assertIn("javascript", brotli.headers["content-type"])
 			self.assertEqual(brotli.headers["vary"], "Accept-Encoding")
-			self.assertEqual(brotli.content, b"compressed-body")
+			self.assertEqual(brotli.content, original)  # decoded by the client
 
 			plain = client.get("/app.js", headers={"Accept-Encoding": "gzip"})
 			self.assertEqual(plain.status_code, 200)
@@ -61,7 +62,7 @@ class PrecompressedStaticFilesTest(unittest.TestCase):
 			js.mkdir(parents=True)
 			css.mkdir(parents=True)
 			(js / "app.js").write_bytes(b"const answer = 42;\n" * 40)
-			(js / "app.js.br").write_bytes(b"compressed-body")
+			(js / "app.js.br").write_bytes(compress(b"const answer = 42;\n" * 40))
 			(css / "app.css").write_bytes(b"body{color:black}\n" * 20)
 			(root / "index.html").write_text("<!doctype html><title>x</title>")
 			client = TestClient(

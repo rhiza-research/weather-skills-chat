@@ -661,6 +661,9 @@ def list_artifacts(
             # Hide dotfiles/dirs (uv cache, HOME scratch under Landlock, etc.)
             if path.name.startswith("."):
                 continue
+            # The brotli copy of a figure's JSON is served in its place.
+            if path.name.endswith(".plotly.json.br"):
+                continue
             rel = path.relative_to(root).as_posix()
             if prefix and rel != prefix and not rel.startswith(base + "/"):
                 # Outside the requested path: only walk on toward it.
