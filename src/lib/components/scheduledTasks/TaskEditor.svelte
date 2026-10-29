@@ -10,7 +10,6 @@
 	import Wrench from '$lib/components/icons/Wrench.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
 	import CommandLine from '$lib/components/icons/CommandLine.svelte';
-	import Photo from '$lib/components/icons/Photo.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -57,12 +56,6 @@
 			label: $i18n.t('Run code'),
 			icon: CommandLine,
 			shown: allowed('code_interpreter', 'enable_code_interpreter')
-		},
-		{
-			key: 'image_generation',
-			label: $i18n.t('Generate images'),
-			icon: Photo,
-			shown: allowed('image_generation', 'enable_image_generation')
 		}
 	].filter((toggle) => toggle.shown || form.features?.[toggle.key]);
 
