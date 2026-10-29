@@ -10,7 +10,6 @@
 	import Wrench from '$lib/components/icons/Wrench.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
 	import CommandLine from '$lib/components/icons/CommandLine.svelte';
-	import Photo from '$lib/components/icons/Photo.svelte';
 	import Eye from '$lib/components/icons/Eye.svelte';
 
 	const i18n = getContext('i18n');
@@ -62,13 +61,6 @@
 			off: $i18n.t('Agent not allowed to write/execute its own code'),
 			icon: CommandLine,
 			shown: allowed('code_interpreter', 'enable_code_interpreter')
-		},
-		{
-			key: 'image_generation',
-			on: $i18n.t('Image'),
-			off: $i18n.t('Image'),
-			icon: Photo,
-			shown: allowed('image_generation', 'enable_image_generation')
 		},
 		{
 			key: 'read_artifacts',
