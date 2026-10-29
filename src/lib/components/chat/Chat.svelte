@@ -2090,6 +2090,13 @@
 		setQueuedSends(queuedSends.filter((_, i) => i !== idx));
 	};
 
+	// Moves it to the front and stops the running reply; the queue then sends it
+	// the way it sends after any stopped reply.
+	const sendQueuedNow = async (idx: number) => {
+		setQueuedSends([queuedSends[idx], ...queuedSends.filter((_, i) => i !== idx)]);
+		if (replyRunning) await stopResponse();
+	};
+
 	const sendQueued = () => {
 		const [userPrompt, ...rest] = queuedSends;
 		// Another open tab of this chat may have sent it already.
@@ -3102,6 +3109,7 @@
 								}}
 								{queuedSends}
 								onDeleteQueuedSend={deleteQueuedSend}
+								onSendQueuedNow={sendQueuedNow}
 								on:submit={async (e) => {
 									if (e.detail || files.length > 0) {
 										await tick();

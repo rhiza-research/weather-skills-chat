@@ -8,13 +8,17 @@ While a reply is running, pressing Enter, or the send button next to **Stop**, p
 
 - A chat holds up to three queued messages. Trying to queue a fourth shows an error; the queue stays as it was.
 - Only text is queued. A message with attachments is not queued; the user sends it once the reply is done.
-- Queued messages show above the chat bar, oldest first. Each has a delete button that removes it without sending it.
+- Queued messages show above the chat bar, oldest first. Each has a **Send now** button and a trash button that removes it without sending it.
 
 ## When they are sent
 
 The oldest queued message is sent as soon as the reply before it is done, including when the user stops that reply. It becomes the next message in the chat, as if the user had sent it then. The next one waits for that message's reply, and so on until the queue is empty.
 
 If a reply fails, nothing more is sent. The queued messages go back into the chat bar, in order, so the user can decide what to send.
+
+## Sending one now
+
+**Send now** on a queued message stops the running reply and sends that message next, ahead of the older ones. It is the same as moving the message to the front of the queue and pressing **Stop**. The rest of the queue keeps its order and waits for the new message's reply.
 
 ## Switching chats
 
