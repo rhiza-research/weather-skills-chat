@@ -52,6 +52,7 @@
 	import Spinner from '../common/Spinner.svelte';
 
 	import XMark from '../icons/XMark.svelte';
+	import GarbageBin from '../icons/GarbageBin.svelte';
 	import Headphone from '../icons/Headphone.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import CommandLine from '../icons/CommandLine.svelte';
@@ -133,6 +134,7 @@
 	// Sends waiting for the running reply to finish, oldest first, shown above the chat bar.
 	export let queuedSends: string[] = [];
 	export let onDeleteQueuedSend: Function = () => {};
+	export let onSendQueuedNow: Function = () => {};
 
 	let visionCapableModels = [];
 	$: visionCapableModels = [...(atSelectedModel ? [atSelectedModel] : selectedModels)].filter(
@@ -515,10 +517,19 @@
 							{#each queuedSends as queued, idx}
 								<div class="queued-send flex items-start gap-2 pt-1">
 									<div
-										class="flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap break-words dark:text-gray-200"
+										class="queued-send-text flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap break-words dark:text-gray-200"
 									>
 										{queued}
 									</div>
+									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
+										<button
+											type="button"
+											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 transition"
+											on:click={() => onSendQueuedNow(idx)}
+										>
+											{$i18n.t('Send now')}
+										</button>
+									</Tooltip>
 									<Tooltip content={$i18n.t('Delete queued send')}>
 										<button
 											type="button"
@@ -526,7 +537,7 @@
 											aria-label={$i18n.t('Delete queued send')}
 											on:click={() => onDeleteQueuedSend(idx)}
 										>
-											<XMark className="size-4" />
+											<GarbageBin className="size-4" />
 										</button>
 									</Tooltip>
 								</div>
