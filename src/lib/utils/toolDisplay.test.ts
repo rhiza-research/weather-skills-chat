@@ -7,6 +7,7 @@ import {
 	parseGitOrgRepo,
 	remapSelectedToolIdsToHighestSkills,
 	sortToolsByName,
+	taskToolIds,
 	toolSelectionLabel,
 	toolSkillRepoRef
 } from './toolDisplay';
@@ -127,5 +128,30 @@ describe('defaultEnabledToolIds', () => {
 			skill('new', 'plot', '2.0.0', 'main', undefined, true)
 		];
 		expect(defaultEnabledToolIds(tools)).toEqual(['new']);
+	});
+});
+
+describe('taskToolIds', () => {
+	const tools = [
+		skill('plot-old', 'plot', '1.0.0'),
+		skill('plot-new', 'plot', '2.0.0'),
+		skill('fetch', 'smap-fetch', '1.0.0'),
+		{ id: 'custom', name: 'Custom Tool' }
+	];
+
+	it('maps saved skill names to the newest copy', () => {
+		expect(taskToolIds(['plot', 'smap-fetch'], tools)).toEqual(['plot-new', 'fetch']);
+	});
+
+	it('maps an old skill id to the newest copy and keeps other tool ids', () => {
+		expect(taskToolIds(['plot-old', 'custom'], tools)).toEqual(['plot-new', 'custom']);
+	});
+
+	it('keeps entries it cannot match so saving does not drop them', () => {
+		expect(taskToolIds(['plot', 'gone-skill'], tools)).toEqual(['plot-new', 'gone-skill']);
+	});
+
+	it('selects what a new chat selects when the task has no list', () => {
+		expect(taskToolIds(null, tools)).toEqual(defaultEnabledToolIds(tools));
 	});
 });

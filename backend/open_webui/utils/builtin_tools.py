@@ -174,7 +174,7 @@ async def create_scheduled_task(
     )
     return (
         f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
-        f"{tool_note} [Open scheduled tasks](/automations) to manage it."
+        f"{tool_note} [Open scheduled tasks](/scheduled-tasks) to manage it."
     )
 
 

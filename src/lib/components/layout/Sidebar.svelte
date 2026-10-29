@@ -767,7 +767,7 @@
 		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 			<a
 				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-				href="/automations"
+				href="/scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
 					chatId.set('');
@@ -795,7 +795,7 @@
 					</svg>
 				</div>
 				<div class="flex self-center translate-y-[0.5px]">
-					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Automations')}</div>
+					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Scheduled tasks')}</div>
 				</div>
 			</a>
 		</div>
