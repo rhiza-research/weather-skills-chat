@@ -802,6 +802,8 @@
 			</a>
 		</div>
 
+		<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
+
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
 				<div class="absolute z-40 w-full h-full flex justify-center"></div>
@@ -823,8 +825,6 @@
 			{#if !search}
 				<ScheduledTasks />
 			{/if}
-
-			<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
 
 			<Folder
 				collapsible={!search}
