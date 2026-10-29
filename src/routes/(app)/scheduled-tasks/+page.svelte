@@ -118,49 +118,50 @@
 				</div>
 				<div class="text-lg font-medium px-1.5">{$i18n.t('Scheduled tasks')}</div>
 			</div>
-			<div class="flex items-center gap-1">
-				<Dropdown bind:show={showSort}>
-					<Tooltip content={$i18n.t('Sort')}>
-						<button
-							class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-							aria-label={$i18n.t('Sort scheduled tasks')}
-						>
-							<BarsArrowUp className="size-4" strokeWidth="2" />
-						</button>
-					</Tooltip>
-					<div slot="content">
-						<DropdownMenu.Content
-							class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
-							sideOffset={4}
-							side="bottom"
-							align="end"
-							transition={flyAndScale}
-						>
-							{#each sortOptions as option (option.value)}
-								<DropdownMenu.Item
-									class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-									on:click={() => setSort(option.value)}
-								>
-									{option.label}
-									{#if sortBy === option.value}
-										<Check className="size-3.5" strokeWidth="2.5" />
-									{/if}
-								</DropdownMenu.Item>
-							{/each}
-						</DropdownMenu.Content>
-					</div>
-				</Dropdown>
-				<a
-					class="mr-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
-					href="/scheduled-tasks/new"
-				>
-					{$i18n.t('New scheduled task')}
-				</a>
-			</div>
 		</div>
 	</nav>
 
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
+		<div class="flex items-center justify-end gap-1">
+			<Dropdown bind:show={showSort}>
+				<Tooltip content={$i18n.t('Sort')}>
+					<button
+						class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						aria-label={$i18n.t('Sort scheduled tasks')}
+					>
+						<BarsArrowUp className="size-4" strokeWidth="2" />
+					</button>
+				</Tooltip>
+				<div slot="content">
+					<DropdownMenu.Content
+						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+						sideOffset={4}
+						side="bottom"
+						align="end"
+						transition={flyAndScale}
+					>
+						{#each sortOptions as option (option.value)}
+							<DropdownMenu.Item
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+								on:click={() => setSort(option.value)}
+							>
+								{option.label}
+								{#if sortBy === option.value}
+									<Check className="size-3.5" strokeWidth="2.5" />
+								{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</div>
+			</Dropdown>
+			<a
+				class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
+				href="/scheduled-tasks/new"
+			>
+				{$i18n.t('New scheduled task')}
+			</a>
+		</div>
+
 		{#if loaded && tasks.length === 0}
 			<div class="text-sm text-gray-500 text-center py-8">
 				{$i18n.t(
