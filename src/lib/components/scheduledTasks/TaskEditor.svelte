@@ -186,7 +186,7 @@
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Prompt')}</span>
 		<textarea
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
-			rows="6"
+			rows="10"
 			placeholder={$i18n.t('What the task should do each time it runs')}
 			bind:value={form.prompt}
 			disabled={!canManage}
