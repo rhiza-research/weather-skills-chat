@@ -112,7 +112,7 @@ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
-MAX_TOOL_CALL_RETRIES = int(os.environ.get("MAX_TOOL_CALL_RETRIES", "40"))
+MAX_TOOL_CALL_RETRIES = int(os.environ.get("MAX_TOOL_CALL_RETRIES", "100"))
 MAX_CODE_INTERPRETER_RETRIES = int(
     os.environ.get("MAX_CODE_INTERPRETER_RETRIES", "20")
 )

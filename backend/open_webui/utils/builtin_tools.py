@@ -213,7 +213,8 @@ CREATE_SCHEDULED_TASK_SPEC = {
                 "type": "string",
                 "description": (
                     "Cron expression (0 12 * * *) or a phrase such as "
-                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
                 ),
             },
             "prompt": {
@@ -433,7 +434,8 @@ UPDATE_SCHEDULED_TASK_SPEC = {
                 "type": "string",
                 "description": (
                     "New cron expression (0 12 * * *) or a phrase such as "
-                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
                 ),
             },
             "prompt": {

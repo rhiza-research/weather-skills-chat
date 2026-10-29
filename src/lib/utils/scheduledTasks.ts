@@ -1,3 +1,4 @@
+import cronstrue from 'cronstrue';
 /** Who may change a scheduled task, mirroring can_manage_automation on the server. */
 export const canManageTask = (
 	task: { user_id: string; visibility?: string } | null,
@@ -87,4 +88,15 @@ export const sortTasks = <T extends SidebarTask>(tasks: T[], by: TaskSort): T[] 
 		(a, b) =>
 			(b.last_run?.started_at ?? -1) - (a.last_run?.started_at ?? -1) || byName(a, b)
 	);
+};
+
+/** A task's schedule in English. Times are UTC, which the scheduler runs on. */
+export const describeSchedule = (cron: string | null | undefined): string => {
+	if (!cron) return 'Runs only when started';
+	try {
+		const text = cronstrue.toString(cron, { throwExceptionOnParseError: true });
+		return `${text} (UTC)`;
+	} catch {
+		return cron;
+	}
 };

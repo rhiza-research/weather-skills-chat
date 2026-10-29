@@ -74,6 +74,7 @@
 		"codemirror-lang-elixir": "^4.0.0",
 		"codemirror-lang-hcl": "^0.0.0-beta.2",
 		"crc-32": "^1.2.2",
+		"cronstrue": "^3.32.0",
 		"dayjs": "^1.11.10",
 		"dompurify": "^3.2.5",
 		"eventsource-parser": "^1.1.2",

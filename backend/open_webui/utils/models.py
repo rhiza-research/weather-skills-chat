@@ -64,6 +64,21 @@ async def get_all_base_models(request: Request, user: UserModel = None):
     return models
 
 
+# What the model editor and the admin model list read from a base model.
+# The provider's own record (description, pricing, ...) stays on the server:
+# with hundreds of models per connection it is megabytes.
+LISTED_BASE_MODEL_FIELDS = ("id", "name", "owned_by", "urlIdx", "connection_name")
+
+
+def listed_base_model(model: dict) -> dict:
+    """A base model as the browser lists it."""
+    listed = {key: model[key] for key in LISTED_BASE_MODEL_FIELDS if key in model}
+    # The browser falls back to the id, so send it only when a prefix differs.
+    if model.get("upstream_id", model["id"]) != model["id"]:
+        listed["upstream_id"] = model["upstream_id"]
+    return listed
+
+
 async def get_all_models(request, user: UserModel = None):
     models = await get_all_base_models(request, user=user)
 
