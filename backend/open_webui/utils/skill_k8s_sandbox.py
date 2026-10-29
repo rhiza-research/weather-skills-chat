@@ -762,38 +762,17 @@ def _pack_root(skill_dir: Path) -> Path:
     return pack_root
 
 
-def _git_commit(pack_root: Path) -> Optional[str]:
-    """The commit a pack checkout is at, read from .git without running git."""
-    git = pack_root / ".git"
-    try:
-        head = (git / "HEAD").read_text().strip()
-    except OSError:
-        return None
-    if not head.startswith("ref:"):
-        return head or None
-    ref = head[len("ref:") :].strip()
-    try:
-        return (git / ref).read_text().strip() or None
-    except OSError:
-        pass
-    try:
-        for line in (git / "packed-refs").read_text().splitlines():
-            commit, _, name = line.partition(" ")
-            if name.strip() == ref:
-                return commit.strip() or None
-    except OSError:
-        pass
-    return None
-
-
 def _runner_pack_name(pack_root: Path) -> str:
-    """The pack's folder on a runner: its name and the commit it is at.
+    """The pack's folder on a runner: its name and its installed commit.
 
-    An updated pack gets a new folder, so a runner holding an older copy
-    gets the new one instead of running the old code. A pack that is not a
-    git checkout keeps its plain name. Reads files: call from a thread.
+    The commit is the one the skill_pack table records for this checkout, so
+    an updated pack gets a new folder and a runner holding an older copy
+    gets the new one instead of running the old code. A pack with no
+    recorded commit keeps its plain name. Reads the DB: call from a thread.
     """
-    commit = _git_commit(pack_root)
+    from open_webui.models.skill_packs import SkillPacks
+
+    commit = SkillPacks.get_commit_by_local_path(pack_root)
     return f"{pack_root.name}--{commit[:12]}" if commit else pack_root.name
 
 

@@ -1,75 +1,122 @@
-"""A skill call makes sure the runner has its pack at the current version."""
+"""A skill call makes sure the runner has its pack at the installed commit."""
 
 from __future__ import annotations
 
+
 import asyncio
 import tempfile
+import time
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import open_webui.config  # noqa: F401  Runs the migrations: pack names read skill_pack.
+from open_webui.models.skill_packs import SkillPacks
 from open_webui.utils import skill_k8s_sandbox as sandbox
 
 K = "open_webui.utils.skill_k8s_sandbox"
 
 
-def _git_pack(root: Path, name: str, commit: str, packed: bool = False) -> Path:
-    """A pack checkout whose .git HEAD points at commit."""
-    pack = root / name
-    (pack / "skills" / "plot" / "scripts").mkdir(parents=True)
-    (pack / "skills" / "plot" / "scripts" / "plot.py").write_text("print(1)\n")
-    git = pack / ".git"
-    git.mkdir()
-    (git / "HEAD").write_text("ref: refs/heads/main\n")
-    if packed:
-        (git / "packed-refs").write_text(f"# pack-refs\n{commit} refs/heads/main\n")
-    else:
-        (git / "refs" / "heads").mkdir(parents=True)
-        (git / "refs" / "heads" / "main").write_text(commit + "\n")
-    return pack
+class _Packs(unittest.TestCase):
+    """Pack checkouts on disk with skill_pack rows recording their commits."""
 
-
-class PackVersionTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
+        self.env = patch.dict("os.environ", {"SKILLS_DIR": str(self.tmp)})
+        self.env.start()
+        self.addCleanup(self.env.stop)
 
-    def test_a_git_pack_is_named_by_its_commit(self):
-        pack = _git_pack(self.tmp, "weather-skills__main", "a" * 40)
+    def _pack(self, name: str, commit=None, *, folder=None) -> Path:
+        pack = folder or self.tmp / name
+        scripts = pack / "skills" / "plot" / "scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        (scripts / "plot.py").write_text("print(1)\n")
+        if commit is not None:
+            self._install(pack, commit)
+        return pack
+
+    def _install(self, pack: Path, commit: str):
+        row = SkillPacks.insert(
+            f"user-{uuid.uuid4()}",
+            name=pack.name,
+            git_url=f"https://github.com/example/{uuid.uuid4()}.git",
+            git_ref="main",
+            commit_sha=commit,
+            local_path=str(pack),
+            organization_id=f"org-{uuid.uuid4()}",
+        )
+        self.addCleanup(SkillPacks.delete, row.id)
+        return row
+
+
+class PackVersionTest(_Packs):
+    def test_a_pack_is_named_by_its_installed_commit(self):
+        pack = self._pack("weather-skills__main", "a" * 40)
         self.assertEqual(sandbox._runner_pack_name(pack), "weather-skills__main--aaaaaaaaaaaa")
 
-    def test_packed_refs_and_detached_heads(self):
-        pack = _git_pack(self.tmp, "p", "b" * 40, packed=True)
-        self.assertEqual(sandbox._runner_pack_name(pack), "p--bbbbbbbbbbbb")
-        (pack / ".git" / "HEAD").write_text("c" * 40 + "\n")
-        self.assertEqual(sandbox._runner_pack_name(pack), "p--cccccccccccc")
-
     def test_an_update_changes_the_name(self):
-        pack = _git_pack(self.tmp, "p", "a" * 40)
+        pack = self._pack("p")
+        row = self._install(pack, "a" * 40)
         before = sandbox._runner_pack_name(pack)
-        (pack / ".git" / "refs" / "heads" / "main").write_text("d" * 40 + "\n")
-        self.assertNotEqual(sandbox._runner_pack_name(pack), before)
+        SkillPacks.update(row.id, {"commit_sha": "d" * 40})
+        self.assertEqual(sandbox._runner_pack_name(pack), "p--dddddddddddd")
+        self.assertNotEqual(before, "p--dddddddddddd")
 
-    def test_a_pack_without_git_keeps_its_folder_name(self):
-        (self.tmp / "plain").mkdir()
-        self.assertEqual(sandbox._runner_pack_name(self.tmp / "plain"), "plain")
+    def test_the_latest_install_of_a_shared_folder_wins(self):
+        # One person installing the same repo and ref in two organizations
+        # gets two rows for one folder; the folder holds the last checkout.
+        pack = self._pack("p")
+        self._install(pack, "a" * 40)
+        time.sleep(1.1)
+        self._install(pack, "b" * 40)
+        self.assertEqual(sandbox._runner_pack_name(pack), "p--bbbbbbbbbbbb")
+
+    def test_a_pack_with_no_recorded_commit_keeps_its_folder_name(self):
+        self.assertEqual(sandbox._runner_pack_name(self._pack("plain")), "plain")
 
     def test_the_script_path_uses_the_versioned_folder(self):
-        pack = _git_pack(self.tmp, "p", "a" * 40)
-        with patch.dict("os.environ", {"SKILLS_DIR": str(self.tmp)}):
-            path = sandbox.remote_script_path(
-                pack / "skills" / "plot", pack / "skills" / "plot" / "scripts" / "plot.py"
-            )
+        pack = self._pack("p", "a" * 40)
+        path = sandbox.remote_script_path(
+            pack / "skills" / "plot", pack / "skills" / "plot" / "scripts" / "plot.py"
+        )
         self.assertEqual(
             path, "/workspace/.skill-packs/p--aaaaaaaaaaaa/skills/plot/scripts/plot.py"
         )
 
 
-class CallPackSyncTest(unittest.IsolatedAsyncioTestCase):
+class StartAndUnpackTest(_Packs):
+    def test_missing_packs_compare_versioned_names(self):
+        pack = self._pack("p", "a" * 40)
+        self.assertEqual(sandbox._pack_names([pack]), {"p--aaaaaaaaaaaa"})
+        # An old unversioned copy on the runner does not count.
+        self.assertEqual(sandbox._missing_packs({"p"}, [pack]), [pack])
+        self.assertEqual(sandbox._missing_packs({"p--aaaaaaaaaaaa"}, [pack]), [])
+
+    def test_the_archive_unpacks_into_the_versioned_folder(self):
+        # The runner extracts the archive into its packs folder, so the
+        # folder name inside the archive is the one that ends up there.
+        import base64
+        import io
+        import json
+        import tarfile
+
+        pack = self._pack("p", "a" * 40)
+        dest, body = sandbox._unpack_request(pack / "skills" / "plot")
+        self.assertEqual(dest, "/workspace/.skill-packs/p--aaaaaaaaaaaa")
+        archive = base64.b64decode(json.loads(body)["archive"])
+        names = tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz").getnames()
+        self.assertIn("p--aaaaaaaaaaaa/skills/plot/scripts/plot.py", names)
+        self.assertFalse(any(n.startswith("p/") for n in names))
+
+
+class CallPackSyncTest(_Packs, unittest.IsolatedAsyncioTestCase):
     """run_skill_on_runner copies a pack the runner lacks before running."""
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
-        self.pack = _git_pack(self.tmp, "p", "a" * 40)
+        super().setUp()
+        self.pack = self._pack("p")
+        self.row = self._install(self.pack, "a" * 40)
         self.info = {"pod_ip": "10.0.0.1", "pod_name": "runner-1"}
         self.events: list[str] = []
         self.listed: set[str] = set()
@@ -89,7 +136,6 @@ class CallPackSyncTest(unittest.IsolatedAsyncioTestCase):
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
         patches = [
-            patch.dict("os.environ", {"SKILLS_DIR": str(self.tmp)}),
             patch(f"{K}.ensure_runner", AsyncMock(return_value=self.info)),
             patch(f"{K}.hold_runner_for_skill", AsyncMock()),
             patch(f"{K}._listed_packs", side_effect=listed),
@@ -131,7 +177,7 @@ class CallPackSyncTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_an_updated_pack_is_copied_again(self):
         await self._call()
-        (self.pack / ".git" / "refs" / "heads" / "main").write_text("e" * 40 + "\n")
+        SkillPacks.update(self.row.id, {"commit_sha": "e" * 40})
         await self._call()
         pushes = [e for e in self.events if e.startswith("push")]
         self.assertEqual(pushes, ["push p--aaaaaaaaaaaa", "push p--eeeeeeeeeeee"])
@@ -142,35 +188,5 @@ class CallPackSyncTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(e.startswith("exec") for e in self.events), 3)
 
 
-class StartUsesVersionedNamesTest(unittest.TestCase):
-    def test_missing_packs_compare_versioned_names(self):
-        tmp = Path(tempfile.mkdtemp())
-        pack = _git_pack(tmp, "p", "a" * 40)
-        self.assertEqual(sandbox._pack_names([pack]), {"p--aaaaaaaaaaaa"})
-        # An old unversioned copy on the runner does not count.
-        self.assertEqual(sandbox._missing_packs({"p"}, [pack]), [pack])
-        self.assertEqual(sandbox._missing_packs({"p--aaaaaaaaaaaa"}, [pack]), [])
-
-
 if __name__ == "__main__":
     unittest.main()
-
-
-class UnpackNameTest(unittest.TestCase):
-    def test_the_archive_unpacks_into_the_versioned_folder(self):
-        # The runner extracts the archive into the packs folder, so the
-        # folder name inside the archive is the one that ends up there.
-        import base64
-        import io
-        import json
-        import tarfile
-
-        tmp = Path(tempfile.mkdtemp())
-        pack = _git_pack(tmp, "p", "a" * 40)
-        with patch.dict("os.environ", {"SKILLS_DIR": str(tmp)}):
-            dest, body = sandbox._unpack_request(pack / "skills" / "plot")
-        self.assertEqual(dest, "/workspace/.skill-packs/p--aaaaaaaaaaaa")
-        archive = base64.b64decode(json.loads(body)["archive"])
-        names = tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz").getnames()
-        self.assertIn("p--aaaaaaaaaaaa/skills/plot/scripts/plot.py", names)
-        self.assertFalse(any(n.startswith("p/") for n in names))
