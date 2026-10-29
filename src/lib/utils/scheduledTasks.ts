@@ -26,7 +26,6 @@ export const taskFromChat = (chatId: string, chat) => {
 				: null;
 			features = {
 				web_search: !!input.webSearchEnabled,
-				image_generation: !!input.imageGenerationEnabled,
 				code_interpreter: !!input.codeInterpreterEnabled,
 				read_artifacts: !!input.readArtifactsEnabled,
 				...(input.builtinFeatures ?? {})
