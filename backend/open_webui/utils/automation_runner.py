@@ -9,7 +9,11 @@ from typing import Optional
 from fastapi import HTTPException, status
 
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, SRC_LOG_LEVELS
-from open_webui.models.automations import AutomationRuns, Automations
+from open_webui.models.automations import (
+    DEFAULT_RUN_TIMEOUT_MINUTES,
+    AutomationRuns,
+    Automations,
+)
 from open_webui.models.chats import ChatForm, Chats
 from open_webui.models.usage import UsageLimitExceeded
 from open_webui.models.users import Users
@@ -44,10 +48,6 @@ def record_report(
         _report_images.pop(run_id, None)
     else:
         _report_images[run_id] = image
-
-
-# How long a run may take when its task sets no limit.
-DEFAULT_RUN_TIMEOUT_MINUTES = 60
 
 
 class RunTimedOut(Exception):

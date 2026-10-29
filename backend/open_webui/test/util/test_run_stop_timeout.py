@@ -188,3 +188,75 @@ class TimeoutSettingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TaskToolTimeLimitTest(unittest.IsolatedAsyncioTestCase):
+    """The model's scheduled task tools set and show the time limit."""
+
+    def setUp(self):
+        from open_webui.utils import builtin_tools
+
+        self.builtin_tools = builtin_tools
+        self.owner = f"owner-{uuid.uuid4()}"
+        user = SimpleNamespace(id=self.owner, name="Owner", role="user")
+        chat = SimpleNamespace(
+            id="chat-1", chat={"models": ["m"]}, organization_id=self.owner, visibility="private"
+        )
+        patches = [
+            patch.object(builtin_tools.Users, "get_user_by_id", return_value=user),
+            patch.object(builtin_tools.Chats, "get_chat_by_id", return_value=chat),
+            patch.object(builtin_tools, "can_read_chat", return_value=True),
+            patch.object(builtin_tools, "is_member", return_value=True),
+            patch.object(builtin_tools, "sync_automation_job"),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _ctx(self):
+        return {
+            "__user__": {"id": self.owner},
+            "__metadata__": {"chat_id": "chat-1", "organization_id": self.owner},
+        }
+
+    def _only_task(self):
+        tasks = Automations.get_automations_for_user(self.owner, self.owner)
+        self.assertEqual(len(tasks), 1)
+        self.addCleanup(Automations.delete_automation, tasks[0].id)
+        return tasks[0]
+
+    async def test_create_and_update_set_the_limit(self):
+        await self.builtin_tools.create_scheduled_task(
+            name="Daily map",
+            schedule="daily at 6am",
+            prompt="Make the map.",
+            time_limit_minutes=20,
+            **self._ctx(),
+        )
+        task = self._only_task()
+        self.assertEqual(task.timeout_minutes, 20)
+
+        result = await self.builtin_tools.update_scheduled_task(
+            task_id=task.id, time_limit_minutes=90, __user__={"id": self.owner}
+        )
+        self.assertEqual(Automations.get_automation_by_id(task.id).timeout_minutes, 90)
+        self.assertIn("time limit: 90 minutes", result)
+
+    async def test_out_of_range_limits_are_refused(self):
+        result = await self.builtin_tools.create_scheduled_task(
+            name="Daily map",
+            schedule="daily at 6am",
+            prompt="Make the map.",
+            time_limit_minutes=0,
+            **self._ctx(),
+        )
+        self.assertIn("between 1 and 1440", result)
+        self.assertEqual(Automations.get_automations_for_user(self.owner, self.owner), [])
+
+    async def test_the_list_shows_the_default_limit(self):
+        await self.builtin_tools.create_scheduled_task(
+            name="Daily map", schedule="daily at 6am", prompt="Make the map.", **self._ctx()
+        )
+        self._only_task()
+        result = await self.builtin_tools.list_scheduled_tasks(**self._ctx())
+        self.assertIn("time limit: 60 minutes (default)", result)

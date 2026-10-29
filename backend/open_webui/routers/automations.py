@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.automations import (
+    MAX_RUN_TIMEOUT_MINUTES,
     AutomationForm,
     AutomationModel,
     AutomationRunModel,
@@ -39,11 +40,8 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 router = APIRouter()
 
 
-MAX_TIMEOUT_MINUTES = 24 * 60
-
-
 def _check_timeout(minutes: Optional[int]) -> None:
-    if minutes is not None and not 1 <= minutes <= MAX_TIMEOUT_MINUTES:
+    if minutes is not None and not 1 <= minutes <= MAX_RUN_TIMEOUT_MINUTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The time limit must be between 1 minute and 24 hours.",

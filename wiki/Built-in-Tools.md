@@ -7,9 +7,9 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_scheduled_task` | Turn the current chat into a scheduled task. See [[Scheduled Tasks]]. |
-| `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
-| `update_scheduled_task` | Change a scheduled task's name, schedule, prompt, or organization. |
+| `create_scheduled_task` | Turn the current chat into a scheduled task, optionally with a time limit for its runs. See [[Scheduled Tasks]]. |
+| `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, time limit, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
+| `update_scheduled_task` | Change a scheduled task's name, schedule, prompt, organization, or time limit. |
 | `delete_scheduled_task` | Delete a scheduled task and its run history. The model is told to do this only when the user asks. |
 | `secrets_page` | Give the user a link to the page where they enter a secret. The model never receives the value. See [[Secrets]]. |
 | `list_preferences` | Read the user's saved [[Preferences]]. |

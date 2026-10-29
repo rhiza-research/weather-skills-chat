@@ -14,6 +14,12 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
 
 
+# A run's time limit, in minutes, when its task sets none, and the most a
+# task may set.
+DEFAULT_RUN_TIMEOUT_MINUTES = 60
+MAX_RUN_TIMEOUT_MINUTES = 24 * 60
+
+
 class Automation(Base):
     __tablename__ = "automation"
 
