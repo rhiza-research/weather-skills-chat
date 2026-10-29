@@ -105,16 +105,24 @@
 
 	const when = (seconds: number) => new Date(seconds * 1000).toLocaleString();
 
-	/** Who created the task and who last changed it, for the line by Save. */
+	/** Who created the task, and who last changed it if anyone has, for the lines by Save. */
 	const authorship = (t) => {
-		const created = t.created_by_name
-			? $i18n.t('Created by {{NAME}} {{WHEN}}', { NAME: t.created_by_name, WHEN: when(t.created_at) })
-			: $i18n.t('Created {{WHEN}}', { WHEN: when(t.created_at) });
-		if (t.updated_at === t.created_at) return created;
-		const changed = t.updated_by_name
-			? $i18n.t('last changed by {{NAME}} {{WHEN}}', { NAME: t.updated_by_name, WHEN: when(t.updated_at) })
-			: $i18n.t('last changed {{WHEN}}', { WHEN: when(t.updated_at) });
-		return `${created} · ${changed}`;
+		const lines = [
+			t.created_by_name
+				? $i18n.t('Created by {{NAME}} {{WHEN}}', { NAME: t.created_by_name, WHEN: when(t.created_at) })
+				: $i18n.t('Created {{WHEN}}', { WHEN: when(t.created_at) })
+		];
+		if (t.updated_at !== t.created_at) {
+			lines.push(
+				t.updated_by_name
+					? $i18n.t('Last changed by {{NAME}} {{WHEN}}', {
+							NAME: t.updated_by_name,
+							WHEN: when(t.updated_at)
+						})
+					: $i18n.t('Last changed {{WHEN}}', { WHEN: when(t.updated_at) })
+			);
+		}
+		return lines;
 	};
 
 	const save = async () => {
@@ -324,7 +332,11 @@
 			</button>
 		{/if}
 		{#if task}
-			<span class="text-xs text-gray-500">{authorship(task)}</span>
+			<div class="flex flex-col text-xs text-gray-500">
+				{#each authorship(task) as line}
+					<span>{line}</span>
+				{/each}
+			</div>
 		{/if}
 	</div>
 </form>
