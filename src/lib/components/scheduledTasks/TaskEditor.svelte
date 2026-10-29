@@ -54,7 +54,8 @@
 			visibility: source?.visibility ?? 'private',
 			source_chat_id: source?.source_chat_id ?? null,
 			tool_ids: source?.tool_ids ?? null,
-			features: { ...(source?.features ?? {}) }
+			features: { ...(source?.features ?? {}) },
+			timeout_minutes: source?.timeout_minutes ?? null
 		};
 	}
 
@@ -100,7 +101,11 @@
 				cron: form.cron || '',
 				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: toolsReady ? selectedToolIds : form.tool_ids,
-				features: form.features
+				features: form.features,
+				timeout_minutes:
+					form.timeout_minutes == null || form.timeout_minutes === ''
+						? null
+						: Number(form.timeout_minutes)
 			};
 			const saved = task
 				? await updateAutomationById(localStorage.token, task.id, payload)
@@ -213,6 +218,23 @@
 					<option value={model.id}>{model.name ?? model.id}</option>
 				{/each}
 			</select>
+		</label>
+
+		<label class="flex flex-col gap-1">
+			<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
+			<input
+				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				type="number"
+				min="1"
+				max="1440"
+				step="1"
+				placeholder={$i18n.t('60 (default)')}
+				bind:value={form.timeout_minutes}
+				disabled={!canManage}
+			/>
+			<span class="text-xs text-gray-500">
+				{$i18n.t('A run that takes longer is stopped and shown as an error.')}
+			</span>
 		</label>
 	</div>
 
