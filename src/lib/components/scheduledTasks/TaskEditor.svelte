@@ -3,8 +3,9 @@
 	import { toast } from 'svelte-sonner';
 	import { config, models, tools, user } from '$lib/stores';
 	import { getToolSummary } from '$lib/apis/tools';
-	import { createAutomation, updateAutomationById } from '$lib/apis/automations';
+	import { createAutomation, previewSchedule, updateAutomationById } from '$lib/apis/automations';
 	import { taskToolIds } from '$lib/utils/toolDisplay';
+	import { describeSchedule } from '$lib/utils/scheduledTasks';
 
 	import ToolServersModal from '$lib/components/chat/ToolServersModal.svelte';
 	import Wrench from '$lib/components/icons/Wrench.svelte';
@@ -28,6 +29,23 @@
 	let showTools = false;
 	let saving = false;
 
+	// A saved schedule shows as English until the user changes it. While
+	// typing, the server's parser previews what it would save.
+	let editingSchedule = !task?.cron;
+	let showCron = false;
+	let previewCron: string | null = task?.cron ?? null;
+	let previewTimer: ReturnType<typeof setTimeout>;
+	$: if (editingSchedule) schedulePreview(form.cron);
+
+	const schedulePreview = (text: string) => {
+		clearTimeout(previewTimer);
+		previewTimer = setTimeout(async () => {
+			previewCron = text?.trim()
+				? await previewSchedule(localStorage.token, text).catch(() => null)
+				: null;
+		}, 300);
+	};
+
 	function fromTask(source) {
 		return {
 			name: source?.name ?? '',
@@ -37,7 +55,8 @@
 			visibility: source?.visibility ?? 'private',
 			source_chat_id: source?.source_chat_id ?? null,
 			tool_ids: source?.tool_ids ?? null,
-			features: { ...(source?.features ?? {}) }
+			features: { ...(source?.features ?? {}) },
+			timeout_minutes: source?.timeout_minutes ?? null
 		};
 	}
 
@@ -94,7 +113,11 @@
 				cron: form.cron || '',
 				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: toolsReady ? selectedToolIds : form.tool_ids,
-				features: form.features
+				features: form.features,
+				timeout_minutes:
+					form.timeout_minutes == null || form.timeout_minutes === ''
+						? null
+						: Number(form.timeout_minutes)
 			};
 			const saved = task
 				? await updateAutomationById(localStorage.token, task.id, payload)
@@ -107,6 +130,8 @@
 			toast.success(task ? $i18n.t('Scheduled task saved') : $i18n.t('Scheduled task created'));
 			task = saved;
 			form = fromTask(saved);
+			editingSchedule = !saved?.cron;
+			previewCron = saved?.cron ?? null;
 			onSaved(saved);
 		} catch (error) {
 			toast.error(`${error}`);
@@ -142,15 +167,56 @@
 	</label>
 
 	<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-		<label class="flex flex-col gap-1">
+		<div class="flex flex-col gap-1">
 			<span class="text-xs font-medium text-gray-500">{$i18n.t('Schedule')}</span>
-			<input
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
-				placeholder={$i18n.t('every day at noon, or 0 12 * * *')}
-				bind:value={form.cron}
-				disabled={!canManage}
-			/>
-		</label>
+			{#if editingSchedule}
+				<input
+					class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+					placeholder={$i18n.t('every weekday at 7am, or 0 7 * * 1-5')}
+					aria-label={$i18n.t('Schedule')}
+					bind:value={form.cron}
+					disabled={!canManage}
+				/>
+			{:else}
+				<div class="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm">
+					<span class="flex-1">{describeSchedule(form.cron)}</span>
+					{#if canManage}
+						<button
+							type="button"
+							class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-100"
+							on:click={() => (editingSchedule = true)}
+						>
+							{$i18n.t('Change')}
+						</button>
+					{/if}
+				</div>
+			{/if}
+			<div class="flex items-center gap-2 text-xs text-gray-500 min-h-4">
+				{#if editingSchedule && form.cron?.trim()}
+					{#if previewCron}
+						<span>{describeSchedule(previewCron)}</span>
+					{:else}
+						<span class="text-orange-500">
+							{$i18n.t("Not understood. Try 'every weekday at 7am', 'mondays and thursdays at 6pm', or cron.")}
+						</span>
+					{/if}
+				{/if}
+				{#if previewCron || (!editingSchedule && form.cron)}
+					<button
+						type="button"
+						class="ml-auto hover:text-gray-800 dark:hover:text-gray-100"
+						on:click={() => (showCron = !showCron)}
+					>
+						{showCron ? $i18n.t('Hide cron') : $i18n.t('Show cron')}
+					</button>
+				{/if}
+			</div>
+			{#if showCron}
+				<code class="text-xs text-gray-500">
+					{editingSchedule ? (previewCron ?? '') : form.cron}
+				</code>
+			{/if}
+		</div>
 
 		<label class="flex flex-col gap-1">
 			<span class="text-xs font-medium text-gray-500">{$i18n.t('Model')}</span>
@@ -164,6 +230,23 @@
 					<option value={model.id}>{model.name ?? model.id}</option>
 				{/each}
 			</select>
+		</label>
+
+		<label class="flex flex-col gap-1">
+			<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
+			<input
+				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				type="number"
+				min="1"
+				max="1440"
+				step="1"
+				placeholder={$i18n.t('60 (default)')}
+				bind:value={form.timeout_minutes}
+				disabled={!canManage}
+			/>
+			<span class="text-xs text-gray-500">
+				{$i18n.t('A run that takes longer is stopped and shown as an error.')}
+			</span>
 		</label>
 	</div>
 
@@ -208,12 +291,6 @@
 				<option value="private">{$i18n.t('Private')}</option>
 				<option value="organization">{$i18n.t('Shared with the organization')}</option>
 			</select>
-		</div>
-	{/if}
-
-	{#if task?.cron}
-		<div class="text-xs text-gray-500">
-			{$i18n.t('Runs on cron')} <code>{task.cron}</code>
 		</div>
 	{/if}
 

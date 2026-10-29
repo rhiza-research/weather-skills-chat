@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DOT_MAX_AGE_S, sortTasks, taskDot } from './scheduledTasks';
+import { DOT_MAX_AGE_S, describeSchedule, sortTasks, taskDot } from './scheduledTasks';
 
 const NOW = 1_800_000_000;
 
@@ -21,6 +21,10 @@ describe('taskDot', () => {
 		for (const status of ['success', 'failure', 'unknown', 'error']) {
 			expect(taskDot(task('a', { status }), NOW)).toBe(status);
 		}
+	});
+
+	it('shows no dot for a run the user stopped', () => {
+		expect(taskDot(task('a', { status: 'stopped' }), NOW)).toBeNull();
 	});
 
 	it('clears once the run is seen', () => {
@@ -54,5 +58,26 @@ describe('sortTasks', () => {
 
 	it('puts the newest task first', () => {
 		expect(sortTasks(tasks, 'created').map((t) => t.id)).toEqual(['beta', 'gamma', 'alpha']);
+	});
+});
+
+describe('describeSchedule', () => {
+	it('reads cron as English in UTC', () => {
+		expect(describeSchedule('0 6 * * 1,4')).toBe(
+			'At 06:00 AM, only on Monday and Thursday (UTC)'
+		);
+		expect(describeSchedule('30 18 * * 1-5')).toBe(
+			'At 06:30 PM, Monday through Friday (UTC)'
+		);
+	});
+
+	it('reads Sunday as 0 or 7, as the scheduler does', () => {
+		expect(describeSchedule('0 9 * * 0')).toContain('Sunday');
+		expect(describeSchedule('0 9 * * 7')).toContain('Sunday');
+	});
+
+	it('says when there is no schedule, and falls back to the cron it cannot read', () => {
+		expect(describeSchedule(null)).toBe('Runs only when started');
+		expect(describeSchedule('not cron')).toBe('not cron');
 	});
 });

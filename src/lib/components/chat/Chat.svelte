@@ -476,8 +476,6 @@
 	};
 
 	const chatEventHandler = async (event, cb) => {
-		console.log(event);
-
 		const type = event?.data?.type ?? null;
 		if (
 			type === 'execute:python' ||
