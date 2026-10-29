@@ -17,6 +17,12 @@ Skills are kept by name, not as a particular copy of a skill. Each run uses the 
 
 When the model creates a scheduled task from a chat, it copies the chat's selected tools and features. If the model passes no prompt, the `create_scheduled_task` tool builds one from the chat's earlier user messages, leaving out the latest one. When the chat has only one user message, that message becomes the prompt. A chat with no requests yet produces no task, and the model asks the user what the task should be.
 
+## The Scheduled tasks page
+
+The Scheduled tasks page lists every task the user can see in the active organization. In an organization, private and shared tasks are listed in separate groups. A task whose scheduled runs are off is greyed out.
+
+Tasks are sorted by most recent run by default. The sort button beside **New scheduled task** sorts them by most recently edited or by name instead. Turning a task's scheduled runs on or off counts as an edit. The choice is remembered in that browser, separately from the sidebar's.
+
 ## The task page
 
 Each scheduled task has a page with its settings in a single column and its run history below. Next to the Save button, the page shows who created the task and when, and who last changed it and when. Changes made by the model in a chat count as the user's. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]. With **Agent not allowed to read files**, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
@@ -31,7 +37,7 @@ The sidebar has a Scheduled tasks section listing the active tasks the user can 
 
 Tasks are sorted by most recent run by default. The sort button in the section's header sorts them by name or by newest task instead. The choice is remembered in that browser.
 
-Clicking a task opens the chat of its latest run. A task that has never run opens its page. On the Scheduled tasks page, a task whose scheduled runs are off is greyed out.
+Clicking a task opens the chat of its latest run. A task that has never run opens its page.
 
 A dot beside a task shows its latest run:
 

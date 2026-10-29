@@ -2,6 +2,7 @@
 	import { getContext, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import { DropdownMenu } from 'bits-ui';
 	import {
 		organizations,
 		activeOrganizationId,
@@ -11,16 +12,51 @@
 		scheduledTasks
 	} from '$lib/stores';
 	import { runAutomationById, updateAutomationById } from '$lib/apis/automations';
-	import { canManageTask, describeSchedule, taskDot } from '$lib/utils/scheduledTasks';
+	import {
+		canManageTask,
+		describeSchedule,
+		sortTasks,
+		taskDot,
+		type TaskSort
+	} from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks, setTaskPinned } from '$lib/utils/scheduledTaskStore';
 	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
 	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
+	import { flyAndScale } from '$lib/utils/transitions';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import Dropdown from '$lib/components/common/Dropdown.svelte';
+	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
+	import BarsArrowUp from '$lib/components/icons/BarsArrowUp.svelte';
+	import Check from '$lib/components/icons/Check.svelte';
 
 	const i18n = getContext('i18n');
 
-	$: tasks = $scheduledTasks ?? [];
+	const SORT_KEY = 'scheduledTaskPageSort';
+	let sortBy: TaskSort = 'recent';
+	try {
+		sortBy = (localStorage.getItem(SORT_KEY) as TaskSort) ?? 'recent';
+	} catch {
+		// Not remembered in this browser.
+	}
+	let showSort = false;
+
+	const setSort = (value: TaskSort) => {
+		sortBy = value;
+		try {
+			localStorage.setItem(SORT_KEY, value);
+		} catch {
+			// Not remembered in this browser.
+		}
+	};
+
+	$: sortOptions = [
+		{ value: 'recent', label: $i18n.t('Recently run') },
+		{ value: 'updated', label: $i18n.t('Recently edited') },
+		{ value: 'name', label: $i18n.t('Name') }
+	] as { value: TaskSort; label: string }[];
+
+	$: tasks = sortTasks($scheduledTasks ?? [], sortBy);
 	$: loaded = $scheduledTasks !== null;
 
 	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
@@ -82,16 +118,50 @@
 				</div>
 				<div class="text-lg font-medium px-1.5">{$i18n.t('Scheduled tasks')}</div>
 			</div>
+		</div>
+	</nav>
+
+	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
+		<div class="flex items-center justify-end gap-1">
+			<Dropdown bind:show={showSort}>
+				<Tooltip content={$i18n.t('Sort')}>
+					<button
+						class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						aria-label={$i18n.t('Sort scheduled tasks')}
+					>
+						<BarsArrowUp className="size-4" strokeWidth="2" />
+					</button>
+				</Tooltip>
+				<div slot="content">
+					<DropdownMenu.Content
+						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+						sideOffset={4}
+						side="bottom"
+						align="end"
+						transition={flyAndScale}
+					>
+						{#each sortOptions as option (option.value)}
+							<DropdownMenu.Item
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+								on:click={() => setSort(option.value)}
+							>
+								{option.label}
+								{#if sortBy === option.value}
+									<Check className="size-3.5" strokeWidth="2.5" />
+								{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</div>
+			</Dropdown>
 			<a
-				class="mr-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
+				class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm"
 				href="/scheduled-tasks/new"
 			>
 				{$i18n.t('New scheduled task')}
 			</a>
 		</div>
-	</nav>
 
-	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
 		{#if loaded && tasks.length === 0}
 			<div class="text-sm text-gray-500 text-center py-8">
 				{$i18n.t(
