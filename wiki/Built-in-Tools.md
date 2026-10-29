@@ -1,8 +1,16 @@
 # Built-in Tools
 
-Besides the skills on [[Skill Packs]] and any Workspace tools selected for a chat, the model always has a set of built-in tools. Users do not need to select them.
+Besides the skills on [[Skill Packs]] and any Workspace tools selected for a chat, the model has a set of built-in tools. Users do not need to select them.
 
-## Tools the model always has
+Some built-in tools can be turned off for a chat in the Built-in group of the chat's Tools list, and for a scheduled task in the same list on its page. They are on unless turned off:
+
+- **Email**: `list_email_recipients` and `send_email`.
+- **Scheduled tasks**: the scheduled task tools. Only chats have this switch, since a scheduled task's run never gets these tools.
+- **Preferences**: `list_preferences` and `create_preference`.
+
+The others are always on, apart from those that need a chat feature such as web search or running code.
+
+## Built-in tools
 
 | Tool | What it lets the model do |
 |-|-|
