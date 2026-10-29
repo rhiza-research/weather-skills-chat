@@ -171,7 +171,7 @@
 	builtinGroups={['email', 'preferences']}
 />
 
-<form class="flex flex-col gap-4 max-w-xl" on:submit|preventDefault={save}>
+<form class="flex flex-col gap-4" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Name')}</span>
 		<input
@@ -194,7 +194,7 @@
 		/>
 	</label>
 
-	<div class="flex flex-col gap-1">
+	<div class="flex flex-col gap-1 w-full max-w-sm">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Schedule')}</span>
 		{#if editingSchedule}
 			<input
@@ -245,7 +245,7 @@
 		{/if}
 	</div>
 
-	<label class="flex flex-col gap-1">
+	<label class="flex flex-col gap-1 w-full max-w-sm">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Model')}</span>
 		<select
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
@@ -259,7 +259,7 @@
 		</select>
 	</label>
 
-	<label class="flex flex-col gap-1">
+	<label class="flex flex-col gap-1 w-full max-w-sm">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
 		<input
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
@@ -308,7 +308,7 @@
 	</div>
 
 	{#if !isPersonal}
-		<label class="flex flex-col gap-1">
+		<label class="flex flex-col gap-1 w-full max-w-sm">
 			<span class="text-xs font-medium text-gray-500">{$i18n.t('Sharing')}</span>
 			<select
 				class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
