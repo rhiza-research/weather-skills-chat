@@ -96,6 +96,14 @@ class HtmlViewRouteTest(unittest.TestCase):
         self.assertNotIn("content-encoding", plain.headers)
         self.assertEqual(plain.content, zipped.content)
 
+    def test_brotli_is_preferred_when_the_browser_accepts_it(self):
+        url = "/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html"
+        packed = self.client.get(url, headers={"Accept-Encoding": "gzip, br"})
+        self.assertEqual(packed.headers["content-encoding"], "br")
+        self.assertEqual(packed.headers["vary"], "Accept-Encoding")
+        self.assertTrue(packed.content.startswith(PAGE))  # decoded by the client
+        self.assertIn(b"weather-skills:figure-size", packed.content)
+
     def test_only_html_can_be_viewed(self):
         res = self.client.get("/api/v1/chats/chat-1/artifacts/view/data.csv")
         self.assertEqual(res.status_code, 415)
