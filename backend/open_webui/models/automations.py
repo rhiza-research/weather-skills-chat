@@ -8,7 +8,7 @@ from open_webui.internal.db import Base, JSONField, get_db
 from open_webui.models.tools import Tools
 from open_webui.utils.skill_version import tool_ids_with_skill_names
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, LargeBinary, Text, func, or_
+from sqlalchemy import BigInteger, Boolean, Column, Integer, LargeBinary, Text, func, or_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -33,6 +33,9 @@ class Automation(Base):
     features = Column(JSONField, nullable=True)
     # When the task's picture last changed, or null when it has none.
     image_updated_at = Column(BigInteger, nullable=True)
+    # How long a run may take before it is stopped as an error; null uses
+    # the default.
+    timeout_minutes = Column(Integer, nullable=True)
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
 
@@ -94,6 +97,7 @@ class AutomationModel(BaseModel):
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
     image_updated_at: Optional[int] = None
+    timeout_minutes: Optional[int] = None
     created_at: int
     updated_at: int
 
@@ -124,6 +128,7 @@ class AutomationForm(BaseModel):
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    timeout_minutes: Optional[int] = None
 
 
 class AutomationUpdateForm(BaseModel):
@@ -136,6 +141,7 @@ class AutomationUpdateForm(BaseModel):
     visibility: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    timeout_minutes: Optional[int] = None
 
 
 def _with_skill_names(tool_ids: Optional[list[str]]) -> Optional[list[str]]:
@@ -167,6 +173,7 @@ class AutomationTable:
                 source_chat_id=form_data.source_chat_id,
                 tool_ids=_with_skill_names(form_data.tool_ids),
                 features=form_data.features,
+                timeout_minutes=form_data.timeout_minutes,
                 created_at=now,
                 updated_at=now,
             )

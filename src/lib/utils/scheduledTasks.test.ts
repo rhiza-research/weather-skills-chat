@@ -23,6 +23,10 @@ describe('taskDot', () => {
 		}
 	});
 
+	it('shows no dot for a run the user stopped', () => {
+		expect(taskDot(task('a', { status: 'stopped' }), NOW)).toBeNull();
+	});
+
 	it('clears once the run is seen', () => {
 		expect(taskDot(task('a', { status: 'success' }, { seen_run_id: 'a-run' }), NOW)).toBeNull();
 	});

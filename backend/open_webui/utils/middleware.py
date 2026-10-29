@@ -3444,6 +3444,8 @@ async def process_chat_response(
                 end_chat_trace(output=data)
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
+                # Lets a scheduled task's run tell a stop from a finished reply.
+                metadata["cancelled"] = True
                 complete_open_tool_calls("Cancelled by user.")
 
                 cancelled_content = serialize_content_blocks(content_blocks)

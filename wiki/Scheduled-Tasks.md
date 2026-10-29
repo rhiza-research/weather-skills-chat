@@ -7,6 +7,7 @@ A scheduled task sends the same prompt as a new chat on a schedule, for example 
 - A name.
 - The prompt each run sends.
 - The model to use. "Default model" uses the organization's default model, or the app's default when the organization has none.
+- A time limit for each run, from 1 minute to 24 hours, 60 minutes unless set. A run that takes longer is stopped and recorded as an error.
 - A schedule, or no schedule for a task that only runs when someone presses Run now.
 - Whether scheduled runs are on.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.
@@ -74,7 +75,8 @@ The model is told to report, when it finishes, whether it did what the prompt as
 - **Success**: the model reported that it did the task.
 - **Failure**: the model reported that it could not do the task, for example because the data it needed was missing. The run itself worked.
 - **Unknown**: the run finished, but the model did not report a result.
-- **Error**: the run itself broke, for example because the model could not be reached or a server restart interrupted it. The error is shown with the run.
+- **Error**: the run itself broke, for example because the model could not be reached, a server restart interrupted it, or it took longer than the task's time limit. The error is shown with the run.
+- **Stopped**: someone stopped the run from its chat. A stopped run gets no dot in the sidebar.
 
 The model's summary is shown with the run, next to a success or failure.
 
