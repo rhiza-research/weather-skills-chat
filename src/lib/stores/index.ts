@@ -181,6 +181,7 @@ type Config = {
 	name: string;
 	version: string;
 	image_tag?: string | null;
+	build_hash?: string;
 	help_email?: string | null;
 	default_locale: string;
 	default_models: string;

@@ -1631,6 +1631,7 @@ def get_app_config():
         "name": app.state.WEBUI_NAME,
         "version": VERSION,
         "image_tag": WEBUI_IMAGE_TAG or None,
+        "build_hash": WEBUI_BUILD_HASH,
         "help_email": WEBUI_HELP_EMAIL,
         "default_locale": str(DEFAULT_LOCALE),
         "oauth": {

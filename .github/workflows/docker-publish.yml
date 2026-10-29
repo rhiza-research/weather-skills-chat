@@ -59,6 +59,9 @@ jobs:
             USE_CUDA=false
             USE_OLLAMA=false
             BUILD_HASH=${{ github.sha }}
+          # Layer cache from the last dev build. Only dev writes it; main and tags read it.
+          cache-from: type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-dev
+          cache-to: ${{ github.ref == 'refs/heads/dev' && 'type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-dev,mode=max' || '' }}
 
       # staging: every push to dev, image tag sha-<short>.
       # prod: only semver tags that point at a commit on main; image tag is that tag.
