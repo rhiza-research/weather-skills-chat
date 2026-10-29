@@ -170,14 +170,41 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
 
-    async def test_bad_request_is_not_resent(self):
-        self.replies[PRIMARY] += [_error(400, "Bad request")]
+    async def test_rejected_key_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [_error(401, "Missing Authentication header")]
+        self.replies[BACKUP] += [_ok()]
+
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP])
+
+    async def test_spent_key_limit_is_resent_and_marks_the_primary_down(self):
+        self.replies[PRIMARY] += [_error(403, "Key limit exceeded (monthly limit)")]
+        self.replies[BACKUP] += [_ok(), _ok()]
+
+        await self._call()
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP, BACKUP])
+
+    async def test_rejected_request_is_resent_but_does_not_mark_the_primary_down(self):
+        self.replies[PRIMARY] += [_error(400, "Bad request"), _ok()]
+        self.replies[BACKUP] += [_ok()]
+
+        await self._call()
+        await self._call()
+
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, BACKUP, PRIMARY])
+
+    async def test_request_rejected_by_both_raises_the_primary_error(self):
+        self.replies[PRIMARY] += [_error(400, "Prompt is too long")]
+        self.replies[BACKUP] += [_error(400, "Context length exceeded")]
 
         with self.assertRaises(HTTPException) as caught:
             await self._call()
 
         self.assertEqual(caught.exception.status_code, 400)
-        self.assertEqual([url for url, _ in self.sent], [PRIMARY])
+        self.assertIn("Prompt is too long", caught.exception.detail)
 
     async def test_model_without_backup_fails_as_before(self):
         self._without_backup()
