@@ -94,7 +94,7 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 
 ## Tool rounds per reply
 
-In one reply, the model can call tools, read their results, and call more, round after round. Calls the model makes together count as one round. When a reply reaches the limit and the model still wants to call tools, the reply ends with a message saying it hit the tool-call limit before finishing. Each new message starts the count again. This applies to chats and to [[Automations]] runs alike.
+In one reply, the model can call tools, read their results, and call more, round after round. Calls the model makes together count as one round. When a reply reaches the limit and the model still wants to call tools, the reply ends with a message saying it hit the tool-call limit before finishing. Each new message starts the count again. This applies to chats and to [[Scheduled Tasks]] runs alike.
 
 | Env var | Default | Effect |
 |-|-|-|
