@@ -103,6 +103,20 @@
 		toolsReady = true;
 	});
 
+	const when = (seconds: number) => new Date(seconds * 1000).toLocaleString();
+
+	/** Who created the task and who last changed it, for the line by Save. */
+	const authorship = (t) => {
+		const created = t.created_by_name
+			? $i18n.t('Created by {{NAME}} {{WHEN}}', { NAME: t.created_by_name, WHEN: when(t.created_at) })
+			: $i18n.t('Created {{WHEN}}', { WHEN: when(t.created_at) });
+		if (t.updated_at === t.created_at) return created;
+		const changed = t.updated_by_name
+			? $i18n.t('last changed by {{NAME}} {{WHEN}}', { NAME: t.updated_by_name, WHEN: when(t.updated_at) })
+			: $i18n.t('last changed {{WHEN}}', { WHEN: when(t.updated_at) });
+		return `${created} · ${changed}`;
+	};
+
 	const save = async () => {
 		saving = true;
 		try {
@@ -149,7 +163,7 @@
 	builtinGroups={['email', 'preferences']}
 />
 
-<form class="flex flex-col gap-3" on:submit|preventDefault={save}>
+<form class="flex flex-col gap-4 max-w-xl" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Name')}</span>
 		<input
@@ -172,93 +186,91 @@
 		/>
 	</label>
 
-	<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-		<div class="flex flex-col gap-1">
-			<span class="text-xs font-medium text-gray-500">{$i18n.t('Schedule')}</span>
-			{#if editingSchedule}
-				<input
-					class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
-					placeholder={$i18n.t('every weekday at 7am, or 0 7 * * 1-5')}
-					aria-label={$i18n.t('Schedule')}
-					bind:value={form.cron}
-					disabled={!canManage}
-				/>
-			{:else}
-				<div class="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm">
-					<span class="flex-1">{describeSchedule(form.cron)}</span>
-					{#if canManage}
-						<button
-							type="button"
-							class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-100"
-							on:click={() => (editingSchedule = true)}
-						>
-							{$i18n.t('Change')}
-						</button>
-					{/if}
-				</div>
-			{/if}
-			<div class="flex items-center gap-2 text-xs text-gray-500 min-h-4">
-				{#if editingSchedule && form.cron?.trim()}
-					{#if previewCron}
-						<span>{describeSchedule(previewCron)}</span>
-					{:else}
-						<span class="text-orange-500">
-							{$i18n.t("Not understood. Try 'every weekday at 7am', 'mondays and thursdays at 6pm', or cron.")}
-						</span>
-					{/if}
-				{/if}
-				{#if previewCron || (!editingSchedule && form.cron)}
+	<div class="flex flex-col gap-1">
+		<span class="text-xs font-medium text-gray-500">{$i18n.t('Schedule')}</span>
+		{#if editingSchedule}
+			<input
+				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				placeholder={$i18n.t('every weekday at 7am, or 0 7 * * 1-5')}
+				aria-label={$i18n.t('Schedule')}
+				bind:value={form.cron}
+				disabled={!canManage}
+			/>
+		{:else}
+			<div class="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm">
+				<span class="flex-1">{describeSchedule(form.cron)}</span>
+				{#if canManage}
 					<button
 						type="button"
-						class="ml-auto hover:text-gray-800 dark:hover:text-gray-100"
-						on:click={() => (showCron = !showCron)}
+						class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-100"
+						on:click={() => (editingSchedule = true)}
 					>
-						{showCron ? $i18n.t('Hide cron') : $i18n.t('Show cron')}
+						{$i18n.t('Change')}
 					</button>
 				{/if}
 			</div>
-			{#if showCron}
-				<code class="text-xs text-gray-500">
-					{editingSchedule ? (previewCron ?? '') : form.cron}
-				</code>
+		{/if}
+		<div class="flex items-center gap-2 text-xs text-gray-500 min-h-4">
+			{#if editingSchedule && form.cron?.trim()}
+				{#if previewCron}
+					<span>{describeSchedule(previewCron)}</span>
+				{:else}
+					<span class="text-orange-500">
+						{$i18n.t("Not understood. Try 'every weekday at 7am', 'mondays and thursdays at 6pm', or cron.")}
+					</span>
+				{/if}
+			{/if}
+			{#if previewCron || (!editingSchedule && form.cron)}
+				<button
+					type="button"
+					class="ml-auto hover:text-gray-800 dark:hover:text-gray-100"
+					on:click={() => (showCron = !showCron)}
+				>
+					{showCron ? $i18n.t('Hide cron') : $i18n.t('Show cron')}
+				</button>
 			{/if}
 		</div>
-
-		<label class="flex flex-col gap-1">
-			<span class="text-xs font-medium text-gray-500">{$i18n.t('Model')}</span>
-			<select
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
-				bind:value={form.model}
-				disabled={!canManage}
-			>
-				<option value="">{$i18n.t('Default model')}</option>
-				{#each $models as model}
-					<option value={model.id}>{model.name ?? model.id}</option>
-				{/each}
-			</select>
-		</label>
-
-		<label class="flex flex-col gap-1">
-			<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
-			<input
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
-				type="number"
-				min="1"
-				max="1440"
-				step="1"
-				placeholder={$i18n.t('60 (default)')}
-				bind:value={form.timeout_minutes}
-				disabled={!canManage}
-			/>
-			<span class="text-xs text-gray-500">
-				{$i18n.t('A run that takes longer is stopped and shown as an error.')}
-			</span>
-		</label>
+		{#if showCron}
+			<code class="text-xs text-gray-500">
+				{editingSchedule ? (previewCron ?? '') : form.cron}
+			</code>
+		{/if}
 	</div>
+
+	<label class="flex flex-col gap-1">
+		<span class="text-xs font-medium text-gray-500">{$i18n.t('Model')}</span>
+		<select
+			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+			bind:value={form.model}
+			disabled={!canManage}
+		>
+			<option value="">{$i18n.t('Default model')}</option>
+			{#each $models as model}
+				<option value={model.id}>{model.name ?? model.id}</option>
+			{/each}
+		</select>
+	</label>
+
+	<label class="flex flex-col gap-1">
+		<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
+		<input
+			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+			type="number"
+			min="1"
+			max="1440"
+			step="1"
+			placeholder={$i18n.t('60 (default)')}
+			bind:value={form.timeout_minutes}
+			disabled={!canManage}
+		/>
+		<span class="text-xs text-gray-500">
+			{$i18n.t('A run that takes longer is stopped and shown as an error.')}
+		</span>
+	</label>
 
 	<div class="flex flex-col gap-1">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Tools')}</span>
-		<div class="flex flex-wrap items-center gap-1.5">
+		<div class="flex flex-col items-start gap-1.5">
 			<button
 				type="button"
 				class="flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-800 px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-850 transition disabled:opacity-50"
@@ -288,20 +300,21 @@
 	</div>
 
 	{#if !isPersonal}
-		<div>
+		<label class="flex flex-col gap-1">
+			<span class="text-xs font-medium text-gray-500">{$i18n.t('Sharing')}</span>
 			<select
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-1.5 text-sm"
+				class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
 				bind:value={form.visibility}
 				disabled={!canManage}
 			>
 				<option value="private">{$i18n.t('Private')}</option>
 				<option value="organization">{$i18n.t('Shared with the organization')}</option>
 			</select>
-		</div>
+		</label>
 	{/if}
 
-	{#if canManage}
-		<div>
+	<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+		{#if canManage}
 			<button
 				class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm disabled:opacity-50"
 				type="submit"
@@ -309,6 +322,9 @@
 			>
 				{task ? $i18n.t('Save') : $i18n.t('Create')}
 			</button>
-		</div>
-	{/if}
+		{/if}
+		{#if task}
+			<span class="text-xs text-gray-500">{authorship(task)}</span>
+		{/if}
+	</div>
 </form>

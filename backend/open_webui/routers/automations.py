@@ -17,6 +17,7 @@ from open_webui.models.automations import (
     AutomationUserStates,
 )
 from open_webui.models.chats import Chats
+from open_webui.models.users import Users
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.automation_runner import execute_automation
 from open_webui.utils.automation_scheduler import (
@@ -159,7 +160,26 @@ def mark_seen(id: str, form_data: SeenForm, user=Depends(get_verified_user)):
     return True
 
 
-@router.post("/", response_model=AutomationModel)
+class AutomationDetail(AutomationModel):
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
+
+def _user_name(user_id: Optional[str]) -> Optional[str]:
+    user = Users.get_user_by_id(user_id) if user_id else None
+    return user.name if user else None
+
+
+def _with_names(automation: AutomationModel) -> AutomationDetail:
+    """The task with the names of who created it and who last changed it."""
+    return AutomationDetail(
+        **automation.model_dump(),
+        created_by_name=_user_name(automation.user_id),
+        updated_by_name=_user_name(automation.updated_by),
+    )
+
+
+@router.post("/", response_model=AutomationDetail)
 async def create_automation(
     form_data: AutomationForm,
     user=Depends(get_verified_user),
@@ -190,20 +210,20 @@ async def create_automation(
             detail=ERROR_MESSAGES.DEFAULT("Error creating automation"),
         )
     sync_automation_job(automation)
-    return automation
+    return _with_names(automation)
 
 
-@router.get("/{id}", response_model=AutomationModel)
+@router.get("/{id}", response_model=AutomationDetail)
 async def get_automation(id: str, user=Depends(get_verified_user)):
     automation = Automations.get_automation_by_id(id)
     if not can_view_automation(user, automation):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    return automation
+    return _with_names(automation)
 
 
-@router.post("/{id}/update", response_model=AutomationModel)
+@router.post("/{id}/update", response_model=AutomationDetail)
 async def update_automation(
     id: str, form_data: AutomationUpdateForm, user=Depends(get_verified_user)
 ):
@@ -221,10 +241,10 @@ async def update_automation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    automation = Automations.update_automation(id, form_data)
+    automation = Automations.update_automation(id, form_data, updated_by=user.id)
     if automation:
         sync_automation_job(automation)
-    return automation
+    return _with_names(automation) if automation else automation
 
 
 @router.delete("/{id}", response_model=bool)

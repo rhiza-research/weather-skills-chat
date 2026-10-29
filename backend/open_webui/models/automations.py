@@ -42,6 +42,8 @@ class Automation(Base):
     # How long a run may take before it is stopped as an error; null uses
     # the default.
     timeout_minutes = Column(Integer, nullable=True)
+    # The user who last changed the task; user_id created it.
+    updated_by = Column(Text, nullable=True)
     created_at = Column(BigInteger)
     updated_at = Column(BigInteger)
 
@@ -104,6 +106,7 @@ class AutomationModel(BaseModel):
     features: Optional[dict] = None
     image_updated_at: Optional[int] = None
     timeout_minutes: Optional[int] = None
+    updated_by: Optional[str] = None
     created_at: int
     updated_at: int
 
@@ -180,6 +183,7 @@ class AutomationTable:
                 tool_ids=_with_skill_names(form_data.tool_ids),
                 features=form_data.features,
                 timeout_minutes=form_data.timeout_minutes,
+                updated_by=user_id,
                 created_at=now,
                 updated_at=now,
             )
@@ -222,9 +226,14 @@ class AutomationTable:
             ]
 
     def update_automation(
-        self, id: str, form_data: AutomationUpdateForm
+        self,
+        id: str,
+        form_data: AutomationUpdateForm,
+        updated_by: Optional[str] = None,
     ) -> Optional[AutomationModel]:
         updates = form_data.model_dump(exclude_unset=True)
+        if updated_by:
+            updates["updated_by"] = updated_by
         if "tool_ids" in updates:
             updates["tool_ids"] = _with_skill_names(updates["tool_ids"])
         if "name" in updates and updates["name"] is not None:
