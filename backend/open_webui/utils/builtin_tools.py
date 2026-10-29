@@ -466,6 +466,11 @@ def _describe_task(automation, user_id: str, full: bool) -> str:
     lines.append(f"- features: {_describe_task_features(automation.features)}")
     if automation.image_updated_at:
         lines.append("- has a picture")
+    changed = f"- last changed: {_format_time(automation.updated_at)}"
+    if automation.updated_by:
+        changer = Users.get_user_by_id(automation.updated_by)
+        changed += f" by {changer.name if changer else automation.updated_by}"
+    lines.append(changed)
     lines.append(f"- last run: {last_run}")
     lines.append(f"- prompt: {prompt}")
     return "\n".join(lines)
@@ -629,7 +634,7 @@ async def update_scheduled_task(
         if remove_picture:
             Automations.set_image(automation.id, None)
         updated = (
-            Automations.update_automation(automation.id, form)
+            Automations.update_automation(automation.id, form, updated_by=user.id)
             if form.model_fields_set
             else Automations.get_automation_by_id(automation.id)
         )
