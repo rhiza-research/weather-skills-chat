@@ -294,9 +294,15 @@
 					class="text-left self-center overflow-hidden w-full min-w-0 {ownerName && !isMine
 						? 'h-[32px]'
 						: 'h-[20px]'}"
-					title={title}
 				>
-					<div class="truncate">{title}</div>
+					<Tooltip
+						content={title}
+						className="w-full min-w-0"
+						placement="top-start"
+						tippyOptions={{ delay: [250, 0], showOnCreate: true }}
+					>
+						<div class="truncate">{title}</div>
+					</Tooltip>
 					{#if ownerName && !isMine}
 						<div class="text-[10px] text-gray-500 truncate">{ownerName}</div>
 					{/if}

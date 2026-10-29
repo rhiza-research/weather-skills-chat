@@ -24,6 +24,26 @@ A new task starts with its scheduled runs on. They are turned off and back on wi
 
 People who can view a task but not change it see its settings without being able to edit them, and can still press Run now.
 
+## In the sidebar
+
+The sidebar has a Scheduled tasks section listing the active tasks the user can see in the active organization, one row per task, shared tasks included. A task whose scheduled runs are off is left out of the sidebar. Every task starts pinned there. A task's menu in the sidebar can unpin it, run it now, or open it for editing; a user pins it again from the Scheduled tasks page. Pinning is per user and does not change the sidebar for anyone else. The section scrolls when it holds more tasks than fit, and can be collapsed.
+
+Tasks are sorted by most recent run by default. The sort button in the section's header sorts them by name or by newest task instead. The choice is remembered in that browser.
+
+Clicking a task opens the chat of its latest run. A task that has never run opens its page. On the Scheduled tasks page, a task whose scheduled runs are off is greyed out.
+
+A dot beside a task shows its latest run:
+
+| Dot | Meaning |
+|-|-|
+| Pulsing grey | The run is going |
+| Green | Success |
+| Red | Failure |
+| Orange | Unknown: the run finished without a result |
+| Red ring | Error |
+
+Opening a finished run clears its dot for that user, as does having the run's chat open when it finishes. A run that finished more than a week ago shows no dot. The dots change as runs start and finish, without reloading the page.
+
 ## Schedules
 
 A schedule is a five-field cron expression or one of these phrases. Days of the week follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday.
@@ -54,7 +74,7 @@ The model is told to report, when it finishes, whether it did what the prompt as
 - **Success**: the model reported that it did the task.
 - **Failure**: the model reported that it could not do the task, for example because the data it needed was missing. The run itself worked.
 - **Unknown**: the run finished, but the model did not report a result.
-- **Error**: the run itself broke, for example because the model could not be reached. The error is shown with the run.
+- **Error**: the run itself broke, for example because the model could not be reached or a server restart interrupted it. The error is shown with the run.
 
 The model's summary is shown with the run, next to a success or failure.
 

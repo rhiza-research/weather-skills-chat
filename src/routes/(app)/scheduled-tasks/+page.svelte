@@ -2,16 +2,25 @@
 	import { getContext, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { organizations, activeOrganizationId, user, WEBUI_NAME, showSidebar } from '$lib/stores';
-	import { getAutomations, runAutomationById, updateAutomationById } from '$lib/apis/automations';
-	import { canManageTask } from '$lib/utils/scheduledTasks';
+	import {
+		organizations,
+		activeOrganizationId,
+		user,
+		WEBUI_NAME,
+		showSidebar,
+		scheduledTasks
+	} from '$lib/stores';
+	import { runAutomationById, updateAutomationById } from '$lib/apis/automations';
+	import { canManageTask, taskDot } from '$lib/utils/scheduledTasks';
+	import { loadScheduledTasks, setTaskPinned } from '$lib/utils/scheduledTaskStore';
+	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 
 	const i18n = getContext('i18n');
 
-	let tasks = [];
-	let loaded = false;
+	$: tasks = $scheduledTasks ?? [];
+	$: loaded = $scheduledTasks !== null;
 
 	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
 	$: isPersonal =
@@ -29,13 +38,7 @@
 				}
 			];
 
-	const refresh = async () => {
-		tasks = await getAutomations(localStorage.token).catch((error) => {
-			toast.error(`${error}`);
-			return [];
-		});
-		loaded = true;
-	};
+	const refresh = () => loadScheduledTasks(localStorage.token);
 
 	const setEnabled = async (task, enabled: boolean) => {
 		if (task.enabled === enabled) return;
@@ -104,16 +107,36 @@
 					</div>
 					{#each section.items as task (task.id)}
 						<div
-							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3"
+							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3 {task.enabled
+								? ''
+								: 'bg-gray-50 dark:bg-gray-900/50'}"
 						>
 							<a class="min-w-0 flex-1" href={`/scheduled-tasks/${task.id}`}>
-								<div class="font-medium truncate">{task.name}</div>
+								<div class="flex items-center gap-2 font-medium">
+									<span class="truncate {task.enabled ? '' : 'text-gray-400 dark:text-gray-500'}"
+										>{task.name}</span
+									>
+									<TaskDot dot={taskDot(task)} />
+								</div>
 								<div class="text-xs text-gray-500">
+									{#if !task.enabled}
+										<span
+											class="mr-1 rounded px-1 py-px bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+										>
+											{$i18n.t('Off')}
+										</span>
+									{/if}
 									{task.cron || $i18n.t('Runs only when started')}
 								</div>
 								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{task.prompt}</div>
 							</a>
 							<div class="flex items-center gap-3 text-xs shrink-0">
+								<button
+									class="text-gray-500"
+									on:click={() => setTaskPinned(localStorage.token, task.id, !task.pinned)}
+								>
+									{task.pinned ? $i18n.t('Unpin') : $i18n.t('Pin to sidebar')}
+								</button>
 								{#if canManageTask(task, $user?.id, currentOrg?.role)}
 									<Switch state={task.enabled} on:change={(e) => setEnabled(task, e.detail)} />
 								{/if}

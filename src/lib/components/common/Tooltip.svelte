@@ -12,6 +12,7 @@
 
 	let tooltipElement;
 	let tooltipInstance;
+	let hovering = false;
 	let active = false;
 	let purify: { sanitize: (dirty: string) => string } | null = null;
 	let tippyLib: ((element: Element, options: Record<string, unknown>) => { setContent: (value: string) => void; destroy: () => void }) | null = null;
@@ -51,7 +52,10 @@
 					...(theme !== '' ? { theme } : { theme: 'dark' }),
 					arrow: false,
 					offset: offset,
-					...tippyOptions
+					...tippyOptions,
+					// The instance is made on the first hover, so showing it on
+					// creation only makes sense while the pointer is still here.
+					showOnCreate: !!tippyOptions.showOnCreate && hovering
 				});
 			}
 		});
@@ -72,7 +76,8 @@
 	bind:this={tooltipElement}
 	aria-label={plainText(content)}
 	class={className}
-	on:pointerenter={() => (active = true)}
+	on:pointerenter={() => (active = hovering = true)}
+	on:pointerleave={() => (hovering = false)}
 	on:focusin={() => (active = true)}
 >
 	<slot />

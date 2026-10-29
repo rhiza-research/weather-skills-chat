@@ -1,6 +1,8 @@
 import logging
 from typing import Optional
 
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
@@ -11,6 +13,7 @@ from open_webui.models.automations import (
     AutomationRuns,
     Automations,
     AutomationUpdateForm,
+    AutomationUserStates,
 )
 from open_webui.models.chats import Chats
 from open_webui.utils.auth import get_verified_user
@@ -47,12 +50,63 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     return parsed
 
 
-@router.get("/", response_model=list[AutomationModel])
+class AutomationListItem(AutomationModel):
+    last_run: Optional[AutomationRunModel] = None
+    # The viewer's own: shown in their sidebar, and the last run they opened.
+    pinned: bool = True
+    seen_run_id: Optional[str] = None
+
+
+class PinForm(BaseModel):
+    pinned: bool
+
+
+class SeenForm(BaseModel):
+    run_id: str
+
+
+@router.get("/", response_model=list[AutomationListItem])
 def list_automations(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    return Automations.get_automations_for_user(user.id, organization_id)
+    automations = Automations.get_automations_for_user(user.id, organization_id)
+    ids = [a.id for a in automations]
+    last_runs = AutomationRuns.get_latest_runs(ids)
+    states = AutomationUserStates.get_states(user.id, ids)
+    items = []
+    for automation in automations:
+        state = states.get(automation.id)
+        items.append(
+            AutomationListItem(
+                **automation.model_dump(),
+                last_run=last_runs.get(automation.id),
+                pinned=state.pinned if state else True,
+                seen_run_id=state.seen_run_id if state else None,
+            )
+        )
+    return items
+
+
+def _viewable(id: str, user) -> None:
+    if not can_view_automation(user, Automations.get_automation_by_id(id)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+
+@router.post("/{id}/pin", response_model=bool)
+def set_pinned(id: str, form_data: PinForm, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    AutomationUserStates.set_state(user.id, id, pinned=form_data.pinned)
+    return True
+
+
+@router.post("/{id}/seen", response_model=bool)
+def mark_seen(id: str, form_data: SeenForm, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    AutomationUserStates.set_state(user.id, id, seen_run_id=form_data.run_id)
+    return True
 
 
 @router.post("/", response_model=AutomationModel)
