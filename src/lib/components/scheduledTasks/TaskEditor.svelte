@@ -48,27 +48,37 @@
 		!!$config?.features?.[configFlag] &&
 		($user?.role === 'admin' || !!$user?.permissions?.features?.[feature]);
 
+	// Worded as in the chat bar. A run has no one to ask, so reading files is
+	// either allowed or not.
 	$: featureToggles = [
 		{
 			key: 'web_search',
-			label: $i18n.t('Web search'),
+			on: $i18n.t('Agent allowed to search the web'),
+			off: $i18n.t('Agent not allowed to search the web'),
 			icon: GlobeAlt,
 			shown: allowed('web_search', 'enable_web_search')
 		},
 		{
 			key: 'code_interpreter',
-			label: $i18n.t('Run code'),
+			on: $i18n.t('Agent allowed to write/execute its own code'),
+			off: $i18n.t('Agent not allowed to write/execute its own code'),
 			icon: CommandLine,
 			shown: allowed('code_interpreter', 'enable_code_interpreter')
 		},
 		{
 			key: 'image_generation',
-			label: $i18n.t('Generate images'),
+			on: $i18n.t('Image'),
+			off: $i18n.t('Image'),
 			icon: Photo,
 			shown: allowed('image_generation', 'enable_image_generation')
 		},
-		// No one is present during a run, so off means the task cannot read its files.
-		{ key: 'read_artifacts', label: $i18n.t('Read files'), icon: Eye, shown: true }
+		{
+			key: 'read_artifacts',
+			on: $i18n.t('Agent allowed to read files'),
+			off: $i18n.t('Agent not allowed to read files'),
+			icon: Eye,
+			shown: true
+		}
 	].filter((toggle) => toggle.shown || form.features?.[toggle.key]);
 
 	const toggleFeature = (key: string) => {
@@ -191,7 +201,7 @@
 					on:click={() => toggleFeature(toggle.key)}
 				>
 					<svelte:component this={toggle.icon} className="size-4" strokeWidth="1.75" />
-					{toggle.label}
+					{on ? toggle.on : toggle.off}
 				</button>
 			{/each}
 		</div>

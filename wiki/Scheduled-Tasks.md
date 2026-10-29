@@ -18,7 +18,7 @@ When the model creates a scheduled task from a chat, it copies the chat's select
 
 ## The task page
 
-Each scheduled task has a page with its settings above and its run history below. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search, running code, and image generation can be turned on for the task when the user may use them in a chat. **Read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]; with it off, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
+Each scheduled task has a page with its settings above and its run history below. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search, running code, and image generation can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]. With **Agent not allowed to read files**, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
 
 People who can view a task but not change it see its settings without being able to edit them, and can still press Run now.
 
