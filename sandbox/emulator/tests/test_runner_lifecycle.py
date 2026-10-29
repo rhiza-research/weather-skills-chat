@@ -153,6 +153,13 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             return_value=[],
         )
         self._packs_patch.start()
+        # No skill_pack rows here: packs keep their plain folder names, as
+        # _stage_pack puts them on the runner.
+        self._commit_patch = patch(
+            "open_webui.models.skill_packs.SkillPacks.get_commit_by_local_path",
+            return_value=None,
+        )
+        self._commit_patch.start()
 
     async def asyncTearDown(self):
         emulator._start_runtime = self._orig_start
@@ -164,6 +171,8 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         k8s._starts.clear()
         if getattr(self, "_packs_patch", None) is not None:
             self._packs_patch.stop()
+        if getattr(self, "_commit_patch", None) is not None:
+            self._commit_patch.stop()
         for key, value in self._prev_env.items():
             if value is None:
                 os.environ.pop(key, None)

@@ -762,13 +762,30 @@ def _pack_root(skill_dir: Path) -> Path:
     return pack_root
 
 
-def remote_script_path(skill_dir: Path, script_path: Path) -> str:
+def _runner_pack_name(pack_root: Path) -> str:
+    """The pack's folder on a runner: its name and its installed commit.
+
+    The commit is the one the skill_pack table records for this checkout, so
+    an updated pack gets a new folder and a runner holding an older copy
+    gets the new one instead of running the old code. A pack with no
+    recorded commit keeps its plain name. Reads the DB: call from a thread.
+    """
+    from open_webui.models.skill_packs import SkillPacks
+
+    commit = SkillPacks.get_commit_by_local_path(pack_root)
+    return f"{pack_root.name}--{commit[:12]}" if commit else pack_root.name
+
+
+def remote_script_path(
+    skill_dir: Path, script_path: Path, pack_name: Optional[str] = None
+) -> str:
     pack = _pack_root(skill_dir)
     root = _runner_packs_root()
+    name = pack_name or _runner_pack_name(pack)
     try:
         rel = Path(skill_dir).resolve().relative_to(pack)
         mid = "" if str(rel) in (".", "") else f"/{rel.as_posix()}"
-        return f"{root}/{pack.name}{mid}/scripts/{script_path.name}"
+        return f"{root}/{name}{mid}/scripts/{script_path.name}"
     except Exception:
         return f"{root}/{Path(skill_dir).name}/scripts/{script_path.name}"
 
@@ -776,7 +793,12 @@ def remote_script_path(skill_dir: Path, script_path: Path) -> str:
 _SKIP_PACK_PARTS = {"__pycache__", ".git", ".venv", ".uv-cache", ".mypy_cache"}
 
 
-def _tar_pack(pack_root: Path) -> bytes:
+def _tar_pack(pack_root: Path, arcname: Optional[str] = None) -> bytes:
+    """The pack as a gzipped tar under one top folder, arcname or its own name.
+
+    The runner unpacks into its packs folder, so that top folder is the
+    folder the pack gets there.
+    """
     buf = io.BytesIO()
 
     def skip(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
@@ -785,7 +807,7 @@ def _tar_pack(pack_root: Path) -> bytes:
         return info
 
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        tar.add(pack_root, arcname=pack_root.name, filter=skip)
+        tar.add(pack_root, arcname=arcname or pack_root.name, filter=skip)
     return buf.getvalue()
 
 
@@ -967,11 +989,11 @@ async def _adopt_or_replace_claim(chat_id: str) -> dict:
 
 
 def _pack_names(paths: list[Path]) -> set[str]:
-    return {path.name for path in paths}
+    return {_runner_pack_name(path) for path in paths}
 
 
 def _missing_packs(have: set[str], packs: list[Path]) -> list[Path]:
-    return [path for path in packs if path.name not in have]
+    return [path for path in packs if _runner_pack_name(path) not in have]
 
 
 def _tool_skill_dir(tool) -> str:
@@ -1117,8 +1139,9 @@ async def _packs_ready_on_runner(
 def _unpack_request(skill_dir: Path) -> tuple[str, bytes]:
     """Runner path and /unpack body for a pack. Reads JuiceFS and compresses; run in a thread."""
     pack = _pack_root(skill_dir)
-    dest = f"{_runner_packs_root()}/{pack.name}"
-    archive = base64.b64encode(_tar_pack(pack)).decode()
+    name = _runner_pack_name(pack)
+    dest = f"{_runner_packs_root()}/{name}"
+    archive = base64.b64encode(_tar_pack(pack, arcname=name)).decode()
     return dest, json.dumps({"dest": dest, "archive": archive}).encode()
 
 
@@ -1149,7 +1172,7 @@ async def _ensure_pack_on_runner(info: dict, skill_dir: Path) -> str:
 async def _ensure_packs_on_runner(info: dict, chat_id: str) -> None:
     wanted = await asyncio.to_thread(_packs_for_chat, chat_id)
     have = await _listed_packs(info) or set()
-    missing = _missing_packs(have, wanted)
+    missing = await asyncio.to_thread(_missing_packs, have, wanted)
     if not missing:
         log.info("skill packs already on runner n=%s", len(have))
         return
@@ -1775,6 +1798,38 @@ def _with_usage(out: dict, reply: dict) -> dict:
     return out
 
 
+async def _ensure_call_pack(info: dict, skill_dir: Path) -> Optional[str]:
+    """Make sure the runner has this call's pack at its current version.
+
+    The runner gets the organization's packs when it starts, but a skill
+    turned on, installed, or updated later is not on it. The packs the
+    runner has are listed once and remembered on the runner's info, so most
+    calls make no request; parallel calls share one copy. Returns the pack's
+    folder name on the runner, or None when the pack is not on this server.
+    """
+    pack = _pack_root(skill_dir)
+    if not await asyncio.to_thread(pack.is_dir):
+        return None
+    name = await asyncio.to_thread(_runner_pack_name, pack)
+    have = info.get("packs")
+    if have is None:
+        have = info["packs"] = await _listed_packs(info) or set()
+    if name in have:
+        return name
+    copies = info.setdefault("pack_copies", {})
+    copy = copies.get(name)
+    if copy is None:
+        log.info("skill pack missing on runner pack=%s runner=%s", name, _runner_log_name(info))
+        copy = copies[name] = asyncio.ensure_future(_ensure_pack_on_runner(info, skill_dir))
+    try:
+        await copy
+    finally:
+        if copies.get(name) is copy and copy.done():
+            copies.pop(name, None)
+    have.add(name)
+    return name
+
+
 async def run_skill_on_runner(
     *,
     chat_id: str,
@@ -1790,19 +1845,6 @@ async def run_skill_on_runner(
     info = await ensure_runner(chat_id, emitter=emitter)
     await hold_runner_for_skill(chat_id, timeout)
     workspace = _runner_workspace(chat_id)
-    remote_script = remote_script_path(skill_dir, script_path)
-    argv = ["uv", "run", "--script", remote_script, *args]
-    runner_env = {
-        "UV_PYTHON_INSTALL_DIR": os.environ.get("UV_PYTHON_INSTALL_DIR", "/opt/uv-python"),
-        "UV_CACHE_DIR": _uv_cache_dir(workspace),
-        "HOME": workspace,
-        "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
-        "CLAUDE_SKILL_DIR": str(Path(remote_script).parent.parent),
-        "WEATHER_SKILL_DIR": str(Path(remote_script).parent.parent),
-        "WEATHER_INTERMEDIATE_DIR": f"{workspace}/intermediate_results",
-        "INTERMEDIATE_RESULTS_DIR": f"{workspace}/intermediate_results",
-    }
-    runner_env.update(env)
     exec_started = time.monotonic()
     log.info(
         "skill exec start chat=%s script=%s runner=%s",
@@ -1812,6 +1854,24 @@ async def run_skill_on_runner(
     )
     try:
         async with _watching_runner(chat_id, info) as lost:
+            # Copying the pack is work on the runner too, so its death is
+            # caught the same way.
+            pack_name = await _unless_runner_lost(lost, _ensure_call_pack(info, skill_dir))
+            remote_script = remote_script_path(skill_dir, script_path, pack_name)
+            argv = ["uv", "run", "--script", remote_script, *args]
+            runner_env = {
+                "UV_PYTHON_INSTALL_DIR": os.environ.get(
+                    "UV_PYTHON_INSTALL_DIR", "/opt/uv-python"
+                ),
+                "UV_CACHE_DIR": _uv_cache_dir(workspace),
+                "HOME": workspace,
+                "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+                "CLAUDE_SKILL_DIR": str(Path(remote_script).parent.parent),
+                "WEATHER_SKILL_DIR": str(Path(remote_script).parent.parent),
+                "WEATHER_INTERMEDIATE_DIR": f"{workspace}/intermediate_results",
+                "INTERMEDIATE_RESULTS_DIR": f"{workspace}/intermediate_results",
+            }
+            runner_env.update(env)
             result = await _unless_runner_lost(
                 lost,
                 exec_on_runner(

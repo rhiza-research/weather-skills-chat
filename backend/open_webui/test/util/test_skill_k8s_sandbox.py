@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
 
+import open_webui.config  # noqa: F401  Runs the migrations: pack names read skill_pack.
 from open_webui.utils.skill_k8s_sandbox import (
     PACKS_ANN,
     RUNNER_HOLD_BUFFER_SEC,
