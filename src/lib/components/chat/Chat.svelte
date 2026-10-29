@@ -208,6 +208,7 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
+	let readArtifactsEnabled = false;
 
 	let chat = null;
 	let tags = [];
@@ -333,6 +334,7 @@
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
+		readArtifactsEnabled = false;
 
 		try {
 			const ok = await loadChat(id);
@@ -362,6 +364,7 @@
 					webSearchEnabled = input.webSearchEnabled;
 					imageGenerationEnabled = input.imageGenerationEnabled;
 					codeInterpreterEnabled = input.codeInterpreterEnabled;
+					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
 				} catch (e) {}
 			}
 
@@ -651,6 +654,7 @@
 				webSearchEnabled = input.webSearchEnabled;
 				imageGenerationEnabled = input.imageGenerationEnabled;
 				codeInterpreterEnabled = input.codeInterpreterEnabled;
+				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
 			} catch (e) {
 				prompt = '';
 				files = [];
@@ -658,6 +662,7 @@
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
 				codeInterpreterEnabled = false;
+				readArtifactsEnabled = false;
 			}
 		}
 
@@ -2392,7 +2397,8 @@
 						$config?.features?.enable_web_search &&
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
-							: false
+							: false,
+					read_artifacts: readArtifactsEnabled
 				},
 				variables: {
 					...getPromptVariables(
@@ -3059,6 +3065,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								toolServers={$toolServers}
@@ -3115,6 +3122,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								transparentBackground={$settings?.backgroundImageUrl ?? false}

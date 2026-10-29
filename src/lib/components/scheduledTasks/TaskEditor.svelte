@@ -11,6 +11,7 @@
 	import Wrench from '$lib/components/icons/Wrench.svelte';
 	import GlobeAlt from '$lib/components/icons/GlobeAlt.svelte';
 	import CommandLine from '$lib/components/icons/CommandLine.svelte';
+	import Eye from '$lib/components/icons/Eye.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -63,18 +64,29 @@
 		!!$config?.features?.[configFlag] &&
 		($user?.role === 'admin' || !!$user?.permissions?.features?.[feature]);
 
+	// Worded as in the chat bar. A run has no one to ask, so reading files is
+	// either allowed or not.
 	$: featureToggles = [
 		{
 			key: 'web_search',
-			label: $i18n.t('Web search'),
+			on: $i18n.t('Agent allowed to search the web'),
+			off: $i18n.t('Agent not allowed to search the web'),
 			icon: GlobeAlt,
 			shown: allowed('web_search', 'enable_web_search')
 		},
 		{
 			key: 'code_interpreter',
-			label: $i18n.t('Run code'),
+			on: $i18n.t('Agent allowed to write/execute its own code'),
+			off: $i18n.t('Agent not allowed to write/execute its own code'),
 			icon: CommandLine,
 			shown: allowed('code_interpreter', 'enable_code_interpreter')
+		},
+		{
+			key: 'read_artifacts',
+			on: $i18n.t('Agent allowed to read files'),
+			off: $i18n.t('Agent not allowed to read files'),
+			icon: Eye,
+			shown: true
 		}
 	].filter((toggle) => toggle.shown || form.features?.[toggle.key]);
 
@@ -263,7 +275,7 @@
 					on:click={() => toggleFeature(toggle.key)}
 				>
 					<svelte:component this={toggle.icon} className="size-4" strokeWidth="1.75" />
-					{toggle.label}
+					{on ? toggle.on : toggle.off}
 				</button>
 			{/each}
 		</div>
