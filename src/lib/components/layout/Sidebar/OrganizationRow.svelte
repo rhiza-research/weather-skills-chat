@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
-	import { createEventDispatcher, getContext } from 'svelte';
+	import { createEventDispatcher, getContext, onMount, tick } from 'svelte';
 	import { activeOrganizationId, organizations, user } from '$lib/stores';
 	import { flyAndScale } from '$lib/utils/transitions';
 	import Check from '$lib/components/icons/Check.svelte';
@@ -18,6 +18,24 @@
 			name: 'Personal',
 			kind: 'personal'
 		};
+
+	// A name that doesn't fit on one line at the row's text size drops to a
+	// smaller size on two lines, so the row stays as tall as the rows around it.
+	let nameBox: HTMLElement;
+	let nameMeasure: HTMLElement;
+	let twoLines = false;
+
+	const fit = () => {
+		if (nameBox && nameMeasure) twoLines = nameMeasure.scrollWidth > nameBox.clientWidth;
+	};
+
+	$: current.name, tick().then(fit);
+
+	onMount(() => {
+		const observer = new ResizeObserver(fit);
+		observer.observe(nameBox);
+		return () => observer.disconnect();
+	});
 </script>
 
 <!-- Which organization the sidebar shows, and a switcher, so it is easy to find.
@@ -46,12 +64,27 @@
 				</svg>
 			</div>
 
-			<!-- A long name wraps to a second line; a short one stays on the label's line. -->
-			<div class="flex flex-1 min-w-0 items-baseline gap-1.5 self-center translate-y-[0.5px]">
+			<!-- The text keeps a one-line height. Two smaller lines are centered on
+			     it and spill into the row's padding. -->
+			<div
+				class="flex flex-1 min-w-0 h-5 gap-1.5 self-center translate-y-[0.5px] {twoLines
+					? 'items-center'
+					: 'items-baseline'}"
+			>
 				<span class="shrink-0 font-medium text-sm font-primary">{$i18n.t('Organization')}</span>
-				<span class="flex-1 min-w-0 line-clamp-2 break-words text-sm text-gray-500 dark:text-gray-400"
-					>{current.name}</span
-				>
+				<div bind:this={nameBox} class="relative flex flex-1 min-w-0 h-5 items-center">
+					<span
+						class="min-w-0 text-gray-500 dark:text-gray-400 {twoLines
+							? 'line-clamp-2 break-words text-[11px] leading-[13px]'
+							: 'truncate text-sm'}">{current.name}</span
+					>
+					<span
+						bind:this={nameMeasure}
+						aria-hidden="true"
+						class="invisible absolute left-0 top-0 w-0 overflow-hidden whitespace-nowrap text-sm"
+						>{current.name}</span
+					>
+				</div>
 			</div>
 
 			<ChevronDown
