@@ -43,9 +43,9 @@ describe('taskDot', () => {
 
 describe('sortTasks', () => {
 	const tasks = [
-		task('beta', { status: 'success', started_at: NOW - 500 }, { created_at: 3 }),
-		task('alpha', null, { created_at: 1 }),
-		task('gamma', { status: 'success', started_at: NOW - 100 }, { created_at: 2 })
+		task('beta', { status: 'success', started_at: NOW - 500 }, { created_at: 3, updated_at: 4 }),
+		task('alpha', null, { created_at: 1, updated_at: 5 }),
+		task('gamma', { status: 'success', started_at: NOW - 100 }, { created_at: 2, updated_at: 2 })
 	];
 
 	it('puts the most recently run first, and tasks never run last', () => {
@@ -58,6 +58,10 @@ describe('sortTasks', () => {
 
 	it('puts the newest task first', () => {
 		expect(sortTasks(tasks, 'created').map((t) => t.id)).toEqual(['beta', 'gamma', 'alpha']);
+	});
+
+	it('puts the most recently edited first', () => {
+		expect(sortTasks(tasks, 'updated').map((t) => t.id)).toEqual(['alpha', 'beta', 'gamma']);
 	});
 });
 
