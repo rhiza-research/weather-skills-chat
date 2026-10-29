@@ -61,3 +61,10 @@ export const markAutomationRunSeen = async (token: string, id: string, runId: st
 		method: 'POST',
 		body: JSON.stringify({ run_id: runId })
 	});
+
+/** The task's picture. `version` is its image_updated_at, so a new picture is a new URL. */
+export const getAutomationImageUrl = (id: string, version: number) =>
+	`${WEBUI_API_BASE_URL}/automations/${id}/image?v=${version}`;
+
+export const deleteAutomationImage = async (token: string, id: string) =>
+	request(token, `/automations/${id}/image`, { method: 'DELETE' });

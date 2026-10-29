@@ -8,7 +8,7 @@ from open_webui.internal.db import Base, JSONField, get_db
 from open_webui.models.tools import Tools
 from open_webui.utils.skill_version import tool_ids_with_skill_names
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, Text, func, or_
+from sqlalchemy import BigInteger, Boolean, Column, LargeBinary, Text, func, or_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -31,7 +31,19 @@ class Automation(Base):
     # skill usable in the organization. Null offers every usable tool.
     tool_ids = Column(JSONField, nullable=True)
     features = Column(JSONField, nullable=True)
+    # When the task's picture last changed, or null when it has none.
+    image_updated_at = Column(BigInteger, nullable=True)
     created_at = Column(BigInteger)
+    updated_at = Column(BigInteger)
+
+
+class AutomationImage(Base):
+    """A task's picture, kept apart so listing tasks does not load it."""
+
+    __tablename__ = "automation_image"
+
+    automation_id = Column(Text, primary_key=True)
+    data = Column(LargeBinary, nullable=False)
     updated_at = Column(BigInteger)
 
 
@@ -81,6 +93,7 @@ class AutomationModel(BaseModel):
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    image_updated_at: Optional[int] = None
     created_at: int
     updated_at: int
 
@@ -213,9 +226,28 @@ class AutomationTable:
         with get_db() as db:
             db.query(AutomationRun).filter_by(automation_id=id).delete()
             db.query(AutomationUserState).filter_by(automation_id=id).delete()
+            db.query(AutomationImage).filter_by(automation_id=id).delete()
             deleted = db.query(Automation).filter_by(id=id).delete()
             db.commit()
             return deleted > 0
+
+
+    def set_image(self, id: str, data: Optional[bytes]) -> None:
+        """Replace the task's picture, or remove it when data is None."""
+        now = int(time.time())
+        with get_db() as db:
+            db.query(AutomationImage).filter_by(automation_id=id).delete()
+            if data is not None:
+                db.add(AutomationImage(automation_id=id, data=data, updated_at=now))
+            db.query(Automation).filter_by(id=id).update(
+                {"image_updated_at": now if data is not None else None}
+            )
+            db.commit()
+
+    def get_image(self, id: str) -> Optional[bytes]:
+        with get_db() as db:
+            row = db.query(AutomationImage).filter_by(automation_id=id).first()
+            return row.data if row else None
 
 
 class AutomationRunTable:

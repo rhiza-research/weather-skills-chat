@@ -453,17 +453,51 @@ DELETE_SCHEDULED_TASK_SPEC = {
 TASK_RESULT_STATUSES = ("success", "failure")
 
 
+def _task_picture(user_id: Optional[str], chat_id: Optional[str], path: str):
+    """(thumbnail, None) for an image in the chat's files, or (None, why not).
+
+    Reads files and the DB: call from a worker thread.
+    """
+    from open_webui.utils.artifacts import resolve_in_sandbox
+    from open_webui.utils.task_image import task_image_thumbnail
+
+    if not chat_id or not _load_chat_access(user_id, chat_id).readable:
+        return None, "this run's chat files could not be read"
+    rel = (path or "").strip().lstrip("/")
+    try:
+        target = resolve_in_sandbox(chat_id, rel)
+    except Exception as e:
+        return None, f"invalid path: {e}"
+    if target.suffix.lower() not in DISPLAY_IMAGE_TYPES:
+        return None, "use a .png, .jpg, .jpeg, .gif, or .webp image"
+    data = wait_for_sandbox_image(target, target.suffix, timeout_s=DISPLAY_IMAGE_WAIT_S)
+    if data is None:
+        return None, f"`{rel}` was not found"
+    if len(data) > DISPLAY_IMAGE_MAX_BYTES:
+        return None, f"`{rel}` is too large"
+    try:
+        return task_image_thumbnail(data), None
+    except Exception:
+        return None, f"`{rel}` could not be read as an image"
+
+
 async def report_task_result(
-    status: str, summary: str, __metadata__: dict = None
+    status: str,
+    summary: str,
+    image: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
 ) -> str:
     """Report whether this scheduled task run did what it was asked.
 
     :param status: success or failure
     :param summary: One or two sentences on the result
+    :param image: Optional path to an image in the chat's files to show for the task
     """
     from open_webui.utils.automation_runner import record_report
 
-    run_id = (__metadata__ or {}).get("automation_run_id")
+    metadata = __metadata__ or {}
+    run_id = metadata.get("automation_run_id")
     if not run_id:
         return "There is no scheduled task run to report on."
     status = (status or "").strip().lower()
@@ -472,8 +506,16 @@ async def report_task_result(
     summary = (summary or "").strip()
     if not summary:
         return "Give a short summary of the result."
-    record_report(run_id, status, summary)
-    return f"Recorded this run's result as {status}."
+    picture, problem = None, None
+    if image:
+        picture, problem = await asyncio.to_thread(
+            _task_picture, __user__.get("id"), metadata.get("chat_id"), image
+        )
+    record_report(run_id, status, summary, picture)
+    result = f"Recorded this run's result as {status}."
+    if problem:
+        result += f" The image was not used: {problem}."
+    return result
 
 
 REPORT_TASK_RESULT_SPEC = {
@@ -483,7 +525,12 @@ REPORT_TASK_RESULT_SPEC = {
         "when the task is done: `success` if it did, `failure` if it could not, "
         "for example because data was missing or a step failed. The summary is "
         "shown to the user next to the run. A later call replaces an earlier one. "
-        "If you never call it, the run's result is shown as unknown."
+        "If you never call it, the run's result is shown as unknown. Optionally "
+        "pass `image`, a path to a PNG, JPEG, GIF, or WebP in the chat's files "
+        "that best shows what this run produced, such as the map it made; it "
+        "becomes the task's picture. When the run made or showed an image that "
+        "represents its result, pass it, so the user can recognize the task at "
+        "a glance. Leave it out to keep the current picture."
     ),
     "parameters": {
         "type": "object",
@@ -496,6 +543,13 @@ REPORT_TASK_RESULT_SPEC = {
             "summary": {
                 "type": "string",
                 "description": "One or two sentences on the result, for the user",
+            },
+            "image": {
+                "type": "string",
+                "description": (
+                    "Optional relative path to an image in the chat's files to "
+                    "show as the task's picture"
+                ),
             },
         },
         "required": ["status", "summary"],

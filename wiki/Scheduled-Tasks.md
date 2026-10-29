@@ -78,6 +78,10 @@ The model is told to report, when it finishes, whether it did what the prompt as
 
 The model's summary is shown with the run, next to a success or failure.
 
+## Picture
+
+A scheduled task can have a picture, shown on its page, on the Scheduled tasks page, and in the sidebar. When a run reports its result, the model can choose an image the run made, such as the map it drew, and it becomes the task's picture. A run that does not choose one keeps the current picture, and so does a run that ends in an error. A task with no picture shows its first letter instead. People who can edit a task can remove its picture.
+
 ## Who can do what
 
 - View and run a scheduled task: its owner, and every member of the organization when the task is shared.

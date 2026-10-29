@@ -12,6 +12,7 @@
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import TaskDot from '$lib/components/scheduledTasks/TaskDot.svelte';
+	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
 	import TaskMenu from '$lib/components/scheduledTasks/TaskMenu.svelte';
 	import BarsArrowUp from '$lib/components/icons/BarsArrowUp.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
@@ -148,6 +149,7 @@
 						class="flex-1 min-w-0 flex items-center gap-2 text-left"
 						on:click={() => openTask(task)}
 					>
+						<TaskImage {task} className="size-5 rounded text-[10px]" />
 						<Tooltip
 							content={task.name}
 							className="min-w-0"

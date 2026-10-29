@@ -6,6 +6,7 @@
 	import { organizations, activeOrganizationId, user, WEBUI_NAME, showSidebar } from '$lib/stores';
 	import {
 		deleteAutomationById,
+		deleteAutomationImage,
 		getAutomationById,
 		getAutomationRuns,
 		runAutomationById
@@ -14,6 +15,7 @@
 	import { canManageTask, taskFromChat } from '$lib/utils/scheduledTasks';
 	import { loadScheduledTasks } from '$lib/utils/scheduledTaskStore';
 	import TaskEditor from '$lib/components/scheduledTasks/TaskEditor.svelte';
+	import TaskImage from '$lib/components/scheduledTasks/TaskImage.svelte';
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
 
@@ -83,6 +85,16 @@
 		}
 	};
 
+	const removeImage = async () => {
+		try {
+			await deleteAutomationImage(localStorage.token, task.id);
+			task = { ...task, image_updated_at: null };
+			loadScheduledTasks(localStorage.token);
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
 	const statusClass = (status: string) =>
 		({
 			success: 'text-green-600 dark:text-green-400',
@@ -139,6 +151,34 @@
 
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-3xl w-full mx-auto flex flex-col gap-6">
 		{#if loaded}
+			{#if task}
+				<section class="flex flex-col gap-2">
+					{#if task.image_updated_at}
+						<TaskImage
+							{task}
+							className="w-full max-h-72 rounded-xl object-contain"
+						/>
+					{/if}
+					<div class="flex items-center gap-3 text-xs text-gray-500">
+						{#if !task.image_updated_at}
+							<TaskImage {task} className="size-10 rounded-lg text-base" />
+						{/if}
+						<span class="flex-1">
+							{task.image_updated_at
+								? $i18n.t("The picture is the image a run chose to show this task's result.")
+								: $i18n.t(
+										"No picture yet. A run can choose an image it made, such as a map, to show this task's result."
+									)}
+						</span>
+						{#if task.image_updated_at && canManage}
+							<button class="text-gray-500 hover:text-red-500" on:click={removeImage}>
+								{$i18n.t('Remove picture')}
+							</button>
+						{/if}
+					</div>
+				</section>
+			{/if}
+
 			{#key task?.id ?? 'new'}
 				<TaskEditor
 					{task}

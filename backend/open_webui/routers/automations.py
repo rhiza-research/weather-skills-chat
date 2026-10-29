@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.automations import (
@@ -23,6 +23,7 @@ from open_webui.utils.automation_scheduler import (
     sync_automation_job,
 )
 from open_webui.utils.schedule import parse_schedule
+from open_webui.utils.task_image import TASK_IMAGE_MIME
 from open_webui.utils.organizations import (
     can_manage_automation,
     can_view_automation,
@@ -93,6 +94,33 @@ def _viewable(id: str, user) -> None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
+
+
+@router.get("/{id}/image")
+def get_task_image(id: str, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    data = Automations.get_image(id)
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    # Pages ask with ?v=<image_updated_at>, so a new picture is a new URL.
+    return Response(
+        content=data,
+        media_type=TASK_IMAGE_MIME,
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/{id}/image", response_model=bool)
+def delete_task_image(id: str, user=Depends(get_verified_user)):
+    if not can_manage_automation(user, Automations.get_automation_by_id(id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    Automations.set_image(id, None)
+    return True
 
 
 @router.post("/{id}/pin", response_model=bool)

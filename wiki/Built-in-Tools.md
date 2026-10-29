@@ -24,7 +24,7 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 
 The chat's files are described on [[Chat Artifacts]]. The file tools, `send_email`, and `create_scheduled_task` do not work in temporary chats.
 
-The scheduled task tools act as the user, so the model can change or delete only the tasks the user could change on the Scheduled tasks page. A scheduled task's run is not given these tools, so it cannot create, change, or delete scheduled tasks. Instead it has `report_task_result`, which records whether the run succeeded or failed, with a short summary. The results are described on [[Scheduled Tasks]].
+The scheduled task tools act as the user, so the model can change or delete only the tasks the user could change on the Scheduled tasks page. A scheduled task's run is not given these tools, so it cannot create, change, or delete scheduled tasks. Instead it has `report_task_result`, which records whether the run succeeded or failed, with a short summary and optionally an image from the chat's files for the task's picture. The results are described on [[Scheduled Tasks]].
 
 ## Running code
 
