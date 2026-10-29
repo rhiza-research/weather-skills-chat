@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.automations import (
+    MAX_RUN_TIMEOUT_MINUTES,
     AutomationForm,
     AutomationModel,
     AutomationRunModel,
@@ -39,6 +40,14 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 router = APIRouter()
 
 
+def _check_timeout(minutes: Optional[int]) -> None:
+    if minutes is not None and not 1 <= minutes <= MAX_RUN_TIMEOUT_MINUTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The time limit must be between 1 minute and 24 hours.",
+        )
+
+
 def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if cron is None or cron == "":
         return None
@@ -46,7 +55,10 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if not parsed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid schedule. Use cron or a phrase like 'every day at noon'.",
+            detail=(
+                "Invalid schedule. Use cron, or a phrase like 'every weekday at 7am' "
+                "or 'mondays and thursdays at 6pm'."
+            ),
         )
     return parsed
 
@@ -64,6 +76,16 @@ class PinForm(BaseModel):
 
 class SeenForm(BaseModel):
     run_id: str
+
+
+class ScheduleForm(BaseModel):
+    schedule: str
+
+
+@router.post("/schedule", response_model=Optional[str])
+def preview_schedule(form_data: ScheduleForm, user=Depends(get_verified_user)):
+    """The cron a schedule phrase saves as, or null when it is not understood."""
+    return parse_schedule(form_data.schedule)
 
 
 @router.get("/", response_model=list[AutomationListItem])
@@ -144,6 +166,7 @@ async def create_automation(
     organization_id: str = Depends(get_active_organization_id),
 ):
     form_data.cron = _normalize_form_cron(form_data.cron)
+    _check_timeout(form_data.timeout_minutes)
     form_data.organization_id = form_data.organization_id or organization_id
     if not is_member(form_data.organization_id, user.id):
         raise HTTPException(
@@ -192,6 +215,7 @@ async def update_automation(
         )
     if form_data.cron is not None:
         form_data.cron = _normalize_form_cron(form_data.cron)
+    _check_timeout(form_data.timeout_minutes)
     if form_data.organization_id and not is_member(form_data.organization_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -100,7 +100,8 @@
 			success: 'text-green-600 dark:text-green-400',
 			failure: 'text-red-600 dark:text-red-400',
 			error: 'text-red-600 dark:text-red-400',
-			unknown: 'text-orange-500 dark:text-orange-400'
+			unknown: 'text-orange-500 dark:text-orange-400',
+			stopped: 'text-gray-500'
 		})[status] ?? 'text-gray-500';
 </script>
 

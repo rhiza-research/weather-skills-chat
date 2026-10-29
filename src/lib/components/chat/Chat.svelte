@@ -208,6 +208,7 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
+	let readArtifactsEnabled = false;
 	// Built-in tool groups the user turned off or on; missing means on.
 	let builtinFeatures: Record<string, boolean> = {};
 
@@ -335,6 +336,7 @@
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
+		readArtifactsEnabled = false;
 		builtinFeatures = {};
 
 		try {
@@ -365,6 +367,7 @@
 					webSearchEnabled = input.webSearchEnabled;
 					imageGenerationEnabled = input.imageGenerationEnabled;
 					codeInterpreterEnabled = input.codeInterpreterEnabled;
+					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
 					builtinFeatures = input.builtinFeatures ?? {};
 				} catch (e) {}
 			}
@@ -477,8 +480,6 @@
 	};
 
 	const chatEventHandler = async (event, cb) => {
-		console.log(event);
-
 		const type = event?.data?.type ?? null;
 		if (
 			type === 'execute:python' ||
@@ -657,6 +658,7 @@
 				webSearchEnabled = input.webSearchEnabled;
 				imageGenerationEnabled = input.imageGenerationEnabled;
 				codeInterpreterEnabled = input.codeInterpreterEnabled;
+				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
 				builtinFeatures = input.builtinFeatures ?? {};
 			} catch (e) {
 				prompt = '';
@@ -665,6 +667,7 @@
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
 				codeInterpreterEnabled = false;
+				readArtifactsEnabled = false;
 				builtinFeatures = {};
 			}
 		}
@@ -2401,6 +2404,7 @@
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
 							: false,
+					read_artifacts: readArtifactsEnabled,
 					email: builtinFeatures.email !== false,
 					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
 					preferences: builtinFeatures.preferences !== false
@@ -3070,6 +3074,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
 								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
@@ -3127,6 +3132,7 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
 								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel

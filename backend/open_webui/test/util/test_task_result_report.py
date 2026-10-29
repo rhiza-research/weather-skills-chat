@@ -149,7 +149,7 @@ class ExecuteAutomationReportTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((run.status, run.summary, run.error), ("failure", "No data today.", None))
 
     async def test_the_model_does_not_report(self):
-        run = await self._execute(AsyncMock())
+        run = await self._execute(AsyncMock(return_value=False))
         self.assertEqual(run.status, "unknown")
 
     async def test_the_run_breaks(self):

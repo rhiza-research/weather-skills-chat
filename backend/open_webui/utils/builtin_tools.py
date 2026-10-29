@@ -12,6 +12,8 @@ import smtplib
 from email.message import EmailMessage
 
 from open_webui.models.automations import (
+    DEFAULT_RUN_TIMEOUT_MINUTES,
+    MAX_RUN_TIMEOUT_MINUTES,
     AutomationForm,
     AutomationRuns,
     Automations,
@@ -70,11 +72,21 @@ async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAc
     return await asyncio.to_thread(_load_chat_access, user_id, chat_id)
 
 
+def _time_limit_problem(minutes: Optional[int]) -> Optional[str]:
+    if minutes is not None and not 1 <= minutes <= MAX_RUN_TIMEOUT_MINUTES:
+        return (
+            f"The time limit must be between 1 and {MAX_RUN_TIMEOUT_MINUTES} "
+            "minutes."
+        )
+    return None
+
+
 async def create_scheduled_task(
     name: str,
     schedule: str,
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
+    time_limit_minutes: Optional[int] = None,
     __user__: dict = {},
     __messages__: list = None,
     __metadata__: dict = None,
@@ -89,7 +101,10 @@ async def create_scheduled_task(
     :param schedule: Cron (0 12 * * *) or a phrase like "every day at noon"
     :param prompt: Optional restatement of the task. If omitted, prior user turns are used.
     :param organization_id: Optional organization id. Defaults to the current chat's organization.
+    :param time_limit_minutes: Optional limit on how long each run may take
     """
+    if problem := _time_limit_problem(time_limit_minutes):
+        return problem
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     if not chat_id or chat_id == "local":
@@ -157,6 +172,7 @@ async def create_scheduled_task(
             source_chat_id=chat_id,
             tool_ids=tool_ids,
             features=features,
+            timeout_minutes=time_limit_minutes,
         ),
     )
     if not automation:
@@ -197,7 +213,8 @@ CREATE_SCHEDULED_TASK_SPEC = {
                 "type": "string",
                 "description": (
                     "Cron expression (0 12 * * *) or a phrase such as "
-                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
                 ),
             },
             "prompt": {
@@ -207,6 +224,13 @@ CREATE_SCHEDULED_TASK_SPEC = {
             "organization_id": {
                 "type": "string",
                 "description": "Optional organization id; defaults to the current chat's organization",
+            },
+            "time_limit_minutes": {
+                "type": "integer",
+                "description": (
+                    f"How long each run may take, in minutes (1 to {MAX_RUN_TIMEOUT_MINUTES}). "
+                    f"A run past it is stopped as an error. Defaults to {DEFAULT_RUN_TIMEOUT_MINUTES}."
+                ),
             },
         },
         "required": ["name", "schedule"],
@@ -242,6 +266,11 @@ def _describe_task(automation, user_id: str, full: bool) -> str:
         f"- schedule: `{automation.cron or 'none (runs only when someone presses Run)'}`"
         + ("" if automation.enabled else " (scheduled runs are off)"),
         f"- model: {automation.model or 'default'}",
+        (
+            f"- time limit: {automation.timeout_minutes} minutes"
+            if automation.timeout_minutes
+            else f"- time limit: {DEFAULT_RUN_TIMEOUT_MINUTES} minutes (default)"
+        ),
         "- shared with the organization"
         if automation.visibility == "organization"
         else "- private",
@@ -325,17 +354,23 @@ async def update_scheduled_task(
     schedule: Optional[str] = None,
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
+    time_limit_minutes: Optional[int] = None,
     __user__: dict = {},
 ) -> str:
-    """Change a scheduled task's name, schedule, prompt, or organization.
+    """Change a scheduled task's name, schedule, prompt, organization, or time limit.
 
     :param task_id: The scheduled task to change, from list_scheduled_tasks
     :param name: New short title
     :param schedule: New cron (0 12 * * *) or a phrase like "every day at noon"
     :param prompt: New task to run, in full
     :param organization_id: Organization id to move the scheduled task to
+    :param time_limit_minutes: New limit on how long each run may take
     """
     form = AutomationUpdateForm()
+    if time_limit_minutes is not None:
+        if problem := _time_limit_problem(time_limit_minutes):
+            return problem
+        form.timeout_minutes = time_limit_minutes
     if name is not None:
         if not name.strip():
             return "The name cannot be empty."
@@ -364,7 +399,10 @@ async def update_scheduled_task(
             # Sharing does not carry into a personal organization.
             form.visibility = resolve_visibility(organization_id, automation.visibility)
         if not form.model_fields_set:
-            return "Nothing to change. Pass a new name, schedule, prompt, or organization."
+            return (
+                "Nothing to change. Pass a new name, schedule, prompt, "
+                "organization, or time limit."
+            )
         updated = Automations.update_automation(automation.id, form)
         if not updated:
             return "Failed to update the scheduled task."
@@ -379,7 +417,8 @@ async def update_scheduled_task(
 UPDATE_SCHEDULED_TASK_SPEC = {
     "name": "update_scheduled_task",
     "description": (
-        "Change an existing scheduled task's name, schedule, prompt, or organization. "
+        "Change an existing scheduled task's name, schedule, prompt, organization, "
+        "or time limit. "
         "Get its id from list_scheduled_tasks. Only pass the fields to change. "
         "A new prompt replaces the old one, so pass the whole task."
     ),
@@ -395,7 +434,8 @@ UPDATE_SCHEDULED_TASK_SPEC = {
                 "type": "string",
                 "description": (
                     "New cron expression (0 12 * * *) or a phrase such as "
-                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
                 ),
             },
             "prompt": {
@@ -405,6 +445,13 @@ UPDATE_SCHEDULED_TASK_SPEC = {
             "organization_id": {
                 "type": "string",
                 "description": "Organization id to move the scheduled task to",
+            },
+            "time_limit_minutes": {
+                "type": "integer",
+                "description": (
+                    f"How long each run may take, in minutes (1 to {MAX_RUN_TIMEOUT_MINUTES}). "
+                    f"A run past it is stopped as an error. Tasks without one use {DEFAULT_RUN_TIMEOUT_MINUTES}."
+                ),
             },
         },
         "required": ["task_id"],
@@ -1372,9 +1419,21 @@ async def read_artifact(
     if problem:
         return problem
 
-    denied = await _user_approved_artifact_read(rel, __event_call__)
-    if denied:
-        return denied
+    # The Read files switch: on reads without asking. Off asks the user in a
+    # chat; a scheduled task has no one to ask, so off refuses.
+    features = metadata.get("features") or {}
+    if isinstance(features, dict) and features.get("read_artifacts"):
+        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    elif metadata.get("headless"):
+        return (
+            "Reading files is off for this scheduled task, so the file was not "
+            "sent. Turn on Read files for the task to allow it."
+        )
+    else:
+        denied = await _user_approved_artifact_read(rel, __event_call__)
+        if denied:
+            return denied
+        allowed_note = f"The user approved reading `{rel}`."
 
     if DISPLAY_IMAGE_TYPES.get(target.suffix.lower()):
         shown = await asyncio.to_thread(
@@ -1383,7 +1442,7 @@ async def read_artifact(
         if isinstance(shown, list) and shown:
             shown = [
                 (
-                    f"The user approved reading `{rel}`. "
+                    f"{allowed_note} "
                     "The image is attached as a vision input after this tool result."
                 ),
                 *shown[1:],
@@ -1405,7 +1464,7 @@ async def read_artifact(
             __messages__ or [],
             model_id,
         )
-        return f"The user approved reading `{rel}`.\n\n{context}"
+        return f"{allowed_note}\n\n{context}"
     except Exception as e:
         return f"Failed to read `{rel}`: {e}"
 
@@ -1415,7 +1474,8 @@ READ_ARTIFACT_SPEC = {
     "description": (
         "Read a file from the current chat artifact sandbox and send its "
         "contents to yourself. Files in the sandbox are not in your context "
-        "until you call this. The user must approve each read in a popup. "
+        "until you call this. Unless Read files is turned on, the user must "
+        "approve each read in a popup, and a scheduled task cannot read files. "
         "Images are sent as images; other files are indexed and matching "
         "text is inserted into context. Pass a relative path such as "
         "`photo.png` or `stations.csv`. Folders and Zarr stores cannot be "

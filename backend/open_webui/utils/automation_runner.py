@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -8,7 +9,11 @@ from typing import Optional
 from fastapi import HTTPException, status
 
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, SRC_LOG_LEVELS
-from open_webui.models.automations import AutomationRuns, Automations
+from open_webui.models.automations import (
+    DEFAULT_RUN_TIMEOUT_MINUTES,
+    AutomationRuns,
+    Automations,
+)
 from open_webui.models.chats import ChatForm, Chats
 from open_webui.models.usage import UsageLimitExceeded
 from open_webui.models.users import Users
@@ -45,13 +50,27 @@ def record_report(
         _report_images[run_id] = image
 
 
-def finish_run(run_id: str, error: Optional[str] = None):
-    """End a run as error if it broke, else as the model reported, else unknown.
+class RunTimedOut(Exception):
+    """A run took longer than its task's time limit."""
 
-    A reported image becomes the task's picture unless the run broke.
+    def __init__(self, seconds: float):
+        minutes = round(seconds / 60)
+        super().__init__(
+            f"Timed out after {minutes} minute{'' if minutes == 1 else 's'}"
+        )
+
+
+def finish_run(run_id: str, error: Optional[str] = None, stopped: bool = False):
+    """End a run as stopped if the user stopped it, error if it broke, else as
+    the model reported, else unknown.
+
+    A reported image becomes the task's picture only when the run ends as the
+    model reported or as unknown.
     """
     reported = _reports.pop(run_id, None)
     image = _report_images.pop(run_id, None)
+    if stopped:
+        return AutomationRuns.update_run(run_id, status="stopped", finished=True)
     if error is not None:
         return AutomationRuns.update_run(
             run_id, status="error", error=error, finished=True
@@ -192,8 +211,13 @@ async def _stream_automation_chat(
     tool_ids: Optional[list[str]],
     features: dict,
     organization_id: Optional[str] = None,
-) -> None:
-    """Run the chat middleware + streaming tool loop for an automation chat."""
+    timeout_s: Optional[float] = None,
+) -> bool:
+    """Run the chat middleware + streaming tool loop for an automation chat.
+
+    Returns whether the user stopped the reply. Raises RunTimedOut, after
+    cancelling the reply, when the run takes longer than timeout_s.
+    """
     form_data = {
         "model": model_id,
         "messages": [{"role": "user", "content": prompt}],
@@ -230,22 +254,34 @@ async def _stream_automation_chat(
     form_data["metadata"] = metadata
 
     begin_chat_trace(user=user, metadata=metadata, form_data=form_data)
+    deadline = asyncio.timeout(timeout_s)
+    reply = None
     try:
-        form_data, metadata, events = await process_chat_payload(
-            request, form_data, user, metadata, model
-        )
+        async with deadline:
+            form_data, metadata, events = await process_chat_payload(
+                request, form_data, user, metadata, model
+            )
 
-        response = await chat_completion_handler(request, form_data, user)
-        result = await process_chat_response(
-            request, response, form_data, user, metadata, model, events, None
-        )
+            response = await chat_completion_handler(request, form_data, user)
+            result = await process_chat_response(
+                request, response, form_data, user, metadata, model, events, None
+            )
 
-        # Streaming path schedules the tool loop as a background task — wait for it.
-        if isinstance(result, dict) and result.get("task_id"):
-            task = get_task(result["task_id"])
-            if task is not None:
-                await task
+            # Streaming path schedules the tool loop as a background task — wait for it.
+            if isinstance(result, dict) and result.get("task_id"):
+                reply = get_task(result["task_id"])
+                if reply is not None:
+                    await reply
     except BaseException as e:
+        # A TimeoutError from inside the run, such as a provider's, is not
+        # the time limit; only an expired deadline is.
+        if isinstance(e, TimeoutError) and deadline.expired():
+            # The reply runs in its own task, which the deadline does not cancel.
+            if reply is not None and not reply.done():
+                reply.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await reply
+            e = RunTimedOut(timeout_s)
         if chat_trace_ended():
             log.debug(
                 "Automation run failed after its trace ended: %r", e, exc_info=True
@@ -253,6 +289,8 @@ async def _stream_automation_chat(
         end_chat_trace(
             error="cancelled" if isinstance(e, asyncio.CancelledError) else e
         )
+        if isinstance(e, RunTimedOut):
+            raise e
         raise
     # The tool loop task ends the root span with its reply, and this call only
     # clears the trace from this context. With no task awaited it ends the
@@ -270,6 +308,8 @@ async def _stream_automation_chat(
     from open_webui.utils.chat_realtime import save_final_reply
 
     await save_final_reply(chat_id, assistant_id, {"done": True})
+    # The reply loop marks the metadata when the user stopped it.
+    return bool(metadata.get("cancelled"))
 
 
 def _first_model_id(*model_lists: Optional[str]) -> Optional[str]:
@@ -379,9 +419,11 @@ async def execute_automation(
         tool_ids = _resolve_tool_ids(automation, model, user)
         features = automation.features if isinstance(automation.features, dict) else {}
 
+        timeout_minutes = automation.timeout_minutes or DEFAULT_RUN_TIMEOUT_MINUTES
+
         async def _complete():
             try:
-                await _stream_automation_chat(
+                stopped = await _stream_automation_chat(
                     request,
                     run_id=run.id,
                     chat_id=chat.id,
@@ -393,8 +435,14 @@ async def execute_automation(
                     tool_ids=tool_ids,
                     features=features,
                     organization_id=org_id,
+                    timeout_s=timeout_minutes * 60,
                 )
-                await notify_run(automation, finish_run(run.id))
+                await notify_run(automation, finish_run(run.id, stopped=stopped))
+            except asyncio.CancelledError:
+                # Stop on a Run now cancels this task along with the reply.
+                await notify_run(automation, finish_run(run.id, stopped=True))
+                if wait:
+                    raise
             except Exception as e:
                 log.exception("Automation run failed")
                 if isinstance(e, HTTPException) and isinstance(e.detail, str):

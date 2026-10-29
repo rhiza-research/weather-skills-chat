@@ -7,6 +7,7 @@ A scheduled task sends the same prompt as a new chat on a schedule, for example 
 - A name.
 - The prompt each run sends.
 - The model to use. "Default model" uses the organization's default model, or the app's default when the organization has none.
+- A time limit for each run, from 1 minute to 24 hours, 60 minutes unless set. A run that takes longer is stopped and recorded as an error.
 - A schedule, or no schedule for a task that only runs when someone presses Run now.
 - Whether scheduled runs are on.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.
@@ -18,7 +19,7 @@ When the model creates a scheduled task from a chat, it copies the chat's select
 
 ## The task page
 
-Each scheduled task has a page with its settings above and its run history below. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
+Each scheduled task has a page with its settings above and its run history below. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]. With **Agent not allowed to read files**, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
 
 A new task starts with its scheduled runs on. They are turned off and back on with the task's switch on the Scheduled tasks page.
 
@@ -46,14 +47,17 @@ Opening a finished run clears its dot for that user, as does having the run's ch
 
 ## Schedules
 
-A schedule is a five-field cron expression or one of these phrases. Days of the week follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday.
+Schedules run in UTC. They are shown in English, such as "At 06:00 AM, only on Monday and Thursday (UTC)". The task page has a **Show cron** button for the cron expression behind it. While a schedule is being typed, the page shows how it will be read, or says when it is not understood.
 
-- `hourly` or `every hour`
-- `daily`, `every day`, or `everyday`, which run at midnight
-- `weekly` or `every week`, which run on Sunday at midnight
-- `every day at noon` or `every day at midnight`
-- `every day at` a time, such as `every day at 7am` or `daily at 6:30pm`
-- `weekly on` a weekday `at` a time, such as `weekly on Monday at 9am`
+A schedule is a five-field cron expression or a phrase. Days of the week in cron follow standard cron: 0 or 7 is Sunday, 1 is Monday, and 6 is Saturday. A phrase names days, then an optional time; with no time, it runs at midnight. Some examples:
+
+- `hourly`, `every 15 minutes`, `every 2 hours`
+- `daily`, `every day at noon`, `daily at 6:30pm`
+- `every weekday at 7am`, `every weekend at 10am`
+- `every monday and thursday at 6am`, `mon, wed and fri at 7:15`
+- `weekly`, which runs on Sunday at midnight, or `weekly on Monday at 9am`
+- `monthly`, which runs on the 1st at midnight, or `monthly on the 15th at 9am`
+- the time first: `at 9am every day`
 
 ## What a run does
 
@@ -74,7 +78,8 @@ The model is told to report, when it finishes, whether it did what the prompt as
 - **Success**: the model reported that it did the task.
 - **Failure**: the model reported that it could not do the task, for example because the data it needed was missing. The run itself worked.
 - **Unknown**: the run finished, but the model did not report a result.
-- **Error**: the run itself broke, for example because the model could not be reached or a server restart interrupted it. The error is shown with the run.
+- **Error**: the run itself broke, for example because the model could not be reached, a server restart interrupted it, or it took longer than the task's time limit. The error is shown with the run.
+- **Stopped**: someone stopped the run from its chat. A stopped run gets no dot in the sidebar.
 
 The model's summary is shown with the run, next to a success or failure.
 

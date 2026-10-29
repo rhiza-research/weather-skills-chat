@@ -55,6 +55,7 @@
 	import Headphone from '../icons/Headphone.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import CommandLine from '../icons/CommandLine.svelte';
+	import Eye from '../icons/Eye.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
 	import { whenAppIdle } from '$lib/utils/idle';
@@ -90,6 +91,7 @@
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
+	export let readArtifactsEnabled = false;
 	export let builtinFeatures: Record<string, boolean> = {};
 
 	$: onChange({
@@ -99,6 +101,7 @@
 		imageGenerationEnabled,
 		webSearchEnabled,
 		codeInterpreterEnabled,
+		readArtifactsEnabled,
 		builtinFeatures
 	});
 
@@ -1214,6 +1217,30 @@
 														</button>
 													</Tooltip>
 												{/if}
+
+												<Tooltip
+													content={readArtifactsEnabled
+														? $i18n.t('Agent allowed to read files')
+														: $i18n.t('Agent asks before reading files')}
+													placement="top"
+												>
+													<button
+														on:click|preventDefault={() =>
+															(readArtifactsEnabled = !readArtifactsEnabled)}
+														type="button"
+														aria-pressed={readArtifactsEnabled}
+														class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {readArtifactsEnabled
+															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
+															: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
+													>
+														<Eye className="size-5" strokeWidth="1.75" />
+														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
+															>{readArtifactsEnabled
+																? $i18n.t('Agent allowed to read files')
+																: $i18n.t('Agent asks before reading files')}</span
+														>
+													</button>
+												</Tooltip>
 											{/if}
 										</div>
 									</div>
