@@ -804,6 +804,9 @@
 
 		<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
 
+		<!-- Separates the settings rows above from search and the chats and tasks below. -->
+		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
+
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
 				<div class="absolute z-40 w-full h-full flex justify-center"></div>
