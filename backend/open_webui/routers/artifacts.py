@@ -88,7 +88,16 @@ def get_artifact_content(
     # browser keeps a copy and asks before each use, and an unchanged file
     # answers 304 with no body.
     st = target.stat()
-    etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+    # A figure's JSON ships a brotli copy beside it; use it while it is current.
+    served = target.with_name(target.name + ".br")
+    use_br = (
+        target.name.endswith(".plotly.json")
+        and accepts_brotli(request.headers.get("accept-encoding"))
+        and served.is_file()
+        and served.stat().st_mtime >= st.st_mtime
+    )
+    # Weak: the brotli and plain bodies differ byte for byte.
+    etag = f'{"W/" if use_br else ""}"{st.st_mtime_ns:x}-{st.st_size:x}"'
     last_modified = formatdate(st.st_mtime, usegmt=True)
     headers = {
         "Cache-Control": "private, no-cache",
@@ -97,12 +106,14 @@ def get_artifact_content(
     }
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    if use_br:
+        headers |= {"Content-Encoding": "br", "Vary": "Accept-Encoding"}
     return FileResponse(
-        target,
+        served if use_br else target,
         filename=target.name,
         content_disposition_type="attachment",
         headers=headers,
-        stat_result=st,
+        stat_result=served.stat() if use_br else st,
     )
 
 
