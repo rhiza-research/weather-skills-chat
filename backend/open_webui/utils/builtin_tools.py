@@ -70,7 +70,7 @@ async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAc
     return await asyncio.to_thread(_load_chat_access, user_id, chat_id)
 
 
-async def create_automation(
+async def create_scheduled_task(
     name: str,
     schedule: str,
     prompt: Optional[str] = None,
@@ -80,12 +80,12 @@ async def create_automation(
     __metadata__: dict = None,
     __model__: dict = None,
 ) -> str:
-    """Create a scheduled automation from the current chat.
+    """Create a scheduled task from the current chat.
 
     Call this when the user asks to repeat the current task on a schedule,
     e.g. "do this again every day at noon".
 
-    :param name: Short title for the automation
+    :param name: Short title for the scheduled task
     :param schedule: Cron (0 12 * * *) or a phrase like "every day at noon"
     :param prompt: Optional restatement of the task. If omitted, prior user turns are used.
     :param organization_id: Optional organization id. Defaults to the current chat's organization.
@@ -93,7 +93,7 @@ async def create_automation(
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     if not chat_id or chat_id == "local":
-        return "Cannot create an automation from a temporary chat. Save the chat first."
+        return "Cannot create a scheduled task from a temporary chat. Save the chat first."
 
     cron = parse_schedule(schedule)
     if not cron:
@@ -102,7 +102,7 @@ async def create_automation(
             "Try cron like `0 12 * * *` or a phrase like `every day at noon`."
         )
 
-    # The whole chat: the automation reuses its model. DB reads, so in a thread.
+    # The whole chat: the task reuses its model. DB reads, so in a thread.
     def load() -> tuple:
         user = Users.get_user_by_id(__user__.get("id"))
         if not user:
@@ -160,12 +160,12 @@ async def create_automation(
         ),
     )
     if not automation:
-        return "Failed to create the automation."
+        return "Failed to create the scheduled task."
     sync_automation_job(automation)
     scope = (
         f"organization `{organization_id}`"
         if organization_id != user.id
-        else "your personal automations"
+        else "your personal scheduled tasks"
     )
     tool_note = (
         f" Tools/skills captured: {len(tool_ids)}."
@@ -173,25 +173,25 @@ async def create_automation(
         else " Built-in tools only (no chat skills selected)."
     )
     return (
-        f"Created automation **{automation.name}** ({cron}) under {scope}."
-        f"{tool_note} [Open automations](/automations) to manage it."
+        f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
+        f"{tool_note} [Open scheduled tasks](/automations) to manage it."
     )
 
 
-CREATE_AUTOMATION_SPEC = {
-    "name": "create_automation",
+CREATE_SCHEDULED_TASK_SPEC = {
+    "name": "create_scheduled_task",
     "description": (
-        "Create a scheduled automation from the current chat. "
+        "Create a scheduled task from the current chat. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
-        "Automations run headless: no user is present to answer follow-up questions."
+        "Scheduled tasks run headless: no user is present to answer follow-up questions."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "name": {
                 "type": "string",
-                "description": "Short title for the automation",
+                "description": "Short title for the scheduled task",
             },
             "schedule": {
                 "type": "string",
@@ -214,7 +214,7 @@ CREATE_AUTOMATION_SPEC = {
 }
 
 
-AUTOMATION_PROMPT_PREVIEW_CHARS = 200
+TASK_PROMPT_PREVIEW_CHARS = 200
 
 
 def _format_time(epoch: Optional[int]) -> str:
@@ -223,17 +223,19 @@ def _format_time(epoch: Optional[int]) -> str:
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(epoch))
 
 
-def _describe_automation(automation, user_id: str, full: bool) -> str:
+def _describe_task(automation, user_id: str, full: bool) -> str:
     runs = AutomationRuns.get_runs(automation.id, limit=1)
     last = runs[0] if runs else None
     last_run = "never run"
     if last:
         last_run = f"{last.status} at {_format_time(last.started_at)}"
+        if last.summary:
+            last_run += f": {last.summary}"
         if last.error:
             last_run += f": {last.error}"
     prompt = automation.prompt or ""
-    if not full and len(prompt) > AUTOMATION_PROMPT_PREVIEW_CHARS:
-        prompt = prompt[:AUTOMATION_PROMPT_PREVIEW_CHARS].rstrip() + "…"
+    if not full and len(prompt) > TASK_PROMPT_PREVIEW_CHARS:
+        prompt = prompt[:TASK_PROMPT_PREVIEW_CHARS].rstrip() + "…"
     lines = [
         f"### {automation.name}",
         f"- id: `{automation.id}`",
@@ -252,14 +254,14 @@ def _describe_automation(automation, user_id: str, full: bool) -> str:
     return "\n".join(lines)
 
 
-async def list_automations(
-    automation_id: Optional[str] = None,
+async def list_scheduled_tasks(
+    task_id: Optional[str] = None,
     __user__: dict = {},
     __metadata__: dict = None,
 ) -> str:
-    """List the automations in this chat's organization, or show one in full.
+    """List the scheduled tasks in this chat's organization, or show one in full.
 
-    :param automation_id: Optional automation id to show with its whole prompt
+    :param task_id: Optional scheduled task id to show with its whole prompt
     """
     metadata = __metadata__ or {}
     user_id = __user__.get("id")
@@ -268,72 +270,70 @@ async def list_automations(
         user = Users.get_user_by_id(user_id)
         if not user:
             return "User not found."
-        if automation_id:
-            automation = Automations.get_automation_by_id(automation_id)
+        if task_id:
+            automation = Automations.get_automation_by_id(task_id)
             if not can_view_automation(user, automation):
-                return "Automation not found."
-            return _describe_automation(automation, user.id, full=True)
+                return "Scheduled task not found."
+            return _describe_task(automation, user.id, full=True)
         organization_id = metadata.get("organization_id") or user.id
         automations = Automations.get_automations_for_user(user.id, organization_id)
         if not automations:
-            return "There are no automations in this organization."
-        return "\n\n".join(
-            _describe_automation(a, user.id, full=False) for a in automations
-        )
+            return "There are no scheduled tasks in this organization."
+        return "\n\n".join(_describe_task(a, user.id, full=False) for a in automations)
 
     return await asyncio.to_thread(load)
 
 
-LIST_AUTOMATIONS_SPEC = {
-    "name": "list_automations",
+LIST_SCHEDULED_TASKS_SPEC = {
+    "name": "list_scheduled_tasks",
     "description": (
-        "List the scheduled automations in this organization that the user can see, "
-        "with each one's id, schedule, model, sharing, last run, and the start of "
-        "its prompt. Pass automation_id to show one automation's whole prompt."
+        "List the scheduled tasks in this organization that the user can see, "
+        "with each one's id, schedule, model, sharing, last run and its result, "
+        "and the start of its prompt. Pass task_id to show one task's whole prompt."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "automation_id": {
+            "task_id": {
                 "type": "string",
-                "description": "Optional automation id to show in full",
+                "description": "Optional scheduled task id to show in full",
             },
         },
     },
 }
 
 
-def _managed_automation(user_id: Optional[str], automation_id: str):
+def _managed_task(user_id: Optional[str], task_id: str):
     """(user, automation, error). DB reads: call from a worker thread."""
     user = Users.get_user_by_id(user_id) if user_id else None
     if not user:
         return None, None, "User not found."
-    automation = Automations.get_automation_by_id(automation_id)
+    automation = Automations.get_automation_by_id(task_id)
     if not can_view_automation(user, automation):
-        return user, None, "Automation not found."
+        return user, None, "Scheduled task not found."
     if not can_manage_automation(user, automation):
         return user, automation, (
-            "You cannot change this automation. Only its owner, or an "
-            "organization admin for a shared automation, can."
+            "You cannot change this scheduled task. Only its owner, or an "
+            "organization admin for a shared task, can."
         )
     return user, automation, None
 
 
-async def update_automation(
-    automation_id: str,
+async def update_scheduled_task(
+    task_id: str,
     name: Optional[str] = None,
     schedule: Optional[str] = None,
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
     __user__: dict = {},
 ) -> str:
-    """Change an automation's name, schedule, prompt, or organization.
+    """Change a scheduled task's name, schedule, prompt, or organization.
 
-    :param automation_id: The automation to change, from list_automations
+    :param task_id: The scheduled task to change, from list_scheduled_tasks
     :param name: New short title
     :param schedule: New cron (0 12 * * *) or a phrase like "every day at noon"
-    :param prompt: New task the automation runs, in full
-    :param organization_id: Organization id to move the automation to
+    :param prompt: New task to run, in full
+    :param organization_id: Organization id to move the scheduled task to
     """
     form = AutomationUpdateForm()
     if name is not None:
@@ -354,7 +354,7 @@ async def update_automation(
         form.prompt = prompt
 
     def save() -> str:
-        user, automation, error = _managed_automation(__user__.get("id"), automation_id)
+        user, automation, error = _managed_task(__user__.get("id"), task_id)
         if error:
             return error
         if organization_id is not None and organization_id != automation.organization_id:
@@ -367,28 +367,28 @@ async def update_automation(
             return "Nothing to change. Pass a new name, schedule, prompt, or organization."
         updated = Automations.update_automation(automation.id, form)
         if not updated:
-            return "Failed to update the automation."
+            return "Failed to update the scheduled task."
         sync_automation_job(updated)
-        return "Updated the automation.\n\n" + _describe_automation(
+        return "Updated the scheduled task.\n\n" + _describe_task(
             updated, user.id, full=False
         )
 
     return await asyncio.to_thread(save)
 
 
-UPDATE_AUTOMATION_SPEC = {
-    "name": "update_automation",
+UPDATE_SCHEDULED_TASK_SPEC = {
+    "name": "update_scheduled_task",
     "description": (
-        "Change an existing automation's name, schedule, prompt, or organization. "
-        "Get its id from list_automations. Only pass the fields to change. "
+        "Change an existing scheduled task's name, schedule, prompt, or organization. "
+        "Get its id from list_scheduled_tasks. Only pass the fields to change. "
         "A new prompt replaces the old one, so pass the whole task."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "automation_id": {
+            "task_id": {
                 "type": "string",
-                "description": "The automation to change, from list_automations",
+                "description": "The scheduled task to change, from list_scheduled_tasks",
             },
             "name": {"type": "string", "description": "New short title"},
             "schedule": {
@@ -400,52 +400,105 @@ UPDATE_AUTOMATION_SPEC = {
             },
             "prompt": {
                 "type": "string",
-                "description": "New task the automation runs, in full",
+                "description": "New task to run, in full",
             },
             "organization_id": {
                 "type": "string",
-                "description": "Organization id to move the automation to",
+                "description": "Organization id to move the scheduled task to",
             },
         },
-        "required": ["automation_id"],
+        "required": ["task_id"],
     },
 }
 
 
-async def delete_automation(automation_id: str, __user__: dict = {}) -> str:
-    """Delete an automation, its schedule, and its run history.
+async def delete_scheduled_task(task_id: str, __user__: dict = {}) -> str:
+    """Delete a scheduled task, its schedule, and its run history.
 
-    :param automation_id: The automation to delete, from list_automations
+    :param task_id: The scheduled task to delete, from list_scheduled_tasks
     """
 
     def delete() -> str:
-        _user, automation, error = _managed_automation(__user__.get("id"), automation_id)
+        _user, automation, error = _managed_task(__user__.get("id"), task_id)
         if error:
             return error
         remove_automation_job(automation.id)
         if not Automations.delete_automation(automation.id):
-            return "Failed to delete the automation."
-        return f"Deleted automation **{automation.name}** and its run history."
+            return "Failed to delete the scheduled task."
+        return f"Deleted scheduled task **{automation.name}** and its run history."
 
     return await asyncio.to_thread(delete)
 
 
-DELETE_AUTOMATION_SPEC = {
-    "name": "delete_automation",
+DELETE_SCHEDULED_TASK_SPEC = {
+    "name": "delete_scheduled_task",
     "description": (
-        "Delete an automation, its schedule, and its run history. This cannot be "
-        "undone. Only call it when the user asks to delete that automation. "
-        "Get its id from list_automations."
+        "Delete a scheduled task, its schedule, and its run history. This cannot be "
+        "undone. Only call it when the user asks to delete that scheduled task. "
+        "Get its id from list_scheduled_tasks."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "automation_id": {
+            "task_id": {
                 "type": "string",
-                "description": "The automation to delete, from list_automations",
+                "description": "The scheduled task to delete, from list_scheduled_tasks",
             },
         },
-        "required": ["automation_id"],
+        "required": ["task_id"],
+    },
+}
+
+
+TASK_RESULT_STATUSES = ("success", "failure")
+
+
+async def report_task_result(
+    status: str, summary: str, __metadata__: dict = None
+) -> str:
+    """Report whether this scheduled task run did what it was asked.
+
+    :param status: success or failure
+    :param summary: One or two sentences on the result
+    """
+    from open_webui.utils.automation_runner import record_report
+
+    run_id = (__metadata__ or {}).get("automation_run_id")
+    if not run_id:
+        return "There is no scheduled task run to report on."
+    status = (status or "").strip().lower()
+    if status not in TASK_RESULT_STATUSES:
+        return "The status must be `success` or `failure`."
+    summary = (summary or "").strip()
+    if not summary:
+        return "Give a short summary of the result."
+    record_report(run_id, status, summary)
+    return f"Recorded this run's result as {status}."
+
+
+REPORT_TASK_RESULT_SPEC = {
+    "name": "report_task_result",
+    "description": (
+        "Report whether this scheduled task did what it was asked. Call it once, "
+        "when the task is done: `success` if it did, `failure` if it could not, "
+        "for example because data was missing or a step failed. The summary is "
+        "shown to the user next to the run. A later call replaces an earlier one. "
+        "If you never call it, the run's result is shown as unknown."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": list(TASK_RESULT_STATUSES),
+                "description": "success or failure",
+            },
+            "summary": {
+                "type": "string",
+                "description": "One or two sentences on the result, for the user",
+            },
+        },
+        "required": ["status", "summary"],
     },
 }
 
@@ -1822,8 +1875,8 @@ async def list_available_tools(
     )
     lines.append(
         _tool_summary_line(
-            "create_automation",
-            "Create a scheduled automation from the current chat.",
+            "create_scheduled_task",
+            "Create a scheduled task from the current chat.",
             kind="builtin",
         )
     )
@@ -2591,14 +2644,25 @@ def get_builtin_tools(extra_params: dict) -> dict:
         "send_email": _tool(send_email, SEND_EMAIL_SPEC),
     }
     metadata = extra_params.get("__metadata__") or {}
-    # An automation run has no one present to ask, so it cannot change automations.
-    if not metadata.get("headless"):
+    # A scheduled run has no one present to ask, so it cannot change scheduled
+    # tasks. It reports its own result instead.
+    if metadata.get("headless"):
+        tools["report_task_result"] = _tool(report_task_result, REPORT_TASK_RESULT_SPEC)
+    else:
         tools.update(
             {
-                "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
-                "list_automations": _tool(list_automations, LIST_AUTOMATIONS_SPEC),
-                "update_automation": _tool(update_automation, UPDATE_AUTOMATION_SPEC),
-                "delete_automation": _tool(delete_automation, DELETE_AUTOMATION_SPEC),
+                "create_scheduled_task": _tool(
+                    create_scheduled_task, CREATE_SCHEDULED_TASK_SPEC
+                ),
+                "list_scheduled_tasks": _tool(
+                    list_scheduled_tasks, LIST_SCHEDULED_TASKS_SPEC
+                ),
+                "update_scheduled_task": _tool(
+                    update_scheduled_task, UPDATE_SCHEDULED_TASK_SPEC
+                ),
+                "delete_scheduled_task": _tool(
+                    delete_scheduled_task, DELETE_SCHEDULED_TASK_SPEC
+                ),
             }
         )
     features = metadata.get("features") or {}

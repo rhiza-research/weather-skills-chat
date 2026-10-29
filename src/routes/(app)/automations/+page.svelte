@@ -360,6 +360,9 @@
 											{#if run.chat_title}
 												· {run.chat_title}
 											{/if}
+											{#if run.summary}
+												· {run.summary}
+											{/if}
 											{#if run.error}
 												· {run.error}
 											{/if}
