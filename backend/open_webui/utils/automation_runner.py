@@ -28,6 +28,28 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 
+# What report_task_result recorded, by run id, until the run finishes.
+_reports: dict[str, tuple[str, str]] = {}
+
+
+def record_report(run_id: str, status: str, summary: str) -> None:
+    """Keep the model's latest report for a run. A later report replaces it."""
+    _reports[run_id] = (status, summary)
+
+
+def finish_run(run_id: str, error: Optional[str] = None):
+    """End a run as error if it broke, else as the model reported, else unknown."""
+    reported = _reports.pop(run_id, None)
+    if error is not None:
+        return AutomationRuns.update_run(
+            run_id, status="error", error=error, finished=True
+        )
+    status, summary = reported or ("unknown", None)
+    return AutomationRuns.update_run(
+        run_id, status=status, summary=summary, finished=True
+    )
+
+
 def _new_message(role: str, content: str, model: Optional[str] = None) -> dict:
     return {
         "id": str(uuid.uuid4()),
@@ -154,6 +176,7 @@ async def _stream_automation_chat(
         "direct": False,
         "function_calling": "native",
         "headless": True,
+        "automation_run_id": run_id,
         "organization_id": organization_id,
         "usage_source": "automation",
     }
@@ -324,7 +347,7 @@ async def execute_automation(
                     features=features,
                     organization_id=org_id,
                 )
-                AutomationRuns.update_run(run.id, status="success", finished=True)
+                finish_run(run.id)
             except Exception as e:
                 log.exception("Automation run failed")
                 if isinstance(e, HTTPException) and isinstance(e.detail, str):
@@ -333,9 +356,7 @@ async def execute_automation(
                     error_content = e.detail
                 else:
                     error_content = str(e)
-                AutomationRuns.update_run(
-                    run.id, status="error", error=error_content, finished=True
-                )
+                finish_run(run.id, error=error_content)
                 from open_webui.utils.chat_realtime import save_final_reply
 
                 await save_final_reply(
@@ -354,5 +375,5 @@ async def execute_automation(
         return run
     except Exception as e:
         log.exception("Automation run failed")
-        AutomationRuns.update_run(run.id, status="error", error=str(e), finished=True)
+        finish_run(run.id, error=str(e))
         raise

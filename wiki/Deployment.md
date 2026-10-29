@@ -58,7 +58,7 @@ Many settings can be changed by an admin while the app runs, and the app stores 
 
 ## Model providers
 
-The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings.
+The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings. A second provider can serve as a backup when the first stops answering. See [[Model Fallback]].
 
 | Env var | Default | Effect |
 |-|-|-|
@@ -91,3 +91,11 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 | Env var | Default | Effect |
 |-|-|-|
 | `RENDERING_PROMPT` | "Responses will be interpreted as github markdown. Please use proper escape sequences if you would like to use markdown-specific characters but not render them as markdown" | Instruction added to every chat telling the model how its replies are displayed; empty turns it off |
+
+## Tool rounds per reply
+
+In one reply, the model can call tools, read their results, and call more, round after round. Calls the model makes together count as one round. When a reply reaches the limit and the model still wants to call tools, the reply ends with a message saying it hit the tool-call limit before finishing. Each new message starts the count again. This applies to chats and to [[Automations]] runs alike.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |

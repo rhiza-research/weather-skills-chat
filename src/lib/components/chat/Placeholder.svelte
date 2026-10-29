@@ -7,7 +7,7 @@
 
 	const dispatch = createEventDispatcher();
 
-	import { config, user, models as _models, temporaryChatEnabled } from '$lib/stores';
+	import { config, user, models as _models, settings, temporaryChatEnabled } from '$lib/stores';
 	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -203,8 +203,14 @@
 			</div>
 		</div>
 	</div>
-	<div class="mx-auto max-w-2xl font-primary" in:fade={{ duration: 200, delay: 200 }}>
-		<div class="mx-5">
+	<!-- The chat bar's width and inner padding, so the suggestions line up with it. -->
+	<div
+		class="mx-auto w-full {($settings?.widescreenMode ?? null)
+			? 'max-w-full'
+			: 'max-w-[58rem]'} font-primary"
+		in:fade={{ duration: 200, delay: 200 }}
+	>
+		<div class="px-2.5">
 			<Suggestions
 				suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
 					models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??

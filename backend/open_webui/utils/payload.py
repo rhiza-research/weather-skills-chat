@@ -8,16 +8,17 @@ from typing import Callable, Optional
 import json
 
 HEADLESS_SYSTEM_CONTEXT = """\
-This chat is a scheduled automation. No user is present and cannot reply.
+This chat is a scheduled task. No user is present and cannot reply.
 Do not ask clarifying questions or wait for user input.
 Make reasonable assumptions, use available tools, and complete the task autonomously.
-If critical information is missing, state your assumptions and proceed with the best available option."""
+If critical information is missing, state your assumptions and proceed with the best available option.
+When you are done, call report_task_result once to say whether the task succeeded or failed."""
 
-_HEADLESS_MARKER = "This chat is a scheduled automation"
+_HEADLESS_MARKER = "This chat is a scheduled task"
 
 
 def inject_headless_context(form_data: dict) -> dict:
-    """Tell the model it is running without a user (scheduled automation)."""
+    """Tell the model it is running without a user (a scheduled task)."""
     messages = form_data.get("messages") or []
     system = get_system_message(messages)
     if system and _HEADLESS_MARKER in (system.get("content") or ""):

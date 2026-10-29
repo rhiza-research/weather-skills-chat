@@ -4,6 +4,7 @@
 - [[Chat Artifacts]]
 - [[Built-in Tools]]
 - [[Organizations]]
+- [[Model Fallback]]
 - [[Usage and Spending Caps]]
 - [[Invitations]]
 - [[Scheduled Tasks]]

@@ -7,10 +7,10 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_automation` | Turn the current chat into a scheduled task. See [[Scheduled Tasks]]. |
-| `list_automations` | List the automations in the chat's organization that the user can see, with each one's schedule, model, sharing, last run, and the start of its prompt, or show one automation's whole prompt. |
-| `update_automation` | Change an automation's name, schedule, prompt, or organization. |
-| `delete_automation` | Delete an automation and its run history. The model is told to do this only when the user asks. |
+| `create_scheduled_task` | Turn the current chat into a scheduled task. See [[Scheduled Tasks]]. |
+| `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
+| `update_scheduled_task` | Change a scheduled task's name, schedule, prompt, or organization. |
+| `delete_scheduled_task` | Delete a scheduled task and its run history. The model is told to do this only when the user asks. |
 | `secrets_page` | Give the user a link to the page where they enter a secret. The model never receives the value. See [[Secrets]]. |
 | `list_preferences` | Read the user's saved [[Preferences]]. |
 | `create_preference` | Save a new preference. The model is told to ask the user first. |
@@ -22,9 +22,9 @@ Besides the skills on [[Skill Packs]] and any Workspace tools selected for a cha
 | `list_email_recipients` | List the addresses the model may email. |
 | `send_email` | Email a message, with files from the chat attached. |
 
-The chat's files are described on [[Chat Artifacts]]. The file tools, `send_email`, and `create_automation` do not work in temporary chats.
+The chat's files are described on [[Chat Artifacts]]. The file tools, `send_email`, and `create_scheduled_task` do not work in temporary chats.
 
-The automation tools act as the user, so the model can change or delete only the automations the user could change on the Scheduled tasks page. A [[Scheduled Tasks]] run is not given the automation tools, so a scheduled chat cannot create, change, or delete automations.
+The scheduled task tools act as the user, so the model can change or delete only the tasks the user could change on the Scheduled tasks page. A scheduled task's run is not given these tools, so it cannot create, change, or delete scheduled tasks. Instead it has `report_task_result`, which records whether the run succeeded or failed, with a short summary. The results are described on [[Scheduled Tasks]].
 
 ## Running code
 

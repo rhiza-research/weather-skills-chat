@@ -382,6 +382,7 @@ from open_webui.env import (
 
 from open_webui.utils.models import (
     get_all_base_models,
+    listed_base_model,
     get_catalog_chat_models,
     remember_catalog_model,
     check_model_access,
@@ -1201,7 +1202,7 @@ async def get_base_models(
             detail="Access prohibited",
         )
     models = await get_all_base_models(request, user=user)
-    return {"data": models}
+    return {"data": [listed_base_model(model) for model in models]}
 
 
 def require_owned_chat(chat_id, user):

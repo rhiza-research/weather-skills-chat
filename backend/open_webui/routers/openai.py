@@ -5,7 +5,8 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional, overload
+from typing import Literal, NamedTuple, Optional, overload
+from urllib.parse import urlparse
 
 import aiohttp
 from aiocache import cached
@@ -544,6 +545,8 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
 
         for idx, models in enumerate(model_lists):
             if models is not None and "error" not in models:
+                name = connection_name(request, idx)
+                prefix_id = api_config_for_index(request, idx).get("prefix_id")
 
                 merged_list.extend(
                     [
@@ -553,6 +556,14 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
                             "owned_by": "openai",
                             "openai": model,
                             "urlIdx": idx,
+                            # The model editor lists models as
+                            # connection_name/upstream_id.
+                            "connection_name": name,
+                            "upstream_id": (
+                                model["id"].removeprefix(f"{prefix_id}.")
+                                if prefix_id
+                                else model["id"]
+                            ),
                         }
                         for model in models
                         if (model.get("id") or model.get("name"))
@@ -700,27 +711,53 @@ async def verify_connection(
 def connection_index_for_model(request: Request, model_id: str) -> Optional[int]:
     """Which configured connection should serve this base model id.
 
-    An empty model allowlist accepts any id. The last matching connection
-    wins, matching the previous full-catalog merge.
+    An empty model allowlist accepts any id. A connection with a prefix lists
+    its models as ``{prefix}.{id}``, so it serves only ids with its prefix, and
+    such an id goes to it before any unprefixed connection. Among equals the
+    last matching connection wins, matching the previous full-catalog merge.
     """
     if not model_id:
         return None
     urls = request.app.state.config.OPENAI_API_BASE_URLS or []
     configs = request.app.state.config.OPENAI_API_CONFIGS or {}
     found = None
+    found_by_prefix = None
     for idx, url in enumerate(urls):
         api_config = configs.get(str(idx), configs.get(url, {})) or {}
         if not api_config.get("enable", True):
             continue
         prefix_id = api_config.get("prefix_id")
         bare = model_id
-        if prefix_id and model_id.startswith(f"{prefix_id}."):
+        if prefix_id:
+            if not model_id.startswith(f"{prefix_id}."):
+                continue
             bare = model_id[len(prefix_id) + 1 :]
         allowed = api_config.get("model_ids") or []
         if allowed and bare not in allowed and model_id not in allowed:
             continue
-        found = idx
-    return found
+        if prefix_id:
+            found_by_prefix = idx
+        else:
+            found = idx
+    return found_by_prefix if found_by_prefix is not None else found
+
+
+def fallback_model_error(
+    request: Request, base_model_id: Optional[str], fallback_model_id: Optional[str]
+) -> Optional[str]:
+    """Why a model cannot use this backup, or None when it can.
+
+    A backup must be served by a connection other than the model's own, or a
+    failing provider would be retried with itself.
+    """
+    if not fallback_model_id:
+        return None
+    fallback_idx = connection_index_for_model(request, fallback_model_id)
+    if fallback_idx is None:
+        return "The fallback model is not served by any connection."
+    if fallback_idx == connection_index_for_model(request, base_model_id):
+        return "The fallback model must come from a different connection than the base model."
+    return None
 
 
 def base_model_id_for(model_info, model_id: str) -> str:
@@ -738,6 +775,15 @@ def api_config_for_index(request: Request, idx: int) -> dict:
         # Legacy support
         config = configs.get(request.app.state.config.OPENAI_API_BASE_URLS[idx])
     return config or {}
+
+
+def connection_name(request: Request, idx: int) -> str:
+    """A connection's name as an admin set it, else its URL's host."""
+    name = (api_config_for_index(request, idx).get("name") or "").strip()
+    if name:
+        return name
+    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
+    return urlparse(url).hostname or url
 
 
 def model_call_tracing_style_for_model(request: Request, model_id: str) -> str:
@@ -780,12 +826,28 @@ def provider_trace_style(metadata: Optional[dict], api_config: dict) -> str:
     return MODEL_CALL_TRACING_APP
 
 
+class ProviderCall(NamedTuple):
+    url: str
+    key: str
+    payload: str
+    chat_id: Optional[str]
+    url_idx: int
+    # The model's backup when this call goes to its own provider, else None.
+    fallback_model_id: Optional[str]
+
+
 def prepare_provider_call(
-    request: Request, form_data: dict, user, bypass_filter: bool
-) -> tuple[str, str, str, Optional[str]]:
+    request: Request,
+    form_data: dict,
+    user,
+    bypass_filter: bool,
+    upstream_model_id: Optional[str] = None,
+) -> ProviderCall:
     """Check the model and build the provider request for one model call.
 
-    Returns the provider's URL, its API key, the JSON body and the chat id.
+    With ``upstream_model_id`` the call is built for that model instead of
+    the model's base model, keeping the model's own prompt and parameters.
+    That is how a call is resent to the model's backup.
 
     Synchronous: it reads the model row and the user's organizations, and
     serializes the whole conversation. Callers on the event loop run it in a
@@ -837,6 +899,14 @@ def prepare_provider_call(
                 status_code=403,
                 detail="Model not found",
             )
+
+    fallback_model_id = None
+    if upstream_model_id:
+        model_id = upstream_model_id
+        payload["model"] = model_id
+    elif model_info:
+        meta = getattr(model_info, "meta", None)
+        fallback_model_id = getattr(meta, "fallback_model_id", None) or None
 
     t_models = time.perf_counter()
     idx = connection_index_for_model(request, model_id)
@@ -909,7 +979,44 @@ def prepare_provider_call(
         payload_bytes=len(payload),
     )
 
-    return url, key, payload, chat_id
+    return ProviderCall(url, key, payload, chat_id, idx, fallback_model_id)
+
+
+# A model with a backup has its call resent to the backup whenever its provider
+# fails before replying: no connection, a timeout, or any error status.
+# Providers disagree on what a status means (OpenRouter reports a spent key
+# limit as 403) and the backup has its own key, account and models, so even a
+# rejected request gets one more try there.
+PROVIDER_CONNECT_TIMEOUT_S = 10
+# After a failure of the provider itself, calls for models with a backup go to
+# the backup first for this long. Models without a backup keep calling the
+# provider.
+PROVIDER_DOWN_S = 60
+# Statuses that reject one request rather than show the provider failing.
+REQUEST_ERROR_STATUSES = (400, 404, 413, 422)
+
+# Provider URL -> time.monotonic() until which it counts as down.
+_provider_down_until: dict[str, float] = {}
+
+
+def _provider_failed(status_code: int) -> bool:
+    return status_code not in REQUEST_ERROR_STATUSES
+
+
+def _reply_backups(request) -> Optional[set]:
+    """Models whose calls in this reply have switched to their backup.
+
+    Every model call for one reply, its tool rounds included, gets the same
+    request, so the set lives on request.state.
+    """
+    state = getattr(request, "state", None)
+    if state is None:
+        return None
+    backups = getattr(state, "provider_backups", None)
+    if backups is None:
+        backups = set()
+        state.provider_backups = backups
+    return backups
 
 
 @router.post("/chat/completions")
@@ -922,9 +1029,78 @@ async def generate_chat_completion(
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 
-    url, key, payload, chat_id = await asyncio.to_thread(
+    call = await asyncio.to_thread(
         prepare_provider_call, request, form_data, user, bypass_filter
     )
+    if not call.fallback_model_id:
+        return await _send_provider_call(call, user)
+
+    model_id = form_data.get("model")
+    backups = _reply_backups(request)
+    order = [None, call.fallback_model_id]
+    if (backups is not None and model_id in backups) or (
+        time.monotonic() < _provider_down_until.get(call.url, 0)
+    ):
+        order.reverse()
+
+    primary_error = None
+    backup_error = None
+    for upstream_model_id in order:
+        attempt = call
+        if upstream_model_id:
+            try:
+                attempt = await asyncio.to_thread(
+                    prepare_provider_call,
+                    request,
+                    form_data,
+                    user,
+                    bypass_filter,
+                    upstream_model_id=upstream_model_id,
+                )
+            except HTTPException as e:
+                log.warning(
+                    "Fallback model %s for %s cannot be used: %s",
+                    upstream_model_id,
+                    model_id,
+                    e.detail,
+                )
+                continue
+        try:
+            response = await _send_provider_call(attempt, user)
+        except HTTPException as e:
+            if _provider_failed(e.status_code):
+                _provider_down_until[attempt.url] = time.monotonic() + PROVIDER_DOWN_S
+            log.warning(
+                "Provider %s failed with %s for %s chat_id=%s",
+                attempt.url,
+                e.status_code,
+                model_id,
+                attempt.chat_id,
+            )
+            if upstream_model_id:
+                backup_error = e
+            else:
+                primary_error = e
+            continue
+
+        _provider_down_until.pop(attempt.url, None)
+        if backups is not None:
+            if upstream_model_id:
+                backups.add(model_id)
+            else:
+                backups.discard(model_id)
+        return response
+
+    raise primary_error or backup_error
+
+
+async def _send_provider_call(call: ProviderCall, user):
+    """Send one model call to its provider and return the reply or stream.
+
+    Raises HTTPException with the provider's status, or 500 when it could
+    not be reached.
+    """
+    url, key, payload, chat_id = call.url, call.key, call.payload, call.chat_id
 
     r = None
     session = None
@@ -933,7 +1109,10 @@ async def generate_chat_completion(
 
     try:
         session = aiohttp.ClientSession(
-            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
+            trust_env=True,
+            timeout=aiohttp.ClientTimeout(
+                total=AIOHTTP_CLIENT_TIMEOUT, sock_connect=PROVIDER_CONNECT_TIMEOUT_S
+            ),
         )
 
         t_post = time.perf_counter()
