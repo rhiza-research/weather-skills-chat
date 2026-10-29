@@ -43,11 +43,78 @@ def apscheduler_day_of_week(field: str) -> str:
     return ",".join(_APSCHEDULER_DAY_NAMES[day] for day in sorted(days))
 
 
+_DAY_ALIASES = {
+    **{name: number for name, number in WEEKDAYS.items()},
+    **{name[:3]: number for name, number in WEEKDAYS.items()},
+    "tues": 2,
+    "wed": 3,
+    "thur": 4,
+    "thurs": 4,
+}
+
+
+def _parse_time(text: str) -> Optional[tuple[int, int]]:
+    """(hour, minute) for "9am", "6:30pm", "18:00", "noon", or "midnight"."""
+    if text == "noon":
+        return 12, 0
+    if text == "midnight":
+        return 0, 0
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
+    if not match:
+        return None
+    hour, minute, meridiem = int(match.group(1)), int(match.group(2) or 0), match.group(3)
+    if meridiem:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if meridiem == "pm" else 0)
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return hour, minute
+    return None
+
+
+def _parse_days(text: str) -> Optional[str]:
+    """The day-of-month, month, and day-of-week cron fields for the day part
+    of a phrase, such as "every day", "weekdays", "mondays and thursdays",
+    or "monthly on the 15th"."""
+    text = re.sub(r"^(?:weekly on|on|every|each)\s+", "", text).strip()
+    if text in {"", "day", "daily", "everyday", "every day", "each day"}:
+        return "* * *"
+    if text in {"weekly", "week"}:
+        return "* * 0"
+    if text in {"weekday", "weekdays"}:
+        return "* * 1-5"
+    if text in {"weekend", "weekends"}:
+        return "* * 0,6"
+
+    monthly = re.fullmatch(
+        r"(?:monthly|month)(?: on the (\d{1,2})(?:st|nd|rd|th)?)?"
+        r"|the (\d{1,2})(?:st|nd|rd|th)? of (?:every|each) month",
+        text,
+    )
+    if monthly:
+        day = int(monthly.group(1) or monthly.group(2) or 1)
+        return f"{day} * *" if 1 <= day <= 31 else None
+
+    days = set()
+    for word in re.split(r"\s*,\s*|\s+and\s+|\s+", text):
+        word = word.removesuffix("s") if word.endswith("days") else word
+        if word not in _DAY_ALIASES:
+            return None
+        days.add(_DAY_ALIASES[word])
+    return "* * " + ",".join(str(day) for day in sorted(days))
+
+
 def parse_schedule(schedule: str) -> Optional[str]:
-    """Normalize a cron string or a small set of phrases to a 5-field cron."""
+    """Normalize a cron string or a common English phrase to a 5-field cron.
+
+    Phrases name days, then an optional time: "every weekday at 7am",
+    "mondays and thursdays at 6:30pm", "monthly on the 15th at 9am". The time
+    can come first ("at 9am every day"), and leaving it out means midnight.
+    "every N minutes" and "every N hours" repeat through the day.
+    """
     if not schedule:
         return None
-    text = schedule.strip().lower()
+    text = " ".join(schedule.strip().lower().rstrip(".").split())
     if not text:
         return None
 
@@ -57,48 +124,24 @@ def parse_schedule(schedule: str) -> Optional[str]:
 
     if text in {"hourly", "every hour"}:
         return "0 * * * *"
-    if text in {"daily", "every day", "everyday"}:
-        return "0 0 * * *"
-    if text in {"weekly", "every week"}:
-        return "0 0 * * 0"
+    interval = re.fullmatch(r"every (\d+) (minute|min|hour)s?", text)
+    if interval:
+        count, unit = int(interval.group(1)), interval.group(2)
+        if unit == "hour":
+            return f"0 */{count} * * *" if 1 <= count <= 23 else None
+        return f"*/{count} * * * *" if 1 <= count <= 59 else None
 
-    noon = re.fullmatch(r"(every day|daily|everyday) at noon", text)
-    if noon:
-        return "0 12 * * *"
-
-    midnight = re.fullmatch(r"(every day|daily|everyday) at midnight", text)
-    if midnight:
-        return "0 0 * * *"
-
-    daily_at = re.fullmatch(
-        r"(?:every day|daily|everyday) at (\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text
-    )
-    if daily_at:
-        hour = int(daily_at.group(1))
-        minute = int(daily_at.group(2) or 0)
-        mer = daily_at.group(3)
-        if mer == "pm" and hour < 12:
-            hour += 12
-        if mer == "am" and hour == 12:
-            hour = 0
-        if 0 <= hour <= 23 and 0 <= minute <= 59:
-            return f"{minute} {hour} * * *"
-
-    weekly = re.fullmatch(
-        r"weekly on (\w+) at (\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text
-    )
-    if weekly and weekly.group(1) in WEEKDAYS:
-        hour = int(weekly.group(2))
-        minute = int(weekly.group(3) or 0)
-        mer = weekly.group(4)
-        if mer == "pm" and hour < 12:
-            hour += 12
-        if mer == "am" and hour == 12:
-            hour = 0
-        if 0 <= hour <= 23 and 0 <= minute <= 59:
-            return f"{minute} {hour} * * {WEEKDAYS[weekly.group(1)]}"
-
-    return None
+    time_first = re.fullmatch(r"at (.+?) ((?:on |every |each )?\S.*)", text)
+    if time_first and _parse_time(time_first.group(1)):
+        days_text, time_text = time_first.group(2), time_first.group(1)
+    else:
+        days_text, _, time_text = text.partition(" at ")
+    when = _parse_time(time_text) if time_text else (0, 0)
+    days = _parse_days(days_text)
+    if when is None or days is None:
+        return None
+    hour, minute = when
+    return f"{minute} {hour} {days}"
 
 
 def prompt_from_messages(messages: list[dict]) -> str:

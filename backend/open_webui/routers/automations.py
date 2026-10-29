@@ -55,7 +55,10 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if not parsed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid schedule. Use cron or a phrase like 'every day at noon'.",
+            detail=(
+                "Invalid schedule. Use cron, or a phrase like 'every weekday at 7am' "
+                "or 'mondays and thursdays at 6pm'."
+            ),
         )
     return parsed
 
@@ -73,6 +76,16 @@ class PinForm(BaseModel):
 
 class SeenForm(BaseModel):
     run_id: str
+
+
+class ScheduleForm(BaseModel):
+    schedule: str
+
+
+@router.post("/schedule", response_model=Optional[str])
+def preview_schedule(form_data: ScheduleForm, user=Depends(get_verified_user)):
+    """The cron a schedule phrase saves as, or null when it is not understood."""
+    return parse_schedule(form_data.schedule)
 
 
 @router.get("/", response_model=list[AutomationListItem])
