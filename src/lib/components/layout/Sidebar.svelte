@@ -57,6 +57,7 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
 	import ScheduledTasks from './Sidebar/ScheduledTasks.svelte';
+	import OrganizationRow from './Sidebar/OrganizationRow.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
 
@@ -800,6 +801,11 @@
 				</div>
 			</a>
 		</div>
+
+		<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
+
+		<!-- Separates the settings rows above from search and the chats and tasks below. -->
+		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
