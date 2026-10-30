@@ -1,7 +1,7 @@
 """Add organization.can_use_large_runners and automation.runner_type.
 
 can_use_large_runners lets an organization's members use tool runner sizes
-that need approval. runner_type is the tool runner size a scheduled task's
+that need approval. It starts on for every organization. runner_type is the tool runner size a scheduled task's
 runs use; tasks without one use the default size.
 
 Revision ID: w3x4y5z6a7b8
@@ -26,7 +26,7 @@ def upgrade():
             "can_use_large_runners",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.false(),
+            server_default=sa.true(),
         ),
     )
     op.add_column("automation", sa.Column("runner_type", sa.Text(), nullable=True))

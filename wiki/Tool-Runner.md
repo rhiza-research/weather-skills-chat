@@ -44,7 +44,7 @@ Every chat starts on the standard size. It can be switched in two ways:
 
 After a switch, skill calls run on a runner of the new size, which starts right away. Skill calls already running finish on the previous runner, which is released once its last call ends. Both runners see the same chat files. A chat on another size than the standard one goes back to the standard size once that runner has been idle for its idle time, so the next send gets a standard runner.
 
-Sizes that need approval are available only to organizations a platform admin has allowed to use large runners, and to the platform organization. See [[Organizations]].
+Sizes that need approval are available to every organization unless a platform admin has turned off large runners for it. See [[Organizations]].
 
 The chosen size is kept by the chat server while it runs. Restarting the chat server puts every chat back on the standard size; a runner of another size still running then stops after its idle time.
 

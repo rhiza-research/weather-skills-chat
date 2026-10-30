@@ -31,7 +31,7 @@ Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, 
 
 The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools and the same cached skill packages. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
 
-The emulator offers the same runner sizes as the cluster, so switching sizes from the status menu or with `request_tool_runner` can be tried locally. A runner of a size with no runners kept ready (medium, large, xlarge) takes longer to start, standing in for a new node. The CPU and memory limits shown are the size's; nothing enforces them. To try sizes that need approval, sign in to the platform organization or allow large runners for an organization (see [[Organizations]]).
+The emulator offers the same runner sizes as the cluster, so switching sizes from the status menu or with `request_tool_runner` can be tried locally. A runner of a size with no runners kept ready (medium, large, xlarge) takes longer to start, standing in for a new node. The CPU and memory limits shown are the size's; nothing enforces them.
 
 | Env var | Default in Compose | Effect |
 |-|-|-|
