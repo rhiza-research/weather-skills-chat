@@ -99,7 +99,7 @@ def _type_pool(rtype: Optional[RunnerType]) -> str:
     return rtype.name if rtype is not None else _pool()
 
 
-def current_runner_type(chat_id: Optional[str]) -> Optional[RunnerType]:
+def _current_runner_type(chat_id: Optional[str]) -> Optional[RunnerType]:
     """The size new skill calls of this chat run on; None is the default pool."""
     return runner_types.chosen(chat_id)
 
@@ -402,7 +402,7 @@ async def delete_claim(
     await _delete_claim_named(claim_name(chat_id, rtype), uid)
 
 
-async def list_chat_claims(chat_id: str) -> list[dict]:
+async def _list_chat_claims(chat_id: str) -> list[dict]:
     """Every claim of this chat, of any size."""
     selector = quote(f"weather-skills-chat={chat_id}", safe="=")
     found = await _k8s("GET", f"{_crd('sandboxclaims')}?labelSelector={selector}")
@@ -540,7 +540,7 @@ def runner_needs_wait(claim: Optional[dict]) -> bool:
     return claim is None or not (_claim_ready(claim) and _pod_ref(claim))
 
 
-def waiting_status(rtype: Optional[RunnerType] = None) -> str:
+def _waiting_status(rtype: Optional[RunnerType] = None) -> str:
     """The waiting line: names a size other than the default, and warns when it starts cold."""
     if rtype is None:
         return WAITING_STATUS
@@ -553,7 +553,7 @@ def waiting_status(rtype: Optional[RunnerType] = None) -> str:
 async def _emit_waiting(emitter, done: bool, rtype: Optional[RunnerType] = None) -> None:
     if not emitter:
         return
-    data = {"action": WAITING_ACTION, "description": waiting_status(rtype), "done": done}
+    data = {"action": WAITING_ACTION, "description": _waiting_status(rtype), "done": done}
     if done:
         data["hidden"] = True
     await emitter({"type": "status", "data": data})
@@ -610,12 +610,12 @@ def _amount(value: float) -> str:
     return str(int(value)) if value == int(value) else f"{value:.1f}"
 
 
-# The prompt line is read once per this long; a failed read is retried sooner.
+# The size catalog (and with it the prompt line's limits) is read once per
+# this long; a failed or partial read is retried sooner.
 RUNNER_LIMITS_CACHE_SEC = 300
 RUNNER_LIMITS_RETRY_SEC = 60
 # Short: this runs before every model call while the tool runner is on.
 RUNNER_LIMITS_TIMEOUT_SEC = 3
-_runner_limits_cache: Optional[tuple[float, float, Optional[str]]] = None
 
 
 def _limits_text(cpus: float, memory: float) -> str:
@@ -628,36 +628,14 @@ def _limits_text(cpus: float, memory: float) -> str:
 async def runner_resources_guidance(chat_id: Optional[str] = None) -> Optional[str]:
     """The system-prompt line with the chat's runner CPU and memory limits.
 
-    Read from the runner's SandboxTemplate, so it matches what the infra chart
-    deploys in each environment. A chat switched to another size gets that
-    size's limits. None (no line) when they cannot be read.
+    Read from the size catalog, so it matches what the infra chart deploys in
+    each environment, and follows a switch to another size. None (no line)
+    when the limits cannot be read.
     """
-    rtype = current_runner_type(chat_id)
-    if rtype is not None:
-        if rtype.cpus and rtype.memory_gib:
-            return _limits_text(rtype.cpus, rtype.memory_gib)
-        return None
-    global _runner_limits_cache
-    now = time.monotonic()
-    if _runner_limits_cache is not None:
-        read_at, ttl, text = _runner_limits_cache
-        if now - read_at < ttl:
-            return text
-    text = None
-    try:
-        template = await _k8s(
-            "GET", _crd("sandboxtemplates", _template_name()), timeout=RUNNER_LIMITS_TIMEOUT_SEC
-        )
-        limits = _runner_limits(template)
-        if limits:
-            text = _limits_text(*limits)
-        else:
-            log.warning("runner template %s has no cpu/memory limits", _template_name())
-    except Exception as exc:
-        log.warning("runner limits unavailable template=%s: %s", _template_name(), exc)
-    ttl = RUNNER_LIMITS_CACHE_SEC if text else RUNNER_LIMITS_RETRY_SEC
-    _runner_limits_cache = (now, ttl, text)
-    return text
+    rtype = effective_runner_type(chat_id, await runner_catalog())
+    if rtype.cpus and rtype.memory_gib:
+        return _limits_text(rtype.cpus, rtype.memory_gib)
+    return None
 
 
 _catalog_cache: Optional[tuple[float, float, list[RunnerType]]] = None
@@ -675,34 +653,39 @@ def _fallback_type(template: Optional[dict] = None) -> RunnerType:
     )
 
 
-async def _read_catalog() -> Optional[list[RunnerType]]:
-    """The sizes infra publishes, by order; None when they cannot be read."""
+async def _read_catalog() -> tuple[Optional[list[RunnerType]], bool]:
+    """(sizes cheapest first, whether the catalog was listed).
+
+    Without a listed catalog (an older chart, or no permission to list
+    templates) the default pool is the only size, with its own template's
+    limits. Sizes are None when neither could be read.
+    """
     selector = quote(runner_types.TYPE_LABEL, safe="")
+    sizes = []
+    listed = True
     try:
         found = await _k8s(
             "GET",
             f"{_crd('sandboxtemplates')}?labelSelector={selector}",
             timeout=RUNNER_LIMITS_TIMEOUT_SEC,
         )
+        for template in found.get("items") or []:
+            rtype = runner_types.from_template(template, _runner_limits(template))
+            if rtype is not None:
+                sizes.append(rtype)
     except Exception as exc:
         log.warning("runner sizes unavailable: %s", exc)
-        return None
-    sizes = []
-    for template in found.get("items") or []:
-        rtype = runner_types.from_template(template, _runner_limits(template))
-        if rtype is not None:
-            sizes.append(rtype)
-    if not sizes:
-        try:
-            template = await _k8s(
-                "GET",
-                _crd("sandboxtemplates", _template_name()),
-                timeout=RUNNER_LIMITS_TIMEOUT_SEC,
-            )
-        except Exception:
-            template = None
-        return [_fallback_type(template)]
-    return sorted(sizes, key=lambda t: (t.order, t.type))
+        listed = False
+    if sizes:
+        return sorted(sizes, key=lambda t: (t.order, t.type)), True
+    try:
+        template = await _k8s(
+            "GET", _crd("sandboxtemplates", _template_name()), timeout=RUNNER_LIMITS_TIMEOUT_SEC
+        )
+    except Exception as exc:
+        log.warning("runner limits unavailable template=%s: %s", _template_name(), exc)
+        return None, False
+    return [_fallback_type(template)], listed
 
 
 async def runner_catalog() -> list[RunnerType]:
@@ -713,16 +696,15 @@ async def runner_catalog() -> list[RunnerType]:
         read_at, ttl, sizes = _catalog_cache
         if now - read_at < ttl:
             return sizes
-    sizes = await _read_catalog()
+    sizes, listed = await _read_catalog()
     if sizes is None:
         sizes = _catalog_cache[2] if _catalog_cache else [_fallback_type()]
-        _catalog_cache = (now, RUNNER_LIMITS_RETRY_SEC, sizes)
-    else:
-        _catalog_cache = (now, RUNNER_LIMITS_CACHE_SEC, sizes)
+    ttl = RUNNER_LIMITS_CACHE_SEC if listed else RUNNER_LIMITS_RETRY_SEC
+    _catalog_cache = (now, ttl, sizes)
     return sizes
 
 
-def cached_catalog() -> list[RunnerType]:
+def _cached_catalog() -> list[RunnerType]:
     """The last catalog read, without reading it; empty before the first read."""
     return list(_catalog_cache[2]) if _catalog_cache else []
 
@@ -737,12 +719,12 @@ def default_runner_type(catalog: list[RunnerType]) -> RunnerType:
 
 def effective_runner_type(chat_id: Optional[str], catalog: list[RunnerType]) -> RunnerType:
     """The chat's size as a catalog entry, the default one included."""
-    return current_runner_type(chat_id) or default_runner_type(catalog)
+    return _current_runner_type(chat_id) or default_runner_type(catalog)
 
 
 def runner_size_public(chat_id: Optional[str]) -> Optional[dict]:
     """The chat's size for the top bar, from the last catalog read; None before one."""
-    catalog = cached_catalog()
+    catalog = _cached_catalog()
     if not catalog:
         return None
     rtype = effective_runner_type(chat_id, catalog)
@@ -765,7 +747,7 @@ def switch_runner_type(chat_id: str, rtype: RunnerType, catalog: list[RunnerType
             chat_id, rtype, _type_start_timeout(rtype) + _type_ttl(rtype)
         )
     hit = _ready_cache.get(chat_id)
-    if hit is not None and not runner_types.same(hit[1].get("rtype"), current_runner_type(chat_id)):
+    if hit is not None and not runner_types.same(hit[1].get("rtype"), _current_runner_type(chat_id)):
         _ready_cache.pop(chat_id, None)
 
 
@@ -813,7 +795,7 @@ async def runner_sizes_guidance(chat_id: Optional[str], allowed: list[RunnerType
 
 def _oom_message(detail: str, rtype: Optional[RunnerType]) -> str:
     message = RUNNER_OOM_MESSAGE.format(detail=detail)
-    catalog = cached_catalog()
+    catalog = _cached_catalog()
     if catalog:
         here = rtype or default_runner_type(catalog)
         if any(t.order > here.order for t in catalog):
@@ -1081,7 +1063,7 @@ def _cached_runner(chat_id: str) -> Optional[dict]:
     if time.monotonic() - stamp > float(_type_ttl(rtype)):
         _ready_cache.pop(chat_id, None)
         return None
-    if not runner_types.same(rtype, current_runner_type(chat_id)):
+    if not runner_types.same(rtype, _current_runner_type(chat_id)):
         # Switched to another size: new calls go to a runner of that size.
         _ready_cache.pop(chat_id, None)
         return None
@@ -1466,7 +1448,7 @@ def start_runner(chat_id: str) -> asyncio.Task:
     been switched away from is not reused; a new one starts for the new size.
     """
     with _lock:
-        rtype = current_runner_type(chat_id)
+        rtype = _current_runner_type(chat_id)
         task = _starts.get(chat_id)
         if task is not None and not runner_types.same(_start_types.get(chat_id), rtype):
             task = None
@@ -1507,7 +1489,7 @@ async def _run_start(chat_id: str) -> dict:
         return cached
     if cached:
         _drop_runner(chat_id)
-    rtype = current_runner_type(chat_id)
+    rtype = _current_runner_type(chat_id)
     deadline = time.monotonic() + _type_start_timeout(rtype)
     try:
 
@@ -1554,7 +1536,7 @@ async def _run_start(chat_id: str) -> dict:
         # Calls waiting on this start take it in a moment; the grace keeps a
         # release from beating them to it.
         _mark_handed_out(chat_id, pod_name)
-        if runner_types.same(rtype, current_runner_type(chat_id)):
+        if runner_types.same(rtype, _current_runner_type(chat_id)):
             _store_runner(chat_id, info)
             _start_failed_at.pop(chat_id, None)
         # Releases the other size's runner, or this one if the chat was
@@ -1562,7 +1544,7 @@ async def _run_start(chat_id: str) -> dict:
         _release_soon(chat_id)
         return info
     except Exception:
-        if runner_types.same(rtype, current_runner_type(chat_id)):
+        if runner_types.same(rtype, _current_runner_type(chat_id)):
             _start_failed_at[chat_id] = time.monotonic()
             _drop_runner(chat_id)
         raise
@@ -1592,9 +1574,9 @@ async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
         return
     chat_id = str(chat_id)
     task = start_runner(chat_id)
-    await _emit_waiting(emitter, False, current_runner_type(chat_id))
+    await _emit_waiting(emitter, False, _current_runner_type(chat_id))
     # The start has its own time limit; this only guards against a hang.
-    timeout = _type_start_timeout(current_runner_type(chat_id)) + 30
+    timeout = _type_start_timeout(_current_runner_type(chat_id)) + 30
     await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
 
 
@@ -1624,7 +1606,7 @@ async def ensure_runner(chat_id: str, *, emitter=None, take: bool = False) -> di
     task = start_runner(chat_id)
     if emitter is None:
         return handed(await asyncio.shield(task))
-    rtype = current_runner_type(chat_id)
+    rtype = _current_runner_type(chat_id)
     await _emit_waiting(emitter, False, rtype)
     try:
         return handed(await asyncio.shield(task))
@@ -1668,7 +1650,7 @@ async def runner_status(chat_id: str) -> dict:
     A ready result is remembered so later status and tool calls do not list
     packs again. Packs are listed only when the pod is not already marked ready.
     """
-    rtype = current_runner_type(chat_id)
+    rtype = _current_runner_type(chat_id)
     name = claim_name(chat_id, rtype)
     cached = _cached_runner(chat_id)
     if cached:
@@ -1735,7 +1717,7 @@ async def runner_status(chat_id: str) -> dict:
 
 async def runner_metrics(chat_id: str) -> dict:
     try:
-        claim = await get_claim(chat_id, current_runner_type(chat_id))
+        claim = await get_claim(chat_id, _current_runner_type(chat_id))
         if not claim or not _claim_ready(claim):
             raise RuntimeError("tool runner is not ready")
         pod_name = _pod_ref(claim)
@@ -1926,7 +1908,7 @@ def _give_back_runner(chat_id: str, info: dict) -> None:
         return
     _runner_users.pop(key, None)
     _handed_out_at.pop(key, None)
-    if not runner_types.same(info.get("rtype"), current_runner_type(chat_id)):
+    if not runner_types.same(info.get("rtype"), _current_runner_type(chat_id)):
         _release_soon(chat_id)
 
 
@@ -1940,7 +1922,7 @@ def _just_handed_out(chat_id: str, pod_name: Optional[str]) -> bool:
     return at is not None and time.monotonic() - at < RELEASE_GRACE_SEC
 
 
-async def release_other_runners(chat_id: str) -> None:
+async def _release_other_runners(chat_id: str) -> None:
     """Delete this chat's claims of sizes it no longer uses.
 
     A runner a tool call holds is left; it is released when that call gives
@@ -1949,7 +1931,7 @@ async def release_other_runners(chat_id: str) -> None:
     before each delete, with nothing awaited in between.
     """
     try:
-        claims = await list_chat_claims(chat_id)
+        claims = await _list_chat_claims(chat_id)
     except Exception:
         log.debug("listing runner claims failed chat=%s", chat_id, exc_info=True)
         return
@@ -1957,7 +1939,7 @@ async def release_other_runners(chat_id: str) -> None:
     for claim in claims:
         meta = claim.get("metadata") or {}
         name = meta.get("name")
-        keep = claim_name(chat_id, current_runner_type(chat_id))
+        keep = claim_name(chat_id, _current_runner_type(chat_id))
         if not name or name == keep or meta.get("deletionTimestamp"):
             continue
         pod_name = _pod_ref(claim)
@@ -1985,7 +1967,7 @@ _switched_chats: set[str] = set()
 
 
 def _release_soon(chat_id: str) -> None:
-    """Run release_other_runners in the background, once at a time per chat."""
+    """Run _release_other_runners in the background, once at a time per chat."""
     if chat_id not in _switched_chats:
         return
     task = _releases.get(chat_id)
@@ -1993,7 +1975,7 @@ def _release_soon(chat_id: str) -> None:
         return
     try:
         _releases[chat_id] = asyncio.get_running_loop().create_task(
-            release_other_runners(chat_id), name=f"runner-release-{chat_id}"
+            _release_other_runners(chat_id), name=f"runner-release-{chat_id}"
         )
     except RuntimeError:
         pass

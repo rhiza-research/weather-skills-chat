@@ -1886,10 +1886,10 @@ class RunnerResourcesGuidanceTest(IsolatedAsyncioTestCase):
         from open_webui.utils import skill_k8s_sandbox as k8s
 
         self.k8s = k8s
-        k8s._runner_limits_cache = None
+        k8s._catalog_cache = None
 
     def tearDown(self):
-        self.k8s._runner_limits_cache = None
+        self.k8s._catalog_cache = None
 
     async def _guidance(self, k8s_mock):
         with patch("open_webui.utils.skill_k8s_sandbox._k8s", k8s_mock):
@@ -1910,24 +1910,28 @@ class RunnerResourcesGuidanceTest(IsolatedAsyncioTestCase):
     async def test_other_quantity_forms(self):
         text = await self._guidance(AsyncMock(return_value=_template(cpu="1000m", memory="12288Mi")))
         self.assertIn("1 CPU core and 12 GiB of memory", text)
-        self.k8s._runner_limits_cache = None
+        self.k8s._catalog_cache = None
         text = await self._guidance(AsyncMock(return_value=_template(cpu="2.5", memory="3686Mi")))
         self.assertIn("2.5 CPU cores and 3.6 GiB of memory", text)
 
     async def test_read_once_and_cached(self):
+        # No catalog listed (an older chart): the default template is read
+        # once, then the cache answers.
         k8s_mock = AsyncMock(return_value=_template())
         await self._guidance(k8s_mock)
+        reads = k8s_mock.await_count
         await self._guidance(k8s_mock)
-        self.assertEqual(k8s_mock.await_count, 1)
+        self.assertEqual(k8s_mock.await_count, reads)
 
     async def test_a_failed_read_leaves_the_line_out_and_retries_later(self):
         k8s_mock = AsyncMock(side_effect=RuntimeError("k8s GET ... -> 403: forbidden"))
         self.assertIsNone(await self._guidance(k8s_mock))
+        reads = k8s_mock.await_count
         self.assertIsNone(await self._guidance(k8s_mock))
-        self.assertEqual(k8s_mock.await_count, 1)
-        read_at, ttl, _ = self.k8s._runner_limits_cache
+        self.assertEqual(k8s_mock.await_count, reads)
+        read_at, ttl, sizes = self.k8s._catalog_cache
         self.assertEqual(ttl, self.k8s.RUNNER_LIMITS_RETRY_SEC)
-        self.k8s._runner_limits_cache = (read_at - ttl, ttl, None)
+        self.k8s._catalog_cache = (read_at - ttl, ttl, sizes)
         k8s_mock.side_effect = None
         k8s_mock.return_value = _template()
         self.assertIn("8 GiB", await self._guidance(k8s_mock))

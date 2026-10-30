@@ -158,9 +158,9 @@ class ClaimTest(IsolatedAsyncioTestCase):
         self.assertEqual(k8s._type_start_timeout(LARGE), 300)
 
     def test_waiting_line_names_a_cold_size(self):
-        self.assertEqual(k8s.waiting_status(None), k8s.WAITING_STATUS)
-        self.assertIn("Large", k8s.waiting_status(LARGE))
-        self.assertIn("few minutes", k8s.waiting_status(LARGE))
+        self.assertEqual(k8s._waiting_status(None), k8s.WAITING_STATUS)
+        self.assertIn("Large", k8s._waiting_status(LARGE))
+        self.assertIn("few minutes", k8s._waiting_status(LARGE))
 
 
 class SwitchTest(IsolatedAsyncioTestCase):
@@ -181,13 +181,13 @@ class SwitchTest(IsolatedAsyncioTestCase):
         k8s._store_runner("c1", {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None})
         self.assertIsNotNone(k8s._cached_runner("c1"))
         k8s.switch_runner_type("c1", LARGE, _catalog())
-        self.assertEqual(k8s.current_runner_type("c1"), LARGE)
+        self.assertEqual(k8s._current_runner_type("c1"), LARGE)
         self.assertIsNone(k8s._cached_runner("c1"))
 
     def test_switching_to_the_default_size_clears_the_choice(self):
         k8s.switch_runner_type("c1", MEDIUM, _catalog())
         k8s.switch_runner_type("c1", STANDARD, _catalog())
-        self.assertIsNone(k8s.current_runner_type("c1"))
+        self.assertIsNone(k8s._current_runner_type("c1"))
         self.assertEqual(k8s.effective_runner_type("c1", _catalog()), STANDARD)
 
     async def test_a_start_for_the_old_size_is_not_reused(self):
@@ -216,10 +216,10 @@ class SwitchTest(IsolatedAsyncioTestCase):
         ]
         # A call still holding the medium runner.
         k8s._take_runner("c1", {"pod_name": "med"})
-        with patch(f"{K}.list_chat_claims", AsyncMock(return_value=claims)), patch(
+        with patch(f"{K}._list_chat_claims", AsyncMock(return_value=claims)), patch(
             f"{K}._delete_claim_named", AsyncMock()
         ) as delete:
-            await k8s.release_other_runners("c1")
+            await k8s._release_other_runners("c1")
         delete.assert_awaited_once_with("runner-c1", "u-std")
 
     async def test_the_last_call_on_an_old_size_releases_it(self):
@@ -227,7 +227,7 @@ class SwitchTest(IsolatedAsyncioTestCase):
         old = {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None}
         k8s._take_runner("c1", old)
         k8s._take_runner("c1", old)
-        with patch(f"{K}.release_other_runners", AsyncMock()) as release:
+        with patch(f"{K}._release_other_runners", AsyncMock()) as release:
             k8s._give_back_runner("c1", old)
             await asyncio.sleep(0)
             release.assert_not_awaited()
@@ -248,11 +248,11 @@ class SwitchTest(IsolatedAsyncioTestCase):
             return old
 
         with patch(f"{K}._run_start", side_effect=start), patch(
-            f"{K}.list_chat_claims", AsyncMock(return_value=claims)
+            f"{K}._list_chat_claims", AsyncMock(return_value=claims)
         ), patch(f"{K}._delete_claim_named", AsyncMock()) as delete:
             info = await k8s.ensure_runner("c1", take=True)
             # Released now, before the call starts: the runner must stay.
-            await k8s.release_other_runners("c1")
+            await k8s._release_other_runners("c1")
             delete.assert_not_awaited()
             k8s._give_back_runner("c1", info)
             await asyncio.sleep(0)
@@ -266,9 +266,9 @@ class SwitchTest(IsolatedAsyncioTestCase):
             {"metadata": {"name": "runner-c1", "uid": "u-std"}, "status": {"sandbox": {"name": "std"}}},
         ]
         with patch(f"{K}.RELEASE_GRACE_SEC", 0.05), patch(
-            f"{K}.list_chat_claims", AsyncMock(return_value=claims)
+            f"{K}._list_chat_claims", AsyncMock(return_value=claims)
         ), patch(f"{K}._delete_claim_named", AsyncMock()) as delete:
-            await k8s.release_other_runners("c1")
+            await k8s._release_other_runners("c1")
             delete.assert_not_awaited()
             await asyncio.sleep(0.1)
             await k8s._releases["c1"]
@@ -297,7 +297,7 @@ class SwitchTest(IsolatedAsyncioTestCase):
         self.assertFalse(k8s._runner_busy("c1", "std"))
 
     async def test_a_chat_never_switched_lists_no_claims(self):
-        with patch(f"{K}.list_chat_claims", AsyncMock()) as listing:
+        with patch(f"{K}._list_chat_claims", AsyncMock()) as listing:
             k8s._release_soon("c1")
             await asyncio.sleep(0)
         listing.assert_not_awaited()
@@ -365,25 +365,25 @@ class RequestToolRunnerTest(IsolatedAsyncioTestCase):
         self.assertIn("Large", asked[0]["data"]["title"])
         self.assertIn("ERA5 over Africa", asked[0]["data"]["message"])
         self.assertIn("Switched this chat to the Large", result)
-        self.assertEqual(k8s.current_runner_type("c1"), LARGE)
+        self.assertEqual(k8s._current_runner_type("c1"), LARGE)
         start.assert_called_once_with("c1")
 
     async def test_declined_leaves_the_runner(self):
         result, asked, start = await self._call("large", approve=False)
         self.assertIn("declined", result)
-        self.assertIsNone(k8s.current_runner_type("c1"))
+        self.assertIsNone(k8s._current_runner_type("c1"))
         start.assert_not_called()
 
     async def test_a_size_without_approval_switches_without_asking(self):
         result, asked, _ = await self._call("medium")
         self.assertEqual(asked, [])
-        self.assertEqual(k8s.current_runner_type("c1"), MEDIUM)
+        self.assertEqual(k8s._current_runner_type("c1"), MEDIUM)
 
     async def test_going_smaller_never_asks(self):
         k8s.switch_runner_type("c1", LARGE, _catalog())
         result, asked, _ = await self._call("standard")
         self.assertEqual(asked, [])
-        self.assertIsNone(k8s.current_runner_type("c1"))
+        self.assertIsNone(k8s._current_runner_type("c1"))
 
     async def test_a_size_the_organization_cannot_use_is_refused(self):
         result, asked, start = await self._call("large", allowed=[STANDARD, MEDIUM])
@@ -394,7 +394,7 @@ class RequestToolRunnerTest(IsolatedAsyncioTestCase):
     async def test_a_scheduled_run_cannot_ask(self):
         result, asked, _ = await self._call("large", headless=True)
         self.assertIn("scheduled task cannot", result)
-        self.assertIsNone(k8s.current_runner_type("c1"))
+        self.assertIsNone(k8s._current_runner_type("c1"))
 
     async def test_unknown_size_lists_the_choices(self):
         result, _, _ = await self._call("huge")
@@ -493,3 +493,26 @@ class RunnerInfoToolTest(IsolatedAsyncioTestCase):
         self.assertEqual(usage["script"], "plot.py")
         self.assertEqual(usage["memory_mb"], 50.0)
         self.assertIsNone(usage["rtype"])
+
+
+class CatalogWithoutListTest(IsolatedAsyncioTestCase):
+    """No permission to list templates (infra's RBAC not yet released)."""
+
+    def setUp(self):
+        k8s._catalog_cache = None
+
+    def tearDown(self):
+        k8s._catalog_cache = None
+
+    async def test_the_default_template_still_gives_the_limits(self):
+        def answer(method, path, *args, **kwargs):
+            if "labelSelector" in path:
+                raise RuntimeError("k8s GET ... -> 403: forbidden")
+            return TEMPLATES[1]
+
+        with patch(f"{K}._k8s", AsyncMock(side_effect=answer)):
+            sizes = await k8s.runner_catalog()
+            text = await k8s.runner_resources_guidance("c1")
+        self.assertEqual([t.type for t in sizes], ["standard"])
+        self.assertIn("8 CPU cores and 8 GiB", text)
+        self.assertEqual(k8s._catalog_cache[1], k8s.RUNNER_LIMITS_RETRY_SEC)
