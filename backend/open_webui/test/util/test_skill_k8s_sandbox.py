@@ -601,7 +601,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
         }
         holds = []
 
-        async def get(chat_id):
+        async def get(chat_id, rtype=None):
             return claim
 
         async def extend(body, seconds=None):
@@ -629,7 +629,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
         async def exec_on(chat_id, argv, **kwargs):
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
-        async def hold(chat_id, timeout):
+        async def hold(chat_id, timeout, rtype=None):
             holds.append(timeout)
 
         with patch(
@@ -1039,7 +1039,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         )
         # An explicit 503 is definitive: delete that claim now.
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
         self.assertIsNone(_ready_cache.get("chat-1"))
 
     async def test_failed_skill_on_a_healthy_runner_is_the_skills_failure(self):
@@ -1074,7 +1074,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         pod = {"status": {"phase": "Running", "containerStatuses": [{"name": "runner", "state": {"running": {}}}]}}
         result, delete = await self._run(_runner("old", "u1"), exec_error=RuntimeError("reset"), pod=pod, health="unhealthy")
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
 
     async def test_failed_skill_with_a_slow_health_answer_is_the_skills_failure(self):
         result, delete = await self._run(
@@ -1402,7 +1402,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
             await asyncio.wait_for(deleted.wait(), timeout=5)
             raise RuntimeError("POST http://10.0.0.1:8888/exec failed: Connection reset by peer")
 
-        async def delete_claim(chat_id, uid=None):
+        async def delete_claim(chat_id, uid=None, rtype=None):
             deleted.set()
 
         running_pod = {"status": {"phase": "Running", "podIP": "10.0.0.1", "containerStatuses": [{"restartCount": 0}]}}
@@ -1441,7 +1441,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         results, delete, _ = await self._run_calls(
             ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1, pod=deleting_pod
         )
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
         self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
         self.assertEqual(self.k8s._watchers, {})
 
@@ -1710,7 +1710,7 @@ class EvictedRunnerStartTest(IsolatedAsyncioTestCase):
         evicted_claim = {"metadata": {"uid": "u-old"}, "status": {"ready": False, "sandbox": {"name": "pod-old"}}}
         deleting = {"metadata": {"uid": "u-old", "deletionTimestamp": "2026-10-20T00:22:50Z"}}
         info, mocks = await self._start([evicted_claim, deleting, None])
-        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old")
+        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old", rtype=None)
         mocks["create_claim"].assert_awaited_once()
         # Extending a dead claim's TTL is what kept it alive before.
         mocks["extend_claim_ttl"].assert_not_awaited()
@@ -1720,7 +1720,7 @@ class EvictedRunnerStartTest(IsolatedAsyncioTestCase):
         starting = {"metadata": {"uid": "u-old"}, "status": {"ready": False}}
         evicted_claim = {"metadata": {"uid": "u-old"}, "status": {"ready": False, "sandbox": {"name": "pod-old"}}}
         info, mocks = await self._start([starting, evicted_claim, None])
-        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old")
+        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old", rtype=None)
         self.assertEqual(info["pod_name"], "pod-new")
 
     async def test_a_claim_that_never_gets_ready_gives_up_without_extending_it(self):

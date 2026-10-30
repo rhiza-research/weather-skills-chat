@@ -8,6 +8,7 @@ A scheduled task sends the same prompt as a new chat on a schedule, for example 
 - The prompt each run sends.
 - The model to use. "Default model" uses the organization's default model, or the app's default when the organization has none.
 - A time limit for each run, from 1 minute to 24 hours, 60 minutes unless set. A run that takes longer is stopped and recorded as an error.
+- A tool runner size for its runs, when the tool runner is on and the organization can use more than one size. The standard size unless set. See [[Tool Runner#runner-sizes]].
 - A schedule, or no schedule for a task that only runs when someone presses Run now.
 - Whether scheduled runs are on.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.

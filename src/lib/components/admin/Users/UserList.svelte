@@ -160,6 +160,23 @@
 		activating = '';
 	};
 
+	const toggleLargeRunners = async (row) => {
+		const next = !row.can_use_large_runners;
+		try {
+			await updateOrganizationById(localStorage.token, row.id, {
+				can_use_large_runners: next
+			});
+			await loadOrgs();
+			toast.success(
+				next
+					? $i18n.t('{{name}} can now use large tool runners', { name: row.displayName })
+					: $i18n.t('{{name}} can no longer use large tool runners', { name: row.displayName })
+			);
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
 	const toggleCanAdd = async (row, key) => {
 		const next = !row[key];
 		const kind =
@@ -575,6 +592,7 @@
 			<div class="text-center leading-tight">{$i18n.t('Allow adding models')}</div>
 			<div class="text-center leading-tight">{$i18n.t('Allow adding skills')}</div>
 			<div class="text-center leading-tight">{$i18n.t('Allow adding knowledge')}</div>
+			<div class="text-center leading-tight">{$i18n.t('Allow large runners')}</div>
 			<div></div>
 		</div>
 		<hr class="mt-0.5 border-gray-100 dark:border-gray-850" />
@@ -756,6 +774,18 @@
 							aria-label={$i18n.t('Allow adding knowledge')}
 							on:click|stopPropagation
 							on:change={() => toggleCanAdd(row, 'can_add_knowledge')}
+						/>
+					{/if}
+				</div>
+				<div class="flex justify-center">
+					{#if row.kind !== 'platform' && row.kind !== 'invite'}
+						<input
+							type="checkbox"
+							class="cursor-pointer"
+							checked={!!row.can_use_large_runners}
+							aria-label={$i18n.t('Allow large runners')}
+							on:click|stopPropagation
+							on:change={() => toggleLargeRunners(row)}
 						/>
 					{/if}
 				</div>
@@ -1043,7 +1073,7 @@
 <style>
 	.org-table {
 		width: 100%;
-		min-width: 71.5rem;
+		min-width: 75.75rem;
 	}
 
 	.org-table-row {
@@ -1057,6 +1087,7 @@
 			minmax(6rem, 1fr)
 			4rem
 			4rem
+			4.25rem
 			4.25rem
 			6.5rem;
 	}

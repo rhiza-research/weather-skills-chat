@@ -49,6 +49,28 @@ def _check_timeout(minutes: Optional[int]) -> None:
         )
 
 
+async def _check_runner_type(value: Optional[str], organization_id: Optional[str]) -> Optional[str]:
+    """The size's type name, None for the default, or 400 when this organization cannot use it."""
+    if not (value or "").strip():
+        return None
+    from open_webui.env import tool_runner_enabled
+    from open_webui.utils.runner_types import find
+    from open_webui.utils.skill_k8s_sandbox import default_runner_type, runner_types_for_org
+
+    if not tool_runner_enabled():
+        return None
+    allowed = await runner_types_for_org(organization_id)
+    rtype = find(allowed, value)
+    if rtype is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This organization cannot use that tool runner size.",
+        )
+    if rtype.name == default_runner_type(allowed).name:
+        return None
+    return rtype.type
+
+
 def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if cron is None or cron == "":
         return None
@@ -193,6 +215,9 @@ async def create_automation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+    form_data.runner_type = await _check_runner_type(
+        form_data.runner_type, form_data.organization_id
+    )
     form_data.visibility = resolve_visibility(
         form_data.organization_id, form_data.visibility
     )
@@ -211,6 +236,36 @@ async def create_automation(
         )
     sync_automation_job(automation)
     return _with_names(automation)
+
+
+@router.get("/runner-sizes")
+async def get_runner_sizes(
+    organization_id: Optional[str] = None,
+    user=Depends(get_verified_user),
+    active_organization_id: str = Depends(get_active_organization_id),
+):
+    """Tool runner sizes a task in this organization can use; empty when there is no tool runner."""
+    from open_webui.env import tool_runner_enabled
+
+    org_id = organization_id or active_organization_id
+    if not is_member(org_id, user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if not tool_runner_enabled():
+        return {"sizes": [], "default": None}
+    from open_webui.utils.skill_k8s_sandbox import (
+        default_runner_type,
+        runner_catalog,
+        runner_types_for_org,
+    )
+
+    allowed = await runner_types_for_org(org_id)
+    return {
+        "sizes": [t.public() for t in allowed],
+        "default": default_runner_type(await runner_catalog()).type,
+    }
 
 
 @router.get("/{id}", response_model=AutomationDetail)
@@ -240,6 +295,11 @@ async def update_automation(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    if "runner_type" in form_data.model_fields_set:
+        form_data.runner_type = await _check_runner_type(
+            form_data.runner_type,
+            form_data.organization_id or automation.organization_id,
         )
     automation = Automations.update_automation(id, form_data, updated_by=user.id)
     if automation:
