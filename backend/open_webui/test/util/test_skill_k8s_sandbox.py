@@ -621,7 +621,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
     async def test_run_skill_holds_even_when_the_runner_is_already_ready(self):
         holds = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             info = {"pod_ip": "10.0.0.1", "pod_name": "ready"}
             _store_runner(chat_id, info)
             return info
@@ -685,7 +685,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
         _drop_runner("chat-1")
 
     async def _run(self, reply=None, error=None, health="ok"):
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             return {"pod_ip": "10.0.0.1", "pod_name": "ready"}
 
         async def exec_on(chat_id, argv, **kwargs):
@@ -828,7 +828,7 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
         info = {"pod_ip": "10.0.0.1", "pod_name": "old", "claim": {"metadata": {"uid": "claim-old"}}}
         execs = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -982,7 +982,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         _drop_runner("chat-1")
 
     async def _run(self, info, *, exec_result=None, exec_error=None, pod=None, health="ok", event=None):
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -1391,7 +1391,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         info = _runner("old", "u1")
         deleted = asyncio.Event()
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -1990,7 +1990,7 @@ class RunnerDiesDuringCallTest(IsolatedAsyncioTestCase):
         info = _runner("old", "u1")
         cancelled = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 

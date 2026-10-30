@@ -1551,14 +1551,15 @@ async def _run_start(chat_id: str) -> dict:
                 await _annotate_pod(pod, {PACKS_ANN: "ready"})
 
         await _until(deadline, "skill packs", packs)
+        # Calls waiting on this start take it in a moment; the grace keeps a
+        # release from beating them to it.
+        _mark_handed_out(chat_id, pod_name)
         if runner_types.same(rtype, current_runner_type(chat_id)):
             _store_runner(chat_id, info)
             _start_failed_at.pop(chat_id, None)
-            _release_soon(chat_id)
-        else:
-            # Switched to another size while this one started. Whoever
-            # waited on it still gets it; it is released once they finish.
-            _release_soon(chat_id)
+        # Releases the other size's runner, or this one if the chat was
+        # switched away while it started and no call takes it.
+        _release_soon(chat_id)
         return info
     except Exception:
         if runner_types.same(rtype, current_runner_type(chat_id)):
@@ -1597,25 +1598,36 @@ async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
     await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
 
 
-async def ensure_runner(chat_id: str, *, emitter=None) -> dict:
+async def ensure_runner(chat_id: str, *, emitter=None, take: bool = False) -> dict:
     """Return a ready runner, starting one if needed.
 
     A remembered runner that no longer answers /health (dead, or its storage
     is disconnected) is replaced here, with the waiting status shown, so the
     tool call runs on the new runner instead of failing.
+
+    take: count the runner as in use from the moment it is returned, with
+    nothing awaited in between, so a switch to another size cannot release
+    it before the caller starts on it. The caller gives it back with
+    _give_back_runner.
     """
+
+    def handed(info: dict) -> dict:
+        if take:
+            _take_runner(chat_id, info)
+        return info
+
     cached = _cached_runner(chat_id)
     if cached and await _runner_alive(cached):
-        return cached
+        return handed(cached)
     if cached:
         _drop_runner(chat_id)
     task = start_runner(chat_id)
     if emitter is None:
-        return await asyncio.shield(task)
+        return handed(await asyncio.shield(task))
     rtype = current_runner_type(chat_id)
     await _emit_waiting(emitter, False, rtype)
     try:
-        return await asyncio.shield(task)
+        return handed(await asyncio.shield(task))
     finally:
         await _emit_waiting(emitter, True, rtype)
 
@@ -1884,36 +1896,86 @@ async def _delete_unhealthy_runner(chat_id: str, info: dict) -> None:
         log.info("delete unhealthy runner claim failed chat=%s", chat_id, exc_info=True)
 
 
+# Tool calls holding each runner, by (chat_id, pod name): counted from the
+# moment ensure_runner hands the runner out until the call ends.
+_runner_users: dict[tuple[str, str], int] = {}
+# When each runner was last handed out or became ready (monotonic).
+_handed_out_at: dict[tuple[str, str], float] = {}
+# A runner of another size handed out this recently is not released yet: a
+# call woken by the same start may not have taken it.
+RELEASE_GRACE_SEC = 10.0
+
+
+def _mark_handed_out(chat_id: str, pod_name: Optional[str]) -> None:
+    _handed_out_at[(chat_id, pod_name or "")] = time.monotonic()
+
+
+def _take_runner(chat_id: str, info: dict) -> None:
+    key = (chat_id, info.get("pod_name") or "")
+    _runner_users[key] = _runner_users.get(key, 0) + 1
+    _handed_out_at[key] = time.monotonic()
+
+
+def _give_back_runner(chat_id: str, info: dict) -> None:
+    """The call is done with this runner. The last call on a size the chat
+    was switched away from releases it."""
+    key = (chat_id, info.get("pod_name") or "")
+    left = _runner_users.get(key, 1) - 1
+    if left > 0:
+        _runner_users[key] = left
+        return
+    _runner_users.pop(key, None)
+    _handed_out_at.pop(key, None)
+    if not runner_types.same(info.get("rtype"), current_runner_type(chat_id)):
+        _release_soon(chat_id)
+
+
 def _runner_busy(chat_id: str, pod_name: Optional[str]) -> bool:
-    """True while a tool call of this chat is running on that runner."""
-    entry = _watchers.get((chat_id, pod_name or ""))
-    return entry is not None and entry[1] > 0
+    """True while a tool call of this chat holds that runner."""
+    return _runner_users.get((chat_id, pod_name or ""), 0) > 0
+
+
+def _just_handed_out(chat_id: str, pod_name: Optional[str]) -> bool:
+    at = _handed_out_at.get((chat_id, pod_name or ""))
+    return at is not None and time.monotonic() - at < RELEASE_GRACE_SEC
 
 
 async def release_other_runners(chat_id: str) -> None:
     """Delete this chat's claims of sizes it no longer uses.
 
-    A runner with a tool call still running is left; it is released when its
-    last call finishes.
+    A runner a tool call holds is left; it is released when that call gives
+    it back. One handed out or started within RELEASE_GRACE_SEC is left too,
+    and looked at again once the grace is over. Both are checked right
+    before each delete, with nothing awaited in between.
     """
-    keep = claim_name(chat_id, current_runner_type(chat_id))
     try:
         claims = await list_chat_claims(chat_id)
     except Exception:
         log.debug("listing runner claims failed chat=%s", chat_id, exc_info=True)
         return
+    again = False
     for claim in claims:
         meta = claim.get("metadata") or {}
         name = meta.get("name")
+        keep = claim_name(chat_id, current_runner_type(chat_id))
         if not name or name == keep or meta.get("deletionTimestamp"):
             continue
-        if _runner_busy(chat_id, _pod_ref(claim)):
+        pod_name = _pod_ref(claim)
+        if _runner_busy(chat_id, pod_name):
+            continue
+        if _just_handed_out(chat_id, pod_name):
+            again = True
             continue
         log.info("releasing runner of another size chat=%s claim=%s", chat_id, name)
+        _handed_out_at.pop((chat_id, pod_name or ""), None)
         try:
             await _delete_claim_named(name, meta.get("uid"))
         except Exception:
             log.info("release runner claim failed chat=%s claim=%s", chat_id, name, exc_info=True)
+    if again:
+        asyncio.get_running_loop().call_later(
+            RELEASE_GRACE_SEC, _release_soon, chat_id
+        )
 
 
 _releases: dict[str, asyncio.Task] = {}
@@ -2028,9 +2090,6 @@ async def _watching_runner(chat_id: str, info: dict):
             entry[0].cancel()
             if _watchers.get(key) is entry:
                 _watchers.pop(key, None)
-            if not runner_types.same(info.get("rtype"), current_runner_type(chat_id)):
-                # The last call on a size the chat was switched away from.
-                _release_soon(chat_id)
 
 
 async def exec_on_runner(
@@ -2179,9 +2238,56 @@ async def run_skill_on_runner(
     timeout: int,
     emitter=None,
 ) -> dict:
+    info = await ensure_runner(chat_id, emitter=emitter, take=True)
+    try:
+        result = await _run_skill_with_runner(
+            chat_id=chat_id,
+            info=info,
+            skill_dir=skill_dir,
+            script_path=script_path,
+            args=args,
+            env=env,
+            timeout=timeout,
+        )
+    finally:
+        _give_back_runner(chat_id, info)
+    usage = result.get(TOOL_RESOURCE_USAGE_KEY)
+    if usage:
+        _last_skill_usage[chat_id] = {
+            **usage,
+            "script": script_path.name,
+            "rtype": info.get("rtype"),
+            "finished_at": time.time(),
+        }
+    return result
+
+
+# The resource use of each chat's most recent skill that reported it, for
+# get_tool_runner_info. In memory only.
+_last_skill_usage: dict[str, dict] = {}
+
+
+def last_skill_usage(chat_id: str) -> Optional[dict]:
+    return _last_skill_usage.get(chat_id)
+
+
+def runner_calls_running(chat_id: str) -> int:
+    """Tool calls of this chat holding a runner now, of any size."""
+    return sum(n for (cid, _), n in _runner_users.items() if cid == chat_id)
+
+
+async def _run_skill_with_runner(
+    *,
+    chat_id: str,
+    info: dict,
+    skill_dir: Path,
+    script_path: Path,
+    args: list[str],
+    env: dict[str, str],
+    timeout: int,
+) -> dict:
     from open_webui.utils.skill_runtime import skill_timeout_message
 
-    info = await ensure_runner(chat_id, emitter=emitter)
     await hold_runner_for_skill(chat_id, timeout, info.get("rtype"))
     workspace = _runner_workspace(chat_id)
     exec_started = time.monotonic()

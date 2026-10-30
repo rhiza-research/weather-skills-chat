@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
@@ -169,6 +170,8 @@ class SwitchTest(IsolatedAsyncioTestCase):
         k8s._start_types.clear()
         k8s._watchers.clear()
         k8s._switched_chats.clear()
+        k8s._runner_users.clear()
+        k8s._handed_out_at.clear()
 
     def tearDown(self):
         runner_types._choices.clear()
@@ -211,8 +214,8 @@ class SwitchTest(IsolatedAsyncioTestCase):
             {"metadata": {"name": "runner-c1-medium", "uid": "u-med"}, "status": {"sandbox": {"name": "med"}}},
             {"metadata": {"name": "runner-c1-large", "uid": "u-big"}, "status": {"sandbox": {"name": "big"}}},
         ]
-        # A call still running on the medium runner.
-        k8s._watchers[("c1", "med")] = [None, 1, None]
+        # A call still holding the medium runner.
+        k8s._take_runner("c1", {"pod_name": "med"})
         with patch(f"{K}.list_chat_claims", AsyncMock(return_value=claims)), patch(
             f"{K}._delete_claim_named", AsyncMock()
         ) as delete:
@@ -222,13 +225,76 @@ class SwitchTest(IsolatedAsyncioTestCase):
     async def test_the_last_call_on_an_old_size_releases_it(self):
         k8s.switch_runner_type("c1", LARGE, _catalog())
         old = {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None}
-        with patch(f"{K}._watch_runner", AsyncMock()), patch(
-            f"{K}.release_other_runners", AsyncMock()
-        ) as release:
-            async with k8s._watching_runner("c1", old):
-                release.assert_not_awaited()
+        k8s._take_runner("c1", old)
+        k8s._take_runner("c1", old)
+        with patch(f"{K}.release_other_runners", AsyncMock()) as release:
+            k8s._give_back_runner("c1", old)
+            await asyncio.sleep(0)
+            release.assert_not_awaited()
+            k8s._give_back_runner("c1", old)
             await asyncio.sleep(0)
         release.assert_awaited_once_with("c1")
+        self.assertFalse(k8s._runner_busy("c1", "std"))
+
+    async def test_a_runner_handed_out_but_not_yet_running_is_kept(self):
+        """The race: a call has the old runner but has not started on it."""
+        k8s.switch_runner_type("c1", MEDIUM, _catalog())
+        old = {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None}
+        claims = [
+            {"metadata": {"name": "runner-c1", "uid": "u-std"}, "status": {"sandbox": {"name": "std"}}},
+        ]
+
+        async def start(chat_id):
+            return old
+
+        with patch(f"{K}._run_start", side_effect=start), patch(
+            f"{K}.list_chat_claims", AsyncMock(return_value=claims)
+        ), patch(f"{K}._delete_claim_named", AsyncMock()) as delete:
+            info = await k8s.ensure_runner("c1", take=True)
+            # Released now, before the call starts: the runner must stay.
+            await k8s.release_other_runners("c1")
+            delete.assert_not_awaited()
+            k8s._give_back_runner("c1", info)
+            await asyncio.sleep(0)
+            await k8s._releases["c1"]
+        delete.assert_awaited_once_with("runner-c1", "u-std")
+
+    async def test_a_runner_that_just_started_waits_out_the_grace(self):
+        k8s.switch_runner_type("c1", MEDIUM, _catalog())
+        k8s._mark_handed_out("c1", "std")
+        claims = [
+            {"metadata": {"name": "runner-c1", "uid": "u-std"}, "status": {"sandbox": {"name": "std"}}},
+        ]
+        with patch(f"{K}.RELEASE_GRACE_SEC", 0.05), patch(
+            f"{K}.list_chat_claims", AsyncMock(return_value=claims)
+        ), patch(f"{K}._delete_claim_named", AsyncMock()) as delete:
+            await k8s.release_other_runners("c1")
+            delete.assert_not_awaited()
+            await asyncio.sleep(0.1)
+            await k8s._releases["c1"]
+        delete.assert_awaited_once_with("runner-c1", "u-std")
+
+    async def test_a_skill_gives_its_runner_back_when_it_fails(self):
+        info = {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None}
+
+        async def ensure(chat_id, *, emitter=None, take=False):
+            if take:
+                k8s._take_runner(chat_id, info)
+            return info
+
+        with patch(f"{K}.ensure_runner", side_effect=ensure), patch(
+            f"{K}._run_skill_with_runner", AsyncMock(side_effect=RuntimeError("boom"))
+        ):
+            with self.assertRaises(RuntimeError):
+                await k8s.run_skill_on_runner(
+                    chat_id="c1",
+                    skill_dir=Path("/x"),
+                    script_path=Path("/x/s.py"),
+                    args=[],
+                    env={},
+                    timeout=30,
+                )
+        self.assertFalse(k8s._runner_busy("c1", "std"))
 
     async def test_a_chat_never_switched_lists_no_claims(self):
         with patch(f"{K}.list_chat_claims", AsyncMock()) as listing:
@@ -339,3 +405,91 @@ class RequestToolRunnerTest(IsolatedAsyncioTestCase):
         result, asked, start = await self._call("standard")
         self.assertIn("already", result)
         start.assert_not_called()
+
+
+class RunnerInfoToolTest(IsolatedAsyncioTestCase):
+    def setUp(self):
+        k8s._last_skill_usage.clear()
+        k8s._runner_users.clear()
+
+    def tearDown(self):
+        runner_types._choices.clear()
+        self.setUp()
+
+    async def _call(self, *, state="ready", metrics=None, allowed=None):
+        from open_webui.utils import builtin_tools
+
+        access = SimpleNamespace(readable=True)
+        with patch.object(builtin_tools, "_chat_access", AsyncMock(return_value=access)), patch(
+            f"{K}.runner_catalog", AsyncMock(return_value=_catalog())
+        ), patch(
+            f"{K}.runner_types_for_org", AsyncMock(return_value=allowed or _catalog())
+        ), patch(
+            f"{K}.runner_status", AsyncMock(return_value={"state": state})
+        ), patch(
+            f"{K}.runner_metrics", AsyncMock(return_value=metrics or {})
+        ) as read_metrics:
+            text = await builtin_tools.get_tool_runner_info(
+                __user__={"id": "u1"}, __metadata__={"chat_id": "c1", "organization_id": "org"}
+            )
+        return text, read_metrics
+
+    async def test_ready_runner_with_a_recent_skill(self):
+        k8s.switch_runner_type("c1", LARGE, _catalog())
+        k8s._last_skill_usage["c1"] = {
+            "cpu_seconds": 120.0,
+            "memory_mb": 12 * 1024,
+            "run_seconds": 60.0,
+            "script": "fetch.py",
+            "rtype": LARGE,
+            "finished_at": time.time() - 30,
+        }
+        k8s._take_runner("c1", {"pod_name": "big"})
+        text, _ = await self._call(
+            metrics={"memory_bytes": 3 * 2**30, "memory_limit_bytes": 52 * 2**30}
+        )
+        self.assertIn("Large (8 CPU cores, 52 GiB memory)", text)
+        self.assertIn("State: ready.", text)
+        self.assertIn("Memory in use now: 3.0 of 52 GiB (6%)", text)
+        self.assertIn("Skills running now: 1.", text)
+        self.assertIn("`fetch.py` on the Large runner", text)
+        self.assertIn("12.0 GiB", text)
+        self.assertIn("about 2.0 cores", text)
+        self.assertIn("Medium", text)
+        self.assertNotIn("Other sizes this chat can use: Large", text)
+
+    async def test_a_stopped_runner_is_not_started_or_read(self):
+        text, read_metrics = await self._call(state="paused", allowed=[STANDARD])
+        self.assertIn("Standard (8 CPU cores, 8 GiB memory)", text)
+        self.assertIn("not running", text)
+        self.assertIn("No skill has reported", text)
+        self.assertNotIn("Other sizes", text)
+        read_metrics.assert_not_awaited()
+
+    async def test_a_skill_run_records_its_usage(self):
+        info = {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None}
+
+        async def ensure(chat_id, *, emitter=None, take=False):
+            if take:
+                k8s._take_runner(chat_id, info)
+            return info
+
+        result = {
+            "ok": True,
+            k8s.TOOL_RESOURCE_USAGE_KEY: {"cpu_seconds": 1.0, "memory_mb": 50.0, "run_seconds": 2.0},
+        }
+        with patch(f"{K}.ensure_runner", side_effect=ensure), patch(
+            f"{K}._run_skill_with_runner", AsyncMock(return_value=result)
+        ):
+            await k8s.run_skill_on_runner(
+                chat_id="c1",
+                skill_dir=Path("/x"),
+                script_path=Path("/x/plot.py"),
+                args=[],
+                env={},
+                timeout=30,
+            )
+        usage = k8s.last_skill_usage("c1")
+        self.assertEqual(usage["script"], "plot.py")
+        self.assertEqual(usage["memory_mb"], 50.0)
+        self.assertIsNone(usage["rtype"])
