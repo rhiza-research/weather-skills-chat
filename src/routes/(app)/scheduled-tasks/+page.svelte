@@ -29,6 +29,7 @@
 	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import BarsArrowUp from '$lib/components/icons/BarsArrowUp.svelte';
 	import Check from '$lib/components/icons/Check.svelte';
+	import Search from '$lib/components/icons/Search.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -56,7 +57,18 @@
 		{ value: 'name', label: $i18n.t('Name') }
 	] as { value: TaskSort; label: string }[];
 
-	$: tasks = sortTasks($scheduledTasks ?? [], sortBy);
+	let query = '';
+
+	// Filters after sorting, so matches keep the chosen order.
+	$: allTasks = sortTasks($scheduledTasks ?? [], sortBy);
+	$: needle = query.trim().toLowerCase();
+	$: tasks = needle
+		? allTasks.filter(
+				(t) =>
+					(t.name ?? '').toLowerCase().includes(needle) ||
+					(t.prompt ?? '').toLowerCase().includes(needle)
+			)
+		: allTasks;
 	$: loaded = $scheduledTasks !== null;
 
 	$: currentOrg = ($organizations ?? []).find((org) => org.id === $activeOrganizationId);
@@ -123,6 +135,18 @@
 
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
 		<div class="flex items-center justify-end gap-1">
+			<div
+				class="flex w-64 min-w-0 items-center gap-2 mr-1 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-850"
+			>
+				<Search className="size-3.5 shrink-0 text-gray-500" />
+				<input
+					class="w-full min-w-0 text-sm bg-transparent outline-hidden"
+					type="search"
+					bind:value={query}
+					placeholder={$i18n.t('Search scheduled tasks')}
+					aria-label={$i18n.t('Search scheduled tasks')}
+				/>
+			</div>
 			<Dropdown bind:show={showSort}>
 				<Tooltip content={$i18n.t('Sort')}>
 					<button
@@ -162,11 +186,15 @@
 			</a>
 		</div>
 
-		{#if loaded && tasks.length === 0}
+		{#if loaded && allTasks.length === 0}
 			<div class="text-sm text-gray-500 text-center py-8">
 				{$i18n.t(
 					'No scheduled tasks yet. Create one, or ask in a chat to run a task on a schedule.'
 				)}
+			</div>
+		{:else if loaded && tasks.length === 0}
+			<div class="text-sm text-gray-500 text-center py-8">
+				{$i18n.t('No scheduled tasks match your search.')}
 			</div>
 		{/if}
 
