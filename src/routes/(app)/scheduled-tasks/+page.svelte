@@ -136,11 +136,11 @@
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
 		<div class="flex items-center justify-end gap-1">
 			<div
-				class="flex flex-1 items-center gap-2 mr-1 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-850"
+				class="flex w-64 min-w-0 items-center gap-2 mr-1 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-850"
 			>
 				<Search className="size-3.5 shrink-0 text-gray-500" />
 				<input
-					class="w-full text-sm bg-transparent outline-hidden"
+					class="w-full min-w-0 text-sm bg-transparent outline-hidden"
 					type="search"
 					bind:value={query}
 					placeholder={$i18n.t('Search scheduled tasks')}
