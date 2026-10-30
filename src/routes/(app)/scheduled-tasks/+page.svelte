@@ -129,7 +129,7 @@
 						class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
 						aria-label={$i18n.t('Sort scheduled tasks')}
 					>
-						<BarsArrowUp className="size-4" strokeWidth="2" />
+						<BarsArrowUp className="size-5" strokeWidth="2" />
 					</button>
 				</Tooltip>
 				<div slot="content">
