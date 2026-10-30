@@ -38,6 +38,7 @@
 	let size: Size | null = null;
 	let sizes: Size[] = [];
 	let switching = '';
+	let root: HTMLElement;
 
 	$: enabled = Boolean($config?.features?.enable_tool_runner);
 	$: visible = enabled && !$temporaryChatEnabled && $chatId && $chatId !== 'local';
@@ -188,6 +189,14 @@
 		}
 	};
 
+	// A click or tap anywhere outside the status and its menu closes the menu, as does Escape.
+	const closeOnOutside = (event: PointerEvent) => {
+		if (open && root && !root.contains(event.target as Node)) open = false;
+	};
+	const closeOnEscape = (event: KeyboardEvent) => {
+		if (open && event.key === 'Escape') open = false;
+	};
+
 	const sizeLimits = (s: Size) =>
 		[s.cpus ? `${fmtCpu(s.cpus)} CPU` : '', s.memory_gib ? `${Math.round(s.memory_gib)} GB` : '']
 			.filter(Boolean)
@@ -213,8 +222,10 @@
 		.join(' · ');
 </script>
 
+<svelte:window on:pointerdown={closeOnOutside} on:keydown={closeOnEscape} />
+
 {#if visible && state !== 'hidden'}
-	<div class="relative">
+	<div class="relative" bind:this={root}>
 		<button
 			type="button"
 			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-md hover:bg-gray-50 dark:hover:bg-gray-850"
