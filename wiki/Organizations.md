@@ -39,6 +39,8 @@ Models, skill packs, and knowledge bases form a catalog.
 - Public items are managed by platform admins in the platform organization and appear in every organization. A platform admin decides whether each one starts on or off. An organization admin can then turn it on or off for their own organization. A platform admin can also withdraw an item from every organization; it stays listed in the platform organization so it can be brought back.
 - Organization items are private to one organization. Its admins can add models, skill packs, or knowledge bases only when a platform admin allows that kind for the organization. All three are off by default.
 
+Organizations can use large tool runners, the runner sizes that need approval. A platform admin can turn that off for an organization with **Allow large runners** in the organizations list; it is on by default. The platform organization can always use them. See [[Tool Runner#runner-sizes]].
+
 [[Skill Packs]] adds controls for single skills inside a pack.
 
 ## Sharing

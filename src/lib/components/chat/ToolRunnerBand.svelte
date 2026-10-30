@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
+	import { toast } from 'svelte-sonner';
 	import { chatId, chatRunner, config, temporaryChatEnabled } from '$lib/stores';
-	import { getToolRunner } from '$lib/apis/chats';
+	import { getToolRunner, getToolRunnerSizes, setToolRunnerSize } from '$lib/apis/chats';
 	import { fmtCpu, fmtMemGib, runnerResourcesLine } from '$lib/chat/runnerResources';
 
 	const i18n = getContext('i18n');
@@ -11,6 +12,16 @@
 	const SWAP_FLAG_BYTES = 500 * 1024 ** 2;
 
 	type Sample = { t: number; cpu: number; memory: number; swap: boolean };
+	type Size = {
+		type: string;
+		display_name: string;
+		description?: string;
+		warm?: boolean;
+		requires_approval?: boolean;
+		cpus?: number | null;
+		memory_gib?: number | null;
+		default?: boolean;
+	};
 	type BandState = 'hidden' | 'paused' | 'starting' | 'ready' | 'degraded';
 
 	let state: BandState = 'hidden';
@@ -23,6 +34,11 @@
 	let memLimitBytes: number | null = null;
 	let startedFor = '';
 	let ensuring = false;
+	// The chat's runner size, and the sizes it can switch to (read when the menu opens).
+	let size: Size | null = null;
+	let sizes: Size[] = [];
+	let switching = '';
+	let root: HTMLElement;
 
 	$: enabled = Boolean($config?.features?.enable_tool_runner);
 	$: visible = enabled && !$temporaryChatEnabled && $chatId && $chatId !== 'local';
@@ -50,6 +66,9 @@
 		lastCpuTime = null;
 		cpuLimit = null;
 		memLimitBytes = null;
+		size = null;
+		sizes = [];
+		switching = '';
 	};
 
 	const readStatus = async (id: string) => {
@@ -109,7 +128,21 @@
 		samples = [...samples.filter((s) => Date.now() - s.t < 60_000), next];
 	};
 
-	const applyLive = (row: { state?: string; metrics?: Record<string, any> | null }) => {
+	const applyLive = (row: {
+		state?: string;
+		metrics?: Record<string, any> | null;
+		size?: Size | null;
+	}) => {
+		if (row.size) {
+			if (size && row.size.type !== size.type) {
+				// Another size: its limits come with its first metrics.
+				cpuLimit = null;
+				memLimitBytes = null;
+				samples = [];
+				lastCpuUsage = null;
+			}
+			size = row.size;
+		}
 		if (row.state === 'ready') state = 'ready';
 		else if (row.state === 'degraded') {
 			// The runner reports itself unhealthy, or its pod is not ready, or it
@@ -128,10 +161,46 @@
 		if (row.metrics) applyMetrics(row.metrics);
 	};
 
-	const toggle = () => {
-		if (state !== 'ready') return;
-		open = !open;
+	const loadSizes = async (id: string) => {
+		const res = await getToolRunnerSizes(localStorage.token, id).catch(() => null);
+		if (id !== $chatId || !res) return;
+		sizes = res.sizes ?? [];
 	};
+
+	const toggle = () => {
+		if (state === 'hidden') return;
+		open = !open;
+		if (open && $chatId) loadSizes($chatId);
+	};
+
+	const pickSize = async (next: Size) => {
+		if (!$chatId || next.type === size?.type || switching) return;
+		switching = next.type;
+		const id = $chatId;
+		try {
+			const res = await setToolRunnerSize(localStorage.token, id, next.type);
+			if (id !== $chatId) return;
+			open = false;
+			applyLive({ ...res, size: res?.size ?? next });
+		} catch (error) {
+			toast.error(`${error}`);
+		} finally {
+			switching = '';
+		}
+	};
+
+	// A click or tap anywhere outside the status and its menu closes the menu, as does Escape.
+	const closeOnOutside = (event: PointerEvent) => {
+		if (open && root && !root.contains(event.target as Node)) open = false;
+	};
+	const closeOnEscape = (event: KeyboardEvent) => {
+		if (open && event.key === 'Escape') open = false;
+	};
+
+	const sizeLimits = (s: Size) =>
+		[s.cpus ? `${fmtCpu(s.cpus)} CPU` : '', s.memory_gib ? `${Math.round(s.memory_gib)} GB` : '']
+			.filter(Boolean)
+			.join(' · ');
 
 	$: latest = samples[samples.length - 1];
 	$: resources = runnerResourcesLine(latest, cpuLimit, memLimitBytes);
@@ -146,15 +215,20 @@
 	$: cpuPct = latest && cpuLimit ? Math.min(100, (latest.cpu / cpuLimit) * 100) : 0;
 	$: memPct = latest && memLimitBytes ? Math.min(100, (latest.memory / memLimitBytes) * 100) : 0;
 	$: inSwap = Boolean(latest?.swap);
+	// Named only when the chat is on another size than the default.
+	$: sizeName = size && !size.default ? size.display_name : '';
+	$: detailLine = [sizeName, state === 'ready' || state === 'starting' ? resources : '']
+		.filter(Boolean)
+		.join(' · ');
 </script>
 
+<svelte:window on:pointerdown={closeOnOutside} on:keydown={closeOnEscape} />
+
 {#if visible && state !== 'hidden'}
-	<div class="relative">
+	<div class="relative" bind:this={root}>
 		<button
 			type="button"
-			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-md {state === 'ready'
-				? 'hover:bg-gray-50 dark:hover:bg-gray-850'
-				: ''}"
+			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-md hover:bg-gray-50 dark:hover:bg-gray-850"
 			on:click={toggle}
 			title={statusLabel}
 			aria-expanded={open}
@@ -179,49 +253,90 @@
 						? 'text-red-600 dark:text-red-400'
 						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
-				{#if (state === 'ready' || state === 'starting') && resources}
+				{#if detailLine}
 					<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
-						>{resources}</span
+						>{detailLine}</span
 					>
 				{/if}
 			</div>
 		</button>
-		{#if open && state === 'ready'}
+		{#if open}
 			<div
-				class="absolute right-0 top-full mt-1 z-40 w-64 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
+				class="absolute right-0 top-full mt-1 z-40 w-72 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
 			>
-				<div class="mb-1 text-gray-500">
-					{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)}{cpuLimit ? ` / ${fmtCpu(cpuLimit)}` : ''}
-					{$i18n.t('cores')})
-				</div>
-				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
-					<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
-				</div>
-				<div class="mt-2 mb-1 text-gray-500">
-					{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)}{memLimitBytes
-						? ` / ${fmtMemGib(memLimitBytes)}`
-						: ''} GB)
-				</div>
-				<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
-					<div
-						class="h-2 rounded {inSwap ? 'bg-red-500' : 'bg-sky-500'}"
-						style="width: {memPct}%"
-					></div>
-				</div>
-				<div class="mt-2.5 mb-1 text-gray-500">{$i18n.t('Memory, last minute')}</div>
-				<div class="flex gap-0.5 h-8 items-end">
-					{#each samples as s}
-						<div
-							class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-sky-400'}"
-							style="height: {memLimitBytes ? Math.max(8, (s.memory / memLimitBytes) * 100) : 8}%"
-							title="{fmtMemGib(s.memory)} GB{s.swap ? ` · ${$i18n.t('swap')}` : ''}"
-						></div>
-					{/each}
-				</div>
-				{#if inSwap}
-					<div class="mt-1 text-red-600 dark:text-red-400">
-						{$i18n.t('Using disk swap')}
+				{#if state === 'ready'}
+					<div class="mb-1 text-gray-500">
+						{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)}{cpuLimit ? ` / ${fmtCpu(cpuLimit)}` : ''}
+						{$i18n.t('cores')})
 					</div>
+					<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
+						<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
+					</div>
+					<div class="mt-2 mb-1 text-gray-500">
+						{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)}{memLimitBytes
+							? ` / ${fmtMemGib(memLimitBytes)}`
+							: ''} GB)
+					</div>
+					<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
+						<div
+							class="h-2 rounded {inSwap ? 'bg-red-500' : 'bg-sky-500'}"
+							style="width: {memPct}%"
+						></div>
+					</div>
+					<div class="mt-2.5 mb-1 text-gray-500">{$i18n.t('Memory, last minute')}</div>
+					<div class="flex gap-0.5 h-8 items-end">
+						{#each samples as s}
+							<div
+								class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-sky-400'}"
+								style="height: {memLimitBytes ? Math.max(8, (s.memory / memLimitBytes) * 100) : 8}%"
+								title="{fmtMemGib(s.memory)} GB{s.swap ? ` · ${$i18n.t('swap')}` : ''}"
+							></div>
+						{/each}
+					</div>
+					{#if inSwap}
+						<div class="mt-1 text-red-600 dark:text-red-400">
+							{$i18n.t('Using disk swap')}
+						</div>
+					{/if}
+				{/if}
+				{#if sizes.length > 1}
+					<div
+						class="{state === 'ready'
+							? 'mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-800'
+							: ''} mb-1.5 text-gray-500"
+					>
+						{$i18n.t('Runner size')}
+					</div>
+					<div class="flex flex-col gap-1" role="radiogroup" aria-label={$i18n.t('Runner size')}>
+						{#each sizes as option}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={option.type === size?.type}
+								class="flex flex-col items-start rounded-md px-2 py-1.5 text-left border {option.type ===
+								size?.type
+									? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
+									: 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850'} disabled:opacity-60"
+								disabled={!!switching}
+								on:click={() => pickSize(option)}
+							>
+								<span class="flex w-full items-center justify-between gap-2">
+									<span class="font-medium text-gray-800 dark:text-gray-100"
+										>{option.display_name}{switching === option.type ? '…' : ''}</span
+									>
+									<span class="text-gray-500 tabular-nums">{sizeLimits(option)}</span>
+								</span>
+								{#if option.description}
+									<span class="text-[11px] text-gray-500">{option.description}</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+					<div class="mt-1.5 text-[11px] text-gray-500">
+						{$i18n.t('A larger size goes back to the default after its runner has been idle.')}
+					</div>
+				{:else if state !== 'ready'}
+					<div class="text-gray-500">{statusLabel}</div>
 				{/if}
 			</div>
 		{/if}

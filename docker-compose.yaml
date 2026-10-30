@@ -92,8 +92,11 @@ services:
       SKILL_K8S_EMULATOR_API_PORT: "18080"
       SKILL_K8S_BIND_PORT: "9090"
       SKILL_K8S_EMULATOR_START_DELAY: ${SKILL_K8S_EMULATOR_START_DELAY:-15}
+      # Sizes with no warm pool (medium, large, xlarge) start this much later,
+      # standing in for a new node on the cluster.
+      SKILL_K8S_EMULATOR_COLD_START_DELAY: ${SKILL_K8S_EMULATOR_COLD_START_DELAY:-45}
       # The limit the memory gauge shows; there is no cgroup here, so nothing
-      # enforces it. Matches the cluster runner limit (infrastructure values.yaml).
+      # enforces it. Each size's metrics report that size's limits instead.
       SKILL_RUNNER_MEMORY_LIMIT_GIB: "8"
     restart: unless-stopped
 

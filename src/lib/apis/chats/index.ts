@@ -1177,6 +1177,35 @@ export const startToolRunner = async (token: string, chatId: string) => {
 	return res.json();
 };
 
+export const getToolRunnerSizes = async (token: string, chatId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner/sizes`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) return { enabled: false, sizes: [], current: null };
+	return res.json();
+};
+
+export const setToolRunnerSize = async (token: string, chatId: string, size: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner/size`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ size })
+	});
+	if (!res.ok) {
+		const err = await res.json().catch(() => ({}));
+		throw err?.detail ?? 'Could not change the tool runner size';
+	}
+	return res.json();
+};
+
 export const archiveAllChats = async (token: string) => {
 	let error = null;
 

@@ -2,6 +2,8 @@
 
 Laptop stand-in for the APIs chat uses on GKE: SandboxClaim, the bind daemon (`/bind`, `/own`, `/quota`, `/unbind`, `/metrics`), and the runner `/exec` server. There is no isolation. Chat sends `/workspace/chat` the same way it does on the cluster; the emulator maps that onto the chat's artifacts folder. `/workspace/.skill-packs` maps inside the artifacts folder. Skill packages use the image uv cache at `/opt/uv-cache` (the same path chat sets as `UV_CACHE_DIR` on the cluster). Compose runs this on the cluster's runner image (`ghcr.io/rhiza-research/weather-skills-sandbox-runner`, built in rhiza-research/infrastructure `images/sandbox-runner`), so skill exec has the same tools. `SANDBOX_RUNNER_IMAGE` picks another tag. Chat reads CPU and memory from the bind daemon `/metrics` URL; the emulator fills that from the local process.
 
+It serves the cluster's runner sizes (standard, medium, large, xlarge, from `runners` in the infrastructure chart) as SandboxTemplates, so chat can list them and switch a chat between them. Each size's metrics report its own CPU and memory limits; nothing enforces them. A size with no warm pool waits `SKILL_K8S_EMULATOR_COLD_START_DELAY` seconds (45 in Compose) before it is ready, standing in for a new node. `SKILL_K8S_EMULATOR_RUNNER_TYPES` (JSON shaped like `RUNNER_TYPES` in `emulator.py`) replaces the sizes.
+
 Compose starts this service when you pass `--isolation=emulator` to `./run-compose.sh`. See `wiki/Development.md`. Compose waits 15 seconds before a new claim is ready so the top-bar starting status can be seen; set `SKILL_K8S_EMULATOR_START_DELAY=0` to turn that off.
 
 To run it by hand, point `SANDBOX_RUNTIME_PATH` at `images/sandbox-runner/sandbox_runtime.py` in an infrastructure checkout:

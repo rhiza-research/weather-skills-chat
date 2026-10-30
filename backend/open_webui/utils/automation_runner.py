@@ -321,6 +321,37 @@ def _first_model_id(*model_lists: Optional[str]) -> Optional[str]:
     return None
 
 
+async def _use_task_runner_size(automation, chat_id: str) -> None:
+    """Put the run's chat on the task's tool runner size.
+
+    Choosing the size on the task counts as the approval a chat asks for.
+    A size the organization can no longer use leaves the default.
+    """
+    from open_webui.env import tool_runner_enabled
+
+    if not automation.runner_type or not tool_runner_enabled():
+        return
+    try:
+        from open_webui.utils.runner_types import find
+        from open_webui.utils.skill_k8s_sandbox import (
+            runner_catalog,
+            runner_types_for_org,
+            switch_runner_type,
+        )
+
+        rtype = find(await runner_types_for_org(automation.organization_id), automation.runner_type)
+        if rtype is None:
+            log.info(
+                "scheduled task %s runner size %s is not available; using the default",
+                automation.id,
+                automation.runner_type,
+            )
+            return
+        switch_runner_type(chat_id, rtype, await runner_catalog())
+    except Exception:
+        log.warning("could not set the runner size for task %s", automation.id, exc_info=True)
+
+
 async def execute_automation(
     request, automation_id: str, triggered_by: str, *, wait: bool = True
 ):
@@ -402,6 +433,7 @@ async def execute_automation(
             raise ValueError("Failed to create chat")
         run = AutomationRuns.update_run(run.id, chat_id=chat.id)
         await notify_run(automation, run)
+        await _use_task_runner_size(automation, chat.id)
 
         notify_ids = [owner_id]
         if automation.visibility == "organization" and automation.organization_id:

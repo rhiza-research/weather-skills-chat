@@ -42,6 +42,8 @@ class Automation(Base):
     # How long a run may take before it is stopped as an error; null uses
     # the default.
     timeout_minutes = Column(Integer, nullable=True)
+    # Tool runner size of the task's runs; None is the default size.
+    runner_type = Column(Text, nullable=True)
     # The user who last changed the task; user_id created it.
     updated_by = Column(Text, nullable=True)
     created_at = Column(BigInteger)
@@ -106,6 +108,7 @@ class AutomationModel(BaseModel):
     features: Optional[dict] = None
     image_updated_at: Optional[int] = None
     timeout_minutes: Optional[int] = None
+    runner_type: Optional[str] = None
     updated_by: Optional[str] = None
     created_at: int
     updated_at: int
@@ -138,6 +141,7 @@ class AutomationForm(BaseModel):
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
     timeout_minutes: Optional[int] = None
+    runner_type: Optional[str] = None
 
 
 class AutomationUpdateForm(BaseModel):
@@ -151,6 +155,7 @@ class AutomationUpdateForm(BaseModel):
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
     timeout_minutes: Optional[int] = None
+    runner_type: Optional[str] = None
 
 
 def _with_skill_names(tool_ids: Optional[list[str]]) -> Optional[list[str]]:
@@ -183,6 +188,7 @@ class AutomationTable:
                 tool_ids=_with_skill_names(form_data.tool_ids),
                 features=form_data.features,
                 timeout_minutes=form_data.timeout_minutes,
+                runner_type=form_data.runner_type or None,
                 updated_by=user_id,
                 created_at=now,
                 updated_at=now,

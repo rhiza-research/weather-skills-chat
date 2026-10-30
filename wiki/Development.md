@@ -31,6 +31,13 @@ Skill confinement needs Linux Landlock. On a machine without it, such as a Mac, 
 
 The emulator speaks the same claim, bind, and exec APIs as the cluster. There is no isolation. It uses the same runner image as the cluster, so skills have the same tools and the same cached skill packages. The runner working directory is the chat's artifacts folder, on the same Docker volume the app uses. A new runner stays starting for a short time so the top-bar spinner can be seen.
 
+The emulator offers the same runner sizes as the cluster, so switching sizes from the status menu or with `request_tool_runner` can be tried locally. A runner of a size with no runners kept ready (medium, large, xlarge) takes longer to start, standing in for a new node. The CPU and memory limits shown are the size's; nothing enforces them.
+
+| Env var | Default in Compose | Effect |
+|-|-|-|
+| `SKILL_K8S_EMULATOR_START_DELAY` | `15` | Seconds before a new runner is ready |
+| `SKILL_K8S_EMULATOR_COLD_START_DELAY` | `45` | Seconds before a new runner of a size with no runners kept ready is ready |
+
 To run the emulator by hand instead of Compose, set `SANDBOX_RUNTIME_PATH` to the runner's `sandbox_runtime.py` from an infrastructure checkout, run `uv run --script sandbox/emulator/emulator.py`, and point the backend at `http://127.0.0.1:18080`.
 
 A real cluster is not a local Compose mode. Staging uses `sandbox.isolation=k8s` on [[Deployment]].

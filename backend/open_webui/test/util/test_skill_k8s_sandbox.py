@@ -36,7 +36,6 @@ from open_webui.utils.skill_k8s_sandbox import (
     public_runner_state,
     RUNNER_DIED_MESSAGE,
     runner_hold_seconds,
-    runner_needs_wait,
     runner_metrics,
     runner_ready,
     runner_status,
@@ -246,25 +245,7 @@ class RemoteScriptPathTest(TestCase):
         self.assertEqual([p.name for p in packs], ["plotting-new"])
 
 
-class RunnerNeedsWaitTest(TestCase):
-    def test_no_claim_waits(self):
-        self.assertTrue(runner_needs_wait(None))
-
-    def test_starting_claim_waits(self):
-        self.assertTrue(
-            runner_needs_wait({"status": {"ready": False, "conditions": []}})
-        )
-
-    def test_ready_without_pod_waits(self):
-        self.assertTrue(runner_needs_wait({"status": {"ready": True}}))
-
-    def test_ready_with_pod_does_not_wait(self):
-        self.assertFalse(
-            runner_needs_wait(
-                {"status": {"ready": True, "sandbox": {"name": "runner-1"}}}
-            )
-        )
-
+class WaitingStatusTest(TestCase):
     def test_waiting_status_copy(self):
         self.assertEqual(WAITING_STATUS, "Waiting on weather skills runner")
 
@@ -601,7 +582,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
         }
         holds = []
 
-        async def get(chat_id):
+        async def get(chat_id, rtype=None):
             return claim
 
         async def extend(body, seconds=None):
@@ -621,7 +602,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
     async def test_run_skill_holds_even_when_the_runner_is_already_ready(self):
         holds = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             info = {"pod_ip": "10.0.0.1", "pod_name": "ready"}
             _store_runner(chat_id, info)
             return info
@@ -629,7 +610,7 @@ class HoldRunnerForSkillTest(IsolatedAsyncioTestCase):
         async def exec_on(chat_id, argv, **kwargs):
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
-        async def hold(chat_id, timeout):
+        async def hold(chat_id, timeout, rtype=None):
             holds.append(timeout)
 
         with patch(
@@ -685,7 +666,7 @@ class RunnerResourceUsageTest(IsolatedAsyncioTestCase):
         _drop_runner("chat-1")
 
     async def _run(self, reply=None, error=None, health="ok"):
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             return {"pod_ip": "10.0.0.1", "pod_name": "ready"}
 
         async def exec_on(chat_id, argv, **kwargs):
@@ -828,7 +809,7 @@ class RecoverBrokenRunnerTest(IsolatedAsyncioTestCase):
         info = {"pod_ip": "10.0.0.1", "pod_name": "old", "claim": {"metadata": {"uid": "claim-old"}}}
         execs = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -982,7 +963,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         _drop_runner("chat-1")
 
     async def _run(self, info, *, exec_result=None, exec_error=None, pod=None, health="ok", event=None):
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -1039,7 +1020,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         )
         # An explicit 503 is definitive: delete that claim now.
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
         self.assertIsNone(_ready_cache.get("chat-1"))
 
     async def test_failed_skill_on_a_healthy_runner_is_the_skills_failure(self):
@@ -1074,7 +1055,7 @@ class RunnerFaultTest(IsolatedAsyncioTestCase):
         pod = {"status": {"phase": "Running", "containerStatuses": [{"name": "runner", "state": {"running": {}}}]}}
         result, delete = await self._run(_runner("old", "u1"), exec_error=RuntimeError("reset"), pod=pod, health="unhealthy")
         self.assertEqual(result["stderr"], RUNNER_DIED_MESSAGE)
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
 
     async def test_failed_skill_with_a_slow_health_answer_is_the_skills_failure(self):
         result, delete = await self._run(
@@ -1391,7 +1372,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         info = _runner("old", "u1")
         deleted = asyncio.Event()
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 
@@ -1402,7 +1383,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
             await asyncio.wait_for(deleted.wait(), timeout=5)
             raise RuntimeError("POST http://10.0.0.1:8888/exec failed: Connection reset by peer")
 
-        async def delete_claim(chat_id, uid=None):
+        async def delete_claim(chat_id, uid=None, rtype=None):
             deleted.set()
 
         running_pod = {"status": {"phase": "Running", "podIP": "10.0.0.1", "containerStatuses": [{"restartCount": 0}]}}
@@ -1441,7 +1422,7 @@ class InFlightWatcherTest(IsolatedAsyncioTestCase):
         results, delete, _ = await self._run_calls(
             ["ok", "unhealthy", "unhealthy", "unhealthy"], n=1, pod=deleting_pod
         )
-        delete.assert_awaited_once_with("chat-1", uid="u1")
+        delete.assert_awaited_once_with("chat-1", uid="u1", rtype=None)
         self.assertEqual(results[0]["stderr"], RUNNER_DIED_MESSAGE)
         self.assertEqual(self.k8s._watchers, {})
 
@@ -1710,7 +1691,7 @@ class EvictedRunnerStartTest(IsolatedAsyncioTestCase):
         evicted_claim = {"metadata": {"uid": "u-old"}, "status": {"ready": False, "sandbox": {"name": "pod-old"}}}
         deleting = {"metadata": {"uid": "u-old", "deletionTimestamp": "2026-10-20T00:22:50Z"}}
         info, mocks = await self._start([evicted_claim, deleting, None])
-        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old")
+        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old", rtype=None)
         mocks["create_claim"].assert_awaited_once()
         # Extending a dead claim's TTL is what kept it alive before.
         mocks["extend_claim_ttl"].assert_not_awaited()
@@ -1720,7 +1701,7 @@ class EvictedRunnerStartTest(IsolatedAsyncioTestCase):
         starting = {"metadata": {"uid": "u-old"}, "status": {"ready": False}}
         evicted_claim = {"metadata": {"uid": "u-old"}, "status": {"ready": False, "sandbox": {"name": "pod-old"}}}
         info, mocks = await self._start([starting, evicted_claim, None])
-        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old")
+        mocks["delete_claim"].assert_awaited_once_with("chat-1", uid="u-old", rtype=None)
         self.assertEqual(info["pod_name"], "pod-new")
 
     async def test_a_claim_that_never_gets_ready_gives_up_without_extending_it(self):
@@ -1886,10 +1867,10 @@ class RunnerResourcesGuidanceTest(IsolatedAsyncioTestCase):
         from open_webui.utils import skill_k8s_sandbox as k8s
 
         self.k8s = k8s
-        k8s._runner_limits_cache = None
+        k8s._catalog_cache = None
 
     def tearDown(self):
-        self.k8s._runner_limits_cache = None
+        self.k8s._catalog_cache = None
 
     async def _guidance(self, k8s_mock):
         with patch("open_webui.utils.skill_k8s_sandbox._k8s", k8s_mock):
@@ -1910,24 +1891,28 @@ class RunnerResourcesGuidanceTest(IsolatedAsyncioTestCase):
     async def test_other_quantity_forms(self):
         text = await self._guidance(AsyncMock(return_value=_template(cpu="1000m", memory="12288Mi")))
         self.assertIn("1 CPU core and 12 GiB of memory", text)
-        self.k8s._runner_limits_cache = None
+        self.k8s._catalog_cache = None
         text = await self._guidance(AsyncMock(return_value=_template(cpu="2.5", memory="3686Mi")))
         self.assertIn("2.5 CPU cores and 3.6 GiB of memory", text)
 
     async def test_read_once_and_cached(self):
+        # No catalog listed (an older chart): the default template is read
+        # once, then the cache answers.
         k8s_mock = AsyncMock(return_value=_template())
         await self._guidance(k8s_mock)
+        reads = k8s_mock.await_count
         await self._guidance(k8s_mock)
-        self.assertEqual(k8s_mock.await_count, 1)
+        self.assertEqual(k8s_mock.await_count, reads)
 
     async def test_a_failed_read_leaves_the_line_out_and_retries_later(self):
         k8s_mock = AsyncMock(side_effect=RuntimeError("k8s GET ... -> 403: forbidden"))
         self.assertIsNone(await self._guidance(k8s_mock))
+        reads = k8s_mock.await_count
         self.assertIsNone(await self._guidance(k8s_mock))
-        self.assertEqual(k8s_mock.await_count, 1)
-        read_at, ttl, _ = self.k8s._runner_limits_cache
+        self.assertEqual(k8s_mock.await_count, reads)
+        read_at, ttl, sizes = self.k8s._catalog_cache
         self.assertEqual(ttl, self.k8s.RUNNER_LIMITS_RETRY_SEC)
-        self.k8s._runner_limits_cache = (read_at - ttl, ttl, None)
+        self.k8s._catalog_cache = (read_at - ttl, ttl, sizes)
         k8s_mock.side_effect = None
         k8s_mock.return_value = _template()
         self.assertIn("8 GiB", await self._guidance(k8s_mock))
@@ -1990,7 +1975,7 @@ class RunnerDiesDuringCallTest(IsolatedAsyncioTestCase):
         info = _runner("old", "u1")
         cancelled = []
 
-        async def ensure(chat_id, *, emitter=None):
+        async def ensure(chat_id, *, emitter=None, take=False):
             _store_runner(chat_id, info)
             return info
 

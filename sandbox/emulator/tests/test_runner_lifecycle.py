@@ -129,9 +129,9 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         self.runtime_starts = 0
         orig_start = emulator._start_runtime
 
-        def counted_start(chat_id: str, port: int) -> None:
+        def counted_start(key: str, chat_id: str, port: int) -> None:
             self.runtime_starts += 1
-            orig_start(chat_id, port)
+            orig_start(key, chat_id, port)
 
         self._orig_start = orig_start
         emulator._start_runtime = counted_start
@@ -165,8 +165,8 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         emulator._start_runtime = self._orig_start
         self.api.shutdown()
         self.bind.shutdown()
-        for chat_id in list(emulator._procs):
-            emulator._stop_runtime(chat_id)
+        for key in list(emulator._procs):
+            emulator._stop_runtime(key)
         k8s._ready_cache.clear()
         k8s._starts.clear()
         if getattr(self, "_packs_patch", None) is not None:
@@ -188,7 +188,7 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
 
     def _kill_runtime(self, chat_id: str) -> None:
         """Kill the exec process. Leave the claim, as a crashed pod would."""
-        emulator._stop_runtime(chat_id)
+        emulator._stop_runtime(k8s.claim_name(chat_id))
 
     def _live_runtimes(self) -> int:
         return sum(1 for proc in emulator._procs.values() if proc.poll() is None)
@@ -243,6 +243,47 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
             env={},
             timeout=30,
         )
+
+    async def test_switching_size_drains_the_old_runner_then_releases_it(self):
+        from open_webui.utils import runner_types
+
+        chat_id = "switch-size"
+        k8s._catalog_cache = None
+        try:
+            catalog = await k8s.runner_catalog()
+            self.assertEqual([t.type for t in catalog], ["standard", "medium", "large", "xlarge"])
+            medium = runner_types.find(catalog, "medium")
+
+            first = await self._run(chat_id, self.hello_skill, "hello.py")
+            self.assertTrue(first.get("ok"), first)
+            busy = asyncio.create_task(
+                self._run(chat_id, self.sleep_skill, "sleep.py", argv=["3"])
+            )
+            await self._wait_until_in_flight(chat_id, busy)
+
+            k8s.switch_runner_type(chat_id, medium, catalog)
+            moved = await self._run(chat_id, self.hello_skill, "hello.py")
+            self.assertTrue(moved.get("ok"), moved)
+            self.assertEqual(
+                sorted(emulator._claims),
+                [f"runner-{chat_id}", f"runner-{chat_id}-medium"],
+                "the standard runner stays while its skill runs",
+            )
+
+            slept = await busy
+            self.assertTrue(slept.get("ok"), slept)
+            deadline = time.monotonic() + 5
+            while len(emulator._claims) > 1 and time.monotonic() < deadline:
+                await asyncio.sleep(0.1)
+            self.assertEqual(sorted(emulator._claims), [f"runner-{chat_id}-medium"])
+
+            metrics = await k8s.runner_metrics(chat_id)
+            self.assertEqual(metrics["memory_limit_bytes"], 16 * 1024**3)
+            self.assertEqual(await self._public_state(chat_id), "ready")
+        finally:
+            runner_types._choices.clear()
+            k8s._switched_chats.clear()
+            k8s._catalog_cache = None
 
     async def test_idle_death_goes_degraded_then_paused_then_next_skill_claims_one_runner(self):
         chat_id = "idle-death"

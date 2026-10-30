@@ -32,6 +32,12 @@ const request = async (token: string, path: string, options: RequestInit = {}) =
 
 export const getAutomations = async (token: string) => request(token, '/automations/');
 
+export const getRunnerSizes = async (token: string, organizationId?: string | null) =>
+	request(
+		token,
+		`/automations/runner-sizes${organizationId ? `?organization_id=${encodeURIComponent(organizationId)}` : ''}`
+	);
+
 export const getAutomationById = async (token: string, id: string) =>
 	request(token, `/automations/${id}`);
 

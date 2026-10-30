@@ -1372,12 +1372,28 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         from open_webui.utils.skill_k8s_sandbox import (
                             RUNNER_FAILURE_GUIDANCE,
                             runner_resources_guidance,
+                            runner_sizes_guidance,
+                            runner_types_for_org,
                         )
 
                         hints.append(RUNNER_FAILURE_GUIDANCE)
-                        resources = await runner_resources_guidance()
+                        chat_id = metadata.get("chat_id")
+                        resources = await runner_resources_guidance(chat_id)
                         if resources:
                             hints.append(resources)
+                        if chat_id and chat_id != "local":
+                            try:
+                                sizes = await runner_sizes_guidance(
+                                    chat_id,
+                                    await runner_types_for_org(
+                                        metadata.get("organization_id")
+                                    ),
+                                )
+                            except Exception:
+                                log.debug("runner sizes unavailable", exc_info=True)
+                                sizes = None
+                            if sizes:
+                                hints.append(sizes)
                 if hints:
                     combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []
@@ -2819,7 +2835,18 @@ async def process_chat_response(
                         )
 
                         hide_runner_wait = emit_runner_waiting
-                        if not runner_ready(metadata.get("chat_id")):
+                        batch_tools = metadata.get("tools", {})
+                        # A batch of only built-in tools (request_tool_runner
+                        # among them) runs on the chat server: starting a
+                        # runner for it would start one of the old size.
+                        needs_runner = any(
+                            (batch_tools.get(call.get("function", {}).get("name")) or {}).get(
+                                "toolkit_id"
+                            )
+                            != "builtin"
+                            for call, _ in prepared_calls
+                        )
+                        if needs_runner and not runner_ready(metadata.get("chat_id")):
                             await await_runner_for_chat(
                                 metadata.get("chat_id"), event_emitter
                             )
