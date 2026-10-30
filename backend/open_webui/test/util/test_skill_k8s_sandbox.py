@@ -36,7 +36,6 @@ from open_webui.utils.skill_k8s_sandbox import (
     public_runner_state,
     RUNNER_DIED_MESSAGE,
     runner_hold_seconds,
-    runner_needs_wait,
     runner_metrics,
     runner_ready,
     runner_status,
@@ -246,25 +245,7 @@ class RemoteScriptPathTest(TestCase):
         self.assertEqual([p.name for p in packs], ["plotting-new"])
 
 
-class RunnerNeedsWaitTest(TestCase):
-    def test_no_claim_waits(self):
-        self.assertTrue(runner_needs_wait(None))
-
-    def test_starting_claim_waits(self):
-        self.assertTrue(
-            runner_needs_wait({"status": {"ready": False, "conditions": []}})
-        )
-
-    def test_ready_without_pod_waits(self):
-        self.assertTrue(runner_needs_wait({"status": {"ready": True}}))
-
-    def test_ready_with_pod_does_not_wait(self):
-        self.assertFalse(
-            runner_needs_wait(
-                {"status": {"ready": True, "sandbox": {"name": "runner-1"}}}
-            )
-        )
-
+class WaitingStatusTest(TestCase):
     def test_waiting_status_copy(self):
         self.assertEqual(WAITING_STATUS, "Waiting on weather skills runner")
 

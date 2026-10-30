@@ -535,11 +535,6 @@ def _claim_ready(claim: dict) -> bool:
     return bool((claim.get("status") or {}).get("ready"))
 
 
-def runner_needs_wait(claim: Optional[dict]) -> bool:
-    """True when no runner pod is assigned yet (warm pool / first start / idle stop)."""
-    return claim is None or not (_claim_ready(claim) and _pod_ref(claim))
-
-
 def _waiting_status(rtype: Optional[RunnerType] = None) -> str:
     """The waiting line: names a size other than the default, and warns when it starts cold."""
     if rtype is None:
