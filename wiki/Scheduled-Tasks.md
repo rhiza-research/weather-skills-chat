@@ -23,6 +23,8 @@ The Scheduled tasks page lists every task the user can see in the active organiz
 
 Tasks are sorted by most recent run by default. The sort button beside **New scheduled task** sorts them by most recently edited or by name instead. Turning a task's scheduled runs on or off counts as an edit. The choice is remembered in that browser, separately from the sidebar's.
 
+The search box beside the sort button shows only the tasks whose name or prompt contains the text typed, ignoring case, in the chosen sort order.
+
 ## The task page
 
 Each scheduled task has a page with its settings in a single column and its run history below. Next to the Save button, the page shows who created the task and when, and who last changed it and when. Changes made by the model in a chat count as the user's. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]. With **Agent not allowed to read files**, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
