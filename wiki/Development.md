@@ -5,7 +5,7 @@ This page covers running Weather Skills Chat from a source checkout. Which branc
 ## Requirements
 
 - Node.js 18.13 through 22.x, and npm.
-- Python 3.11 or 3.12, with the packages in `pyproject.toml`. `uv sync` installs them, along with the development group the tests need.
+- Python 3.12, with the packages in `pyproject.toml`. `uv sync` installs them, along with the development group the tests need.
 - `git` and `uv` on `PATH`, for [[Skill Packs]].
 
 ## Running the app
