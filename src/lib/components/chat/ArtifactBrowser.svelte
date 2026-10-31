@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import ArtifactTreeNode from './ArtifactTreeNode.svelte';
+	import { isFigureJson } from '$lib/chat/artifactsList';
 
 	const i18n = getContext('i18n');
 
@@ -89,7 +90,7 @@
 		return root.children;
 	};
 
-	$: tree = buildTree(files);
+	$: tree = buildTree((files || []).filter((file) => !isFigureJson(file, files)));
 
 	const onToggle = (e: CustomEvent<{ path: string }>) => {
 		const path = e.detail?.path;
@@ -109,10 +110,12 @@
 			<ArtifactTreeNode
 				{node}
 				depth={0}
+				{files}
 				{expanded}
 				{selectedImage}
 				on:toggle={onToggle}
 				on:openImage
+				on:openFigure
 			/>
 		{/each}
 	</div>

@@ -17,7 +17,7 @@
 		isHtmlArtifact,
 		uploadChatArtifact
 	} from '$lib/apis/artifacts';
-	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
+	import { figureJsonPath, shouldLoadArtifactList } from '$lib/chat/artifactsList';
 	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
@@ -29,6 +29,7 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
+	import FigureHost from '../common/FigureHost.svelte';
 
 	export let history;
 	let messages = [];
@@ -41,6 +42,8 @@
 	let files: any[] = [];
 	let selectedImage: string | null = null;
 	let previewUrl: string | null = null;
+	let figure: any = null;
+	let figurePane: HTMLDivElement;
 	let showImageModal = false;
 	// HTML artifacts (Plotly figures) load straight from the view route in a
 	// sandboxed frame, not as a blob.
@@ -63,6 +66,7 @@
 	let loadedArtifactKey = '';
 
 	const revokePreview = () => {
+		figure = null;
 		if (previewUrl) {
 			URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
@@ -99,6 +103,27 @@
 		modalAlt = path;
 	};
 
+	const openFigure = async (path: string, title: string = '') => {
+		let data: any;
+		try {
+			const res = await fetch(getArtifactContentUrl($chatId, path), {
+				headers: { authorization: `Bearer ${localStorage.token}` }
+			});
+			if (!res.ok) throw new Error(String(res.status));
+			data = await res.json();
+		} catch {
+			toast.error($i18n.t('Could not load preview'));
+			return;
+		}
+		revokePreview();
+		previewHtmlUrl = '';
+		const name = title || path;
+		selectedImage = name;
+		previewModified = fileModified(name);
+		modalAlt = name;
+		figure = data;
+	};
+
 	const clearPreview = () => {
 		selectedImage = null;
 		modalAlt = '';
@@ -110,7 +135,9 @@
 	};
 
 	const expandPreview = () => {
-		if (previewHtmlUrl) {
+		if (figure) {
+			figurePane?.requestFullscreen();
+		} else if (previewHtmlUrl) {
 			showHtmlModal = true;
 		} else if (previewUrl) {
 			showImageModal = true;
@@ -126,14 +153,16 @@
 			previewModified = modified;
 		} else if (modified && modified !== previewModified) {
 			previewModified = modified;
-			if (isHtmlArtifact(selectedImage)) {
+			if (figure) {
+				openFigure(figureJsonPath(selectedImage), selectedImage);
+			} else if (isHtmlArtifact(selectedImage)) {
 				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
 			} else {
 				loadPreview(getArtifactContentUrl($chatId, selectedImage));
 			}
 		}
 	}
-	$: hasPreview = !!previewUrl || !!previewHtmlUrl;
+	$: hasPreview = !!previewUrl || !!previewHtmlUrl || !!figure;
 
 	const closePanel = () => {
 		showArtifacts.set(false);
@@ -400,10 +429,15 @@
 					</button>
 				</div>
 			</div>
-			{#if previewHtmlUrl}
+			{#if figure}
 				<div
-					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
+					class="flex-1 min-h-0 w-full px-2 pb-2 bg-white dark:bg-gray-900"
+					bind:this={figurePane}
 				>
+					<FigureHost {figure} />
+				</div>
+			{:else if previewHtmlUrl}
+				<div class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2">
 					<div
 						class="h-full w-full overflow-hidden rounded border border-gray-100 dark:border-gray-800"
 					>
@@ -443,12 +477,7 @@
 				>
 					{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
 				</button>
-				<input
-					bind:this={fileInput}
-					type="file"
-					class="hidden"
-					on:change={onUpload}
-				/>
+				<input bind:this={fileInput} type="file" class="hidden" on:change={onUpload} />
 				<button
 					type="button"
 					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
@@ -465,6 +494,7 @@
 				{files}
 				{selectedImage}
 				on:openImage={(e) => openImage(e.detail.path)}
+				on:openFigure={(e) => openFigure(e.detail.path, e.detail.title)}
 			/>
 		</div>
 
@@ -583,9 +613,7 @@
 						class="w-full border-0 h-full rounded-none"
 						sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
 							? ' allow-forms'
-							: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)
-							? ' allow-same-origin'
-							: ''}"
+							: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false) ? ' allow-same-origin' : ''}"
 						on:load={iframeLoadHandler}
 					></iframe>
 				{:else if contents[selectedContentIdx].type === 'svg'}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			html,
+			body,
+			#g {
+				height: 100%;
+				margin: 0;
+			}
+			#g {
+				width: 100%;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="g"></div>
+		<script>
+			(() => {
+				const plotlyUrl = new URLSearchParams(location.search).get('plotly');
+				const target = document.getElementById('g');
+				let ready = false;
+				let chain = Promise.resolve();
+				const send = (message) => parent.postMessage(message, '*');
+
+				const script = document.createElement('script');
+				script.src = plotlyUrl;
+				script.onload = () => {
+					ready = true;
+					send({ type: 'ready' });
+				};
+				script.onerror = () => send({ type: 'error', message: 'could not load plotly' });
+				document.head.appendChild(script);
+
+				addEventListener('message', (event) => {
+					if (event.source !== parent) return;
+					const data = event.data;
+					if (!data || data.type !== 'figure') return;
+					if (!ready) {
+						send({ type: 'error', id: data.id, message: 'plotly not ready' });
+						return;
+					}
+
+					const figure = data.figure || {};
+					chain = chain
+						.then(() =>
+							Plotly.newPlot(
+								target,
+								{
+									data: figure.data,
+									frames: figure.frames,
+									layout: { ...(figure.layout || {}), width: undefined, height: undefined, autosize: true }
+								},
+								{
+									responsive: true,
+									scrollZoom: true,
+									showSendToCloud: false,
+									displaylogo: false
+								}
+							)
+						)
+						.then(() => send({ type: 'rendered', id: data.id }))
+						.catch((error) => send({ type: 'error', id: data.id, message: String(error) }));
+				});
+			})();
+		</script>
+	</body>
+</html>
