@@ -12,6 +12,8 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import { toast } from 'svelte-sonner';
+	import SearchableSelect from '$lib/components/common/SearchableSelect.svelte';
+	import { fallbackOptions, modelSelectItems, suggestFallback } from '$lib/utils/modelFallback';
 
 	const i18n = getContext('i18n');
 
@@ -84,6 +86,18 @@
 	let filterIds = [];
 	let actionIds = [];
 
+	// The model a call is resent to when the base model's provider fails.
+	let fallbackModelId: string | null = null;
+	// 'suggested' after a name match filled it in, 'no-match' when none did.
+	let fallbackNote: 'suggested' | 'no-match' | null = null;
+
+	$: modelOptions = baseModels.length ? baseModels : ($models ?? []);
+
+	const suggestFallbackModel = () => {
+		fallbackModelId = suggestFallback(modelOptions, info.base_model_id);
+		fallbackNote = fallbackModelId ? 'suggested' : info.base_model_id ? 'no-match' : null;
+	};
+
 	const addUsage = (base_model_id) => {
 		const baseModel = ($models ?? []).find((m) => m.id === base_model_id);
 
@@ -112,6 +126,13 @@
 			toast.error('Model Name is required.');
 		}
 
+		// The base model list is not a form field, so the form cannot require it.
+		if (preset && !info.base_model_id) {
+			toast.error($i18n.t('Select a base model'));
+			loading = false;
+			return;
+		}
+
 		if (!info.meta || typeof info.meta !== 'object') {
 			info.meta = {
 				profile_image_url: '/static/favicon.png',
@@ -122,6 +143,10 @@
 		}
 
 		info.meta.capabilities = capabilities;
+
+		if (preset) {
+			info.meta.fallback_model_id = fallbackModelId ?? null;
+		}
 
 		if (enableDescription) {
 			const description = (info.meta?.description ?? '').trim();
@@ -227,6 +252,10 @@
 					}
 				}
 
+				if ('fallback_model_id' in model.meta) {
+					fallbackModelId = model.meta.fallback_model_id ?? null;
+				}
+
 				params = { ...params, ...model?.params };
 				params.stop = params?.stop
 					? (typeof params.stop === 'string' ? params.stop.split(',') : (params?.stop ?? [])).join(
@@ -278,6 +307,11 @@
 					delete info.user;
 					delete info.created_at;
 					delete info.updated_at;
+				}
+
+				// A model saved before backups existed gets a suggestion to confirm.
+				if (preset && !('fallback_model_id' in model.meta)) {
+					suggestFallbackModel();
 				}
 				}
 			} catch (error) {
@@ -476,24 +510,56 @@
 							<div class=" text-sm font-semibold mb-1">{$i18n.t('Base Model (From)')}</div>
 
 							<div>
-								<select
-									class="text-sm w-full bg-transparent outline-hidden"
-									placeholder="Select a base model (e.g. llama3, gpt-4o)"
+								<SearchableSelect
 									bind:value={info.base_model_id}
+									items={modelSelectItems(
+										modelOptions.filter(
+											(m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena'
+										)
+									)}
+									placeholder={$i18n.t('Select a base model')}
+									searchPlaceholder={$i18n.t('Search models')}
+									noResults={$i18n.t('No results found')}
 									on:change={(e) => {
-										addUsage(e.target.value);
+										addUsage(e.detail);
+										suggestFallbackModel();
 									}}
-									required
-								>
-									<option value={null} class=" text-gray-900"
-										>{$i18n.t('Select a base model')}</option
-									>
-									{#each (baseModels.length ? baseModels : ($models ?? [])).filter((m) => (model ? m.id !== model.id : true) && !m?.preset && m?.owned_by !== 'arena') as baseModelOption}
-										<option value={baseModelOption.id} class=" text-gray-900"
-											>{baseModelOption.name}</option
-										>
-									{/each}
-								</select>
+								/>
+							</div>
+						</div>
+
+						<div class="my-1">
+							<div class=" text-sm font-semibold mb-1">{$i18n.t('Fallback Model')}</div>
+
+							<div>
+								<SearchableSelect
+									bind:value={fallbackModelId}
+									items={[
+										{ value: null, label: $i18n.t('None') },
+										...modelSelectItems(fallbackOptions(modelOptions, info.base_model_id))
+									]}
+									placeholder={$i18n.t('None')}
+									searchPlaceholder={$i18n.t('Search models')}
+									noResults={$i18n.t('No results found')}
+									disabled={!info.base_model_id}
+									on:change={() => {
+										fallbackNote = null;
+									}}
+								/>
+							</div>
+
+							<div class="text-xs text-gray-500 mt-1">
+								{#if fallbackNote === 'suggested'}
+									{$i18n.t(
+										'Suggested because the model name matches. Check it is the right model before saving.'
+									)}
+								{:else if fallbackNote === 'no-match'}
+									{$i18n.t('No model with this name on another connection.')}
+								{:else}
+									{$i18n.t(
+										"Replies switch to this model when the base model's provider is not responding."
+									)}
+								{/if}
 							</div>
 						</div>
 					{/if}

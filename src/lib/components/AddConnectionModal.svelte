@@ -31,6 +31,7 @@
 	let key = '';
 
 	let prefixId = '';
+	let name = '';
 	let enable = true;
 	let tags = [];
 	// Who records model calls in Langfuse; see langfuse_tracing.py for styles.
@@ -98,7 +99,9 @@
 				tags: tags,
 				prefix_id: prefixId,
 				model_ids: modelIds,
-				...(ollama || direct ? {} : { model_call_tracing: modelCallTracing })
+				...(ollama || direct
+					? {}
+					: { model_call_tracing: modelCallTracing, name: name.trim() })
 			}
 		};
 
@@ -110,6 +113,7 @@
 		url = '';
 		key = '';
 		prefixId = '';
+		name = '';
 		tags = [];
 		modelCallTracing = 'app';
 		modelIds = [];
@@ -123,6 +127,7 @@
 			enable = connection.config?.enable ?? true;
 			tags = connection.config?.tags ?? [];
 			prefixId = connection.config?.prefix_id ?? '';
+			name = connection.config?.name ?? '';
 			modelIds = connection.config?.model_ids ?? [];
 			modelCallTracing = connection.config?.model_call_tracing ?? 'app';
 		}
@@ -256,6 +261,30 @@
 								</div>
 							</div>
 						</div>
+
+						{#if !ollama && !direct}
+							<div class="flex gap-2 mt-2">
+								<div class="flex flex-col w-full">
+									<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
+
+									<div class="flex-1">
+										<Tooltip
+											content={$i18n.t(
+												'Shown before model IDs when choosing a base or fallback model - leave empty to use the URL host'
+											)}
+										>
+											<input
+												class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+												type="text"
+												bind:value={name}
+												placeholder={$i18n.t('e.g. openrouter')}
+												autocomplete="off"
+											/>
+										</Tooltip>
+									</div>
+								</div>
+							</div>
+						{/if}
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">

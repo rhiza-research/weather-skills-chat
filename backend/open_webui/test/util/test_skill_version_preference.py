@@ -5,10 +5,11 @@ from __future__ import annotations
 import unittest
 
 from open_webui.utils.skill_version import (
+    newest_skill_per_name,
     parse_tool_version,
     prefer_incoming_tool_version,
     register_tool_by_function_name,
-    resolve_tool_ids_by_skill_version,
+    resolve_tool_selection,
     tool_version_from_record,
 )
 
@@ -96,7 +97,7 @@ class RegisterToolByFunctionNameTest(unittest.TestCase):
         self.assertEqual(tools["plot"]["tool_id"], "skill_plot_v")
 
 
-class ResolveToolIdsBySkillVersionTest(unittest.TestCase):
+class ResolveToolSelectionTest(unittest.TestCase):
     def test_substitutes_higher_version_not_in_enabled_list(self):
         skills = [
             {"id": "skill_ecmwf_fetch", "skill_name": "ecmwf-fetch", "version": "0.1.12"},
@@ -106,7 +107,7 @@ class ResolveToolIdsBySkillVersionTest(unittest.TestCase):
                 "version": "0.1.13",
             },
         ]
-        resolved = resolve_tool_ids_by_skill_version(["skill_ecmwf_fetch"], skills)
+        resolved = resolve_tool_selection(["skill_ecmwf_fetch"], skills)
         self.assertEqual(resolved, ["skill_branch_ecmwf_fetch"])
 
     def test_equal_version_keeps_requested(self):
@@ -114,8 +115,8 @@ class ResolveToolIdsBySkillVersionTest(unittest.TestCase):
             {"id": "skill_plot", "skill_name": "plot", "version": "0.1.16"},
             {"id": "skill_branch_plot", "skill_name": "plot", "version": "0.1.16"},
         ]
-        resolved = resolve_tool_ids_by_skill_version(["skill_plot"], skills)
-        self.assertEqual(resolved, ["skill_plot"])
+        resolved = resolve_tool_selection(["skill_branch_plot"], skills)
+        self.assertEqual(resolved, ["skill_branch_plot"])
 
     def test_dedupes_when_both_enabled(self):
         skills = [
@@ -126,44 +127,38 @@ class ResolveToolIdsBySkillVersionTest(unittest.TestCase):
                 "version": "0.1.13",
             },
         ]
-        resolved = resolve_tool_ids_by_skill_version(
+        resolved = resolve_tool_selection(
             ["skill_ecmwf_fetch", "skill_branch_ecmwf_fetch"], skills
         )
         self.assertEqual(resolved, ["skill_branch_ecmwf_fetch"])
 
-    def test_does_not_upgrade_to_disabled_higher_version(self):
+    def test_names_become_the_newest_copy(self):
         skills = [
-            {
-                "id": "skill_plot_old",
-                "skill_name": "plot",
-                "version": "1.0.0",
-                "enabled": True,
-            },
-            {
-                "id": "skill_plot_new",
-                "skill_name": "plot",
-                "version": "2.0.0",
-                "enabled": False,
-            },
+            {"id": "skill_plot", "skill_name": "plot", "version": "1.0.0"},
+            {"id": "skill_pack_b_plot", "skill_name": "plot", "version": "1.0.1"},
+            {"id": "skill_smap_fetch", "skill_name": "smap-fetch", "version": "0.3.0"},
         ]
-        resolved = resolve_tool_ids_by_skill_version(["skill_plot_old"], skills)
-        self.assertEqual(resolved, ["skill_plot_old"])
+        self.assertEqual(
+            resolve_tool_selection(["plot", "smap-fetch", "skill_plot"], skills),
+            ["skill_pack_b_plot", "skill_smap_fetch"],
+        )
 
-    def test_keeps_explicitly_selected_disabled_skill(self):
+    def test_other_ids_and_unknown_names_pass_through(self):
+        skills = [{"id": "skill_plot", "skill_name": "plot", "version": "1.0.0"}]
+        self.assertEqual(
+            resolve_tool_selection(["server:0", "gone", "plot"], skills),
+            ["server:0", "gone", "skill_plot"],
+        )
+
+
+class NewestSkillPerNameTest(unittest.TestCase):
+    def test_keeps_the_highest_version_and_the_first_on_a_tie(self):
         skills = [
-            {
-                "id": "skill_plot_old",
-                "skill_name": "plot",
-                "version": "1.0.0",
-                "enabled": True,
-            },
-            {
-                "id": "skill_plot_new",
-                "skill_name": "plot",
-                "version": "2.0.0",
-                "enabled": False,
-            },
+            {"id": "a", "skill_name": "plot", "version": "1.0.0"},
+            {"id": "b", "skill_name": "plot", "version": "1.0.0"},
+            {"id": "c", "skill_name": "plot", "version": "0.9.0"},
+            {"id": "d", "skill_name": "chirps-fetch", "version": "0.1.0"},
+            {"id": "e", "skill_name": "", "version": "5.0.0"},
         ]
-        resolved = resolve_tool_ids_by_skill_version(["skill_plot_new"], skills)
-        self.assertEqual(resolved, ["skill_plot_new"])
-
+        newest = newest_skill_per_name(skills)
+        self.assertEqual({k: v["id"] for k, v in newest.items()}, {"plot": "a", "chirps-fetch": "d"})

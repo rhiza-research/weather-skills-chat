@@ -547,7 +547,12 @@ class OrganizationTable:
             return deleted > 0
 
     def _delete_organization_resources(self, organization_id: str) -> None:
-        from open_webui.models.automations import Automation, AutomationRun
+        from open_webui.models.automations import (
+            Automation,
+            AutomationImage,
+            AutomationRun,
+            AutomationUserState,
+        )
         from open_webui.models.chats import Chat
         from open_webui.models.folders import Folder
         from open_webui.models.knowledge import Knowledge
@@ -575,6 +580,12 @@ class OrganizationTable:
                 db.query(AutomationRun).filter(
                     AutomationRun.automation_id.in_(automation_ids)
                 ).delete(synchronize_session=False)
+                db.query(AutomationUserState).filter(
+                    AutomationUserState.automation_id.in_(automation_ids)
+                ).delete(synchronize_session=False)
+                db.query(AutomationImage).filter(
+                    AutomationImage.automation_id.in_(automation_ids)
+                ).delete(synchronize_session=False)
             if chat_ids:
                 db.query(Chat).filter(Chat.id.in_(chat_ids)).delete(
                     synchronize_session=False
@@ -600,7 +611,12 @@ class OrganizationTable:
         return True
 
     def delete_private_workspace_resources(self, user_id: str) -> None:
-        from open_webui.models.automations import Automation, AutomationRun
+        from open_webui.models.automations import (
+            Automation,
+            AutomationImage,
+            AutomationRun,
+            AutomationUserState,
+        )
         from open_webui.models.chats import Chat, Chats
         from open_webui.models.folders import Folder
         from open_webui.models.knowledge import Knowledge
@@ -619,6 +635,12 @@ class OrganizationTable:
             if private_automation_ids:
                 db.query(AutomationRun).filter(
                     AutomationRun.automation_id.in_(private_automation_ids)
+                ).delete(synchronize_session=False)
+                db.query(AutomationUserState).filter(
+                    AutomationUserState.automation_id.in_(private_automation_ids)
+                ).delete(synchronize_session=False)
+                db.query(AutomationImage).filter(
+                    AutomationImage.automation_id.in_(private_automation_ids)
                 ).delete(synchronize_session=False)
             db.query(Chat).filter_by(user_id=user_id, visibility="private").delete()
             db.query(Secret).filter_by(user_id=user_id, visibility="private").delete()

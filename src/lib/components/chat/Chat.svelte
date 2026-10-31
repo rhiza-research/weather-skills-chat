@@ -208,6 +208,9 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
+	let readArtifactsEnabled = false;
+	// Built-in tool groups the user turned off or on; missing means on.
+	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
 	let tags = [];
@@ -333,6 +336,8 @@
 		webSearchEnabled = false;
 		imageGenerationEnabled = false;
 		codeInterpreterEnabled = false;
+		readArtifactsEnabled = false;
+		builtinFeatures = {};
 
 		try {
 			const ok = await loadChat(id);
@@ -362,6 +367,8 @@
 					webSearchEnabled = input.webSearchEnabled;
 					imageGenerationEnabled = input.imageGenerationEnabled;
 					codeInterpreterEnabled = input.codeInterpreterEnabled;
+					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
+					builtinFeatures = input.builtinFeatures ?? {};
 				} catch (e) {}
 			}
 
@@ -473,8 +480,6 @@
 	};
 
 	const chatEventHandler = async (event, cb) => {
-		console.log(event);
-
 		const type = event?.data?.type ?? null;
 		if (
 			type === 'execute:python' ||
@@ -653,6 +658,8 @@
 				webSearchEnabled = input.webSearchEnabled;
 				imageGenerationEnabled = input.imageGenerationEnabled;
 				codeInterpreterEnabled = input.codeInterpreterEnabled;
+				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
+				builtinFeatures = input.builtinFeatures ?? {};
 			} catch (e) {
 				prompt = '';
 				files = [];
@@ -660,6 +667,8 @@
 				webSearchEnabled = false;
 				imageGenerationEnabled = false;
 				codeInterpreterEnabled = false;
+				readArtifactsEnabled = false;
+				builtinFeatures = {};
 			}
 		}
 
@@ -2081,6 +2090,13 @@
 		setQueuedSends(queuedSends.filter((_, i) => i !== idx));
 	};
 
+	// Moves it to the front and stops the running reply; the queue then sends it
+	// the way it sends after any stopped reply.
+	const sendQueuedNow = async (idx: number) => {
+		setQueuedSends([queuedSends[idx], ...queuedSends.filter((_, i) => i !== idx)]);
+		if (replyRunning) await stopResponse();
+	};
+
 	const sendQueued = () => {
 		const [userPrompt, ...rest] = queuedSends;
 		// Another open tab of this chat may have sent it already.
@@ -2394,7 +2410,11 @@
 						$config?.features?.enable_web_search &&
 						($user?.role === 'admin' || $user?.permissions?.features?.web_search)
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
-							: false
+							: false,
+					read_artifacts: readArtifactsEnabled,
+					email: builtinFeatures.email !== false,
+					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
+					preferences: builtinFeatures.preferences !== false
 				},
 				variables: {
 					...getPromptVariables(
@@ -3061,6 +3081,8 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								toolServers={$toolServers}
@@ -3087,6 +3109,7 @@
 								}}
 								{queuedSends}
 								onDeleteQueuedSend={deleteQueuedSend}
+								onSendQueuedNow={sendQueuedNow}
 								on:submit={async (e) => {
 									if (e.detail || files.length > 0) {
 										await tick();
@@ -3117,6 +3140,8 @@
 								bind:selectedToolIds
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
+								bind:readArtifactsEnabled
+								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
 								transparentBackground={$settings?.backgroundImageUrl ?? false}

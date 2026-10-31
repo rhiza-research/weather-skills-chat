@@ -56,6 +56,8 @@
 	import Plus from '../icons/Plus.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Folders from './Sidebar/Folders.svelte';
+	import ScheduledTasks from './Sidebar/ScheduledTasks.svelte';
+	import OrganizationRow from './Sidebar/OrganizationRow.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
 
@@ -767,7 +769,7 @@
 		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 			<a
 				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-				href="/automations"
+				href="/scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
 					chatId.set('');
@@ -795,10 +797,15 @@
 					</svg>
 				</div>
 				<div class="flex self-center translate-y-[0.5px]">
-					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Automations')}</div>
+					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Scheduled tasks')}</div>
 				</div>
 			</a>
 		</div>
+
+		<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
+
+		<!-- Separates the settings rows above from search and the chats and tasks below. -->
+		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
@@ -818,6 +825,10 @@
 				? 'opacity-20'
 				: ''}"
 		>
+			{#if !search}
+				<ScheduledTasks />
+			{/if}
+
 			<Folder
 				collapsible={!search}
 				className="px-2 mt-0.5"

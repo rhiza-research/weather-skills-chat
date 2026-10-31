@@ -11,16 +11,29 @@ from uuid import uuid4
 import smtplib
 from email.message import EmailMessage
 
-from open_webui.models.automations import AutomationForm, Automations
+from open_webui.models.automations import (
+    DEFAULT_RUN_TIMEOUT_MINUTES,
+    MAX_RUN_TIMEOUT_MINUTES,
+    AutomationForm,
+    AutomationRuns,
+    Automations,
+    AutomationUpdateForm,
+)
 from open_webui.models.chats import Chats
 from open_webui.models.organizations import ORG_KIND_PERSONAL, Organizations
 from open_webui.models.users import Users
-from open_webui.utils.automation_scheduler import sync_automation_job
+from open_webui.utils.automation_scheduler import (
+    remove_automation_job,
+    sync_automation_job,
+)
 from open_webui.utils.schedule import parse_schedule, prompt_from_messages
 from open_webui.utils.organizations import (
+    can_manage_automation,
     can_read_chat,
+    can_view_automation,
     can_write_chat,
     is_member,
+    resolve_visibility,
 )
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -59,30 +72,146 @@ async def _chat_access(user_id: Optional[str], chat_id: Optional[str]) -> ChatAc
     return await asyncio.to_thread(_load_chat_access, user_id, chat_id)
 
 
-async def create_automation(
+def _time_limit_problem(minutes: Optional[int]) -> Optional[str]:
+    if minutes is not None and not 1 <= minutes <= MAX_RUN_TIMEOUT_MINUTES:
+        return (
+            f"The time limit must be between 1 and {MAX_RUN_TIMEOUT_MINUTES} "
+            "minutes."
+        )
+    return None
+
+
+# The tool arguments that set a task's feature flags, by the flag they set.
+TASK_FEATURE_ARGS = {
+    "web_search": "web_search",
+    "code_interpreter": "code_interpreter",
+    "read_files": "read_artifacts",
+    "email": "email",
+    "preferences": "preferences",
+}
+
+# Features an admin turns on for the app and users need permission for, as
+# the task page and chat bar offer them.
+_GATED_TASK_FEATURES = {
+    "web_search": ("ENABLE_WEB_SEARCH", "Web search"),
+    "code_interpreter": ("ENABLE_CODE_INTERPRETER", "Running code"),
+}
+
+
+def _apply_task_settings(
+    form,
+    user,
+    organization_id: str,
+    request,
+    current_features: Optional[dict],
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    shared: Optional[bool] = None,
+    **features: Optional[bool],
+) -> Optional[str]:
+    """Set the passed settings on a task form, or say why one cannot be used.
+
+    Checks them as the task page does. DB reads: call from a worker thread.
+    """
+    from open_webui.utils.access_control import has_permission
+    from open_webui.utils.automation_runner import _accessible_tool_ids
+    from open_webui.utils.models import check_model_access, remember_catalog_model
+    from open_webui.utils.organizations import is_personal_org
+    from open_webui.utils.tools import accessible_skill_records
+
+    if model is not None:
+        entry = remember_catalog_model(request, model) if request is not None else None
+        try:
+            if entry is None:
+                raise ValueError(model)
+            check_model_access(user, entry, organization_id)
+        except Exception:
+            return f"The model `{model}` is not available in this organization."
+        form.model = model
+
+    if skills is not None:
+        known = {
+            record["skill_name"]
+            for record in accessible_skill_records(user, organization_id)
+        } | set(_accessible_tool_ids(user, organization_id))
+        unknown = [skill for skill in skills if skill not in known]
+        if unknown:
+            return (
+                "These skills or tools are not available: "
+                + ", ".join(f"`{skill}`" for skill in unknown)
+                + ". list_available_tools with scope `all` lists the ones there are."
+            )
+        form.tool_ids = list(skills)
+
+    chosen = {
+        TASK_FEATURE_ARGS[arg]: value for arg, value in features.items() if value is not None
+    }
+    if chosen:
+        config = _request_config(request)
+        for feature, (setting, label) in _GATED_TASK_FEATURES.items():
+            if not chosen.get(feature) or config is None:
+                continue
+            permitted = user.role == "admin" or has_permission(
+                user.id, f"features.{feature}", getattr(config, "USER_PERMISSIONS", {})
+            )
+            if not getattr(config, setting, False) or not permitted:
+                return f"{label} is not available to this user, so it cannot be turned on."
+        form.features = {**(current_features or {}), **chosen}
+
+    if shared is not None:
+        if shared and is_personal_org(organization_id):
+            return "A task in a personal organization cannot be shared."
+        form.visibility = "organization" if shared else "private"
+    return None
+
+
+def _task_settings_args(**kwargs) -> dict:
+    """The settings arguments to pass on, without the unset ones."""
+    return {key: value for key, value in kwargs.items() if value is not None}
+
+
+async def create_scheduled_task(
     name: str,
     schedule: str,
     prompt: Optional[str] = None,
     organization_id: Optional[str] = None,
+    time_limit_minutes: Optional[int] = None,
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    web_search: Optional[bool] = None,
+    code_interpreter: Optional[bool] = None,
+    read_files: Optional[bool] = None,
+    email: Optional[bool] = None,
+    preferences: Optional[bool] = None,
+    shared: Optional[bool] = None,
     __user__: dict = {},
     __messages__: list = None,
     __metadata__: dict = None,
     __model__: dict = None,
+    __request__=None,
 ) -> str:
-    """Create a scheduled automation from the current chat.
+    """Create a scheduled task from the current chat.
 
     Call this when the user asks to repeat the current task on a schedule,
     e.g. "do this again every day at noon".
 
-    :param name: Short title for the automation
+    :param name: Short title for the scheduled task
     :param schedule: Cron (0 12 * * *) or a phrase like "every day at noon"
     :param prompt: Optional restatement of the task. If omitted, prior user turns are used.
     :param organization_id: Optional organization id. Defaults to the current chat's organization.
+    :param time_limit_minutes: Optional limit on how long each run may take
+    :param model: Optional model id. Defaults to this chat's model.
+    :param skills: Optional skill names and tool ids. Defaults to this chat's.
+    :param web_search: Optional; defaults to this chat's setting, as do the
+        other switches
+    :param shared: Optional; whether the organization shares the task
     """
+    if problem := _time_limit_problem(time_limit_minutes):
+        return problem
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
     if not chat_id or chat_id == "local":
-        return "Cannot create an automation from a temporary chat. Save the chat first."
+        return "Cannot create a scheduled task from a temporary chat. Save the chat first."
 
     cron = parse_schedule(schedule)
     if not cron:
@@ -91,7 +220,7 @@ async def create_automation(
             "Try cron like `0 12 * * *` or a phrase like `every day at noon`."
         )
 
-    # The whole chat: the automation reuses its model. DB reads, so in a thread.
+    # The whole chat: the task reuses its model. DB reads, so in a thread.
     def load() -> tuple:
         user = Users.get_user_by_id(__user__.get("id"))
         if not user:
@@ -133,28 +262,49 @@ async def create_automation(
     if features is not None and not isinstance(features, dict):
         features = None
 
-    automation = Automations.insert_new_automation(
-        user.id,
-        AutomationForm(
-            name=name.strip() or "Scheduled chat",
-            prompt=recipe,
-            model=model_id,
-            cron=cron,
-            enabled=True,
-            organization_id=organization_id,
-            visibility=getattr(chat, "visibility", "private"),
-            source_chat_id=chat_id,
-            tool_ids=tool_ids,
-            features=features,
+    form = AutomationForm(
+        name=name.strip() or "Scheduled chat",
+        prompt=recipe,
+        model=model_id,
+        cron=cron,
+        enabled=True,
+        organization_id=organization_id,
+        visibility=getattr(chat, "visibility", "private"),
+        source_chat_id=chat_id,
+        tool_ids=tool_ids,
+        features=features,
+        timeout_minutes=time_limit_minutes,
+    )
+    # Anything passed replaces what was copied from the chat.
+    problem = await asyncio.to_thread(
+        _apply_task_settings,
+        form,
+        user,
+        organization_id,
+        __request__,
+        features,
+        **_task_settings_args(
+            model=model,
+            skills=skills,
+            shared=shared,
+            web_search=web_search,
+            code_interpreter=code_interpreter,
+            read_files=read_files,
+            email=email,
+            preferences=preferences,
         ),
     )
+    if problem:
+        return problem
+
+    automation = Automations.insert_new_automation(user.id, form)
     if not automation:
-        return "Failed to create the automation."
+        return "Failed to create the scheduled task."
     sync_automation_job(automation)
     scope = (
         f"organization `{organization_id}`"
         if organization_id != user.id
-        else "your personal automations"
+        else "your personal scheduled tasks"
     )
     tool_note = (
         f" Tools/skills captured: {len(tool_ids)}."
@@ -162,31 +312,67 @@ async def create_automation(
         else " Built-in tools only (no chat skills selected)."
     )
     return (
-        f"Created automation **{automation.name}** ({cron}) under {scope}."
-        f"{tool_note} [Open automations](/automations) to manage it."
+        f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
+        f"{tool_note} [Open scheduled tasks](/scheduled-tasks) to manage it."
     )
 
 
-CREATE_AUTOMATION_SPEC = {
-    "name": "create_automation",
+def _switch(description: str) -> dict:
+    return {"type": "boolean", "description": description}
+
+
+# Settings both create_scheduled_task and update_scheduled_task take, matching
+# what the task page sets. Create defaults each one to the current chat's.
+TASK_SETTING_PROPERTIES = {
+    "model": {
+        "type": "string",
+        "description": "Model id to run the task with",
+    },
+    "skills": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "Skill names and tool ids the task may use, replacing the current "
+            "list; an empty list allows none. Each run uses the newest copy of a "
+            "named skill."
+        ),
+    },
+    "web_search": _switch("Allow the agent to search the web"),
+    "code_interpreter": _switch("Allow the agent to write and run its own code"),
+    "read_files": _switch(
+        "Allow the agent to read the run's files. A run has no one to ask, so "
+        "with this off it cannot read them."
+    ),
+    "email": _switch("Allow the agent to send email"),
+    "preferences": _switch("Allow the agent to read and save preferences"),
+    "shared": _switch(
+        "Share the task with the organization; not possible in a personal one"
+    ),
+}
+
+
+CREATE_SCHEDULED_TASK_SPEC = {
+    "name": "create_scheduled_task",
     "description": (
-        "Create a scheduled automation from the current chat. "
+        "Create a scheduled task from the current chat. It copies this chat's "
+        "model, skills, and switches unless they are passed. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
-        "Automations run headless: no user is present to answer follow-up questions."
+        "Scheduled tasks run headless: no user is present to answer follow-up questions."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "name": {
                 "type": "string",
-                "description": "Short title for the automation",
+                "description": "Short title for the scheduled task",
             },
             "schedule": {
                 "type": "string",
                 "description": (
                     "Cron expression (0 12 * * *) or a phrase such as "
-                    "'every day at noon', 'hourly', 'weekly on Monday at 09:00'"
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
                 ),
             },
             "prompt": {
@@ -197,8 +383,461 @@ CREATE_AUTOMATION_SPEC = {
                 "type": "string",
                 "description": "Optional organization id; defaults to the current chat's organization",
             },
+            "time_limit_minutes": {
+                "type": "integer",
+                "description": (
+                    f"How long each run may take, in minutes (1 to {MAX_RUN_TIMEOUT_MINUTES}). "
+                    f"A run past it is stopped as an error. Defaults to {DEFAULT_RUN_TIMEOUT_MINUTES}."
+                ),
+            },
+            **TASK_SETTING_PROPERTIES,
         },
         "required": ["name", "schedule"],
+    },
+}
+
+
+TASK_PROMPT_PREVIEW_CHARS = 200
+
+
+def _format_time(epoch: Optional[int]) -> str:
+    if not epoch:
+        return "never"
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(epoch))
+
+
+def _describe_task_tools(tool_ids: Optional[list[str]]) -> str:
+    if tool_ids is None:
+        return "every skill and tool the user can use"
+    return ", ".join(tool_ids) or "none"
+
+
+def _describe_task_features(features: Optional[dict]) -> str:
+    features = features or {}
+    on = [
+        label
+        for flag, label in (
+            ("web_search", "web search"),
+            ("code_interpreter", "running code"),
+            ("read_artifacts", "read files"),
+        )
+        if features.get(flag)
+    ]
+    off = [
+        f"{label} off"
+        for flag, label in (("email", "email"), ("preferences", "preferences"))
+        if features.get(flag) is False
+    ]
+    return "; ".join(part for part in (", ".join(on), ", ".join(off)) if part) or "none"
+
+
+def _describe_task(automation, user_id: str, full: bool) -> str:
+    runs = AutomationRuns.get_runs(automation.id, limit=1)
+    last = runs[0] if runs else None
+    last_run = "never run"
+    if last:
+        last_run = f"{last.status} at {_format_time(last.started_at)}"
+        if last.summary:
+            last_run += f": {last.summary}"
+        if last.error:
+            last_run += f": {last.error}"
+    prompt = automation.prompt or ""
+    if not full and len(prompt) > TASK_PROMPT_PREVIEW_CHARS:
+        prompt = prompt[:TASK_PROMPT_PREVIEW_CHARS].rstrip() + "…"
+    lines = [
+        f"### {automation.name}",
+        f"- id: `{automation.id}`",
+        f"- schedule: `{automation.cron or 'none (runs only when someone presses Run)'}`"
+        + ("" if automation.enabled else " (scheduled runs are off)"),
+        f"- model: {automation.model or 'default'}",
+        (
+            f"- time limit: {automation.timeout_minutes} minutes"
+            if automation.timeout_minutes
+            else f"- time limit: {DEFAULT_RUN_TIMEOUT_MINUTES} minutes (default)"
+        ),
+        "- shared with the organization"
+        if automation.visibility == "organization"
+        else "- private",
+    ]
+    if automation.user_id != user_id:
+        owner = Users.get_user_by_id(automation.user_id)
+        lines.append(f"- owner: {owner.name if owner else automation.user_id}")
+    lines.append(f"- skills and tools: {_describe_task_tools(automation.tool_ids)}")
+    lines.append(f"- features: {_describe_task_features(automation.features)}")
+    if automation.image_updated_at:
+        lines.append("- has a picture")
+    changed = f"- last changed: {_format_time(automation.updated_at)}"
+    if automation.updated_by:
+        changer = Users.get_user_by_id(automation.updated_by)
+        changed += f" by {changer.name if changer else automation.updated_by}"
+    lines.append(changed)
+    lines.append(f"- last run: {last_run}")
+    lines.append(f"- prompt: {prompt}")
+    return "\n".join(lines)
+
+
+async def list_scheduled_tasks(
+    task_id: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """List the scheduled tasks in this chat's organization, or show one in full.
+
+    :param task_id: Optional scheduled task id to show with its whole prompt
+    """
+    metadata = __metadata__ or {}
+    user_id = __user__.get("id")
+
+    def load() -> str:
+        user = Users.get_user_by_id(user_id)
+        if not user:
+            return "User not found."
+        if task_id:
+            automation = Automations.get_automation_by_id(task_id)
+            if not can_view_automation(user, automation):
+                return "Scheduled task not found."
+            return _describe_task(automation, user.id, full=True)
+        organization_id = metadata.get("organization_id") or user.id
+        automations = Automations.get_automations_for_user(user.id, organization_id)
+        if not automations:
+            return "There are no scheduled tasks in this organization."
+        return "\n\n".join(_describe_task(a, user.id, full=False) for a in automations)
+
+    return await asyncio.to_thread(load)
+
+
+LIST_SCHEDULED_TASKS_SPEC = {
+    "name": "list_scheduled_tasks",
+    "description": (
+        "List the scheduled tasks in this organization that the user can see, "
+        "with each one's id, schedule, model, sharing, last run and its result, "
+        "and the start of its prompt. Pass task_id to show one task's whole prompt."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "Optional scheduled task id to show in full",
+            },
+        },
+    },
+}
+
+
+def _managed_task(user_id: Optional[str], task_id: str):
+    """(user, automation, error). DB reads: call from a worker thread."""
+    user = Users.get_user_by_id(user_id) if user_id else None
+    if not user:
+        return None, None, "User not found."
+    automation = Automations.get_automation_by_id(task_id)
+    if not can_view_automation(user, automation):
+        return user, None, "Scheduled task not found."
+    if not can_manage_automation(user, automation):
+        return user, automation, (
+            "You cannot change this scheduled task. Only its owner, or an "
+            "organization admin for a shared task, can."
+        )
+    return user, automation, None
+
+
+async def update_scheduled_task(
+    task_id: str,
+    name: Optional[str] = None,
+    schedule: Optional[str] = None,
+    prompt: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    time_limit_minutes: Optional[int] = None,
+    model: Optional[str] = None,
+    skills: Optional[list[str]] = None,
+    web_search: Optional[bool] = None,
+    code_interpreter: Optional[bool] = None,
+    read_files: Optional[bool] = None,
+    email: Optional[bool] = None,
+    preferences: Optional[bool] = None,
+    shared: Optional[bool] = None,
+    enabled: Optional[bool] = None,
+    remove_picture: Optional[bool] = None,
+    __user__: dict = {},
+    __request__=None,
+) -> str:
+    """Change any of a scheduled task's settings. Only the ones passed change.
+
+    :param task_id: The scheduled task to change, from list_scheduled_tasks
+    :param name: New short title
+    :param schedule: New cron (0 12 * * *) or a phrase like "every day at noon"
+    :param prompt: New task to run, in full
+    :param organization_id: Organization id to move the scheduled task to
+    :param time_limit_minutes: New limit on how long each run may take
+    :param model: New model id
+    :param skills: New skill names and tool ids, replacing the old ones
+    :param web_search: Turn web search on or off, as for the other switches
+    :param shared: Whether the organization shares the task
+    :param enabled: Whether scheduled runs are on
+    :param remove_picture: Remove the task's picture
+    """
+    form = AutomationUpdateForm()
+    if enabled is not None:
+        form.enabled = enabled
+    if time_limit_minutes is not None:
+        if problem := _time_limit_problem(time_limit_minutes):
+            return problem
+        form.timeout_minutes = time_limit_minutes
+    if name is not None:
+        if not name.strip():
+            return "The name cannot be empty."
+        form.name = name
+    if schedule is not None:
+        cron = parse_schedule(schedule)
+        if not cron:
+            return (
+                "I could not understand that schedule. "
+                "Try cron like `0 12 * * *` or a phrase like `every day at noon`."
+            )
+        form.cron = cron
+    if prompt is not None:
+        if not prompt.strip():
+            return "The prompt cannot be empty."
+        form.prompt = prompt
+
+    def save() -> str:
+        user, automation, error = _managed_task(__user__.get("id"), task_id)
+        if error:
+            return error
+        if organization_id is not None and organization_id != automation.organization_id:
+            if not is_member(organization_id, user.id):
+                return "You are not a member of that organization."
+            form.organization_id = organization_id
+            # Sharing does not carry into a personal organization.
+            form.visibility = resolve_visibility(organization_id, automation.visibility)
+        problem = _apply_task_settings(
+            form,
+            user,
+            form.organization_id or automation.organization_id,
+            __request__,
+            automation.features,
+            **_task_settings_args(
+                model=model,
+                skills=skills,
+                shared=shared,
+                web_search=web_search,
+                code_interpreter=code_interpreter,
+                    read_files=read_files,
+                email=email,
+                preferences=preferences,
+            ),
+        )
+        if problem:
+            return problem
+        if not form.model_fields_set and not remove_picture:
+            return "Nothing to change. Pass the settings to change."
+        if remove_picture:
+            Automations.set_image(automation.id, None)
+        updated = (
+            Automations.update_automation(automation.id, form, updated_by=user.id)
+            if form.model_fields_set
+            else Automations.get_automation_by_id(automation.id)
+        )
+        if not updated:
+            return "Failed to update the scheduled task."
+        sync_automation_job(updated)
+        return "Updated the scheduled task.\n\n" + _describe_task(
+            updated, user.id, full=False
+        )
+
+    return await asyncio.to_thread(save)
+
+
+UPDATE_SCHEDULED_TASK_SPEC = {
+    "name": "update_scheduled_task",
+    "description": (
+        "Change any of an existing scheduled task's settings: the same ones "
+        "create_scheduled_task takes, plus turning scheduled runs on or off and "
+        "removing its picture. "
+        "Get its id from list_scheduled_tasks. Only pass the fields to change. "
+        "A new prompt replaces the old one, so pass the whole task."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "The scheduled task to change, from list_scheduled_tasks",
+            },
+            "name": {"type": "string", "description": "New short title"},
+            "schedule": {
+                "type": "string",
+                "description": (
+                    "New cron expression (0 12 * * *) or a phrase such as "
+                    "'every weekday at 7am', 'mondays and thursdays at 6pm', "
+                    "'every 2 hours', 'monthly on the 1st at 9am'"
+                ),
+            },
+            "prompt": {
+                "type": "string",
+                "description": "New task to run, in full",
+            },
+            "organization_id": {
+                "type": "string",
+                "description": "Organization id to move the scheduled task to",
+            },
+            "time_limit_minutes": {
+                "type": "integer",
+                "description": (
+                    f"How long each run may take, in minutes (1 to {MAX_RUN_TIMEOUT_MINUTES}). "
+                    f"A run past it is stopped as an error. Tasks without one use {DEFAULT_RUN_TIMEOUT_MINUTES}."
+                ),
+            },
+            **TASK_SETTING_PROPERTIES,
+            "enabled": _switch("Turn the task's scheduled runs on or off"),
+            "remove_picture": _switch("Remove the task's picture"),
+        },
+        "required": ["task_id"],
+    },
+}
+
+
+async def delete_scheduled_task(task_id: str, __user__: dict = {}) -> str:
+    """Delete a scheduled task, its schedule, and its run history.
+
+    :param task_id: The scheduled task to delete, from list_scheduled_tasks
+    """
+
+    def delete() -> str:
+        _user, automation, error = _managed_task(__user__.get("id"), task_id)
+        if error:
+            return error
+        remove_automation_job(automation.id)
+        if not Automations.delete_automation(automation.id):
+            return "Failed to delete the scheduled task."
+        return f"Deleted scheduled task **{automation.name}** and its run history."
+
+    return await asyncio.to_thread(delete)
+
+
+DELETE_SCHEDULED_TASK_SPEC = {
+    "name": "delete_scheduled_task",
+    "description": (
+        "Delete a scheduled task, its schedule, and its run history. This cannot be "
+        "undone. Only call it when the user asks to delete that scheduled task. "
+        "Get its id from list_scheduled_tasks."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "task_id": {
+                "type": "string",
+                "description": "The scheduled task to delete, from list_scheduled_tasks",
+            },
+        },
+        "required": ["task_id"],
+    },
+}
+
+
+TASK_RESULT_STATUSES = ("success", "failure")
+
+
+def _task_picture(user_id: Optional[str], chat_id: Optional[str], path: str):
+    """(thumbnail, None) for an image in the chat's files, or (None, why not).
+
+    Reads files and the DB: call from a worker thread.
+    """
+    from open_webui.utils.artifacts import resolve_in_sandbox
+    from open_webui.utils.task_image import task_image_thumbnail
+
+    if not chat_id or not _load_chat_access(user_id, chat_id).readable:
+        return None, "this run's chat files could not be read"
+    rel = (path or "").strip().lstrip("/")
+    try:
+        target = resolve_in_sandbox(chat_id, rel)
+    except Exception as e:
+        return None, f"invalid path: {e}"
+    if target.suffix.lower() not in DISPLAY_IMAGE_TYPES:
+        return None, "use a .png, .jpg, .jpeg, .gif, or .webp image"
+    data = wait_for_sandbox_image(target, target.suffix, timeout_s=DISPLAY_IMAGE_WAIT_S)
+    if data is None:
+        return None, f"`{rel}` was not found"
+    if len(data) > DISPLAY_IMAGE_MAX_BYTES:
+        return None, f"`{rel}` is too large"
+    try:
+        return task_image_thumbnail(data), None
+    except Exception:
+        return None, f"`{rel}` could not be read as an image"
+
+
+async def report_task_result(
+    status: str,
+    summary: str,
+    image: Optional[str] = None,
+    __user__: dict = {},
+    __metadata__: dict = None,
+) -> str:
+    """Report whether this scheduled task run did what it was asked.
+
+    :param status: success or failure
+    :param summary: One or two sentences on the result
+    :param image: Optional path to an image in the chat's files to show for the task
+    """
+    from open_webui.utils.automation_runner import record_report
+
+    metadata = __metadata__ or {}
+    run_id = metadata.get("automation_run_id")
+    if not run_id:
+        return "There is no scheduled task run to report on."
+    status = (status or "").strip().lower()
+    if status not in TASK_RESULT_STATUSES:
+        return "The status must be `success` or `failure`."
+    summary = (summary or "").strip()
+    if not summary:
+        return "Give a short summary of the result."
+    picture, problem = None, None
+    if image:
+        picture, problem = await asyncio.to_thread(
+            _task_picture, __user__.get("id"), metadata.get("chat_id"), image
+        )
+    record_report(run_id, status, summary, picture)
+    result = f"Recorded this run's result as {status}."
+    if problem:
+        result += f" The image was not used: {problem}."
+    return result
+
+
+REPORT_TASK_RESULT_SPEC = {
+    "name": "report_task_result",
+    "description": (
+        "Report whether this scheduled task did what it was asked. Call it once, "
+        "when the task is done: `success` if it did, `failure` if it could not, "
+        "for example because data was missing or a step failed. The summary is "
+        "shown to the user next to the run. A later call replaces an earlier one. "
+        "If you never call it, the run's result is shown as unknown. Optionally "
+        "pass `image`, a path to a PNG, JPEG, GIF, or WebP in the chat's files "
+        "that best shows what this run produced, such as the map it made; it "
+        "becomes the task's picture. When the run made or showed an image that "
+        "represents its result, pass it, so the user can recognize the task at "
+        "a glance. Leave it out to keep the current picture."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": list(TASK_RESULT_STATUSES),
+                "description": "success or failure",
+            },
+            "summary": {
+                "type": "string",
+                "description": "One or two sentences on the result, for the user",
+            },
+            "image": {
+                "type": "string",
+                "description": (
+                    "Optional relative path to an image in the chat's files to "
+                    "show as the task's picture"
+                ),
+            },
+        },
+        "required": ["status", "summary"],
     },
 }
 
@@ -1018,9 +1657,21 @@ async def read_artifact(
     if problem:
         return problem
 
-    denied = await _user_approved_artifact_read(rel, __event_call__)
-    if denied:
-        return denied
+    # The Read files switch: on reads without asking. Off asks the user in a
+    # chat; a scheduled task has no one to ask, so off refuses.
+    features = metadata.get("features") or {}
+    if isinstance(features, dict) and features.get("read_artifacts"):
+        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    elif metadata.get("headless"):
+        return (
+            "Reading files is off for this scheduled task, so the file was not "
+            "sent. Turn on Read files for the task to allow it."
+        )
+    else:
+        denied = await _user_approved_artifact_read(rel, __event_call__)
+        if denied:
+            return denied
+        allowed_note = f"The user approved reading `{rel}`."
 
     if DISPLAY_IMAGE_TYPES.get(target.suffix.lower()):
         shown = await asyncio.to_thread(
@@ -1029,7 +1680,7 @@ async def read_artifact(
         if isinstance(shown, list) and shown:
             shown = [
                 (
-                    f"The user approved reading `{rel}`. "
+                    f"{allowed_note} "
                     "The image is attached as a vision input after this tool result."
                 ),
                 *shown[1:],
@@ -1051,7 +1702,7 @@ async def read_artifact(
             __messages__ or [],
             model_id,
         )
-        return f"The user approved reading `{rel}`.\n\n{context}"
+        return f"{allowed_note}\n\n{context}"
     except Exception as e:
         return f"Failed to read `{rel}`: {e}"
 
@@ -1061,7 +1712,8 @@ READ_ARTIFACT_SPEC = {
     "description": (
         "Read a file from the current chat artifact sandbox and send its "
         "contents to yourself. Files in the sandbox are not in your context "
-        "until you call this. The user must approve each read in a popup. "
+        "until you call this. Unless Read files is turned on, the user must "
+        "approve each read in a popup, and a scheduled task cannot read files. "
         "Images are sent as images; other files are indexed and matching "
         "text is inserted into context. Pass a relative path such as "
         "`photo.png` or `stations.csv`. Folders and Zarr stores cannot be "
@@ -1551,7 +2203,6 @@ async def list_available_tools(
     """
     from open_webui.models.tools import Tools
     from open_webui.utils.access_control import user_owns_or_has_access
-    from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
     from open_webui.utils.tools import accessible_skill_records
 
     metadata = __metadata__ or {}
@@ -1565,101 +2216,26 @@ async def list_available_tools(
 
     lines = []
 
-    # Builtins are always on for every chat turn.
-    lines.append("## Built-in tools (always available)")
-    lines.append(
-        _tool_summary_line(
-            "list_available_tools",
-            "List tools/skills available in this chat, or all tools you can access.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_automation",
-            "Create a scheduled automation from the current chat.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "secrets_page",
-            "Link to the secrets page with a secret name already filled in.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_preferences",
-            "Read saved preferences for this organization.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_preference",
-            "Save a preference after the user agrees. Ask them first.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "copy_intermediate_result",
-            "Copy a file/folder into or out of intermediate_results.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "create_folder",
-            "Create a folder in the chat artifact sandbox for organizing outputs.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_artifacts",
-            "List files/folders in the chat artifact sandbox.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "read_artifact",
-            "Ask the user for permission, then send a sandbox file to yourself.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "list_email_recipients",
-            "List your email and organization member emails allowed for send_email.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "send_email",
-            "Email results to yourself or people in your organizations; optional artifact sandbox attachments.",
-            kind="builtin",
-        )
-    )
-    lines.append(
-        _tool_summary_line(
-            "display_image",
-            "Show a sandbox image inline, or link it with a relative markdown path. Do not do both.",
-            kind="builtin",
-        )
-    )
-    features = metadata.get("features") or {}
-    if isinstance(features, dict) and features.get("code_interpreter"):
-        lines.append(
-            _tool_summary_line(
-                "execute_code",
-                "Run Python in Pyodide. Can copy artifact files into /mnt and back out.",
-                kind="builtin",
-            )
-        )
+    # The built-in tools this chat or run is offered.
+    offered = get_builtin_tools({"__metadata__": metadata})
+    lines.append("## Built-in tools")
+    for name, description in (
+        ("list_available_tools", "List tools/skills available in this chat, or all tools you can access."),
+        ("create_scheduled_task", "Create a scheduled task from the current chat."),
+        ("secrets_page", "Link to the secrets page with a secret name already filled in."),
+        ("list_preferences", "Read saved preferences for this organization."),
+        ("create_preference", "Save a preference after the user agrees. Ask them first."),
+        ("copy_intermediate_result", "Copy a file/folder into or out of intermediate_results."),
+        ("create_folder", "Create a folder in the chat artifact sandbox for organizing outputs."),
+        ("list_artifacts", "List files/folders in the chat artifact sandbox."),
+        ("read_artifact", "Ask the user for permission, then send a sandbox file to yourself."),
+        ("list_email_recipients", "List your email and organization member emails allowed for send_email."),
+        ("send_email", "Email results to yourself or people in your organizations; optional artifact sandbox attachments."),
+        ("display_image", "Show a sandbox image inline, or link it with a relative markdown path. Do not do both."),
+        ("execute_code", "Run Python in Pyodide. Can copy artifact files into /mnt and back out."),
+    ):
+        if name in offered:
+            lines.append(_tool_summary_line(name, description, kind="builtin"))
 
     selected_ids = list(metadata.get("tool_ids") or [])
     catalog = Tools.get_tool_catalog()
@@ -1668,8 +2244,6 @@ async def list_available_tools(
         user, organization_id=org_id, catalog=catalog
     )
     usable_skill_ids = {record["id"] for record in skill_records}
-    if selected_ids:
-        selected_ids = resolve_tool_ids_by_skill_version(selected_ids, skill_records)
     all_tools = catalog
 
     def _visible(tool) -> bool:
@@ -2316,6 +2890,32 @@ async def web_search(
     return json.dumps({"results": results}, ensure_ascii=False)
 
 
+# Built-in tools a chat or scheduled task can turn off, by feature name. Each
+# group is on unless its feature is false, so older chats and tasks keep it.
+BUILTIN_TOOL_GROUPS = {
+    "email": ("list_email_recipients", "send_email"),
+    "scheduled_tasks": (
+        "create_scheduled_task",
+        "list_scheduled_tasks",
+        "update_scheduled_task",
+        "delete_scheduled_task",
+    ),
+    "preferences": ("list_preferences", "create_preference"),
+}
+
+
+def _turned_off_builtins(metadata: dict) -> set[str]:
+    features = metadata.get("features") or {}
+    if not isinstance(features, dict):
+        return set()
+    return {
+        name
+        for group, names in BUILTIN_TOOL_GROUPS.items()
+        if features.get(group) is False
+        for name in names
+    }
+
+
 def get_builtin_tools(extra_params: dict) -> dict:
     from open_webui.utils.tools import get_async_tool_function_and_apply_extra_params
 
@@ -2331,7 +2931,6 @@ def get_builtin_tools(extra_params: dict) -> dict:
 
     tools = {
         "list_available_tools": _tool(list_available_tools, LIST_AVAILABLE_TOOLS_SPEC),
-        "create_automation": _tool(create_automation, CREATE_AUTOMATION_SPEC),
         "secrets_page": _tool(secrets_page, SECRETS_PAGE_SPEC),
         "list_preferences": _tool(list_preferences, LIST_PREFERENCES_SPEC),
         "create_preference": _tool(create_preference, CREATE_PREFERENCE_SPEC),
@@ -2347,7 +2946,31 @@ def get_builtin_tools(extra_params: dict) -> dict:
         ),
         "send_email": _tool(send_email, SEND_EMAIL_SPEC),
     }
-    features = (extra_params.get("__metadata__") or {}).get("features") or {}
+    metadata = extra_params.get("__metadata__") or {}
+    # A scheduled run has no one present to ask, so it cannot change scheduled
+    # tasks. It reports its own result instead.
+    if metadata.get("headless"):
+        tools["report_task_result"] = _tool(report_task_result, REPORT_TASK_RESULT_SPEC)
+    else:
+        tools.update(
+            {
+                "create_scheduled_task": _tool(
+                    create_scheduled_task, CREATE_SCHEDULED_TASK_SPEC
+                ),
+                "list_scheduled_tasks": _tool(
+                    list_scheduled_tasks, LIST_SCHEDULED_TASKS_SPEC
+                ),
+                "update_scheduled_task": _tool(
+                    update_scheduled_task, UPDATE_SCHEDULED_TASK_SPEC
+                ),
+                "delete_scheduled_task": _tool(
+                    delete_scheduled_task, DELETE_SCHEDULED_TASK_SPEC
+                ),
+            }
+        )
+    for name in _turned_off_builtins(metadata):
+        tools.pop(name, None)
+    features = metadata.get("features") or {}
     if isinstance(features, dict) and features.get("code_interpreter"):
         tools["execute_code"] = _tool(execute_code, EXECUTE_CODE_SPEC)
     if isinstance(features, dict) and features.get("web_search"):

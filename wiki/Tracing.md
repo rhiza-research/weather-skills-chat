@@ -4,7 +4,7 @@ Weather Skills Chat can send a trace of every chat to Langfuse, so admins can se
 
 ## What a trace shows
 
-Each chat request, from a user or from an [[Automations]] run, becomes one trace. The trace is tagged with the user, the chat, the model, the tools offered, and whether it came from a chat or an automation. Inside it are:
+Each chat request, from a user or from a [[Scheduled Tasks]] run, becomes one trace. The trace is tagged with the user, the chat, the model, the tools offered, and whether it came from a chat or a scheduled task. Inside it are:
 
 - Each model call, with the messages sent, the tools offered, the model's reply, and token usage. When a connection hands its model calls to OpenRouter, OpenRouter's record of each call appears here in place of the app's. See below.
 - Each tool run, with its input and output. A tool run on the tool runner also shows its CPU time, the peak memory of its largest process, and how long the skill itself ran.

@@ -112,7 +112,7 @@ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
-MAX_TOOL_CALL_RETRIES = int(os.environ.get("MAX_TOOL_CALL_RETRIES", "40"))
+MAX_TOOL_CALL_RETRIES = int(os.environ.get("MAX_TOOL_CALL_RETRIES", "100"))
 MAX_CODE_INTERPRETER_RETRIES = int(
     os.environ.get("MAX_CODE_INTERPRETER_RETRIES", "20")
 )
@@ -1065,7 +1065,7 @@ def load_payload_context(
     tool_ids = metadata.get("tool_ids", None)
     tools = {}
     if tool_ids:
-        from open_webui.utils.skill_version import resolve_tool_ids_by_skill_version
+        from open_webui.utils.skill_version import resolve_tool_selection
         from open_webui.utils.tools import accessible_skill_records
         from open_webui.models.tools import Tools
         from open_webui.utils.organizations import request_organization_id
@@ -1077,9 +1077,9 @@ def load_payload_context(
             user, organization_id=org_id, catalog=catalog
         )
         clock.mark("accessible_skill_records", n=len(skill_records))
-        tool_ids = resolve_tool_ids_by_skill_version(
-            list(tool_ids), skill_records
-        )
+        # The one place a request's skill names and IDs become the copies
+        # it runs; get_tools uses these as given.
+        tool_ids = resolve_tool_selection(list(tool_ids), skill_records)
         clock.mark("resolve_tool_ids", n=len(tool_ids))
         tools = get_tools(
             request,
@@ -3444,6 +3444,8 @@ async def process_chat_response(
                 end_chat_trace(output=data)
             except asyncio.CancelledError:
                 log.warning("Task was cancelled!")
+                # Lets a scheduled task's run tell a stop from a finished reply.
+                metadata["cancelled"] = True
                 complete_open_tool_calls("Cancelled by user.")
 
                 cancelled_content = serialize_content_blocks(content_blocks)

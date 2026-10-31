@@ -15,7 +15,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Textarea from '$lib/components/common/Textarea.svelte';
-	import { WEBUI_BUILD_HASH, helpEmailAddress, runningReleaseLabel } from '$lib/constants';
+	import { helpEmailAddress, runningReleaseLabel } from '$lib/constants';
 	import { config } from '$lib/stores';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -143,7 +143,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						</div>
 						<div class="flex w-full justify-between items-center">
 							<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
-								<Tooltip content={WEBUI_BUILD_HASH}>
+								<Tooltip content={$config?.build_hash}>
 									{runningReleaseLabel($config?.image_tag)}
 								</Tooltip>
 							</div>

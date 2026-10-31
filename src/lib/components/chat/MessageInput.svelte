@@ -52,9 +52,11 @@
 	import Spinner from '../common/Spinner.svelte';
 
 	import XMark from '../icons/XMark.svelte';
+	import GarbageBin from '../icons/GarbageBin.svelte';
 	import Headphone from '../icons/Headphone.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import CommandLine from '../icons/CommandLine.svelte';
+	import Eye from '../icons/Eye.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
 	import { whenAppIdle } from '$lib/utils/idle';
@@ -90,6 +92,8 @@
 	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
+	export let readArtifactsEnabled = false;
+	export let builtinFeatures: Record<string, boolean> = {};
 
 	$: onChange({
 		prompt,
@@ -97,7 +101,9 @@
 		selectedToolIds,
 		imageGenerationEnabled,
 		webSearchEnabled,
-		codeInterpreterEnabled
+		codeInterpreterEnabled,
+		readArtifactsEnabled,
+		builtinFeatures
 	});
 
 	let showTools = false;
@@ -128,6 +134,7 @@
 	// Sends waiting for the running reply to finish, oldest first, shown above the chat bar.
 	export let queuedSends: string[] = [];
 	export let onDeleteQueuedSend: Function = () => {};
+	export let onSendQueuedNow: Function = () => {};
 
 	let visionCapableModels = [];
 	$: visionCapableModels = [...(atSelectedModel ? [atSelectedModel] : selectedModels)].filter(
@@ -365,7 +372,13 @@
 <FilesOverlay show={dragged} />
 
 {#if ToolServersModal}
-	<svelte:component this={ToolServersModal} bind:show={showTools} bind:selectedToolIds />
+	<svelte:component
+	this={ToolServersModal}
+	bind:show={showTools}
+	bind:selectedToolIds
+	bind:builtinFeatures
+	builtinGroups={['email', 'scheduled_tasks', 'preferences']}
+/>
 {/if}
 
 {#if loaded}
@@ -504,10 +517,19 @@
 							{#each queuedSends as queued, idx}
 								<div class="queued-send flex items-start gap-2 pt-1">
 									<div
-										class="flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap break-words dark:text-gray-200"
+										class="queued-send-text flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap break-words dark:text-gray-200"
 									>
 										{queued}
 									</div>
+									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
+										<button
+											type="button"
+											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 transition"
+											on:click={() => onSendQueuedNow(idx)}
+										>
+											{$i18n.t('Send now')}
+										</button>
+									</Tooltip>
 									<Tooltip content={$i18n.t('Delete queued send')}>
 										<button
 											type="button"
@@ -515,7 +537,7 @@
 											aria-label={$i18n.t('Delete queued send')}
 											on:click={() => onDeleteQueuedSend(idx)}
 										>
-											<XMark className="size-4" />
+											<GarbageBin className="size-4" />
 										</button>
 									</Tooltip>
 								</div>
@@ -1206,6 +1228,30 @@
 														</button>
 													</Tooltip>
 												{/if}
+
+												<Tooltip
+													content={readArtifactsEnabled
+														? $i18n.t('Agent allowed to read files')
+														: $i18n.t('Agent asks before reading files')}
+													placement="top"
+												>
+													<button
+														on:click|preventDefault={() =>
+															(readArtifactsEnabled = !readArtifactsEnabled)}
+														type="button"
+														aria-pressed={readArtifactsEnabled}
+														class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {readArtifactsEnabled
+															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
+															: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
+													>
+														<Eye className="size-5" strokeWidth="1.75" />
+														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
+															>{readArtifactsEnabled
+																? $i18n.t('Agent allowed to read files')
+																: $i18n.t('Agent asks before reading files')}</span
+														>
+													</button>
+												</Tooltip>
 											{/if}
 										</div>
 									</div>

@@ -2,6 +2,7 @@ import logging
 import time
 import uuid
 from contextlib import nullcontext
+from pathlib import Path
 from typing import Any, Optional
 
 from open_webui.env import SRC_LOG_LEVELS
@@ -183,6 +184,26 @@ class SkillPackTable:
         self, user_id: str, git_url: str, git_ref: str
     ) -> Optional[SkillPackModel]:
         return self.get_by_org_url_ref(user_id, git_url, git_ref)
+
+    def get_commit_by_local_path(self, local_path: Path) -> Optional[str]:
+        """The installed commit of the pack checked out at local_path.
+
+        Rows store the path as written, so they are compared resolved. When
+        rows share a folder (the same person installing one repo and ref in
+        two organizations), the latest checkout is the one on disk.
+        """
+        target = Path(local_path).resolve()
+        with get_db() as db:
+            rows = (
+                db.query(SkillPack.local_path, SkillPack.commit_sha)
+                .filter(SkillPack.local_path.like(f"%{target.name}"))
+                .order_by(SkillPack.updated_at.desc())
+                .all()
+            )
+        for path, commit in rows:
+            if commit and Path(path).resolve() == target:
+                return commit
+        return None
 
     def get_all(self) -> list[SkillPackModel]:
         with get_db() as db:

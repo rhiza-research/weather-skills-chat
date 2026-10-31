@@ -31,6 +31,7 @@ The chart lives in the repository under `charts/weather-skills-chat`. Its [READM
 - `image.tag` selects the app version. By default it follows the chart's `appVersion`.
 - By default the app runs as one replica, with SQLite stored on a persistent volume.
 - SQLite supports one app process only: one replica, and `UVICORN_WORKERS` left at 1. Running more needs Postgres, or two processes can erase each other's changes to the same chat.
+- [[Scheduled Tasks]] need one app process even with Postgres. Each process runs every task's schedule, so with more than one a task runs more than once, and a process that starts marks every unfinished run as an error.
 - `sandbox.isolation` chooses how skills are isolated: `off` (the default), `auto` or `sandlock` or `landlock_only` for confinement on the chat server (see [[Skill Packs]]), or `k8s` for a [[Tool Runner]]. Staging and production both use `k8s`.
 - `skillVenvs.enabled` gives each pod its own volume for skill environments, and `skillVenvs.maxBytes` sets how much of it skills may use. See [[Skill Packs]].
 - `langfuse.enabled` turns [[Tracing]] on or off.
@@ -58,7 +59,7 @@ Many settings can be changed by an admin while the app runs, and the app stores 
 
 ## Model providers
 
-The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings.
+The app reaches models through OpenAI-compatible providers and Ollama servers, which admins set up in the admin settings. A second provider can serve as a backup when the first stops answering. See [[Model Fallback]].
 
 | Env var | Default | Effect |
 |-|-|-|
@@ -91,3 +92,11 @@ When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRA
 | Env var | Default | Effect |
 |-|-|-|
 | `RENDERING_PROMPT` | "Responses will be interpreted as github markdown. Please use proper escape sequences if you would like to use markdown-specific characters but not render them as markdown" | Instruction added to every chat telling the model how its replies are displayed; empty turns it off |
+
+## Tool rounds per reply
+
+In one reply, the model can call tools, read their results, and call more, round after round. Calls the model makes together count as one round. When a reply reaches the limit and the model still wants to call tools, the reply ends with a message saying it hit the tool-call limit before finishing. Each new message starts the count again. This applies to chats and to [[Scheduled Tasks]] runs alike.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |

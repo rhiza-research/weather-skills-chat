@@ -1,18 +1,23 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.automations import (
+    MAX_RUN_TIMEOUT_MINUTES,
     AutomationForm,
     AutomationModel,
     AutomationRunModel,
     AutomationRuns,
     Automations,
     AutomationUpdateForm,
+    AutomationUserStates,
 )
 from open_webui.models.chats import Chats
+from open_webui.models.users import Users
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.automation_runner import execute_automation
 from open_webui.utils.automation_scheduler import (
@@ -20,6 +25,7 @@ from open_webui.utils.automation_scheduler import (
     sync_automation_job,
 )
 from open_webui.utils.schedule import parse_schedule
+from open_webui.utils.task_image import TASK_IMAGE_MIME
 from open_webui.utils.organizations import (
     can_manage_automation,
     can_view_automation,
@@ -35,6 +41,14 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 router = APIRouter()
 
 
+def _check_timeout(minutes: Optional[int]) -> None:
+    if minutes is not None and not 1 <= minutes <= MAX_RUN_TIMEOUT_MINUTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The time limit must be between 1 minute and 24 hours.",
+        )
+
+
 def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if cron is None or cron == "":
         return None
@@ -42,26 +56,137 @@ def _normalize_form_cron(cron: Optional[str]) -> Optional[str]:
     if not parsed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid schedule. Use cron or a phrase like 'every day at noon'.",
+            detail=(
+                "Invalid schedule. Use cron, or a phrase like 'every weekday at 7am' "
+                "or 'mondays and thursdays at 6pm'."
+            ),
         )
     return parsed
 
 
-@router.get("/", response_model=list[AutomationModel])
+class AutomationListItem(AutomationModel):
+    last_run: Optional[AutomationRunModel] = None
+    # The viewer's own: shown in their sidebar, and the last run they opened.
+    pinned: bool = True
+    seen_run_id: Optional[str] = None
+
+
+class PinForm(BaseModel):
+    pinned: bool
+
+
+class SeenForm(BaseModel):
+    run_id: str
+
+
+class ScheduleForm(BaseModel):
+    schedule: str
+
+
+@router.post("/schedule", response_model=Optional[str])
+def preview_schedule(form_data: ScheduleForm, user=Depends(get_verified_user)):
+    """The cron a schedule phrase saves as, or null when it is not understood."""
+    return parse_schedule(form_data.schedule)
+
+
+@router.get("/", response_model=list[AutomationListItem])
 def list_automations(
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
-    return Automations.get_automations_for_user(user.id, organization_id)
+    automations = Automations.get_automations_for_user(user.id, organization_id)
+    ids = [a.id for a in automations]
+    last_runs = AutomationRuns.get_latest_runs(ids)
+    states = AutomationUserStates.get_states(user.id, ids)
+    items = []
+    for automation in automations:
+        state = states.get(automation.id)
+        items.append(
+            AutomationListItem(
+                **automation.model_dump(),
+                last_run=last_runs.get(automation.id),
+                pinned=state.pinned if state else True,
+                seen_run_id=state.seen_run_id if state else None,
+            )
+        )
+    return items
 
 
-@router.post("/", response_model=AutomationModel)
+def _viewable(id: str, user) -> None:
+    if not can_view_automation(user, Automations.get_automation_by_id(id)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+
+@router.get("/{id}/image")
+def get_task_image(id: str, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    data = Automations.get_image(id)
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    # Pages ask with ?v=<image_updated_at>, so a new picture is a new URL.
+    return Response(
+        content=data,
+        media_type=TASK_IMAGE_MIME,
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/{id}/image", response_model=bool)
+def delete_task_image(id: str, user=Depends(get_verified_user)):
+    if not can_manage_automation(user, Automations.get_automation_by_id(id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
+    Automations.set_image(id, None)
+    return True
+
+
+@router.post("/{id}/pin", response_model=bool)
+def set_pinned(id: str, form_data: PinForm, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    AutomationUserStates.set_state(user.id, id, pinned=form_data.pinned)
+    return True
+
+
+@router.post("/{id}/seen", response_model=bool)
+def mark_seen(id: str, form_data: SeenForm, user=Depends(get_verified_user)):
+    _viewable(id, user)
+    AutomationUserStates.set_state(user.id, id, seen_run_id=form_data.run_id)
+    return True
+
+
+class AutomationDetail(AutomationModel):
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
+
+def _user_name(user_id: Optional[str]) -> Optional[str]:
+    user = Users.get_user_by_id(user_id) if user_id else None
+    return user.name if user else None
+
+
+def _with_names(automation: AutomationModel) -> AutomationDetail:
+    """The task with the names of who created it and who last changed it."""
+    return AutomationDetail(
+        **automation.model_dump(),
+        created_by_name=_user_name(automation.user_id),
+        updated_by_name=_user_name(automation.updated_by),
+    )
+
+
+@router.post("/", response_model=AutomationDetail)
 async def create_automation(
     form_data: AutomationForm,
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
     form_data.cron = _normalize_form_cron(form_data.cron)
+    _check_timeout(form_data.timeout_minutes)
     form_data.organization_id = form_data.organization_id or organization_id
     if not is_member(form_data.organization_id, user.id):
         raise HTTPException(
@@ -85,20 +210,20 @@ async def create_automation(
             detail=ERROR_MESSAGES.DEFAULT("Error creating automation"),
         )
     sync_automation_job(automation)
-    return automation
+    return _with_names(automation)
 
 
-@router.get("/{id}", response_model=AutomationModel)
+@router.get("/{id}", response_model=AutomationDetail)
 async def get_automation(id: str, user=Depends(get_verified_user)):
     automation = Automations.get_automation_by_id(id)
     if not can_view_automation(user, automation):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    return automation
+    return _with_names(automation)
 
 
-@router.post("/{id}/update", response_model=AutomationModel)
+@router.post("/{id}/update", response_model=AutomationDetail)
 async def update_automation(
     id: str, form_data: AutomationUpdateForm, user=Depends(get_verified_user)
 ):
@@ -110,15 +235,16 @@ async def update_automation(
         )
     if form_data.cron is not None:
         form_data.cron = _normalize_form_cron(form_data.cron)
+    _check_timeout(form_data.timeout_minutes)
     if form_data.organization_id and not is_member(form_data.organization_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
-    automation = Automations.update_automation(id, form_data)
+    automation = Automations.update_automation(id, form_data, updated_by=user.id)
     if automation:
         sync_automation_job(automation)
-    return automation
+    return _with_names(automation) if automation else automation
 
 
 @router.delete("/{id}", response_model=bool)

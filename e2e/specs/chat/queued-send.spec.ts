@@ -35,6 +35,7 @@ async function send(page: Page, text: string) {
 }
 
 const queuedRows = (page: Page) => page.locator('#queued-sends .queued-send');
+const queuedTexts = (page: Page) => page.locator('#queued-sends .queued-send-text');
 const stop = (page: Page) => page.getByRole('button', { name: 'Stop' });
 
 test('up to three sends queue while the reply runs, and go out one per turn', async ({
@@ -49,7 +50,7 @@ test('up to three sends queue while the reply runs, and go out one per turn', as
 	await expect(stop(page)).toBeVisible();
 
 	for (const text of ['queued one', 'queued two', 'queued three']) await send(page, text);
-	await expect(queuedRows(page)).toHaveText(['queued one', 'queued two', 'queued three']);
+	await expect(queuedTexts(page)).toHaveText(['queued one', 'queued two', 'queued three']);
 	await expect(page.locator('#chat-input')).toHaveText('');
 
 	await send(page, 'one too many');
@@ -63,7 +64,7 @@ test('up to three sends queue while the reply runs, and go out one per turn', as
 
 	await stop(page).click();
 	await expect.poll(() => sent).toEqual(['first question', 'queued one']);
-	await expect(queuedRows(page)).toHaveText(['queued two', 'queued three']);
+	await expect(queuedTexts(page)).toHaveText(['queued two', 'queued three']);
 
 	await stop(page).click();
 	await expect.poll(() => sent.at(-1)).toBe('queued two');
@@ -87,7 +88,7 @@ test('one queued send can be deleted and the rest still go out', async ({ page }
 		.nth(1)
 		.getByRole('button', { name: 'Delete queued send' })
 		.click();
-	await expect(queuedRows(page)).toHaveText(['keep one', 'keep two']);
+	await expect(queuedTexts(page)).toHaveText(['keep one', 'keep two']);
 
 	await stop(page).click();
 	await expect.poll(() => sent.at(-1)).toBe('keep one');
@@ -96,6 +97,26 @@ test('one queued send can be deleted and the rest still go out', async ({ page }
 	await stop(page).click();
 	await expect(stop(page)).toHaveCount(0);
 	expect(sent).toEqual(['first question', 'keep one', 'keep two']);
+});
+
+test('send now stops the reply and sends that queued send next', async ({ page }) => {
+	const { id } = await seedChat('queued send now', 'first reply');
+	const sent = await holdReplies(page);
+	await openChat(page, id);
+
+	await send(page, 'first question');
+	await expect.poll(() => sent.length).toBe(1);
+	for (const text of ['later one', 'later two', 'urgent']) await send(page, text);
+	await expect(queuedRows(page)).toHaveCount(3);
+
+	await queuedRows(page).nth(2).getByRole('button', { name: 'Send now' }).click();
+	await expect.poll(() => sent).toEqual(['first question', 'urgent']);
+	await expect(queuedTexts(page)).toHaveText(['later one', 'later two']);
+	await expect(stop(page)).toBeVisible();
+
+	await stop(page).click();
+	await expect.poll(() => sent.at(-1)).toBe('later one');
+	await expect(queuedTexts(page)).toHaveText(['later two']);
 });
 
 test('queued sends stay with their chat when the user opens another chat', async ({ page }) => {
@@ -117,10 +138,10 @@ test('queued sends stay with their chat when the user opens another chat', async
 
 	await page.locator(`#sidebar a[href="/c/${first.id}"]`).click();
 	await expect(page.getByText('first reply')).toBeVisible();
-	await expect(queuedRows(page)).toHaveText(['waiting one', 'waiting two']);
+	await expect(queuedTexts(page)).toHaveText(['waiting one', 'waiting two']);
 	expect(sent).toEqual(['first question']);
 
 	await stop(page).click();
 	await expect.poll(() => sent).toEqual(['first question', 'waiting one']);
-	await expect(queuedRows(page)).toHaveText(['waiting two']);
+	await expect(queuedTexts(page)).toHaveText(['waiting two']);
 });

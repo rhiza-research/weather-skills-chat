@@ -40,7 +40,7 @@ from open_webui.utils.organizations import request_organization_id
 from open_webui.utils.plugin import load_tool_module_by_id
 from open_webui.utils.skill_version import (
     register_tool_by_function_name,
-    resolve_tool_ids_by_skill_version,
+    resolve_tool_selection,
     tool_version_from_record,
 )
 from open_webui.env import AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA
@@ -136,7 +136,6 @@ def accessible_skill_records(
                 "id": tool.id,
                 "skill_name": name,
                 "version": manifest.get("version"),
-                "enabled": True,
             }
         )
     log_timing(
@@ -160,7 +159,9 @@ def get_tools(
     """The chat's tools by function name.
 
     Synchronous: reads the catalog, skill records, access and tool modules.
-    Pass the catalog and skill records when the caller already has them.
+    Pass the catalog when the caller already has it. A caller that passes
+    skill records has already resolved ``tool_ids`` against them with
+    resolve_tool_selection; otherwise they are resolved here.
     """
     tools_dict = {}
     t0 = time.perf_counter()
@@ -172,8 +173,8 @@ def get_tools(
         skill_records = accessible_skill_records(
             user, organization_id=org_id, catalog=catalog
         )
+        tool_ids = resolve_tool_selection(list(tool_ids), skill_records)
     usable_skill_ids = {record["id"] for record in skill_records}
-    tool_ids = resolve_tool_ids_by_skill_version(list(tool_ids), skill_records)
     resolve_s = time.perf_counter() - t_resolve
     by_id = {tool.id: tool for tool in catalog}
 

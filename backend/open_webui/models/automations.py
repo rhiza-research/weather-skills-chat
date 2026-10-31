@@ -5,11 +5,19 @@ from typing import Optional
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.internal.db import Base, JSONField, get_db
+from open_webui.models.tools import Tools
+from open_webui.utils.skill_version import tool_ids_with_skill_names
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Boolean, Column, Text, or_
+from sqlalchemy import BigInteger, Boolean, Column, Integer, LargeBinary, Text, func, or_
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
+
+
+# A run's time limit, in minutes, when its task sets none, and the most a
+# task may set.
+DEFAULT_RUN_TIMEOUT_MINUTES = 60
+MAX_RUN_TIMEOUT_MINUTES = 24 * 60
 
 
 class Automation(Base):
@@ -25,9 +33,28 @@ class Automation(Base):
     organization_id = Column(Text, nullable=False)
     visibility = Column(Text, nullable=False, default="private")
     source_chat_id = Column(Text, nullable=True)
+    # Skills by name, other tools by ID. Each run uses the newest copy of a
+    # skill usable in the organization. Null offers every usable tool.
     tool_ids = Column(JSONField, nullable=True)
     features = Column(JSONField, nullable=True)
+    # When the task's picture last changed, or null when it has none.
+    image_updated_at = Column(BigInteger, nullable=True)
+    # How long a run may take before it is stopped as an error; null uses
+    # the default.
+    timeout_minutes = Column(Integer, nullable=True)
+    # The user who last changed the task; user_id created it.
+    updated_by = Column(Text, nullable=True)
     created_at = Column(BigInteger)
+    updated_at = Column(BigInteger)
+
+
+class AutomationImage(Base):
+    """A task's picture, kept apart so listing tasks does not load it."""
+
+    __tablename__ = "automation_image"
+
+    automation_id = Column(Text, primary_key=True)
+    data = Column(LargeBinary, nullable=False)
     updated_at = Column(BigInteger)
 
 
@@ -37,11 +64,29 @@ class AutomationRun(Base):
     id = Column(Text, unique=True, primary_key=True)
     automation_id = Column(Text, nullable=False)
     chat_id = Column(Text, nullable=True)
+    # running, then success or failure as the model reported it, unknown when
+    # it did not report, or error when the run itself broke.
     status = Column(Text, nullable=False)
     error = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
     started_at = Column(BigInteger)
     finished_at = Column(BigInteger)
     triggered_by = Column(Text, nullable=True)
+
+
+class AutomationUserState(Base):
+    """One user's view of a task: pinned in their sidebar, and the last run seen.
+
+    No row means pinned with nothing seen.
+    """
+
+    __tablename__ = "automation_user_state"
+
+    user_id = Column(Text, primary_key=True)
+    automation_id = Column(Text, primary_key=True, index=True)
+    pinned = Column(Boolean, nullable=False, default=True)
+    seen_run_id = Column(Text, nullable=True)
+    updated_at = Column(BigInteger)
 
 
 class AutomationModel(BaseModel):
@@ -59,6 +104,9 @@ class AutomationModel(BaseModel):
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    image_updated_at: Optional[int] = None
+    timeout_minutes: Optional[int] = None
+    updated_by: Optional[str] = None
     created_at: int
     updated_at: int
 
@@ -71,6 +119,7 @@ class AutomationRunModel(BaseModel):
     chat_id: Optional[str] = None
     status: str
     error: Optional[str] = None
+    summary: Optional[str] = None
     started_at: Optional[int] = None
     finished_at: Optional[int] = None
     triggered_by: Optional[str] = None
@@ -88,6 +137,7 @@ class AutomationForm(BaseModel):
     source_chat_id: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    timeout_minutes: Optional[int] = None
 
 
 class AutomationUpdateForm(BaseModel):
@@ -100,6 +150,13 @@ class AutomationUpdateForm(BaseModel):
     visibility: Optional[str] = None
     tool_ids: Optional[list[str]] = None
     features: Optional[dict] = None
+    timeout_minutes: Optional[int] = None
+
+
+def _with_skill_names(tool_ids: Optional[list[str]]) -> Optional[list[str]]:
+    if tool_ids is None:
+        return None
+    return tool_ids_with_skill_names(tool_ids, Tools.get_tool_catalog())
 
 
 class AutomationTable:
@@ -123,8 +180,10 @@ class AutomationTable:
                     else (form_data.visibility or "private")
                 ),
                 source_chat_id=form_data.source_chat_id,
-                tool_ids=form_data.tool_ids,
+                tool_ids=_with_skill_names(form_data.tool_ids),
                 features=form_data.features,
+                timeout_minutes=form_data.timeout_minutes,
+                updated_by=user_id,
                 created_at=now,
                 updated_at=now,
             )
@@ -167,9 +226,16 @@ class AutomationTable:
             ]
 
     def update_automation(
-        self, id: str, form_data: AutomationUpdateForm
+        self,
+        id: str,
+        form_data: AutomationUpdateForm,
+        updated_by: Optional[str] = None,
     ) -> Optional[AutomationModel]:
         updates = form_data.model_dump(exclude_unset=True)
+        if updated_by:
+            updates["updated_by"] = updated_by
+        if "tool_ids" in updates:
+            updates["tool_ids"] = _with_skill_names(updates["tool_ids"])
         if "name" in updates and updates["name"] is not None:
             updates["name"] = updates["name"].strip()
         updates["updated_at"] = int(time.time())
@@ -181,9 +247,29 @@ class AutomationTable:
     def delete_automation(self, id: str) -> bool:
         with get_db() as db:
             db.query(AutomationRun).filter_by(automation_id=id).delete()
+            db.query(AutomationUserState).filter_by(automation_id=id).delete()
+            db.query(AutomationImage).filter_by(automation_id=id).delete()
             deleted = db.query(Automation).filter_by(id=id).delete()
             db.commit()
             return deleted > 0
+
+
+    def set_image(self, id: str, data: Optional[bytes]) -> None:
+        """Replace the task's picture, or remove it when data is None."""
+        now = int(time.time())
+        with get_db() as db:
+            db.query(AutomationImage).filter_by(automation_id=id).delete()
+            if data is not None:
+                db.add(AutomationImage(automation_id=id, data=data, updated_at=now))
+            db.query(Automation).filter_by(id=id).update(
+                {"image_updated_at": now if data is not None else None}
+            )
+            db.commit()
+
+    def get_image(self, id: str) -> Optional[bytes]:
+        with get_db() as db:
+            row = db.query(AutomationImage).filter_by(automation_id=id).first()
+            return row.data if row else None
 
 
 class AutomationRunTable:
@@ -223,6 +309,7 @@ class AutomationRunTable:
         status: Optional[str] = None,
         chat_id: Optional[str] = None,
         error: Optional[str] = None,
+        summary: Optional[str] = None,
         finished: bool = False,
     ) -> Optional[AutomationRunModel]:
         updates = {}
@@ -232,6 +319,8 @@ class AutomationRunTable:
             updates["chat_id"] = chat_id
         if error is not None:
             updates["error"] = error
+        if summary is not None:
+            updates["summary"] = summary
         if finished:
             updates["finished_at"] = int(time.time())
         with get_db() as db:
@@ -255,11 +344,105 @@ class AutomationRunTable:
             )
             return [AutomationRunModel.model_validate(row) for row in rows]
 
+    def get_latest_runs(self, automation_ids: list[str]) -> dict[str, AutomationRunModel]:
+        """Each task's most recent run, by task id. Tasks never run are left out."""
+        if not automation_ids:
+            return {}
+        with get_db() as db:
+            newest = (
+                db.query(
+                    AutomationRun.automation_id,
+                    func.max(AutomationRun.started_at).label("started_at"),
+                )
+                .filter(AutomationRun.automation_id.in_(automation_ids))
+                .group_by(AutomationRun.automation_id)
+                .subquery()
+            )
+            rows = (
+                db.query(AutomationRun)
+                .join(
+                    newest,
+                    (AutomationRun.automation_id == newest.c.automation_id)
+                    & (AutomationRun.started_at == newest.c.started_at),
+                )
+                .all()
+            )
+            return {
+                row.automation_id: AutomationRunModel.model_validate(row) for row in rows
+            }
+
+    def mark_interrupted(self) -> int:
+        """End every run still marked running as an error.
+
+        Only safe while one process runs tasks: at its startup, nothing else
+        can be running them.
+        """
+        with get_db() as db:
+            count = (
+                db.query(AutomationRun)
+                .filter(AutomationRun.status == "running")
+                .update(
+                    {
+                        "status": "error",
+                        "error": "Interrupted by a server restart",
+                        "finished_at": int(time.time()),
+                    }
+                )
+            )
+            db.commit()
+            return count
+
     def clear_chat_id(self, chat_id: str) -> None:
         with get_db() as db:
             db.query(AutomationRun).filter_by(chat_id=chat_id).update({"chat_id": None})
             db.commit()
 
 
+class AutomationUserStateTable:
+    def get_states(
+        self, user_id: str, automation_ids: list[str]
+    ) -> dict[str, AutomationUserState]:
+        if not automation_ids:
+            return {}
+        with get_db() as db:
+            rows = (
+                db.query(AutomationUserState)
+                .filter(
+                    AutomationUserState.user_id == user_id,
+                    AutomationUserState.automation_id.in_(automation_ids),
+                )
+                .all()
+            )
+            for row in rows:
+                db.expunge(row)
+            return {row.automation_id: row for row in rows}
+
+    def set_state(
+        self,
+        user_id: str,
+        automation_id: str,
+        pinned: Optional[bool] = None,
+        seen_run_id: Optional[str] = None,
+    ) -> None:
+        with get_db() as db:
+            row = (
+                db.query(AutomationUserState)
+                .filter_by(user_id=user_id, automation_id=automation_id)
+                .first()
+            )
+            if row is None:
+                row = AutomationUserState(
+                    user_id=user_id, automation_id=automation_id, pinned=True
+                )
+                db.add(row)
+            if pinned is not None:
+                row.pinned = pinned
+            if seen_run_id is not None:
+                row.seen_run_id = seen_run_id
+            row.updated_at = int(time.time())
+            db.commit()
+
+
 Automations = AutomationTable()
 AutomationRuns = AutomationRunTable()
+AutomationUserStates = AutomationUserStateTable()

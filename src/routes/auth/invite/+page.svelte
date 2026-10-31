@@ -6,6 +6,7 @@
 	import { user } from '$lib/stores';
 	import { getCookieSessionUser, userSignOut } from '$lib/apis/auths';
 	import { acceptInvitation, getInvitation } from '$lib/apis/invitations';
+	import { openInvitedOrganization } from '$lib/utils/organizationContext';
 	import HelpContact from '$lib/components/common/HelpContact.svelte';
 
 	const i18n = getContext('i18n');
@@ -65,6 +66,7 @@
 			);
 			localStorage.token = session.token;
 			await user.set(session);
+			openInvitedOrganization(invite?.organization_id);
 			await goto('/');
 		} catch (err) {
 			toast.error(`${err?.detail || err}`);

@@ -52,3 +52,26 @@ export const runAutomationById = async (token: string, id: string) =>
 
 export const getAutomationRuns = async (token: string, id: string) =>
 	request(token, `/automations/${id}/runs`);
+
+export const setAutomationPinned = async (token: string, id: string, pinned: boolean) =>
+	request(token, `/automations/${id}/pin`, { method: 'POST', body: JSON.stringify({ pinned }) });
+
+export const markAutomationRunSeen = async (token: string, id: string, runId: string) =>
+	request(token, `/automations/${id}/seen`, {
+		method: 'POST',
+		body: JSON.stringify({ run_id: runId })
+	});
+
+/** The task's picture. `version` is its image_updated_at, so a new picture is a new URL. */
+export const getAutomationImageUrl = (id: string, version: number) =>
+	`${WEBUI_API_BASE_URL}/automations/${id}/image?v=${version}`;
+
+export const deleteAutomationImage = async (token: string, id: string) =>
+	request(token, `/automations/${id}/image`, { method: 'DELETE' });
+
+/** The cron a schedule phrase would save as, or null when it is not understood. */
+export const previewSchedule = async (token: string, schedule: string) =>
+	request(token, '/automations/schedule', {
+		method: 'POST',
+		body: JSON.stringify({ schedule })
+	});

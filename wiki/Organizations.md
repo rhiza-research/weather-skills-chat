@@ -1,6 +1,6 @@
 # Organizations
 
-An organization is a space that people share. Chats, automations, secrets, preferences, folders, skill packs, knowledge bases, models, and usage all belong to an organization. The app works in one active organization at a time, and everything a user sees and does happens in it. Users who belong to several organizations switch between them.
+An organization is a space that people share. Chats, scheduled tasks, secrets, preferences, folders, skill packs, knowledge bases, models, and usage all belong to an organization. The app works in one active organization at a time, and everything a user sees and does happens in it. Users who belong to several organizations switch between them, either from the Organization row near the top of the sidebar, above search, which always shows the active organization, or from the user menu. The app remembers the active organization in each browser.
 
 A chat stays in the organization it was created in. Its replies use that organization's skills, secrets, preferences, models, and limits, even when the user has another organization active. When the user is no longer a member of that organization, or it is inactive, the active organization is used instead.
 
@@ -43,7 +43,7 @@ Models, skill packs, and knowledge bases form a catalog.
 
 ## Sharing
 
-Chats, automations, preferences, and folders are either private or shared with the organization. Everything in a personal organization is private.
+Chats, scheduled tasks, preferences, and folders are either private or shared with the organization. Everything in a personal organization is private.
 
 - A chat's owner can share it with the organization. Every member can then read it. Only the owner can change it.
 - If the owner makes a shared chat private, it leaves other members' chat lists. They can no longer open it.
@@ -56,6 +56,6 @@ Chats, automations, preferences, and folders are either private or shared with t
 
 ## Deleting an organization
 
-The owner or a platform admin can delete a workspace organization. This deletes everything in it: chats, automations and their run history, secrets, preferences, folders, skill packs, knowledge bases, models, catalog choices, and usage records.
+The owner or a platform admin can delete a workspace organization. This deletes everything in it: chats, scheduled tasks and their run history, secrets, preferences, folders, skill packs, knowledge bases, models, catalog choices, and usage records.
 
 Spending limits are described on [[Usage and Spending Caps]], and inviting people on [[Invitations]].
