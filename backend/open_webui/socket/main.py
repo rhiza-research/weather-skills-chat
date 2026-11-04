@@ -418,8 +418,7 @@ def get_event_call(request_info):
                 "data": event_data,
             },
             to=request_info["session_id"],
-            # A popup waits for the user, who may be in another chat or tab.
-            timeout=600 if event_data.get("type") in ("confirmation", "input") else 90,
+            timeout=90,
         )
         return response
 

@@ -402,8 +402,8 @@
 				respond: (value) => cb?.(value)
 			};
 			addEventPrompt(prompt);
-			// The server stops waiting after ten minutes (socket get_event_call).
-			setTimeout(() => answerEventPrompt(prompt, false), 10 * 60 * 1000);
+			// The server stops waiting after 90 seconds (socket get_event_call).
+			setTimeout(() => answerEventPrompt(prompt, false), 90 * 1000);
 			// location, not $page: a new chat's address is set with history.replaceState.
 			const watching =
 				document.visibilityState === 'visible' &&
