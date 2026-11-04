@@ -146,6 +146,20 @@ def normalize_env_secret_names(env_secrets: Optional[list] = None) -> list[str]:
     return names
 
 
+def declared_env_names(skill_path: Path) -> set[str]:
+    """Secret names the skill's SKILL.md declares under metadata.openclaw."""
+    from open_webui.utils.skills import _parse_skill_md
+
+    skill_md = Path(skill_path) / "SKILL.md"
+    if not skill_md.is_file():
+        return set()
+    meta, _ = _parse_skill_md(skill_md)
+    claw = (meta.get("metadata") or {}).get("openclaw") or {}
+    required = (claw.get("requires") or {}).get("env") or []
+    described = [var.get("name") for var in claw.get("envVars") or []]
+    return set(required) | set(filter(None, described))
+
+
 def resolve_env_secrets_for_user(
     names: list[str],
     __user__: Optional[dict] = None,
@@ -284,6 +298,12 @@ def prepare_skill_run(
 
     try:
         secret_names = normalize_env_secret_names(env_secrets)
+        declared = declared_env_names(skill_path)
+        wrong = [n for n in secret_names if declared and n not in declared]
+        if wrong:
+            raise ValueError(
+                f"This skill reads {', '.join(sorted(declared))}, not {', '.join(wrong)}."
+            )
         used_secrets = resolve_env_secrets_for_user(
             secret_names,
             __user__,
