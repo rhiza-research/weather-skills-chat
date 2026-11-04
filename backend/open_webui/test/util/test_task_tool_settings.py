@@ -222,6 +222,16 @@ class TaskToolSettingsTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("read files `stations.csv`, `plots/*.png`", result)
 
+    async def test_the_model_is_reminded_when_runs_can_read_nothing(self):
+        result = await self._create()
+        self.assertIn("cannot read any files", result)
+        task = self._only_task()
+        ctx = {k: v for k, v in self._ctx().items() if k != "__metadata__"}
+        updated = await update_scheduled_task(
+            task_id=task.id, read_file_patterns=["plots/*.png"], **ctx
+        )
+        self.assertNotIn("cannot read any files", updated)
+
     async def test_file_patterns_must_be_names(self):
         result = await self._create(read_file_patterns="*.csv")
         self.assertIn("read_file_patterns", result)

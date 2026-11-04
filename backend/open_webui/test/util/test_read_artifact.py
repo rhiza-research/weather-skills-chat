@@ -418,7 +418,8 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
         event_call = AsyncMock(return_value={"error": "unavailable"})
         out = await self._read({"headless": True}, event_call)
         event_call.assert_not_awaited()
-        self.assertIn("Read files", out)
+        self.assertIn("may not read any files", out)
+        self.assertIn("task's page", out)
 
     async def test_allowed_pattern_reads_without_asking(self):
         event_call = AsyncMock(return_value=False)
@@ -436,7 +437,8 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
             event_call,
         )
         event_call.assert_not_awaited()
-        self.assertIsInstance(out, str)
+        self.assertIn("only files matching `*.csv`", out)
+        self.assertIn("`photo.png` is not one of them", out)
 
     async def test_wider_answers_apply_to_later_reads(self):
         for answer, key, expected in (

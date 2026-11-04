@@ -172,6 +172,19 @@ def _apply_task_settings(
     return None
 
 
+def _no_readable_files_note(features) -> str:
+    """A reminder for the model when the task's runs can read no files."""
+    features = features if isinstance(features, dict) else {}
+    if features.get("read_artifacts") or features.get("read_artifact_paths"):
+        return ""
+    return (
+        "\n\nRuns of this task cannot read any files, including the ones they "
+        "make. If a run needs to look at its results, such as a plot to check "
+        "or a table to summarize, call update_scheduled_task with "
+        "read_file_patterns naming those files."
+    )
+
+
 def _task_settings_args(**kwargs) -> dict:
     """The settings arguments to pass on, without the unset ones."""
     return {key: value for key, value in kwargs.items() if value is not None}
@@ -323,6 +336,7 @@ async def create_scheduled_task(
     return (
         f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
         f"{tool_note} [Open scheduled tasks](/scheduled-tasks) to manage it."
+        + _no_readable_files_note(automation.features)
     )
 
 
@@ -361,12 +375,13 @@ TASK_SETTING_PROPERTIES = {
         "description": (
             "File names the run may read when read_files is off, relative to "
             "the run's chat files, such as `stations.csv`, `plots/*.png`, or "
-            "`**/*.csv`. They follow Unix glob rules: * and ? match within one "
-            "folder, and ** matches any number of folders. Name the files the "
-            "run needs as narrowly as you can, rather than turning on "
-            "read_files. Replaces the current list; an empty list allows none. "
-            "Each run's agent is told these names in its prompt, so the task's "
-            "prompt does not need to list them."
+            "`**/*.csv`. Set this whenever a run must look at a file, including "
+            "one it makes, since it cannot otherwise. They follow Unix glob "
+            "rules: * and ? match within one folder, and ** matches any number "
+            "of folders. Name the files the run needs as narrowly as you can, "
+            "rather than turning on read_files. Replaces the current list; an "
+            "empty list allows none. Each run's agent is told these names in "
+            "its prompt, so the task's prompt does not need to list them."
         ),
     },
     "email": _switch("Allow the agent to send email"),
@@ -386,8 +401,13 @@ CREATE_SCHEDULED_TASK_SPEC = {
         "(for example: 'do this again every day at noon'). "
         "Scheduled tasks run headless: no user is present to answer follow-up questions, "
         "so a run reads only the files read_files or read_file_patterns allows. "
-        "Always prefer naming the files the run needs with read_file_patterns "
-        "over allowing every file with read_files. "
+        "A run cannot see any file unless the task allows it, including the "
+        "plots and tables the run makes itself. When the prompt has the run "
+        "check, summarize, or report on files it makes or reads, set "
+        "read_file_patterns to those files, worked out from the prompt and "
+        "from the files this chat read (for example `plots/*.png` for a plot "
+        "the run should check). Always prefer naming the files the run needs "
+        "with read_file_patterns over allowing every file with read_files. "
         "When read_file_patterns is set, each run's agent sees those file names "
         "at the end of its prompt."
     ),
@@ -677,8 +697,10 @@ async def update_scheduled_task(
         if not updated:
             return "Failed to update the scheduled task."
         sync_automation_job(updated)
-        return "Updated the scheduled task.\n\n" + _describe_task(
-            updated, user.id, full=False
+        return (
+            "Updated the scheduled task.\n\n"
+            + _describe_task(updated, user.id, full=False)
+            + _no_readable_files_note(updated.features)
         )
 
     return await asyncio.to_thread(save)
@@ -1756,9 +1778,19 @@ async def read_artifact(
     if read_allowed_without_asking(rel, metadata.get("features")):
         allowed_note = f"Reading `{rel}` is allowed, so it was read without asking."
     elif metadata.get("headless"):
+        features = metadata.get("features") or {}
+        patterns = features.get("read_artifact_paths") if isinstance(features, dict) else None
+        if isinstance(patterns, list) and patterns:
+            allowed = ", ".join(f"`{p}`" for p in patterns if isinstance(p, str))
+            return (
+                f"This scheduled task may read only files matching {allowed}. "
+                f"`{rel}` is not one of them, so it was not sent. The task's "
+                "owner can name more files on the task's page."
+            )
         return (
-            "Reading files is off for this scheduled task, so the file was not "
-            "sent. Turn on Read files for the task to allow it."
+            f"This scheduled task may not read any files, so `{rel}` was not "
+            "sent. The task's owner can name the files it may read on the "
+            "task's page."
         )
     else:
         denied = await _user_approved_artifact_read(rel, __event_call__, metadata)
