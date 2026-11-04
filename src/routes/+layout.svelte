@@ -57,6 +57,7 @@
 		setOpenChat
 	} from '$lib/chat/cache';
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
+	import { addEventPrompt } from '$lib/utils/eventPrompts';
 	import { requestChatTail } from '$lib/chat/scroll';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
@@ -388,6 +389,41 @@
 				}
 			} else {
 				console.log('chatEventHandler', event);
+			}
+			return;
+		}
+
+		// Popups wait in a queue the chat shows when it is open. When the user is
+		// not looking at this chat, tell them the agent is waiting.
+		if (type === 'confirmation' || type === 'input') {
+			addEventPrompt({
+				chatId: event.chat_id,
+				data: { ...data, input: type === 'input' },
+				respond: (value) => cb?.(value)
+			});
+			// location, not $page: a new chat's address is set with history.replaceState.
+			const watching =
+				document.visibilityState === 'visible' &&
+				(window.location.pathname === `/c/${event.chat_id}` ||
+					(event.chat_id === 'local' && $temporaryChatEnabled));
+			if (!watching) {
+				const title = data?.title || $i18n.t('The agent is waiting for you');
+				if ($settings?.notificationEnabled ?? false) {
+					new Notification(`${title} | Weather Skills`, {
+						body: data?.message ?? '',
+						icon: `${WEBUI_BASE_URL}/static/favicon.png`
+					});
+				}
+				toast.custom(NotificationToast, {
+					componentProps: {
+						onClick: () => goto(`/c/${event.chat_id}`),
+						content: data?.message ?? '',
+						title,
+						sound: 'approval'
+					},
+					duration: 15000,
+					unstyled: true
+				});
 			}
 			return;
 		}

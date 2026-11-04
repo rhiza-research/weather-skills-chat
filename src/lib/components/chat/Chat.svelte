@@ -121,7 +121,12 @@
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 	import { revealApp } from '$lib/utils/splash';
-	import { createPromptQueue } from '$lib/utils/eventPrompts';
+	import {
+		answerEventPrompt as answerPrompt,
+		eventPrompts,
+		nextEventPrompt,
+		type EventPrompt
+	} from '$lib/utils/eventPrompts';
 	import { chatInputWorthSaving, parseChatInput, type ChatInput } from '$lib/chat/chatInput';
 
 	import Banner from '../common/Banner.svelte';
@@ -178,23 +183,42 @@
 	let eventConfirmationInput = false;
 	let eventConfirmationInputPlaceholder = '';
 	let eventConfirmationInputValue = '';
-	const eventPrompts = createPromptQueue<Record<string, any>>();
+	let eventConfirmationConfirmLabel = '';
+	let eventConfirmationChoices: { label: string; value: string }[] = [];
+	/** The prompt in the dialog. Prompts for other chats wait until that chat is open. */
+	let eventPrompt: EventPrompt | null = null;
 
-	const showEventPrompt = (data) => {
+	$: pendingEventPrompt = nextEventPrompt($eventPrompts, $chatId);
+	$: if (pendingEventPrompt !== eventPrompt) showEventPrompt(pendingEventPrompt);
+
+	const showEventPrompt = async (next: EventPrompt | null) => {
+		eventPrompt = next;
+		showEventConfirmation = false;
+		if (!next) return;
+		// Let the dialog close before it opens for the next prompt.
+		await tick();
+		if (eventPrompt !== next) return;
+		const data = next.data;
 		eventConfirmationInput = data.input;
 		eventConfirmationTitle = data.title ?? '';
 		eventConfirmationMessage = data.message ?? '';
 		eventConfirmationInputPlaceholder = data.placeholder ?? '';
 		eventConfirmationInputValue = data.value ?? '';
+		eventConfirmationConfirmLabel = data.confirm_label ?? '';
+		eventConfirmationChoices = Array.isArray(data.choices) ? data.choices : [];
 		showEventConfirmation = true;
 	};
 
-	const answerEventPrompt = async (value) => {
-		const next = eventPrompts.answer(value);
-		if (!next) return;
-		// Let the dialog close before it opens for the next prompt.
-		await tick();
-		showEventPrompt(next.data);
+	const answerEventPrompt = (value) => {
+		const answered = eventPrompt;
+		if (!answered) return;
+		// A file read's wider answers stay on for this chat's later messages.
+		const path = answered.data?.path;
+		if (path && value === 'all_files') readArtifactsEnabled = true;
+		if (path && value === 'this_file' && !readArtifactPaths.includes(path)) {
+			readArtifactPaths = [...readArtifactPaths, path];
+		}
+		answerPrompt(answered, value);
 	};
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
@@ -210,6 +234,7 @@
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
 	let readArtifactsEnabled = false;
+	let readArtifactPaths: string[] = [];
 	// Built-in tool groups the user turned off or on; missing means on.
 	let builtinFeatures: Record<string, boolean> = {};
 
@@ -326,6 +351,7 @@
 		imageGenerationEnabled = input.imageGenerationEnabled;
 		codeInterpreterEnabled = input.codeInterpreterEnabled;
 		readArtifactsEnabled = input.readArtifactsEnabled;
+		readArtifactPaths = input.readArtifactPaths;
 		builtinFeatures = input.builtinFeatures;
 	};
 
@@ -514,8 +540,7 @@
 				toast.info(toastContent);
 			}
 		} else if (type === 'confirmation' || type === 'input') {
-			const prompt = { data: { ...data, input: type === 'input' }, respond: (v) => cb?.(v) };
-			if (eventPrompts.push(prompt)) showEventPrompt(prompt.data);
+			// The app layout queues these for every chat; see eventPrompts.
 		} else if (type === 'execute') {
 			try {
 				const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
@@ -2381,6 +2406,7 @@
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
 							: false,
 					read_artifacts: readArtifactsEnabled,
+					read_artifact_paths: readArtifactPaths,
 					email: builtinFeatures.email !== false,
 					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
 					preferences: builtinFeatures.preferences !== false
@@ -2868,6 +2894,8 @@
 	input={eventConfirmationInput}
 	inputPlaceholder={eventConfirmationInputPlaceholder}
 	inputValue={eventConfirmationInputValue}
+	confirmLabel={eventConfirmationConfirmLabel || $i18n.t('Confirm')}
+	choices={eventConfirmationChoices}
 	on:confirm={(e) => answerEventPrompt(e.detail ? e.detail : true)}
 	on:cancel={() => answerEventPrompt(false)}
 />
@@ -3051,6 +3079,7 @@
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
 								bind:readArtifactsEnabled
+								bind:readArtifactPaths
 								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel

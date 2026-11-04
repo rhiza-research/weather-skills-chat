@@ -1,6 +1,7 @@
 from typing import Any, NamedTuple, Optional
 from pathlib import Path
 import asyncio
+import fnmatch
 import json
 import logging
 import mimetypes
@@ -1469,10 +1470,34 @@ DISPLAY_IMAGE_SPEC = {
 }
 
 
-async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
+def read_allowed_without_asking(rel: str, features) -> bool:
+    """Whether Read files, or a file pattern it allows, covers this path."""
+    if not isinstance(features, dict):
+        return False
+    if features.get("read_artifacts"):
+        return True
+    patterns = features.get("read_artifact_paths")
+    if not isinstance(patterns, list):
+        return False
+    return any(
+        isinstance(p, str) and (rel == p or fnmatch.fnmatchcase(rel, p))
+        for p in patterns
+    )
+
+
+# Extra answers the read approval offers besides Allow and Cancel.
+READ_ALL_FILES = "all_files"
+READ_THIS_FILE = "this_file"
+
+
+async def _user_approved_artifact_read(
+    rel: str, event_call, metadata: dict
+) -> Optional[str]:
     """Ask the user to allow sending a sandbox file to the model.
 
-    Returns None when approved, or a message to give the model when not.
+    Returns None when approved, or a message to give the model when not. An
+    answer that allows more reads also applies to the rest of this reply; the
+    browser keeps it for the chat's later messages.
     """
     if event_call is None:
         return (
@@ -1488,6 +1513,12 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
                     "message": (
                         f"The model wants to read `{rel}` from this chat's files."
                     ),
+                    "path": rel,
+                    "confirm_label": "Allow once",
+                    "choices": [
+                        {"label": "Always allow this file", "value": READ_THIS_FILE},
+                        {"label": "Allow all files in this chat", "value": READ_ALL_FILES},
+                    ],
                 },
             }
         )
@@ -1497,6 +1528,16 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
             "It was not sent."
         )
     if result is True:
+        return None
+    features = metadata.get("features")
+    if not isinstance(features, dict):
+        features = metadata["features"] = {}
+    if result == READ_ALL_FILES:
+        features["read_artifacts"] = True
+        return None
+    if result == READ_THIS_FILE:
+        paths = features.get("read_artifact_paths")
+        features["read_artifact_paths"] = [*(paths if isinstance(paths, list) else []), rel]
         return None
     return "The user declined to let you read that file."
 
@@ -1657,18 +1698,18 @@ async def read_artifact(
     if problem:
         return problem
 
-    # The Read files switch: on reads without asking. Off asks the user in a
-    # chat; a scheduled task has no one to ask, so off refuses.
-    features = metadata.get("features") or {}
-    if isinstance(features, dict) and features.get("read_artifacts"):
-        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    # The Read files switch, or a file pattern it allows: reads without asking.
+    # Otherwise it asks the user in a chat; a scheduled task has no one to ask,
+    # so it refuses.
+    if read_allowed_without_asking(rel, metadata.get("features")):
+        allowed_note = f"Reading `{rel}` is allowed, so it was read without asking."
     elif metadata.get("headless"):
         return (
             "Reading files is off for this scheduled task, so the file was not "
             "sent. Turn on Read files for the task to allow it."
         )
     else:
-        denied = await _user_approved_artifact_read(rel, __event_call__)
+        denied = await _user_approved_artifact_read(rel, __event_call__, metadata)
         if denied:
             return denied
         allowed_note = f"The user approved reading `{rel}`."
