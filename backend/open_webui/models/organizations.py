@@ -38,9 +38,8 @@ class Organization(Base):
     can_add_models = Column(Boolean, nullable=False, default=False)
     can_add_skills = Column(Boolean, nullable=False, default=False)
     can_add_knowledge = Column(Boolean, nullable=False, default=False)
-    # Members may use tool runner sizes that need approval. On unless a
-    # platform admin turns it off.
-    can_use_large_runners = Column(Boolean, nullable=False, default=True)
+    # Members may use tool runner sizes that need approval.
+    can_use_large_runners = Column(Boolean, nullable=False, default=False)
     monthly_limit_usd = Column(Float, nullable=True, default=300.0)
     logo = Column(Text, nullable=True)
 
@@ -86,7 +85,7 @@ class OrganizationModel(BaseModel):
     can_add_models: bool = False
     can_add_skills: bool = False
     can_add_knowledge: bool = False
-    can_use_large_runners: bool = True
+    can_use_large_runners: bool = False
     monthly_limit_usd: Optional[float] = None
     usage: Optional[UsageTotalsModel] = None
     logo: Optional[str] = None
