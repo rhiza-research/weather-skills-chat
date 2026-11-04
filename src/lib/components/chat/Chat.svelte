@@ -122,6 +122,7 @@
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 	import { revealApp } from '$lib/utils/splash';
 	import { createPromptQueue } from '$lib/utils/eventPrompts';
+	import { chatInputWorthSaving, parseChatInput, type ChatInput } from '$lib/chat/chatInput';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -317,6 +318,17 @@
 		}
 	};
 
+	const applyChatInput = (input: ChatInput) => {
+		prompt = input.prompt;
+		files = input.files;
+		selectedToolIds = input.selectedToolIds;
+		webSearchEnabled = input.webSearchEnabled;
+		imageGenerationEnabled = input.imageGenerationEnabled;
+		codeInterpreterEnabled = input.codeInterpreterEnabled;
+		readArtifactsEnabled = input.readArtifactsEnabled;
+		builtinFeatures = input.builtinFeatures;
+	};
+
 	const loadChatForProp = async (id: string) => {
 		if (!id || loadingChatId === id) {
 			return;
@@ -330,14 +342,8 @@
 
 		queuedSends = readQueuedSends(id);
 		queueWaitsAfter = null;
-		prompt = '';
-		files = [];
-		selectedToolIds = [];
-		webSearchEnabled = false;
-		imageGenerationEnabled = false;
-		codeInterpreterEnabled = false;
-		readArtifactsEnabled = false;
-		builtinFeatures = {};
+		// Before the chat bar mounts again, so it starts with this chat's draft and switches.
+		applyChatInput(parseChatInput(localStorage.getItem(`chat-input-${id}`)));
 
 		try {
 			const ok = await loadChat(id);
@@ -357,20 +363,6 @@
 			await tick();
 			if (chatAlive && get(chatId) === id) await openArtifactsPanel(id);
 			revealApp();
-
-			if (localStorage.getItem(`chat-input-${id}`)) {
-				try {
-					const input = JSON.parse(localStorage.getItem(`chat-input-${id}`));
-					prompt = input.prompt;
-					files = input.files;
-					selectedToolIds = input.selectedToolIds;
-					webSearchEnabled = input.webSearchEnabled;
-					imageGenerationEnabled = input.imageGenerationEnabled;
-					codeInterpreterEnabled = input.codeInterpreterEnabled;
-					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
-					builtinFeatures = input.builtinFeatures ?? {};
-				} catch (e) {}
-			}
 
 			document.getElementById('chat-input')?.focus();
 		} catch (e) {
@@ -646,29 +638,6 @@
 		} else {
 			if ($temporaryChatEnabled) {
 				await goto('/');
-			}
-		}
-
-		if (localStorage.getItem(`chat-input-${chatIdProp}`)) {
-			try {
-				const input = JSON.parse(localStorage.getItem(`chat-input-${chatIdProp}`));
-				prompt = input.prompt;
-				files = input.files;
-				selectedToolIds = input.selectedToolIds;
-				webSearchEnabled = input.webSearchEnabled;
-				imageGenerationEnabled = input.imageGenerationEnabled;
-				codeInterpreterEnabled = input.codeInterpreterEnabled;
-				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
-				builtinFeatures = input.builtinFeatures ?? {};
-			} catch (e) {
-				prompt = '';
-				files = [];
-				selectedToolIds = [];
-				webSearchEnabled = false;
-				imageGenerationEnabled = false;
-				codeInterpreterEnabled = false;
-				readArtifactsEnabled = false;
-				builtinFeatures = {};
 			}
 		}
 
@@ -3090,7 +3059,8 @@
 								{stopResponse}
 								{createMessagePair}
 								onChange={(input) => {
-									if (input.prompt) {
+									if (!$chatId) return;
+									if (chatInputWorthSaving(input)) {
 										localStorage.setItem(`chat-input-${$chatId}`, JSON.stringify(input));
 									} else {
 										localStorage.removeItem(`chat-input-${$chatId}`);
