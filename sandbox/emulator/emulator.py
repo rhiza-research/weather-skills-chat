@@ -79,8 +79,7 @@ TYPE_LABEL = f"{CATALOG_PREFIX}/runner-type"
 CLAIM_TYPE_LABEL = "weather-skills-runner-type"
 
 # The cluster's runner sizes (infrastructure charts/weather-skills-sandbox
-# values.yaml runners). SKILL_K8S_EMULATOR_RUNNER_TYPES (JSON, same keys)
-# replaces them.
+# values.yaml runners).
 RUNNER_TYPES = {
     "standard": {
         "name": "weather-skills-standard-runner",
@@ -129,18 +128,6 @@ RUNNER_TYPES = {
 }
 
 
-def _runner_types() -> dict:
-    raw = os.environ.get("SKILL_K8S_EMULATOR_RUNNER_TYPES", "").strip()
-    if not raw:
-        return RUNNER_TYPES
-    try:
-        parsed = json.loads(raw)
-    except ValueError:
-        sys.stderr.write("SKILL_K8S_EMULATOR_RUNNER_TYPES is not JSON; using the built-in sizes\n")
-        return RUNNER_TYPES
-    return parsed if isinstance(parsed, dict) and parsed else RUNNER_TYPES
-
-
 def _template(rtype: str, spec: dict) -> dict:
     return {
         "apiVersion": f"{API_GROUP}/{API_VERSION}",
@@ -172,12 +159,12 @@ def _template(rtype: str, spec: dict) -> dict:
 
 
 def _templates() -> list[dict]:
-    return [_template(rtype, spec) for rtype, spec in _runner_types().items()]
+    return [_template(rtype, spec) for rtype, spec in RUNNER_TYPES.items()]
 
 
 def _spec_for_pool(pool: str) -> tuple[str, dict]:
     """(type, spec) of the size whose warm pool is `pool`; the first size if none matches."""
-    sizes = _runner_types()
+    sizes = RUNNER_TYPES
     for rtype, spec in sizes.items():
         if spec.get("name") == pool:
             return rtype, spec
@@ -601,7 +588,7 @@ def _pod_metrics(pod_uid: str) -> dict:
     if pod is None:
         return metrics
     rtype = (pod["metadata"].get("labels") or {}).get("weather-skills-runner-type")
-    limits = (_runner_types().get(rtype) or {}).get("limits") or {}
+    limits = (RUNNER_TYPES.get(rtype) or {}).get("limits") or {}
     if limits.get("cpu"):
         metrics["cpu_limit"] = _cpu(limits["cpu"])
     if limits.get("memory"):

@@ -181,13 +181,13 @@ class SwitchTest(IsolatedAsyncioTestCase):
         k8s._store_runner("c1", {"pod_name": "std", "pod_ip": "10.0.0.1", "rtype": None})
         self.assertIsNotNone(k8s._cached_runner("c1"))
         k8s.switch_runner_type("c1", LARGE, _catalog())
-        self.assertEqual(k8s._current_runner_type("c1"), LARGE)
+        self.assertEqual(runner_types.chosen("c1"), LARGE)
         self.assertIsNone(k8s._cached_runner("c1"))
 
     def test_switching_to_the_default_size_clears_the_choice(self):
         k8s.switch_runner_type("c1", MEDIUM, _catalog())
         k8s.switch_runner_type("c1", STANDARD, _catalog())
-        self.assertIsNone(k8s._current_runner_type("c1"))
+        self.assertIsNone(runner_types.chosen("c1"))
         self.assertEqual(k8s.effective_runner_type("c1", _catalog()), STANDARD)
 
     async def test_a_start_for_the_old_size_is_not_reused(self):
@@ -365,25 +365,25 @@ class RequestToolRunnerTest(IsolatedAsyncioTestCase):
         self.assertIn("Large", asked[0]["data"]["title"])
         self.assertIn("ERA5 over Africa", asked[0]["data"]["message"])
         self.assertIn("Switched this chat to the Large", result)
-        self.assertEqual(k8s._current_runner_type("c1"), LARGE)
+        self.assertEqual(runner_types.chosen("c1"), LARGE)
         start.assert_called_once_with("c1")
 
     async def test_declined_leaves_the_runner(self):
         result, asked, start = await self._call("large", approve=False)
         self.assertIn("declined", result)
-        self.assertIsNone(k8s._current_runner_type("c1"))
+        self.assertIsNone(runner_types.chosen("c1"))
         start.assert_not_called()
 
     async def test_a_size_without_approval_switches_without_asking(self):
         result, asked, _ = await self._call("medium")
         self.assertEqual(asked, [])
-        self.assertEqual(k8s._current_runner_type("c1"), MEDIUM)
+        self.assertEqual(runner_types.chosen("c1"), MEDIUM)
 
     async def test_going_smaller_never_asks(self):
         k8s.switch_runner_type("c1", LARGE, _catalog())
         result, asked, _ = await self._call("standard")
         self.assertEqual(asked, [])
-        self.assertIsNone(k8s._current_runner_type("c1"))
+        self.assertIsNone(runner_types.chosen("c1"))
 
     async def test_a_size_the_organization_cannot_use_is_refused(self):
         result, asked, start = await self._call("large", allowed=[STANDARD, MEDIUM])
@@ -394,7 +394,7 @@ class RequestToolRunnerTest(IsolatedAsyncioTestCase):
     async def test_a_scheduled_run_cannot_ask(self):
         result, asked, _ = await self._call("large", headless=True)
         self.assertIn("scheduled task cannot", result)
-        self.assertIsNone(k8s._current_runner_type("c1"))
+        self.assertIsNone(runner_types.chosen("c1"))
 
     async def test_unknown_size_lists_the_choices(self):
         result, _, _ = await self._call("huge")
@@ -516,3 +516,53 @@ class CatalogWithoutListTest(IsolatedAsyncioTestCase):
         self.assertEqual([t.type for t in sizes], ["standard"])
         self.assertIn("8 CPU cores and 8 GiB", text)
         self.assertEqual(k8s._catalog_cache[1], k8s.RUNNER_LIMITS_RETRY_SEC)
+
+
+class OrgRuleAtUserEntryTest(IsolatedAsyncioTestCase):
+    """Sizes that need approval stay out of reach of organizations without them."""
+
+    def setUp(self):
+        self.org = SimpleNamespace(kind="workspace", can_use_large_runners=False)
+        self.patches = [
+            patch(f"{K}.runner_catalog", AsyncMock(return_value=_catalog())),
+            patch(
+                "open_webui.models.organizations.Organizations.get_organization_by_id",
+                lambda org_id: self.org,
+            ),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in reversed(self.patches):
+            p.stop()
+        runner_types._choices.clear()
+
+    async def test_the_size_picker_refuses_a_large_size(self):
+        from fastapi import HTTPException
+
+        from open_webui.routers import tool_runner as router
+
+        with patch.object(router, "tool_runner_enabled", return_value=True), patch.object(
+            router, "require_chat_write", return_value=SimpleNamespace(organization_id="org")
+        ), patch(f"{K}.switch_runner_type") as switch:
+            with self.assertRaises(HTTPException) as ctx:
+                await router.set_tool_runner_size(
+                    "c1", router.RunnerSizeForm(size="large"), user=SimpleNamespace(id="u1")
+                )
+        self.assertEqual(ctx.exception.status_code, 400)
+        switch.assert_not_called()
+
+    async def test_a_task_cannot_save_a_large_size(self):
+        from fastapi import HTTPException
+
+        from open_webui.routers.automations import _check_runner_type
+
+        with patch("open_webui.env.tool_runner_enabled", return_value=True):
+            with self.assertRaises(HTTPException) as ctx:
+                await _check_runner_type("large", "org")
+            self.assertEqual(ctx.exception.status_code, 400)
+            self.assertEqual(await _check_runner_type("medium", "org"), "medium")
+            self.assertIsNone(await _check_runner_type("standard", "org"))
+            self.org.can_use_large_runners = True
+            self.assertEqual(await _check_runner_type("large", "org"), "large")

@@ -95,15 +95,6 @@ def _type_ttl(rtype: Optional[RunnerType]) -> int:
     return _ttl_seconds()
 
 
-def _type_pool(rtype: Optional[RunnerType]) -> str:
-    return rtype.name if rtype is not None else _pool()
-
-
-def _current_runner_type(chat_id: Optional[str]) -> Optional[RunnerType]:
-    """The size new skill calls of this chat run on; None is the default pool."""
-    return runner_types.chosen(chat_id)
-
-
 # Past the skill's own exec HTTP wait (timeout + 15s) and a controller tick.
 RUNNER_HOLD_BUFFER_SEC = 60
 
@@ -337,7 +328,7 @@ async def create_claim(chat_id: str, rtype: Optional[RunnerType] = None) -> dict
             "finalizers": [FINALIZER],
         },
             "spec": {
-            "warmPoolRef": {"name": _type_pool(rtype)},
+            "warmPoolRef": {"name": rtype.name if rtype is not None else _pool()},
             "lifecycle": {
                 "shutdownTime": shutdown.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "shutdownPolicy": "Delete",
@@ -452,9 +443,11 @@ RUNNER_RESOURCES_GUIDANCE = (
     "calls running at once. Please split and/or parallelize work as "
     "appropriate to fit within those limits."
 )
-# Added to the out-of-memory message when a larger size exists.
+# Added to the out-of-memory message when the cluster has a larger size. The
+# system prompt lists the sizes this chat's organization may use.
 RUNNER_OOM_LARGER_HINT = (
-    " If the work cannot be split, ask for a larger runner with request_tool_runner."
+    " If the work cannot be split and a larger size is listed for this chat, "
+    "switch to it with request_tool_runner."
 )
 # Added to the system prompt when the chat can switch sizes.
 RUNNER_SIZES_GUIDANCE = (
@@ -714,7 +707,7 @@ def default_runner_type(catalog: list[RunnerType]) -> RunnerType:
 
 def effective_runner_type(chat_id: Optional[str], catalog: list[RunnerType]) -> RunnerType:
     """The chat's size as a catalog entry, the default one included."""
-    return _current_runner_type(chat_id) or default_runner_type(catalog)
+    return runner_types.chosen(chat_id) or default_runner_type(catalog)
 
 
 def runner_size_public(chat_id: Optional[str]) -> Optional[dict]:
@@ -742,7 +735,7 @@ def switch_runner_type(chat_id: str, rtype: RunnerType, catalog: list[RunnerType
             chat_id, rtype, _type_start_timeout(rtype) + _type_ttl(rtype)
         )
     hit = _ready_cache.get(chat_id)
-    if hit is not None and not runner_types.same(hit[1].get("rtype"), _current_runner_type(chat_id)):
+    if hit is not None and not runner_types.same(hit[1].get("rtype"), runner_types.chosen(chat_id)):
         _ready_cache.pop(chat_id, None)
 
 
@@ -1058,7 +1051,7 @@ def _cached_runner(chat_id: str) -> Optional[dict]:
     if time.monotonic() - stamp > float(_type_ttl(rtype)):
         _ready_cache.pop(chat_id, None)
         return None
-    if not runner_types.same(rtype, _current_runner_type(chat_id)):
+    if not runner_types.same(rtype, runner_types.chosen(chat_id)):
         # Switched to another size: new calls go to a runner of that size.
         _ready_cache.pop(chat_id, None)
         return None
@@ -1443,7 +1436,7 @@ def start_runner(chat_id: str) -> asyncio.Task:
     been switched away from is not reused; a new one starts for the new size.
     """
     with _lock:
-        rtype = _current_runner_type(chat_id)
+        rtype = runner_types.chosen(chat_id)
         task = _starts.get(chat_id)
         if task is not None and not runner_types.same(_start_types.get(chat_id), rtype):
             task = None
@@ -1484,7 +1477,7 @@ async def _run_start(chat_id: str) -> dict:
         return cached
     if cached:
         _drop_runner(chat_id)
-    rtype = _current_runner_type(chat_id)
+    rtype = runner_types.chosen(chat_id)
     deadline = time.monotonic() + _type_start_timeout(rtype)
     try:
 
@@ -1531,7 +1524,7 @@ async def _run_start(chat_id: str) -> dict:
         # Calls waiting on this start take it in a moment; the grace keeps a
         # release from beating them to it.
         _mark_handed_out(chat_id, pod_name)
-        if runner_types.same(rtype, _current_runner_type(chat_id)):
+        if runner_types.same(rtype, runner_types.chosen(chat_id)):
             _store_runner(chat_id, info)
             _start_failed_at.pop(chat_id, None)
         # Releases the other size's runner, or this one if the chat was
@@ -1539,7 +1532,7 @@ async def _run_start(chat_id: str) -> dict:
         _release_soon(chat_id)
         return info
     except Exception:
-        if runner_types.same(rtype, _current_runner_type(chat_id)):
+        if runner_types.same(rtype, runner_types.chosen(chat_id)):
             _start_failed_at[chat_id] = time.monotonic()
             _drop_runner(chat_id)
         raise
@@ -1569,9 +1562,9 @@ async def await_runner_for_chat(chat_id: Optional[str], emitter=None) -> None:
         return
     chat_id = str(chat_id)
     task = start_runner(chat_id)
-    await _emit_waiting(emitter, False, _current_runner_type(chat_id))
+    await _emit_waiting(emitter, False, runner_types.chosen(chat_id))
     # The start has its own time limit; this only guards against a hang.
-    timeout = _type_start_timeout(_current_runner_type(chat_id)) + 30
+    timeout = _type_start_timeout(runner_types.chosen(chat_id)) + 30
     await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
 
 
@@ -1601,7 +1594,7 @@ async def ensure_runner(chat_id: str, *, emitter=None, take: bool = False) -> di
     task = start_runner(chat_id)
     if emitter is None:
         return handed(await asyncio.shield(task))
-    rtype = _current_runner_type(chat_id)
+    rtype = runner_types.chosen(chat_id)
     await _emit_waiting(emitter, False, rtype)
     try:
         return handed(await asyncio.shield(task))
@@ -1645,7 +1638,7 @@ async def runner_status(chat_id: str) -> dict:
     A ready result is remembered so later status and tool calls do not list
     packs again. Packs are listed only when the pod is not already marked ready.
     """
-    rtype = _current_runner_type(chat_id)
+    rtype = runner_types.chosen(chat_id)
     name = claim_name(chat_id, rtype)
     cached = _cached_runner(chat_id)
     if cached:
@@ -1712,7 +1705,7 @@ async def runner_status(chat_id: str) -> dict:
 
 async def runner_metrics(chat_id: str) -> dict:
     try:
-        claim = await get_claim(chat_id, _current_runner_type(chat_id))
+        claim = await get_claim(chat_id, runner_types.chosen(chat_id))
         if not claim or not _claim_ready(claim):
             raise RuntimeError("tool runner is not ready")
         pod_name = _pod_ref(claim)
@@ -1903,7 +1896,7 @@ def _give_back_runner(chat_id: str, info: dict) -> None:
         return
     _runner_users.pop(key, None)
     _handed_out_at.pop(key, None)
-    if not runner_types.same(info.get("rtype"), _current_runner_type(chat_id)):
+    if not runner_types.same(info.get("rtype"), runner_types.chosen(chat_id)):
         _release_soon(chat_id)
 
 
@@ -1934,7 +1927,7 @@ async def _release_other_runners(chat_id: str) -> None:
     for claim in claims:
         meta = claim.get("metadata") or {}
         name = meta.get("name")
-        keep = claim_name(chat_id, _current_runner_type(chat_id))
+        keep = claim_name(chat_id, runner_types.chosen(chat_id))
         if not name or name == keep or meta.get("deletionTimestamp"):
             continue
         pod_name = _pod_ref(claim)
