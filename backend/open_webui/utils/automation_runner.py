@@ -209,7 +209,8 @@ def readable_files_note(features) -> str:
         return ""
     return (
         "\n\nWith read_artifact, this run may read only the files in its chat "
-        "that match these names, where * and ? are wildcards: "
+        "that match these Unix glob patterns, where * and ? stay within one "
+        "folder and ** spans folders: "
         + ", ".join(f"`{p}`" for p in patterns)
         + "."
     )

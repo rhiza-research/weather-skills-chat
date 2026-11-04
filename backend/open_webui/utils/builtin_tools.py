@@ -358,8 +358,9 @@ TASK_SETTING_PROPERTIES = {
         "items": {"type": "string"},
         "description": (
             "File names the run may read when read_files is off, relative to "
-            "the run's chat files, such as `stations.csv` or `plots/*.png`; * "
-            "and ? are wildcards. Replaces the current list; an empty list "
+            "the run's chat files, such as `stations.csv`, `plots/*.png`, or "
+            "`**/*.csv`. They follow Unix glob rules: * and ? match within one "
+            "folder, and ** matches any number of folders. Replaces the current list; an empty list "
             "allows none. Each run's agent is told these names in its prompt, "
             "so the task's prompt does not need to list them."
         ),
@@ -1498,6 +1499,23 @@ DISPLAY_IMAGE_SPEC = {
 }
 
 
+def glob_match(path: str, pattern: str) -> bool:
+    """Unix glob: * ? and [...] stay within one folder; a ** segment spans any folders."""
+
+    def match(parts: list[str], pats: list[str]) -> bool:
+        if not pats:
+            return not parts
+        if pats[0] == "**":
+            return any(match(parts[i:], pats[1:]) for i in range(len(parts) + 1))
+        return (
+            bool(parts)
+            and fnmatch.fnmatchcase(parts[0], pats[0])
+            and match(parts[1:], pats[1:])
+        )
+
+    return match(path.split("/"), pattern.split("/"))
+
+
 def read_allowed_without_asking(rel: str, features) -> bool:
     """Whether Read files, or a file pattern it allows, covers this path."""
     if not isinstance(features, dict):
@@ -1508,7 +1526,7 @@ def read_allowed_without_asking(rel: str, features) -> bool:
     if not isinstance(patterns, list):
         return False
     return any(
-        isinstance(p, str) and (rel == p or fnmatch.fnmatchcase(rel, p))
+        isinstance(p, str) and (rel == p or glob_match(rel, p))
         for p in patterns
     )
 

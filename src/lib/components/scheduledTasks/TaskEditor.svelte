@@ -330,7 +330,7 @@
 					bind:value={readPatterns}
 					disabled={!canManage}
 					aria-label={$i18n.t('Files the agent may read')}
-					placeholder={$i18n.t('Files it may read, e.g. stations.csv, plots/*.png')}
+					placeholder={$i18n.t('Files it may read, e.g. stations.csv, plots/*.png, **/*.csv')}
 				/>
 			{/if}
 		</div>

@@ -47,7 +47,7 @@ The popup names the file and offers:
 
 What the popup allows is kept with the chat's other chat bar switches (see [[Live Chat Updates]]). A popup for a chat the user is not looking at waits until they open it; see [[Notifications]].
 
-Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so with the switch off a run reads only the files the task names in the field below it, and none when the field is empty. The field takes file names relative to the run's files, separated by commas, such as `stations.csv, plots/*.png`. `*` matches any run of characters, including `/`, and `?` matches one character. Each run is told these names at the end of its prompt. A task made from a chat starts with the files that chat always allows.
+Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so with the switch off a run reads only the files the task names in the field below it, and none when the field is empty. The field takes file names relative to the run's files, separated by commas, such as `stations.csv, plots/*.png, **/*.csv`. They follow Unix glob rules: `*` matches any characters within one folder, `?` matches one character, and `**` matches any number of folders, so `plots/*.png` does not match `plots/old/a.png` but `plots/**/*.png` does. Each run is told these names at the end of its prompt. A task made from a chat starts with the files that chat always allows.
 
 ## Running code
 

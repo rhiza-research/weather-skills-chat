@@ -451,3 +451,24 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
             payload = event_call.await_args.args[0]["data"]
             self.assertEqual(payload["path"], "photo.png")
             self.assertIn(answer, [c["value"] for c in payload["choices"]])
+
+
+class GlobMatchTest(unittest.TestCase):
+    def test_unix_glob_rules(self):
+        from open_webui.utils.builtin_tools import glob_match
+
+        cases = [
+            ("plots/a.png", "plots/*.png", True),
+            ("plots/old/a.png", "plots/*.png", False),
+            ("plots/old/a.png", "plots/**/*.png", True),
+            ("plots/a.png", "plots/**/*.png", True),
+            ("a.csv", "**/*.csv", True),
+            ("data/x/y.csv", "**/*.csv", True),
+            ("data/y.csv", "*.csv", False),
+            ("a1.csv", "a?.csv", True),
+            ("a/b", "a?b", False),
+            ("b.csv", "[ab].csv", True),
+        ]
+        for path, pattern, expected in cases:
+            with self.subTest(path=path, pattern=pattern):
+                self.assertEqual(glob_match(path, pattern), expected)
