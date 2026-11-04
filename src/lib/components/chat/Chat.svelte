@@ -9,7 +9,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
-	import { get, type Unsubscriber, type Writable } from 'svelte/store';
+	import { derived, get, type Unsubscriber, type Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -188,8 +188,6 @@
 	/** The prompt in the dialog. Prompts for other chats wait until that chat is open. */
 	let eventPrompt: EventPrompt | null = null;
 
-	$: pendingEventPrompt = nextEventPrompt($eventPrompts, $chatId);
-	$: if (pendingEventPrompt !== eventPrompt) showEventPrompt(pendingEventPrompt);
 
 	const showEventPrompt = async (next: EventPrompt | null) => {
 		eventPrompt = next;
@@ -208,6 +206,15 @@
 		eventConfirmationChoices = Array.isArray(data.choices) ? data.choices : [];
 		showEventConfirmation = true;
 	};
+
+	// A store subscription, not `$:`: opening a chat sets chatId from a later
+	// reactive statement, which would not re-run an earlier one, so a popup
+	// waiting for that chat would not show.
+	const stopEventPromptWatch = derived([eventPrompts, chatId], ([list, id]) =>
+		nextEventPrompt(list, id)
+	).subscribe((next) => {
+		if (next !== eventPrompt) showEventPrompt(next);
+	});
 
 	const answerEventPrompt = (value) => {
 		const answered = eventPrompt;
@@ -711,6 +718,7 @@
 		stopPaint();
 		stopTailRequest();
 		stopControlsWatch();
+		stopEventPromptWatch();
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		window.removeEventListener('message', onMessageHandler);

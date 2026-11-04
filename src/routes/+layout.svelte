@@ -411,15 +411,21 @@
 					(event.chat_id === 'local' && $temporaryChatEnabled));
 			if (!watching) {
 				const title = data?.title || $i18n.t('The agent is waiting for you');
+				const openChat = () => goto(`/c/${event.chat_id}`);
 				if ($settings?.notificationEnabled ?? false) {
-					new Notification(`${title} | Weather Skills`, {
+					const notice = new Notification(`${title} | Weather Skills`, {
 						body: data?.message ?? '',
 						icon: `${WEBUI_BASE_URL}/static/favicon.png`
 					});
+					notice.onclick = () => {
+						window.focus();
+						openChat();
+						notice.close();
+					};
 				}
 				toast.custom(NotificationToast, {
 					componentProps: {
-						onClick: () => goto(`/c/${event.chat_id}`),
+						onClick: openChat,
 						content: data?.message ?? '',
 						title,
 						sound: 'approval'
