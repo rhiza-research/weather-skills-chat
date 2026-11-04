@@ -15,7 +15,7 @@ The others are always on, apart from those that need a chat feature such as web 
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. See [[Scheduled Tasks]]. |
+| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. The model is told to name the files a run may read rather than let it read every file, whenever it can. See [[Scheduled Tasks]]. |
 | `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, time limit, skills, switches, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
 | `update_scheduled_task` | Change any setting `create_scheduled_task` can set, turn the task's scheduled runs on or off, or remove its picture. |
 | `delete_scheduled_task` | Delete a scheduled task and its run history. The model is told to do this only when the user asks. |

@@ -351,7 +351,9 @@ TASK_SETTING_PROPERTIES = {
     "read_files": _switch(
         "Allow the agent to read all of the run's files. A run has no one to "
         "ask, so with this off it can read only the files read_file_patterns "
-        "names."
+        "names. Prefer read_file_patterns: turn this on only when the run must "
+        "read files whose names cannot be known in advance, and pass false "
+        "with read_file_patterns when this chat has it on."
     ),
     "read_file_patterns": {
         "type": "array",
@@ -360,9 +362,11 @@ TASK_SETTING_PROPERTIES = {
             "File names the run may read when read_files is off, relative to "
             "the run's chat files, such as `stations.csv`, `plots/*.png`, or "
             "`**/*.csv`. They follow Unix glob rules: * and ? match within one "
-            "folder, and ** matches any number of folders. Replaces the current list; an empty list "
-            "allows none. Each run's agent is told these names in its prompt, "
-            "so the task's prompt does not need to list them."
+            "folder, and ** matches any number of folders. Name the files the "
+            "run needs as narrowly as you can, rather than turning on "
+            "read_files. Replaces the current list; an empty list allows none. "
+            "Each run's agent is told these names in its prompt, so the task's "
+            "prompt does not need to list them."
         ),
     },
     "email": _switch("Allow the agent to send email"),
@@ -382,6 +386,8 @@ CREATE_SCHEDULED_TASK_SPEC = {
         "(for example: 'do this again every day at noon'). "
         "Scheduled tasks run headless: no user is present to answer follow-up questions, "
         "so a run reads only the files read_files or read_file_patterns allows. "
+        "Always prefer naming the files the run needs with read_file_patterns "
+        "over allowing every file with read_files. "
         "When read_file_patterns is set, each run's agent sees those file names "
         "at the end of its prompt."
     ),
