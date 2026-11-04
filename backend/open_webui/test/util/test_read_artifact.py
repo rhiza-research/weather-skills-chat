@@ -418,7 +418,8 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
         event_call = AsyncMock(return_value={"error": "unavailable"})
         out = await self._read({"headless": True}, event_call)
         event_call.assert_not_awaited()
-        self.assertIn("Read files", out)
+        self.assertIn("may not read any files", out)
+        self.assertIn("task's page", out)
 
     async def test_allowed_pattern_reads_without_asking(self):
         event_call = AsyncMock(return_value=False)
@@ -436,7 +437,8 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
             event_call,
         )
         event_call.assert_not_awaited()
-        self.assertIsInstance(out, str)
+        self.assertIn("only files matching `*.csv`", out)
+        self.assertIn("`photo.png` is not one of them", out)
 
     async def test_wider_answers_apply_to_later_reads(self):
         for answer, key, expected in (
@@ -451,3 +453,24 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
             payload = event_call.await_args.args[0]["data"]
             self.assertEqual(payload["path"], "photo.png")
             self.assertIn(answer, [c["value"] for c in payload["choices"]])
+
+
+class GlobMatchTest(unittest.TestCase):
+    def test_unix_glob_rules(self):
+        from open_webui.utils.builtin_tools import glob_match
+
+        cases = [
+            ("plots/a.png", "plots/*.png", True),
+            ("plots/old/a.png", "plots/*.png", False),
+            ("plots/old/a.png", "plots/**/*.png", True),
+            ("plots/a.png", "plots/**/*.png", True),
+            ("a.csv", "**/*.csv", True),
+            ("data/x/y.csv", "**/*.csv", True),
+            ("data/y.csv", "*.csv", False),
+            ("a1.csv", "a?.csv", True),
+            ("a/b", "a?b", False),
+            ("b.csv", "[ab].csv", True),
+        ]
+        for path, pattern, expected in cases:
+            with self.subTest(path=path, pattern=pattern):
+                self.assertEqual(glob_match(path, pattern), expected)
