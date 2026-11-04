@@ -29,6 +29,8 @@
 	export let onSaved: (task) => void = () => {};
 
 	let form = fromTask(task ?? prefill);
+	/** The files a run may read when Read files is off, as typed: names or wildcard patterns. */
+	let readPatterns = patternsText(form);
 	let selectedToolIds: string[] = [];
 	let toolsReady = false;
 	let showTools = false;
@@ -50,6 +52,17 @@
 				: null;
 		}, 300);
 	};
+
+	function patternsText(f) {
+		const paths = f.features?.read_artifact_paths;
+		return Array.isArray(paths) ? paths.join(', ') : '';
+	}
+
+	const parsePatterns = (text: string) =>
+		text
+			.split(/[,\n]/)
+			.map((p) => p.trim())
+			.filter(Boolean);
 
 	function fromTask(source) {
 		return {
@@ -82,8 +95,8 @@
 		!!$config?.features?.[configFlag] &&
 		($user?.role === 'admin' || !!$user?.permissions?.features?.[feature]);
 
-	// Worded as in the chat bar. A run has no one to ask, so reading files is
-	// either allowed or not.
+	// Worded as in the chat bar. A run has no one to ask, so it reads all files,
+	// only the ones named below the buttons, or none.
 	$: featureToggles = [
 		{
 			key: 'web_search',
@@ -102,7 +115,9 @@
 		{
 			key: 'read_artifacts',
 			on: $i18n.t('Agent allowed to read files'),
-			off: $i18n.t('Agent not allowed to read files'),
+			off: readPatterns.trim()
+				? $i18n.t('Agent allowed to read only these files')
+				: $i18n.t('Agent not allowed to read files'),
 			icon: Eye,
 			shown: true
 		}
@@ -158,7 +173,10 @@
 				cron: form.cron || '',
 				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: toolsReady ? selectedToolIds : form.tool_ids,
-				features: form.features,
+				features: {
+					...form.features,
+					read_artifact_paths: parsePatterns(readPatterns)
+				},
 				timeout_minutes:
 					form.timeout_minutes == null || form.timeout_minutes === ''
 						? null
@@ -176,6 +194,7 @@
 			toast.success(task ? $i18n.t('Scheduled task saved') : $i18n.t('Scheduled task created'));
 			task = saved;
 			form = fromTask(saved);
+			readPatterns = patternsText(form);
 			editingSchedule = !saved?.cron;
 			previewCron = saved?.cron ?? null;
 			onSaved(saved);
@@ -350,6 +369,16 @@
 					{on ? toggle.on : toggle.off}
 				</button>
 			{/each}
+
+			{#if !form.features?.read_artifacts}
+				<input
+					class="w-full max-w-sm rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+					bind:value={readPatterns}
+					disabled={!canManage}
+					aria-label={$i18n.t('Files the agent may read')}
+					placeholder={$i18n.t('Files it may read, e.g. stations.csv, plots/*.png, **/*.csv')}
+				/>
+			{/if}
 		</div>
 	</div>
 

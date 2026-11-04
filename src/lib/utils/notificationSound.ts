@@ -2,16 +2,23 @@ import { get } from 'svelte/store';
 import { shouldPlayCompletionSound } from '$lib/chat/notifyCompletion';
 import { isLastActiveTab, playingNotificationSound, settings } from '$lib/stores';
 
-let notificationAudio: HTMLAudioElement | null = null;
+const SOUNDS = { reply: '/audio/notification.mp3', approval: '/audio/approval.mp3' };
+const audio: Partial<Record<keyof typeof SOUNDS, HTMLAudioElement>> = {};
 
-export function playNotificationSound(opts?: { focusedOnThisChat?: boolean }) {
+export function playNotificationSound(opts?: {
+	focusedOnThisChat?: boolean;
+	/** `approval` when the agent waits for the user to answer a popup. */
+	kind?: keyof typeof SOUNDS;
+}) {
+	const kind = opts?.kind ?? 'reply';
 	if (typeof Audio === 'undefined') return;
 	if (get(playingNotificationSound)) return;
 	const activation = typeof navigator !== 'undefined' ? navigator.userActivation : undefined;
 	if (
 		!shouldPlayCompletionSound({
 			soundEnabled: get(settings)?.notificationSound ?? true,
-			isLastActiveTab: get(isLastActiveTab),
+			// A popup reaches only the tab that sent the message, so that tab plays it.
+			isLastActiveTab: kind === 'approval' || get(isLastActiveTab),
 			hasBeenActive: !activation || activation.hasBeenActive,
 			focusedOnThisChat: opts?.focusedOnThisChat ?? false
 		})
@@ -20,12 +27,10 @@ export function playNotificationSound(opts?: { focusedOnThisChat?: boolean }) {
 	}
 
 	playingNotificationSound.set(true);
-	if (!notificationAudio) {
-		notificationAudio = new Audio('/audio/notification.mp3');
-		notificationAudio.preload = 'auto';
-	}
-	notificationAudio.currentTime = 0;
-	notificationAudio.play().finally(() => {
+	const sound = (audio[kind] ??= new Audio(SOUNDS[kind]));
+	sound.preload = 'auto';
+	sound.currentTime = 0;
+	sound.play().finally(() => {
 		playingNotificationSound.set(false);
 	});
 }

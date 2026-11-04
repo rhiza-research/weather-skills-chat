@@ -15,7 +15,7 @@ The others are always on, apart from those that need a chat feature such as web 
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. See [[Scheduled Tasks]]. |
+| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. A run cannot see any file the task does not allow, including the ones it makes, so the model is told to name the files a run needs, such as a plot the run should check, rather than let it read every file. When a task it creates or changes can read no files, the model is reminded. See [[Scheduled Tasks]]. |
 | `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, time limit, skills, switches, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
 | `update_scheduled_task` | Change any setting `create_scheduled_task` can set, turn the task's scheduled runs on or off, or remove its picture. |
 | `delete_scheduled_task` | Delete a scheduled task and its run history. The model is told to do this only when the user asks. |
@@ -38,7 +38,18 @@ The scheduled task tools act as the user, so the model can change or delete only
 
 ## Reading chat files
 
-A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to approve it in a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking. Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so a task with Read files off cannot read its files.
+A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to answer a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking.
+
+The popup names the file and offers:
+
+- **Allow once**: this read only.
+- **Always allow this file**: this read, and later reads of the same file in this chat, without asking.
+- **Allow all files in this chat**: turns the button on for this chat.
+- **Cancel**: the model is told the user declined.
+
+What the popup allows is kept with the chat's other chat bar switches (see [[Live Chat Updates]]). A popup for a chat the user is not looking at waits until they open it; see [[Notifications]].
+
+Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so with the switch off a run reads only the files the task names in the field below it, and none when the field is empty. The field takes file names relative to the run's files, separated by commas, such as `stations.csv, plots/*.png, **/*.csv`. They follow Unix glob rules: `*` matches any characters within one folder, `?` matches one character, and `**` matches any number of folders, so `plots/*.png` does not match `plots/old/a.png` but `plots/**/*.png` does. Each run is told these names at the end of its prompt. A task made from a chat starts with the files that chat always allows.
 
 ## Running code
 

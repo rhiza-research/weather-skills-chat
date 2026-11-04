@@ -198,6 +198,24 @@ def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[
     return None
 
 
+def readable_files_note(features) -> str:
+    """What a run is told about the files it may read, when the task allows only some."""
+    if not isinstance(features, dict) or features.get("read_artifacts"):
+        return ""
+    patterns = [
+        p for p in features.get("read_artifact_paths") or [] if isinstance(p, str) and p
+    ]
+    if not patterns:
+        return ""
+    return (
+        "\n\nWith read_artifact, this run may read only the files in its chat "
+        "that match these Unix glob patterns, where * and ? stay within one "
+        "folder and ** spans folders: "
+        + ", ".join(f"`{p}`" for p in patterns)
+        + "."
+    )
+
+
 async def _stream_automation_chat(
     request,
     *,
@@ -401,7 +419,9 @@ async def execute_automation(
         automation.id, status="running", triggered_by=triggered_by
     )
     title = f"{automation.name} — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-    user_message = _new_message("user", automation.prompt)
+    features = automation.features if isinstance(automation.features, dict) else {}
+    prompt = automation.prompt + readable_files_note(features)
+    user_message = _new_message("user", prompt)
     assistant = _new_message("assistant", "", model_id)
     assistant["parentId"] = user_message["id"]
     user_message["childrenIds"] = [assistant["id"]]
@@ -449,7 +469,6 @@ async def execute_automation(
         await _notify_chat_created(notify_ids, chat.id, title)
 
         tool_ids = _resolve_tool_ids(automation, model, user)
-        features = automation.features if isinstance(automation.features, dict) else {}
 
         timeout_minutes = automation.timeout_minutes or DEFAULT_RUN_TIMEOUT_MINUTES
 
@@ -463,7 +482,7 @@ async def execute_automation(
                     user=user,
                     model=model,
                     model_id=model_id,
-                    prompt=automation.prompt,
+                    prompt=prompt,
                     tool_ids=tool_ids,
                     features=features,
                     organization_id=org_id,

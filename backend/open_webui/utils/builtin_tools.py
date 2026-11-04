@@ -1,6 +1,7 @@
 from typing import Any, NamedTuple, Optional
 from pathlib import Path
 import asyncio
+import fnmatch
 import json
 import logging
 import mimetypes
@@ -86,6 +87,7 @@ TASK_FEATURE_ARGS = {
     "web_search": "web_search",
     "code_interpreter": "code_interpreter",
     "read_files": "read_artifacts",
+    "read_file_patterns": "read_artifact_paths",
     "email": "email",
     "preferences": "preferences",
 }
@@ -107,7 +109,7 @@ def _apply_task_settings(
     model: Optional[str] = None,
     skills: Optional[list[str]] = None,
     shared: Optional[bool] = None,
-    **features: Optional[bool],
+    **features,
 ) -> Optional[str]:
     """Set the passed settings on a task form, or say why one cannot be used.
 
@@ -143,6 +145,11 @@ def _apply_task_settings(
             )
         form.tool_ids = list(skills)
 
+    patterns = features.get("read_file_patterns")
+    if patterns is not None:
+        if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+            return "read_file_patterns must be a list of file names or patterns."
+        features["read_file_patterns"] = [p.strip() for p in patterns if p.strip()]
     chosen = {
         TASK_FEATURE_ARGS[arg]: value for arg, value in features.items() if value is not None
     }
@@ -165,6 +172,19 @@ def _apply_task_settings(
     return None
 
 
+def _no_readable_files_note(features) -> str:
+    """A reminder for the model when the task's runs can read no files."""
+    features = features if isinstance(features, dict) else {}
+    if features.get("read_artifacts") or features.get("read_artifact_paths"):
+        return ""
+    return (
+        "\n\nRuns of this task cannot read any files, including the ones they "
+        "make. If a run needs to look at its results, such as a plot to check "
+        "or a table to summarize, call update_scheduled_task with "
+        "read_file_patterns naming those files."
+    )
+
+
 def _task_settings_args(**kwargs) -> dict:
     """The settings arguments to pass on, without the unset ones."""
     return {key: value for key, value in kwargs.items() if value is not None}
@@ -181,6 +201,7 @@ async def create_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -290,6 +311,7 @@ async def create_scheduled_task(
             web_search=web_search,
             code_interpreter=code_interpreter,
             read_files=read_files,
+            read_file_patterns=read_file_patterns,
             email=email,
             preferences=preferences,
         ),
@@ -314,6 +336,7 @@ async def create_scheduled_task(
     return (
         f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
         f"{tool_note} [Open scheduled tasks](/scheduled-tasks) to manage it."
+        + _no_readable_files_note(automation.features)
     )
 
 
@@ -340,9 +363,27 @@ TASK_SETTING_PROPERTIES = {
     "web_search": _switch("Allow the agent to search the web"),
     "code_interpreter": _switch("Allow the agent to write and run its own code"),
     "read_files": _switch(
-        "Allow the agent to read the run's files. A run has no one to ask, so "
-        "with this off it cannot read them."
+        "Allow the agent to read all of the run's files. A run has no one to "
+        "ask, so with this off it can read only the files read_file_patterns "
+        "names. Prefer read_file_patterns: turn this on only when the run must "
+        "read files whose names cannot be known in advance, and pass false "
+        "with read_file_patterns when this chat has it on."
     ),
+    "read_file_patterns": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "File names the run may read when read_files is off, relative to "
+            "the run's chat files, such as `stations.csv`, `plots/*.png`, or "
+            "`**/*.csv`. Set this whenever a run must look at a file, including "
+            "one it makes, since it cannot otherwise. They follow Unix glob "
+            "rules: * and ? match within one folder, and ** matches any number "
+            "of folders. Name the files the run needs as narrowly as you can, "
+            "rather than turning on read_files. Replaces the current list; an "
+            "empty list allows none. Each run's agent is told these names in "
+            "its prompt, so the task's prompt does not need to list them."
+        ),
+    },
     "email": _switch("Allow the agent to send email"),
     "preferences": _switch("Allow the agent to read and save preferences"),
     "shared": _switch(
@@ -358,7 +399,17 @@ CREATE_SCHEDULED_TASK_SPEC = {
         "model, skills, and switches unless they are passed. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
-        "Scheduled tasks run headless: no user is present to answer follow-up questions."
+        "Scheduled tasks run headless: no user is present to answer follow-up questions, "
+        "so a run reads only the files read_files or read_file_patterns allows. "
+        "A run cannot see any file unless the task allows it, including the "
+        "plots and tables the run makes itself. When the prompt has the run "
+        "check, summarize, or report on files it makes or reads, set "
+        "read_file_patterns to those files, worked out from the prompt and "
+        "from the files this chat read (for example `plots/*.png` for a plot "
+        "the run should check). Always prefer naming the files the run needs "
+        "with read_file_patterns over allowing every file with read_files. "
+        "When read_file_patterns is set, each run's agent sees those file names "
+        "at the end of its prompt."
     ),
     "parameters": {
         "type": "object",
@@ -423,6 +474,9 @@ def _describe_task_features(features: Optional[dict]) -> str:
         )
         if features.get(flag)
     ]
+    patterns = features.get("read_artifact_paths")
+    if not features.get("read_artifacts") and isinstance(patterns, list) and patterns:
+        on.append("read files " + ", ".join(f"`{p}`" for p in patterns))
     off = [
         f"{label} off"
         for flag, label in (("email", "email"), ("preferences", "preferences"))
@@ -553,6 +607,7 @@ async def update_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -622,7 +677,8 @@ async def update_scheduled_task(
                 shared=shared,
                 web_search=web_search,
                 code_interpreter=code_interpreter,
-                    read_files=read_files,
+                read_files=read_files,
+                read_file_patterns=read_file_patterns,
                 email=email,
                 preferences=preferences,
             ),
@@ -641,8 +697,10 @@ async def update_scheduled_task(
         if not updated:
             return "Failed to update the scheduled task."
         sync_automation_job(updated)
-        return "Updated the scheduled task.\n\n" + _describe_task(
-            updated, user.id, full=False
+        return (
+            "Updated the scheduled task.\n\n"
+            + _describe_task(updated, user.id, full=False)
+            + _no_readable_files_note(updated.features)
         )
 
     return await asyncio.to_thread(save)
@@ -1469,10 +1527,51 @@ DISPLAY_IMAGE_SPEC = {
 }
 
 
-async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
+def glob_match(path: str, pattern: str) -> bool:
+    """Unix glob: * ? and [...] stay within one folder; a ** segment spans any folders."""
+
+    def match(parts: list[str], pats: list[str]) -> bool:
+        if not pats:
+            return not parts
+        if pats[0] == "**":
+            return any(match(parts[i:], pats[1:]) for i in range(len(parts) + 1))
+        return (
+            bool(parts)
+            and fnmatch.fnmatchcase(parts[0], pats[0])
+            and match(parts[1:], pats[1:])
+        )
+
+    return match(path.split("/"), pattern.split("/"))
+
+
+def read_allowed_without_asking(rel: str, features) -> bool:
+    """Whether Read files, or a file pattern it allows, covers this path."""
+    if not isinstance(features, dict):
+        return False
+    if features.get("read_artifacts"):
+        return True
+    patterns = features.get("read_artifact_paths")
+    if not isinstance(patterns, list):
+        return False
+    return any(
+        isinstance(p, str) and (rel == p or glob_match(rel, p))
+        for p in patterns
+    )
+
+
+# Extra answers the read approval offers besides Allow and Cancel.
+READ_ALL_FILES = "all_files"
+READ_THIS_FILE = "this_file"
+
+
+async def _user_approved_artifact_read(
+    rel: str, event_call, metadata: dict
+) -> Optional[str]:
     """Ask the user to allow sending a sandbox file to the model.
 
-    Returns None when approved, or a message to give the model when not.
+    Returns None when approved, or a message to give the model when not. An
+    answer that allows more reads also applies to the rest of this reply; the
+    browser keeps it for the chat's later messages.
     """
     if event_call is None:
         return (
@@ -1488,6 +1587,12 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
                     "message": (
                         f"The model wants to read `{rel}` from this chat's files."
                     ),
+                    "path": rel,
+                    "confirm_label": "Allow once",
+                    "choices": [
+                        {"label": "Always allow this file", "value": READ_THIS_FILE},
+                        {"label": "Allow all files in this chat", "value": READ_ALL_FILES},
+                    ],
                 },
             }
         )
@@ -1497,6 +1602,16 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
             "It was not sent."
         )
     if result is True:
+        return None
+    features = metadata.get("features")
+    if not isinstance(features, dict):
+        features = metadata["features"] = {}
+    if result == READ_ALL_FILES:
+        features["read_artifacts"] = True
+        return None
+    if result == READ_THIS_FILE:
+        paths = features.get("read_artifact_paths")
+        features["read_artifact_paths"] = [*(paths if isinstance(paths, list) else []), rel]
         return None
     return "The user declined to let you read that file."
 
@@ -1931,18 +2046,28 @@ async def read_artifact(
     if problem:
         return problem
 
-    # The Read files switch: on reads without asking. Off asks the user in a
-    # chat; a scheduled task has no one to ask, so off refuses.
-    features = metadata.get("features") or {}
-    if isinstance(features, dict) and features.get("read_artifacts"):
-        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    # The Read files switch, or a file pattern it allows: reads without asking.
+    # Otherwise it asks the user in a chat; a scheduled task has no one to ask,
+    # so it refuses.
+    if read_allowed_without_asking(rel, metadata.get("features")):
+        allowed_note = f"Reading `{rel}` is allowed, so it was read without asking."
     elif metadata.get("headless"):
+        features = metadata.get("features") or {}
+        patterns = features.get("read_artifact_paths") if isinstance(features, dict) else None
+        if isinstance(patterns, list) and patterns:
+            allowed = ", ".join(f"`{p}`" for p in patterns if isinstance(p, str))
+            return (
+                f"This scheduled task may read only files matching {allowed}. "
+                f"`{rel}` is not one of them, so it was not sent. The task's "
+                "owner can name more files on the task's page."
+            )
         return (
-            "Reading files is off for this scheduled task, so the file was not "
-            "sent. Turn on Read files for the task to allow it."
+            f"This scheduled task may not read any files, so `{rel}` was not "
+            "sent. The task's owner can name the files it may read on the "
+            "task's page."
         )
     else:
-        denied = await _user_approved_artifact_read(rel, __event_call__)
+        denied = await _user_approved_artifact_read(rel, __event_call__, metadata)
         if denied:
             return denied
         allowed_note = f"The user approved reading `{rel}`."

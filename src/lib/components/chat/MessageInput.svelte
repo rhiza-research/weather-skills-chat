@@ -93,6 +93,7 @@
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
 	export let readArtifactsEnabled = false;
+	export let readArtifactPaths: string[] = [];
 	export let builtinFeatures: Record<string, boolean> = {};
 
 	$: onChange({
@@ -103,6 +104,7 @@
 		webSearchEnabled,
 		codeInterpreterEnabled,
 		readArtifactsEnabled,
+		readArtifactPaths,
 		builtinFeatures
 	});
 

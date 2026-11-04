@@ -7,6 +7,8 @@ export type ChatInput = {
 	webSearchEnabled: boolean;
 	codeInterpreterEnabled: boolean;
 	readArtifactsEnabled: boolean;
+	/** Files the agent may read without asking, from "Always allow this file". */
+	readArtifactPaths: string[];
 	builtinFeatures: Record<string, boolean>;
 };
 
@@ -18,6 +20,7 @@ export const emptyChatInput = (): ChatInput => ({
 	webSearchEnabled: false,
 	codeInterpreterEnabled: false,
 	readArtifactsEnabled: false,
+	readArtifactPaths: [],
 	builtinFeatures: {}
 });
 
@@ -28,7 +31,7 @@ export const parseChatInput = (raw: string | null): ChatInput => {
 		const saved = JSON.parse(raw ?? 'null');
 		if (saved && typeof saved === 'object') {
 			for (const key of Object.keys(input)) {
-				if (saved[key] != null) input[key] = saved[key];
+				if (saved[key] != null) (input as Record<string, unknown>)[key] = saved[key];
 			}
 		}
 	} catch {
@@ -46,4 +49,5 @@ export const chatInputWorthSaving = (input: ChatInput): boolean =>
 	input.webSearchEnabled ||
 	input.codeInterpreterEnabled ||
 	input.readArtifactsEnabled ||
+	(input.readArtifactPaths?.length ?? 0) > 0 ||
 	Object.keys(input.builtinFeatures ?? {}).length > 0;

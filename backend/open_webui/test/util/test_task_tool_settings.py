@@ -205,5 +205,37 @@ class TaskToolSettingsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("email off", result)
 
 
+    async def test_file_patterns_are_saved_listed_and_told_to_the_run(self):
+        from open_webui.utils.automation_runner import readable_files_note
+
+        await self._create(read_file_patterns=[" stations.csv ", "plots/*.png", ""])
+        task = self._only_task()
+        patterns = task.features["read_artifact_paths"]
+        self.assertEqual(patterns, ["stations.csv", "plots/*.png"])
+        note = readable_files_note(task.features)
+        self.assertIn("`stations.csv`, `plots/*.png`", note)
+        self.assertEqual(readable_files_note({**task.features, "read_artifacts": True}), "")
+
+        ctx = self._ctx()
+        result = await list_scheduled_tasks(
+            __user__=ctx["__user__"], __metadata__=ctx["__metadata__"]
+        )
+        self.assertIn("read files `stations.csv`, `plots/*.png`", result)
+
+    async def test_the_model_is_reminded_when_runs_can_read_nothing(self):
+        result = await self._create()
+        self.assertIn("cannot read any files", result)
+        task = self._only_task()
+        ctx = {k: v for k, v in self._ctx().items() if k != "__metadata__"}
+        updated = await update_scheduled_task(
+            task_id=task.id, read_file_patterns=["plots/*.png"], **ctx
+        )
+        self.assertNotIn("cannot read any files", updated)
+
+    async def test_file_patterns_must_be_names(self):
+        result = await self._create(read_file_patterns="*.csv")
+        self.assertIn("read_file_patterns", result)
+
+
 if __name__ == "__main__":
     unittest.main()
