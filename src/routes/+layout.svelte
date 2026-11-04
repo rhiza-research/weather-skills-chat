@@ -57,7 +57,7 @@
 		setOpenChat
 	} from '$lib/chat/cache';
 	import NotificationToast from '$lib/components/NotificationToast.svelte';
-	import { addEventPrompt } from '$lib/utils/eventPrompts';
+	import { addEventPrompt, answerEventPrompt } from '$lib/utils/eventPrompts';
 	import { requestChatTail } from '$lib/chat/scroll';
 	import AppSidebar from '$lib/components/app/AppSidebar.svelte';
 	import { chatCompletion } from '$lib/apis/openai';
@@ -396,11 +396,14 @@
 		// Popups wait in a queue the chat shows when it is open. When the user is
 		// not looking at this chat, tell them the agent is waiting.
 		if (type === 'confirmation' || type === 'input') {
-			addEventPrompt({
+			const prompt = {
 				chatId: event.chat_id,
 				data: { ...data, input: type === 'input' },
 				respond: (value) => cb?.(value)
-			});
+			};
+			addEventPrompt(prompt);
+			// The server stops waiting after ten minutes (socket get_event_call).
+			setTimeout(() => answerEventPrompt(prompt, false), 10 * 60 * 1000);
 			// location, not $page: a new chat's address is set with history.replaceState.
 			const watching =
 				document.visibilityState === 'visible' &&
