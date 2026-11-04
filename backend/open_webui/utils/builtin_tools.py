@@ -87,6 +87,7 @@ TASK_FEATURE_ARGS = {
     "web_search": "web_search",
     "code_interpreter": "code_interpreter",
     "read_files": "read_artifacts",
+    "read_file_patterns": "read_artifact_paths",
     "email": "email",
     "preferences": "preferences",
 }
@@ -108,7 +109,7 @@ def _apply_task_settings(
     model: Optional[str] = None,
     skills: Optional[list[str]] = None,
     shared: Optional[bool] = None,
-    **features: Optional[bool],
+    **features,
 ) -> Optional[str]:
     """Set the passed settings on a task form, or say why one cannot be used.
 
@@ -144,6 +145,11 @@ def _apply_task_settings(
             )
         form.tool_ids = list(skills)
 
+    patterns = features.get("read_file_patterns")
+    if patterns is not None:
+        if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+            return "read_file_patterns must be a list of file names or patterns."
+        features["read_file_patterns"] = [p.strip() for p in patterns if p.strip()]
     chosen = {
         TASK_FEATURE_ARGS[arg]: value for arg, value in features.items() if value is not None
     }
@@ -182,6 +188,7 @@ async def create_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -291,6 +298,7 @@ async def create_scheduled_task(
             web_search=web_search,
             code_interpreter=code_interpreter,
             read_files=read_files,
+            read_file_patterns=read_file_patterns,
             email=email,
             preferences=preferences,
         ),
@@ -341,9 +349,21 @@ TASK_SETTING_PROPERTIES = {
     "web_search": _switch("Allow the agent to search the web"),
     "code_interpreter": _switch("Allow the agent to write and run its own code"),
     "read_files": _switch(
-        "Allow the agent to read the run's files. A run has no one to ask, so "
-        "with this off it cannot read them."
+        "Allow the agent to read all of the run's files. A run has no one to "
+        "ask, so with this off it can read only the files read_file_patterns "
+        "names."
     ),
+    "read_file_patterns": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "File names the run may read when read_files is off, relative to "
+            "the run's chat files, such as `stations.csv` or `plots/*.png`; * "
+            "and ? are wildcards. Replaces the current list; an empty list "
+            "allows none. Each run's agent is told these names in its prompt, "
+            "so the task's prompt does not need to list them."
+        ),
+    },
     "email": _switch("Allow the agent to send email"),
     "preferences": _switch("Allow the agent to read and save preferences"),
     "shared": _switch(
@@ -359,7 +379,10 @@ CREATE_SCHEDULED_TASK_SPEC = {
         "model, skills, and switches unless they are passed. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
-        "Scheduled tasks run headless: no user is present to answer follow-up questions."
+        "Scheduled tasks run headless: no user is present to answer follow-up questions, "
+        "so a run reads only the files read_files or read_file_patterns allows. "
+        "When read_file_patterns is set, each run's agent sees those file names "
+        "at the end of its prompt."
     ),
     "parameters": {
         "type": "object",
@@ -424,6 +447,9 @@ def _describe_task_features(features: Optional[dict]) -> str:
         )
         if features.get(flag)
     ]
+    patterns = features.get("read_artifact_paths")
+    if not features.get("read_artifacts") and isinstance(patterns, list) and patterns:
+        on.append("read files " + ", ".join(f"`{p}`" for p in patterns))
     off = [
         f"{label} off"
         for flag, label in (("email", "email"), ("preferences", "preferences"))
@@ -554,6 +580,7 @@ async def update_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -623,7 +650,8 @@ async def update_scheduled_task(
                 shared=shared,
                 web_search=web_search,
                 code_interpreter=code_interpreter,
-                    read_files=read_files,
+                read_files=read_files,
+                read_file_patterns=read_file_patterns,
                 email=email,
                 preferences=preferences,
             ),
