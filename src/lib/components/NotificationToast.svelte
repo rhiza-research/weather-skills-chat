@@ -11,6 +11,7 @@
 	export let title: string = 'HI';
 	export let content: string;
 	export let focusedOnThisChat = false;
+	export let sound: 'reply' | 'approval' = 'reply';
 
 	let html = '';
 
@@ -20,7 +21,7 @@
 			import('marked')
 		]);
 		html = DOMPurify.sanitize(marked(content) as string);
-		playNotificationSound({ focusedOnThisChat });
+		playNotificationSound({ focusedOnThisChat, kind: sound });
 	});
 </script>
 

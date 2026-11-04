@@ -419,3 +419,35 @@ class ReadFilesSwitchTest(unittest.IsolatedAsyncioTestCase):
         out = await self._read({"headless": True}, event_call)
         event_call.assert_not_awaited()
         self.assertIn("Read files", out)
+
+    async def test_allowed_pattern_reads_without_asking(self):
+        event_call = AsyncMock(return_value=False)
+        out = await self._read(
+            {"headless": True, "features": {"read_artifact_paths": ["*.png"]}},
+            event_call,
+        )
+        event_call.assert_not_awaited()
+        self.assertEqual(out[1], "data:image/png;base64,x")
+
+    async def test_other_pattern_still_refuses_in_a_scheduled_task(self):
+        event_call = AsyncMock(return_value=True)
+        out = await self._read(
+            {"headless": True, "features": {"read_artifact_paths": ["*.csv"]}},
+            event_call,
+        )
+        event_call.assert_not_awaited()
+        self.assertIsInstance(out, str)
+
+    async def test_wider_answers_apply_to_later_reads(self):
+        for answer, key, expected in (
+            ("all_files", "read_artifacts", True),
+            ("this_file", "read_artifact_paths", ["photo.png"]),
+        ):
+            features = {}
+            event_call = AsyncMock(return_value=answer)
+            out = await self._read({"features": features}, event_call)
+            self.assertEqual(out[1], "data:image/png;base64,x")
+            self.assertEqual(features[key], expected)
+            payload = event_call.await_args.args[0]["data"]
+            self.assertEqual(payload["path"], "photo.png")
+            self.assertIn(answer, [c["value"] for c in payload["choices"]])
