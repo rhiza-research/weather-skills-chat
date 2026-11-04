@@ -447,6 +447,7 @@ def schedule_runner_metrics(chat_id: str) -> None:
         from open_webui.utils.skill_k8s_sandbox import (
             public_runner_state,
             runner_metrics,
+            runner_size_public,
             runner_status,
         )
 
@@ -457,7 +458,12 @@ def schedule_runner_metrics(chat_id: str) -> None:
                 try:
                     status = await runner_status(chat_id)
                     state = public_runner_state(status.get("state"))
-                    payload = {"id": chat_id, "state": state, "metrics": None}
+                    payload = {
+                        "id": chat_id,
+                        "state": state,
+                        "metrics": None,
+                        "size": runner_size_public(chat_id),
+                    }
                     if state == "ready":
                         try:
                             payload["metrics"] = await runner_metrics(chat_id)

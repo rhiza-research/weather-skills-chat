@@ -30,6 +30,37 @@ class StartDelayTest(TestCase):
         self.assertEqual(claim["status"]["conditions"][0]["status"], "False")
 
 
+class RunnerSizesTest(TestCase):
+    def test_templates_carry_the_catalog(self):
+        templates = {t["metadata"]["labels"][emulator.TYPE_LABEL]: t for t in emulator._templates()}
+        self.assertEqual(set(templates), {"standard", "medium", "large", "xlarge"})
+        large = templates["large"]["metadata"]["annotations"]
+        self.assertEqual(large["weather-skills.org/requires-approval"], "true")
+        self.assertEqual(large["weather-skills.org/warm"], "false")
+        standard = templates["standard"]["metadata"]["annotations"]
+        self.assertEqual(standard["weather-skills.org/warm"], "true")
+
+    def test_a_cold_size_waits_longer(self):
+        os.environ["SKILL_K8S_EMULATOR_START_DELAY"] = "2"
+        os.environ["SKILL_K8S_EMULATOR_COLD_START_DELAY"] = "9"
+        try:
+            _, standard = emulator._spec_for_pool("weather-skills-standard-runner")
+            rtype, large = emulator._spec_for_pool("weather-skills-large-runner")
+            self.assertEqual(rtype, "large")
+            self.assertEqual(emulator._start_delay(standard), 2.0)
+            self.assertEqual(emulator._start_delay(large), 9.0)
+        finally:
+            os.environ.pop("SKILL_K8S_EMULATOR_START_DELAY", None)
+            os.environ.pop("SKILL_K8S_EMULATOR_COLD_START_DELAY", None)
+
+    def test_label_selector(self):
+        labels = {"weather-skills-chat": "c1", "weather-skills-runner-type": "large"}
+        self.assertTrue(emulator._matches(labels, "weather-skills-chat=c1"))
+        self.assertFalse(emulator._matches(labels, "weather-skills-chat=c2"))
+        self.assertTrue(emulator._matches(labels, "weather-skills-runner-type"))
+        self.assertTrue(emulator._matches(labels, ""))
+
+
 class LocalRuntimeMetricsTest(TestCase):
     def test_process_metrics(self):
         metrics = local_runtime.collect_metrics()
@@ -130,7 +161,7 @@ class SandboxEmulatorTest(IsolatedAsyncioTestCase):
         finally:
             api.shutdown()
             bind.shutdown()
-            for chat_id in list(emulator._procs):
-                emulator._stop_runtime(chat_id)
+            for key in list(emulator._procs):
+                emulator._stop_runtime(key)
             for key in env:
                 os.environ.pop(key, None)

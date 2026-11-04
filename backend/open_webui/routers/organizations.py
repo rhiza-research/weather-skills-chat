@@ -123,7 +123,12 @@ async def update_organization(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
     raw = form_data.model_dump(exclude_unset=True)
-    flag_keys = {"can_add_models", "can_add_skills", "can_add_knowledge"}
+    flag_keys = {
+        "can_add_models",
+        "can_add_skills",
+        "can_add_knowledge",
+        "can_use_large_runners",
+    }
     flags = {k: raw.pop(k) for k in list(raw.keys()) if k in flag_keys}
     limit_set = "monthly_limit_usd" in raw
     limit_val = raw.pop("monthly_limit_usd", None)

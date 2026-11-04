@@ -1501,6 +1501,280 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
     return "The user declined to let you read that file."
 
 
+def _runner_size_text(rtype) -> str:
+    parts = []
+    if rtype.cpus:
+        parts.append(f"{rtype.cpus:g} CPU cores")
+    if rtype.memory_gib:
+        parts.append(f"{rtype.memory_gib:g} GiB memory")
+    return f"{rtype.display_name} ({', '.join(parts)})" if parts else rtype.display_name
+
+
+async def _user_approved_runner(rtype, reason: str, event_call) -> Optional[str]:
+    """Ask the user to allow a runner size that needs approval.
+
+    Returns None when approved, or a message to give the model when not.
+    """
+    if event_call is None:
+        return (
+            "Cannot ask the user to approve a larger tool runner in this session. "
+            "The runner was not changed."
+        )
+    minutes = max(1, round((rtype.idle_ttl_seconds or 600) / 60))
+    lines = [f"The model wants a {_runner_size_text(rtype)} tool runner for this chat."]
+    if reason:
+        lines.append(f"Reason: {reason}")
+    if rtype.description:
+        lines.append(rtype.description)
+    lines.append(
+        f"Skills run on it until it has been idle for {minutes} minutes; then the "
+        "chat goes back to the standard runner."
+    )
+    try:
+        result = await event_call(
+            {
+                "type": "confirmation",
+                "data": {
+                    "title": f"Switch to a {rtype.display_name} tool runner?",
+                    "message": "\n\n".join(lines),
+                },
+            }
+        )
+    except Exception:
+        return (
+            "Could not ask the user to approve a larger tool runner. "
+            "The runner was not changed."
+        )
+    if result is True:
+        return None
+    return f"The user declined the {rtype.display_name} tool runner. The runner was not changed."
+
+
+async def request_tool_runner(
+    size: str,
+    reason: str = "",
+    __user__: dict = {},
+    __metadata__: dict = None,
+    __event_call__=None,
+):
+    """Switch this chat's tool runner to another size."""
+    from open_webui.utils.chat_realtime import emit_chat_runner, schedule_runner_metrics
+    from open_webui.utils.runner_types import find
+    from open_webui.utils.skill_k8s_sandbox import (
+        default_runner_type,
+        effective_runner_type,
+        runner_catalog,
+        runner_size_public,
+        runner_types_for_org,
+        start_runner,
+        switch_runner_type,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "A temporary chat has no tool runner. Save the chat first."
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.readable:
+        return "You do not have access to this chat."
+
+    catalog = await runner_catalog()
+    allowed = await runner_types_for_org(metadata.get("organization_id"))
+    names = ", ".join(f"`{t.type}`" for t in allowed)
+    rtype = find(catalog, size)
+    if rtype is None:
+        return f"There is no `{size}` tool runner. Sizes this chat can use: {names}."
+    if not any(t.name == rtype.name for t in allowed):
+        return (
+            f"This organization cannot use {rtype.display_name} tool runners. A "
+            f"platform admin can allow them. Sizes this chat can use: {names}."
+        )
+    current = effective_runner_type(chat_id, catalog)
+    if rtype.name == current.name:
+        return f"This chat is already on the {_runner_size_text(rtype)} tool runner."
+
+    # Going smaller never asks; a size marked as needing approval does.
+    if rtype.requires_approval and rtype.order > current.order:
+        if metadata.get("headless"):
+            return (
+                f"A scheduled task cannot ask for a {rtype.display_name} tool runner. "
+                "Set the runner size on the task instead."
+            )
+        denied = await _user_approved_runner(rtype, (reason or "").strip(), __event_call__)
+        if denied:
+            return denied
+
+    switch_runner_type(chat_id, rtype, catalog)
+    # Start it now, so it boots while the reply goes on.
+    start_runner(chat_id)
+    schedule_runner_metrics(chat_id)
+    try:
+        await emit_chat_runner(
+            chat_id,
+            {"state": "starting", "metrics": None, "size": runner_size_public(chat_id)},
+        )
+    except Exception:
+        log.debug("runner switch emit failed", exc_info=True)
+
+    when = (
+        "It keeps a runner ready, so it starts in seconds."
+        if rtype.warm
+        else "It can take a few minutes to start; the next skill waits for it."
+    )
+    back = ""
+    if rtype.name != default_runner_type(catalog).name:
+        minutes = max(1, round((rtype.idle_ttl_seconds or 600) / 60))
+        back = (
+            f" The chat goes back to {default_runner_type(catalog).display_name} "
+            f"after the runner has been idle for {minutes} minutes."
+        )
+    return (
+        f"Switched this chat to the {_runner_size_text(rtype)} tool runner. Skill "
+        f"calls from now on run on it. {when} Calls already running finish on the "
+        f"previous runner; files in the chat are shared by both.{back}"
+    )
+
+
+def _ago(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 90:
+        return f"{seconds} seconds ago"
+    if seconds < 90 * 60:
+        return f"{round(seconds / 60)} minutes ago"
+    return f"{round(seconds / 3600, 1):g} hours ago"
+
+
+async def get_tool_runner_info(
+    __user__: dict = {},
+    __metadata__: dict = None,
+):
+    """This chat's tool runner: size, limits, state, memory now, and the last skill's use."""
+    from open_webui.utils.skill_k8s_sandbox import (
+        default_runner_type,
+        effective_runner_type,
+        last_skill_usage,
+        public_runner_state,
+        runner_calls_running,
+        runner_catalog,
+        runner_metrics,
+        runner_status,
+        runner_types_for_org,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "A temporary chat has no tool runner. Save the chat first."
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.readable:
+        return "You do not have access to this chat."
+
+    catalog = await runner_catalog()
+    current = effective_runner_type(chat_id, catalog)
+    lines = [f"Tool runner size: {_runner_size_text(current)}."]
+    try:
+        state = public_runner_state((await runner_status(chat_id)).get("state"))
+    except Exception:
+        state = "unknown"
+    lines.append(
+        {
+            "ready": "State: ready.",
+            "starting": "State: starting; the next skill waits for it.",
+            "degraded": "State: degraded; it is not answering or reports itself unhealthy.",
+            "paused": "State: not running; the next skill starts one.",
+        }.get(state, "State: unknown.")
+    )
+    if state == "ready":
+        try:
+            metrics = await runner_metrics(chat_id)
+            used = metrics.get("memory_bytes")
+            limit = metrics.get("memory_limit_bytes")
+            if isinstance(used, (int, float)) and isinstance(limit, (int, float)) and limit:
+                lines.append(
+                    f"Memory in use now: {used / 2**30:.1f} of {limit / 2**30:.0f} GiB "
+                    f"({used / limit:.0%})."
+                )
+        except Exception:
+            log.debug("runner metrics for get_tool_runner_info failed", exc_info=True)
+    running = runner_calls_running(chat_id)
+    if running:
+        lines.append(f"Skills running now: {running}.")
+
+    usage = last_skill_usage(chat_id)
+    if usage:
+        size = usage.get("rtype") or default_runner_type(catalog)
+        run = usage.get("run_seconds") or 0
+        cpu = usage.get("cpu_seconds") or 0
+        text = (
+            f"Most recent skill: `{usage.get('script')}` on the {size.display_name} "
+            f"runner, finished {_ago(time.time() - usage.get('finished_at', time.time()))}. "
+            f"Peak memory of its largest process: {usage.get('memory_mb', 0) / 1024:.1f} GiB. "
+            f"CPU: {cpu:.0f} CPU-seconds over {run:.0f} seconds"
+        )
+        if run > 0:
+            text += f" (about {cpu / run:.1f} cores on average)"
+        lines.append(text + ".")
+    else:
+        lines.append("No skill has reported its resource use in this chat since the server started.")
+
+    allowed = await runner_types_for_org(metadata.get("organization_id"))
+    others = [t for t in allowed if t.name != current.name]
+    if others:
+        lines.append(
+            "Other sizes this chat can use: "
+            + "; ".join(
+                _runner_size_text(t) + (" (needs the user's approval)" if t.requires_approval else "")
+                for t in others
+            )
+            + ". Switch with request_tool_runner."
+        )
+    return "\n".join(lines)
+
+
+GET_TOOL_RUNNER_INFO_SPEC = {
+    "name": "get_tool_runner_info",
+    "description": (
+        "Show this chat's tool runner (where skills run): its size and CPU and "
+        "memory limits, whether it is running, the memory it uses now, the "
+        "peak memory and CPU of the most recent skill, and the other sizes "
+        "this chat can switch to. Use it to judge whether work fits before "
+        "starting it, or whether to switch sizes."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+
+REQUEST_TOOL_RUNNER_SPEC = {
+    "name": "request_tool_runner",
+    "description": (
+        "Switch this chat's tool runner (where skills run) to another size. "
+        "Use it when work needs more memory or CPU than the current runner, "
+        "for example after a skill ran out of memory and the work cannot be "
+        "split, and to switch back to a smaller size once heavy work is done. "
+        "Call it by itself, before the skills that need the new size. Sizes "
+        "that need approval ask the user first. The system prompt lists the "
+        "sizes this chat can use."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "size": {
+                "type": "string",
+                "description": "The size to switch to, such as `medium` or `large`.",
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "One sentence for the user on why this size is needed, "
+                    "for example the region and period being processed."
+                ),
+            },
+        },
+        "required": ["size"],
+    },
+}
+
+
 def _content_loader(request):
     from open_webui.retrieval.loaders.main import Loader
 
@@ -2229,6 +2503,8 @@ async def list_available_tools(
         ("create_folder", "Create a folder in the chat artifact sandbox for organizing outputs."),
         ("list_artifacts", "List files/folders in the chat artifact sandbox."),
         ("read_artifact", "Ask the user for permission, then send a sandbox file to yourself."),
+        ("get_tool_runner_info", "Show this chat's tool runner size, limits, memory now, and the last skill's peak use."),
+        ("request_tool_runner", "Switch this chat's tool runner to a larger or smaller size."),
         ("list_email_recipients", "List your email and organization member emails allowed for send_email."),
         ("send_email", "Email results to yourself or people in your organizations; optional artifact sandbox attachments."),
         ("display_image", "Show a sandbox image inline, or link it with a relative markdown path. Do not do both."),
@@ -2968,6 +3244,12 @@ def get_builtin_tools(extra_params: dict) -> dict:
                 ),
             }
         )
+    from open_webui.env import tool_runner_enabled
+
+    chat_id = metadata.get("chat_id")
+    if tool_runner_enabled() and chat_id and chat_id != "local":
+        tools["request_tool_runner"] = _tool(request_tool_runner, REQUEST_TOOL_RUNNER_SPEC)
+        tools["get_tool_runner_info"] = _tool(get_tool_runner_info, GET_TOOL_RUNNER_INFO_SPEC)
     for name in _turned_off_builtins(metadata):
         tools.pop(name, None)
     features = metadata.get("features") or {}
