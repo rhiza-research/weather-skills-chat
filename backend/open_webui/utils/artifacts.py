@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import stat
+import subprocess
 import tarfile
 import time
 import zipfile
@@ -756,6 +757,42 @@ def _copy_sandbox_entry(src: Path, dest: Path) -> None:
         own_sandbox_path(dest)
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.is_symlink() or path.exists():
+        path.unlink()
+
+
+def _clone_sandbox_entry(src: Path, dest: Path) -> None:
+    """Copy-on-write clone with `juicefs clone`, else a plain copy.
+
+    The clone shares data with the source until either side changes, and
+    keeps the source's owner and mode. It only works on a JuiceFS mount; on
+    any other filesystem, or without the binary, the plain copy runs.
+    """
+    if shutil.which("juicefs"):
+        # The new chat's folder starts with an empty intermediate_results;
+        # clone refuses an existing target.
+        if dest.is_dir() and not dest.is_symlink() and not any(dest.iterdir()):
+            dest.rmdir()
+        if not (dest.exists() or dest.is_symlink()):
+            result = subprocess.run(
+                ["juicefs", "clone", "--preserve", str(src), str(dest)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return
+            log.warning(
+                "juicefs clone of %s failed, copying instead: %s",
+                src,
+                result.stderr.strip(),
+            )
+            _remove_path(dest)
+    _copy_sandbox_entry(src, dest)
+
+
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
     """Copy visible sandbox files onto dest.
 
@@ -777,7 +814,7 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
             if entry.name.startswith("."):
                 continue
             try:
-                _copy_sandbox_entry(entry, dest / entry.name)
+                _clone_sandbox_entry(entry, dest / entry.name)
             except Exception:
                 log.exception(
                     "Failed to copy sandbox entry %s from %s to %s",
