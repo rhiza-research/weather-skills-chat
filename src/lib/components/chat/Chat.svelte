@@ -104,6 +104,7 @@
 		viewingLeafFor
 	} from '$lib/chat/cache';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
+	import { switchOrganization } from '$lib/utils/organizationContext';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getAndUpdateUserLocation, getUserById, getUserSettings } from '$lib/apis/users';
@@ -1160,6 +1161,11 @@
 			if (loadingChatId === id && !loadedChat) await goto('/');
 			return null;
 		}
+		// A chat from another of the user's orgs opens in that org, with its models and sidebar.
+		await switchOrganization(loadedChat.organization_id, token).catch((error) =>
+			toast.error(`${error}`)
+		);
+		if (loadingChatId !== id) return null;
 		if (!applyChatDocument(loadedChat)) return null;
 		loading = false;
 		if (messagesLoad) await messagesLoad;

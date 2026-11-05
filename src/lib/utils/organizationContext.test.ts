@@ -1,7 +1,16 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { activeOrganizationId, organizations } from '$lib/stores';
-import { openInvitedOrganization, platformAdminMembership } from './organizationContext';
+import { activeOrganizationId, models, organizations, switchingOrganization } from '$lib/stores';
+import {
+	openInvitedOrganization,
+	platformAdminMembership,
+	switchOrganization
+} from './organizationContext';
+
+// Each org's catalog has its own model, so a test can see which org loaded.
+const getModels = vi.fn(async () => [{ id: `model-of-${get(activeOrganizationId)}` }]);
+vi.mock('$lib/apis', () => ({ getModels: () => getModels() }));
+vi.mock('$lib/apis/tools', () => ({ getToolSummary: async () => [] }));
 
 const personal = { id: 'u1', name: 'Personal', kind: 'personal', role: 'owner' };
 const workspace = { id: 'w1', name: 'Team', kind: 'workspace', role: 'admin' };
@@ -42,4 +51,41 @@ test('a platform invitation leaves the organization alone', () => {
 	openInvitedOrganization(null, { setItem: (k: string, v: string) => saved.set(k, v) });
 	expect(get(activeOrganizationId)).toBe('u1');
 	expect(saved.size).toBe(0);
+});
+
+test("opening a chat from another of the user's orgs switches to it and loads its models", async () => {
+	organizations.set([personal, workspace]);
+	activeOrganizationId.set('u1');
+
+	expect(await switchOrganization('w1', 'token')).toBe(true);
+
+	expect(get(activeOrganizationId)).toBe('w1');
+	expect(get(models)).toEqual([{ id: 'model-of-w1' }]);
+	expect(get(switchingOrganization)).toBe(false);
+});
+
+test('a chat from an org the user is not in, or the active org, changes nothing', async () => {
+	organizations.set([personal, workspace]);
+	activeOrganizationId.set('u1');
+	getModels.mockClear();
+
+	// Shared chats can come from orgs the user does not belong to.
+	expect(await switchOrganization('other-org', 'token')).toBe(false);
+	expect(await switchOrganization('u1', 'token')).toBe(false);
+	expect(await switchOrganization(null, 'token')).toBe(false);
+
+	expect(get(activeOrganizationId)).toBe('u1');
+	expect(getModels).not.toHaveBeenCalled();
+});
+
+test('a failed switch goes back to the previous org', async () => {
+	organizations.set([personal, workspace]);
+	activeOrganizationId.set('u1');
+	getModels.mockRejectedValueOnce(new Error('offline'));
+
+	await expect(switchOrganization('w1', 'token')).rejects.toThrow('offline');
+
+	expect(get(activeOrganizationId)).toBe('u1');
+	expect(get(models)).toEqual([{ id: 'model-of-u1' }]);
+	expect(get(switchingOrganization)).toBe(false);
 });
