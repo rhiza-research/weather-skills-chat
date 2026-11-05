@@ -150,6 +150,22 @@ RUN if [ "$USE_OLLAMA" = "true" ]; then \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
+# JuiceFS client, so cloning a chat can copy its files with copy-on-write
+# `juicefs clone` on the JuiceFS mount. Keep it at the JuiceFS CSI mount's
+# version; a new version needs its checksums from the release's checksums.txt.
+ARG TARGETARCH
+RUN JUICEFS_VERSION=1.4.1 && \
+    case "$TARGETARCH" in \
+    amd64) sha=01ee09a21a9351a465e09906f113845e1c6a19bea70f530e5e2b2125b2dd3b82 ;; \
+    arm64) sha=1015ade83a7a93180a29f6c93ee5780a3eda52522331934ef2ef0cc0921995fd ;; \
+    *) echo "no JuiceFS build for '$TARGETARCH'" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL -o /tmp/juicefs.tar.gz "https://github.com/juicedata/juicefs/releases/download/v${JUICEFS_VERSION}/juicefs-${JUICEFS_VERSION}-linux-${TARGETARCH}.tar.gz" && \
+    echo "$sha  /tmp/juicefs.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/juicefs.tar.gz -C /usr/local/bin juicefs && \
+    rm /tmp/juicefs.tar.gz && \
+    juicefs version
+
 # Prod dependencies come from uv.lock. The dev group is omitted.
 # Torch is installed separately so the CUDA and CPU images can use different indexes.
 COPY --chown=$UID:$GID pyproject.toml uv.lock /app/
