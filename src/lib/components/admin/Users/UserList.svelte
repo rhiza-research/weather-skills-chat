@@ -64,6 +64,7 @@
 	let inviteRole = 'user';
 	let inviting = false;
 	let memberUserId = '';
+	let memberQuery = '';
 	let memberRole = 'user';
 	let addingMember = false;
 	let showAddMember = false;
@@ -309,9 +310,19 @@
 		}
 	};
 
-	const candidatesFor = (row) => {
+	const candidatesFor = (row, query) => {
+		const q = query.trim().toLowerCase();
+		if (!q) return [];
 		const memberIds = new Set((row.members ?? []).map((member) => member.user_id));
-		return (users ?? []).filter((person) => person?.id && !memberIds.has(person.id));
+		return (users ?? [])
+			.filter(
+				(person) =>
+					person?.id &&
+					!memberIds.has(person.id) &&
+					((person.name || '').toLowerCase().includes(q) ||
+						(person.email || '').toLowerCase().includes(q))
+			)
+			.slice(0, 8);
 	};
 
 	const addExistingMember = async (row) => {
@@ -320,7 +331,7 @@
 		addingMember = true;
 		try {
 			await addOrganizationMember(localStorage.token, row.id, memberUserId, role);
-			memberUserId = '';
+			memberUserId = memberQuery = '';
 			memberRole = row.kind === 'platform' ? 'admin' : 'user';
 			showAddMember = false;
 			toast.success($i18n.t('Member added'));
@@ -658,7 +669,7 @@
 							expandedId = opening ? row.id : '';
 							showAddMember = false;
 							if (opening) {
-								memberUserId = '';
+								memberUserId = memberQuery = '';
 								memberRole = row.kind === 'platform' ? 'admin' : 'user';
 							}
 						}}
@@ -953,7 +964,7 @@
 							on:click={() => {
 								showAddMember = !showAddMember;
 								if (showAddMember) {
-									memberUserId = '';
+									memberUserId = memberQuery = '';
 									memberRole = row.kind === 'platform' ? 'admin' : 'user';
 								}
 							}}
@@ -976,17 +987,46 @@
 						class="flex flex-wrap items-center gap-2 py-1.5"
 						on:submit|preventDefault={() => addExistingMember(row)}
 					>
-						<select
-							class="min-w-[14rem] flex-1 text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
-							bind:value={memberUserId}
-						>
-							<option value="">{$i18n.t('Add an existing user')}</option>
-							{#each candidatesFor(row) as person (person.id)}
-								<option value={person.id}>
-									{person.name}{person.email ? ` (${person.email})` : ''}
-								</option>
-							{/each}
-						</select>
+						<div class="relative min-w-[14rem] flex-1">
+							<input
+								class="w-full text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
+								type="search"
+								placeholder={$i18n.t('Search users by name or email')}
+								aria-label={$i18n.t('Search users by name or email')}
+								bind:value={memberQuery}
+								on:input={() => (memberUserId = '')}
+							/>
+							{#if !memberUserId && memberQuery.trim()}
+								<div
+									class="absolute z-10 mt-1 w-full rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-100 dark:border-gray-800 py-1"
+								>
+									{#each candidatesFor(row, memberQuery) as person (person.id)}
+										<button
+											class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+											type="button"
+											on:click={() => {
+												memberUserId = person.id;
+												memberQuery = person.email || person.name;
+											}}
+										>
+											<img
+												class="rounded-full w-5 h-5 object-cover shrink-0"
+												src={avatarSrc(person.profile_image_url)}
+												alt=""
+											/>
+											<div class="min-w-0">
+												<div class="truncate">{person.name}</div>
+												<div class="text-xs text-gray-500 truncate">{person.email ?? ''}</div>
+											</div>
+										</button>
+									{:else}
+										<div class="px-2 py-1.5 text-xs text-gray-500">
+											{$i18n.t('No matching users')}
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
 						{#if row.kind !== 'platform'}
 							<select
 								class="text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
