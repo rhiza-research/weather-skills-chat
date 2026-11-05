@@ -9,6 +9,16 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 	return res.json();
 };
 
+/** Full provenance branches for one entry. Listings carry only its crumbs. */
+export const getArtifactProvenance = async (token: string, chatId: string, path: string) => {
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/provenance?path=${encodeURIComponent(path)}`,
+		{ headers: { authorization: `Bearer ${token}` } }
+	);
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
+};
+
 export const getArtifactContentUrl = (chatId: string, path: string) =>
 	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
 

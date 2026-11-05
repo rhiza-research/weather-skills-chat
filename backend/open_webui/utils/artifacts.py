@@ -631,6 +631,29 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
     return list(payload.get("crumbs") or [])
 
 
+def _provenance_for_entry(path: Path, kind: str) -> dict | None:
+    if kind == "image" and path.suffix.lower() == ".png":
+        return provenance_for_png(path)
+    if kind == "html":
+        return provenance_for_html(path)
+    if kind == "zarr":
+        return provenance_for_zarr(path)
+    return None
+
+
+def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
+    """Crumbs and full branches for one sandbox entry, or None. Blocks on JuiceFS."""
+    path = resolve_in_sandbox(chat_id, rel_path)
+    if not path.exists():
+        raise FileNotFoundError(rel_path)
+    kind = classify_entry(path)
+    if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
+        kind = "image"
+    elif kind == "file" and path.suffix.lower() in HTML_SUFFIXES:
+        kind = "html"
+    return _provenance_for_entry(path, kind)
+
+
 def list_artifacts(
     chat_id: str,
     path: str | None = None,
@@ -688,18 +711,11 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            prov = None
-            if provenance:
-                if kind == "image" and path.suffix.lower() == ".png":
-                    prov = provenance_for_png(path)
-                elif kind == "html":
-                    prov = provenance_for_html(path)
-                elif kind == "zarr":
-                    prov = provenance_for_zarr(path)
+            prov = _provenance_for_entry(path, kind) if provenance else None
             if prov:
-                # crumbs kept for compact labels; branches carry full args.
+                # Crumbs only: full branches grow with every step and the list is
+                # pushed to every watching tab. artifact_provenance reads them.
                 item["provenance"] = prov.get("crumbs") or []
-                item["provenance_detail"] = prov
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
             level = rel.count("/") + 1 - base_levels
