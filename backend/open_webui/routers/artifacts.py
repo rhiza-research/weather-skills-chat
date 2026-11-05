@@ -25,6 +25,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
     HTML_SUFFIXES,
+    artifact_provenance,
     extract_sandbox_archive,
     is_zarr_store,
     list_artifacts_async,
@@ -52,6 +53,20 @@ async def get_artifacts(
 ):
     await asyncio.to_thread(require_chat_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
+
+
+@router.get("/{chat_id}/artifacts/provenance")
+def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_user)):
+    """Full provenance branches for one entry; the listing carries only crumbs."""
+    require_chat_read(chat_id, user)
+    try:
+        return artifact_provenance(chat_id, path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
 
 
 @router.get("/{chat_id}/artifacts/content")

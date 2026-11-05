@@ -3,7 +3,11 @@
 	import ProvenanceTree from './ProvenanceTree.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
-	import { getArtifactArchiveUrl, getArtifactContentUrl } from '$lib/apis/artifacts';
+	import {
+		getArtifactArchiveUrl,
+		getArtifactContentUrl,
+		getArtifactProvenance
+	} from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
 	const i18n = getContext('i18n');
@@ -26,16 +30,9 @@
 		return n.children?.length > 0 && !n.file;
 	};
 
-	const provenanceLabel = (file) => {
-		const crumbs = file?.provenance_detail?.crumbs ?? file?.provenance;
-		if (!Array.isArray(crumbs) || crumbs.length === 0) return '';
-		return crumbs.join(' → ');
-	};
-
-	const provenanceBranches = (file) => {
-		const branches = file?.provenance_detail?.branches;
-		return Array.isArray(branches) ? branches : [];
-	};
+	// Listings carry each branch's skill names; opening one loads its steps.
+	const loadProvenanceSteps = async () =>
+		(await getArtifactProvenance(localStorage.token, $chatId, file.path))?.branches ?? [];
 
 	const kindLabel = (file) => {
 		if (!file) return 'folder';
@@ -116,17 +113,12 @@
 				rel="noreferrer">{$i18n.t('Download')}</a
 			>
 		</div>
-		{#if provenanceBranches(file).length}
+		{#if file.provenance_branches?.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
-				<ProvenanceTree branches={provenanceBranches(file)} />
-			</div>
-		{:else if provenanceLabel(file)}
-			<div
-				class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate"
-				style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}
-				title={provenanceLabel(file)}
-			>
-				{provenanceLabel(file)}
+				<!-- A rewritten file loads its steps again. -->
+				{#key `${file.path}:${file.modified}`}
+					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+				{/key}
 			</div>
 		{/if}
 	</div>
@@ -191,17 +183,12 @@
 				{/if}
 			</div>
 		</div>
-		{#if provenanceBranches(file).length}
+		{#if file.provenance_branches?.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
-				<ProvenanceTree branches={provenanceBranches(file)} />
-			</div>
-		{:else if provenanceLabel(file)}
-			<div
-				class="text-[10px] leading-snug text-gray-500 dark:text-gray-400 truncate"
-				style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}
-				title={provenanceLabel(file)}
-			>
-				{provenanceLabel(file)}
+				<!-- A rewritten file loads its steps again. -->
+				{#key `${file.path}:${file.modified}`}
+					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+				{/key}
 			</div>
 		{/if}
 	</div>

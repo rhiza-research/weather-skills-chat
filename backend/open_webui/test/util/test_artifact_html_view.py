@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from open_webui.routers import artifacts as artifacts_router
-from open_webui.utils.artifacts import list_artifacts
+from open_webui.utils.artifacts import artifact_provenance, list_artifacts
 from open_webui.utils.auth import get_verified_user
 
 PAGE = b"<html><body><div id='plot'></div></body></html>"
@@ -120,6 +120,16 @@ class HtmlViewRouteTest(unittest.TestCase):
             res = self.client.get("/api/v1/chats/chat-1/artifacts/view/plots/sst%202017.html")
         self.assertEqual(res.status_code, 401)
 
+    def test_provenance_route(self):
+        url = "/api/v1/chats/chat-1/artifacts/provenance"
+        res = self.client.get(url, params={"path": "data.csv"})
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(res.json())
+        self.assertEqual(self.client.get(url, params={"path": "nope.png"}).status_code, 404)
+        self.assertEqual(self.client.get(url, params={"path": "../x.png"}).status_code, 400)
+        with patch("open_webui.utils.organizations.can_read_chat", return_value=False):
+            self.assertEqual(self.client.get(url, params={"path": "data.csv"}).status_code, 401)
+
     def test_listing_marks_html_files(self):
         kinds = {item["path"]: item["kind"] for item in list_artifacts("chat-1")}
         self.assertEqual(kinds["plots/sst 2017.html"], "html")
@@ -171,7 +181,10 @@ class HtmlProvenanceTest(unittest.TestCase):
         item = self._listing()["plot.html"]
         self.assertEqual(item["kind"], "html")
         self.assertEqual(item["provenance"], ["dynamical-fetch", "plot"])
-        steps = item["provenance_detail"]["branches"][0]["steps"]
+        # The listing is pushed to every watching tab: branch names only, steps load per entry.
+        self.assertNotIn("provenance_detail", item)
+        self.assertEqual(item["provenance_branches"], [{"label": None, "crumbs": ["dynamical-fetch", "plot"]}])
+        steps = artifact_provenance("chat-p", "plot.html")["branches"][0]["steps"]
         self.assertEqual([s["skill"] for s in steps], ["dynamical-fetch", "plot"])
         self.assertEqual(steps[0]["args"], {"dataset": "imerg"})
 
@@ -184,3 +197,13 @@ class HtmlProvenanceTest(unittest.TestCase):
             '<html><head></head><body><meta name="weather_skills_history" content="[]"></body></html>'
         )
         self.assertNotIn("provenance", self._listing()["late.html"])
+
+    def test_provenance_of_an_entry_without_one_is_none(self):
+        (self.root / "data.csv").write_text("a,b\n")
+        self.assertIsNone(artifact_provenance("chat-p", "data.csv"))
+
+    def test_provenance_of_a_missing_or_escaping_path(self):
+        with self.assertRaises(FileNotFoundError):
+            artifact_provenance("chat-p", "gone.png")
+        with self.assertRaises(ValueError):
+            artifact_provenance("chat-p", "../chat-q/plot.png")
