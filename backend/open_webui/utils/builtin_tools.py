@@ -1343,7 +1343,7 @@ LIST_ARTIFACTS_SPEC = {
 
 
 DISPLAY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
-DISPLAY_IMAGE_WAIT_S = 6.0
+DISPLAY_IMAGE_WAIT_S = 10.0
 DISPLAY_IMAGE_POLL_S = 0.25
 DISPLAY_IMAGE_TYPES = {
     ".png": "image/png",
@@ -1355,18 +1355,33 @@ DISPLAY_IMAGE_TYPES = {
 }
 
 
+PNG_TRAILER = b"\x00\x00\x00\x00IEND\xaeB`\x82"
+
+
 def looks_like_display_image(data: bytes, suffix: str) -> bool:
+    """True when ``data`` is a whole image: its signature and its end marker.
+
+    A file read over JuiceFS soon after a runner wrote it can be cut short.
+    It still has the signature, and the provider rejects the whole request.
+    """
     if not data:
         return False
     kind = (suffix or "").lower()
     if kind == ".png":
-        return data.startswith(b"\x89PNG\r\n\x1a\n")
+        return data.startswith(b"\x89PNG\r\n\x1a\n") and data.endswith(PNG_TRAILER)
     if kind in (".jpg", ".jpeg"):
-        return data.startswith(b"\xff\xd8\xff")
+        return data.startswith(b"\xff\xd8\xff") and data.endswith(b"\xff\xd9")
     if kind == ".gif":
-        return data.startswith((b"GIF87a", b"GIF89a"))
+        return data.startswith((b"GIF87a", b"GIF89a")) and data.endswith(b";")
     if kind == ".webp":
-        return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+        # The RIFF header holds the file length minus 8.
+        return (
+            len(data) >= 12
+            and data.startswith(b"RIFF")
+            and data[8:12] == b"WEBP"
+            and len(data) >= int.from_bytes(data[4:8], "little") + 8
+        )
+    # shortcut: AVIF has no cheap end marker, so only its signature is checked.
     if kind == ".avif":
         return len(data) >= 12 and data[4:8] == b"ftyp" and b"avif" in data[8:16]
     return False
@@ -1482,6 +1497,11 @@ def display_image(
 
     data = wait_for_sandbox_image(target, target.suffix)
     if data is None:
+        if target.is_file():
+            return (
+                f"`{rel}` is not a complete image yet. It may still be being "
+                "written; try again in a moment."
+            )
         return f"Image not found: `{rel}`"
 
     if len(data) > DISPLAY_IMAGE_MAX_BYTES:
