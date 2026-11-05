@@ -33,7 +33,6 @@
 
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';
-	import Skeleton from './Skeleton.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import RateComment from './RateComment.svelte';
@@ -689,9 +688,7 @@
 							</div>
 						{:else}
 							<div class="w-full flex flex-col relative" id="response-content-container">
-								{#if message.content === '' && !message.error}
-									<Skeleton />
-								{:else if message.content && message.error !== true}
+								{#if message.content && message.error !== true}
 									<!-- always show message contents even if there's an error -->
 									<!-- unless message.error === true which is legacy error handling, where the error message is stored in message.content -->
 									<ContentRenderer
