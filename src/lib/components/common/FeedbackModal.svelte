@@ -116,11 +116,11 @@
           </div>
 
           <label class="flex flex-col w-full">
-            <span class=" mb-0.5 text-xs text-gray-500"
+            <span class=" mb-1 text-xs text-gray-500"
               >{$i18n.t("Subject")}</span
             >
             <input
-              class="w-full text-sm bg-transparent outline-hidden"
+              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition"
               type="text"
               maxlength="200"
               bind:value={subject}
@@ -129,11 +129,11 @@
           </label>
 
           <label class="flex flex-col w-full mt-3">
-            <span class=" mb-0.5 text-xs text-gray-500"
+            <span class=" mb-1 text-xs text-gray-500"
               >{$i18n.t("What happened?")}</span
             >
             <textarea
-              class="w-full text-sm bg-transparent outline-hidden resize-none"
+              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition resize-none"
               rows="6"
               maxlength="5000"
               bind:value={description}
@@ -144,7 +144,7 @@
           {#if emailOff}
             <div class="text-xs text-gray-600 dark:text-gray-400 mt-3">
               {$i18n.t(
-                "This server can't send email, so open this message in your email app and send it to {{email}}.",
+                "This server can't send email. Please open this message in your email app and send it to {{email}}.",
                 { email: helpEmail },
               )}
             </div>

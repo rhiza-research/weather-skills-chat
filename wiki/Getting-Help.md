@@ -7,8 +7,8 @@ Signed-in users report problems to the support team from inside the app, through
 The form opens from:
 
 - **Contact support** in the **?** menu at the bottom right of the chat.
-- **Send feedback** under an error in a chat. The error text is already in the description.
-- A **Send feedback** button in the model's reply. Every chat tells the model to offer this button when the user hits a problem the team should know about, or asks how to get help. Scheduled task runs, which have no user present, don't get this instruction. A link to the support address in a reply also opens the form.
+- The **feedback form** link under an error in a chat. The error text is already in the description.
+- A **feedback form** button in the model's reply. Every chat tells the model to offer this button when the user hits a problem the team should know about, or asks how to get help. Scheduled task runs, which have no user present, don't get this instruction. A link to the support address in a reply also opens the form.
 
 ## What is sent
 

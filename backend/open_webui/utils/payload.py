@@ -19,9 +19,10 @@ _HEADLESS_MARKER = "This chat is a scheduled task"
 # The chat renders a link to #feedback as a button that opens the in-app feedback form.
 FEEDBACK_LINK_PROMPT = (
     "When the user hits a problem the Weather Skills team should know about, or "
-    "asks how to get help or report a bug, offer the link [Send feedback](#feedback). "
-    "It opens a form in this app that sends the team a message with this chat "
-    "attached. Use that link instead of writing out a support email address."
+    "asks how to get help or report a bug, invite them to use the feedback form, "
+    "for example: \"Please let us know by filling out the [feedback form](#feedback).\" "
+    "The #feedback link opens a form in this app that sends the team a message with "
+    "this chat attached. Use it instead of writing out a support email address."
 )
 
 
