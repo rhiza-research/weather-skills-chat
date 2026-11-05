@@ -41,7 +41,7 @@
 		updateChatFolderIdById,
 		importChat
 	} from '$lib/apis/chats';
-	import { reloadOrganizationCatalog } from '$lib/utils/organizationContext';
+	import { switchOrganization } from '$lib/utils/organizationContext';
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -260,35 +260,29 @@
 	$: privateFolders = foldersWithVisibility(folders, 'private');
 	$: teamFolders = foldersWithVisibility(folders, 'organization');
 
-	const switchOrganization = async (orgId) => {
-		if (!orgId || orgId === $activeOrganizationId || $switchingOrganization) {
-			return;
-		}
-		const previousId = $activeOrganizationId;
-		switchingOrganization.set(true);
-		activeOrganizationId.set(orgId);
+	const onSwitchOrganization = async (orgId) => {
 		try {
-			await reloadOrganizationCatalog(localStorage.token);
-			selectedChatId = null;
-			chatId.set('');
-			search = '';
-			await initChatList();
-			await goto('/');
-			await tick();
-			document.getElementById('new-chat-button')?.click();
-		} catch (error) {
-			activeOrganizationId.set(previousId);
-			try {
-				await reloadOrganizationCatalog(localStorage.token);
+			await switchOrganization(orgId, localStorage.token, async () => {
+				selectedChatId = null;
+				chatId.set('');
+				search = '';
 				await initChatList();
-			} catch (revertError) {
-				console.error(revertError);
-			}
+				await goto('/');
+				await tick();
+				document.getElementById('new-chat-button')?.click();
+			});
+		} catch (error) {
 			toast.error(`${error}`);
-		} finally {
-			switchingOrganization.set(false);
 		}
 	};
+
+	// The org the chat list shows. Opening a chat from another org switches
+	// the org outside this component, so the list reloads when the switch ends.
+	let listedOrgId: string | null = null;
+	$: if (!$switchingOrganization && listedOrgId && $activeOrganizationId !== listedOrgId) {
+		search = '';
+		initChatList();
+	}
 
 	/** Soft refresh so automation-created chats appear without resetting pagination/search. */
 	const softRefreshChatList = async () => {
@@ -325,6 +319,7 @@
 	};
 
 	const initChatList = async () => {
+		listedOrgId = $activeOrganizationId;
 		currentChatPage.set(1);
 		allChatsLoaded = false;
 		const token = localStorage.token;
@@ -802,7 +797,7 @@
 			</a>
 		</div>
 
-		<OrganizationRow on:switch-org={(e) => switchOrganization(e.detail)} />
+		<OrganizationRow on:switch-org={(e) => onSwitchOrganization(e.detail)} />
 
 		<!-- Separates the settings rows above from search and the chats and tasks below. -->
 		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
@@ -1269,7 +1264,7 @@
 								showArchivedChats.set(true);
 							}
 						}}
-						on:switch-org={(e) => switchOrganization(e.detail)}
+						on:switch-org={(e) => onSwitchOrganization(e.detail)}
 					>
 						<button
 							id="sidebar-user-menu-button"
