@@ -10,10 +10,10 @@ from unittest.mock import patch
 
 from open_webui.utils.skill_runtime import (
     _redact_skill_result,
-    declared_env_names,
     normalize_env_secret_names,
     prepare_skill_run,
     run_skill,
+    unread_env_names,
 )
 
 
@@ -84,26 +84,25 @@ class NormalizeEnvSecretNamesTest(unittest.TestCase):
             normalize_env_secret_names(["HAS SPACE"])
 
 
-class DeclaredEnvNamesTest(unittest.TestCase):
+class UnreadEnvNamesTest(unittest.TestCase):
     def skill(self, frontmatter: str) -> Path:
         path = Path(tempfile.mkdtemp())
         (path / "SKILL.md").write_text(f"---\nname: s\n{frontmatter}---\n")
         return path
 
-    def test_reads_requires_and_env_vars(self):
+    def test_flags_names_the_skill_never_mentions(self):
         skill = self.skill(
-            "metadata:\n  openclaw:\n    requires:\n      env: [A]\n"
-            "    envVars:\n      - name: B\n"
+            'compatibility: "Optional OTHER."\nmetadata:\n  required-env: "A B"\n'
         )
-        self.assertEqual(declared_env_names(skill), {"A", "B"})
+        self.assertEqual(
+            unread_env_names(skill, ["A", "OTHER", "WRONG"]), (["A", "B"], ["WRONG"])
+        )
 
-    def test_undeclared_skill_has_no_names(self):
-        self.assertEqual(declared_env_names(self.skill("")), set())
+    def test_skill_without_required_env_is_unrestricted(self):
+        self.assertEqual(unread_env_names(self.skill(""), ["WRONG"]), ([], []))
 
     def test_run_rejects_a_secret_the_skill_does_not_read(self):
-        skill = self.skill(
-            "metadata:\n  openclaw:\n    requires:\n      env: [RIGHT]\n"
-        )
+        skill = self.skill('metadata:\n  required-env: "RIGHT"\n')
         (skill / "scripts").mkdir()
         (skill / "scripts" / "s.py").write_text("")
         run = prepare_skill_run(skill, env_secrets=["WRONG"])
