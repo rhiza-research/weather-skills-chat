@@ -22,7 +22,7 @@ An organization member is an owner, an admin, or a user.
 - Admins manage members, settings, shared preferences, and shared secrets, and can turn catalog items on or off for the organization.
 - Users work in the organization and use what it offers.
 
-An organization always keeps at least one owner. Adding a person whose account is waiting for approval activates the account.
+An organization always keeps at least one owner. Organization admins add people by inviting them by email, whether or not they already have an account; see [[Invitations]]. Only platform admins add existing accounts directly, by searching users by name or email. Adding a person whose account is waiting for approval activates the account.
 
 Admins and owners can change the organization's name, description, logo, and default models.
 

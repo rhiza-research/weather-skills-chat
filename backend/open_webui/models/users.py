@@ -9,7 +9,7 @@ from open_webui.models.organizations import Organizations
 
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, String, Text, or_
+from sqlalchemy import BigInteger, Column, String, Text
 
 ####################
 # User DB Schema
@@ -326,20 +326,5 @@ class UsersTable:
         with get_db() as db:
             users = db.query(User).filter(User.id.in_(user_ids)).all()
             return [user.id for user in users]
-
-    def search_users(self, query: str, limit: int = 20) -> list[UserModel]:
-        q = f"%{(query or '').strip()}%"
-        if q == "%%":
-            return []
-        with get_db() as db:
-            users = (
-                db.query(User)
-                .filter(or_(User.name.ilike(q), User.email.ilike(q)))
-                .order_by(User.name.asc())
-                .limit(limit)
-                .all()
-            )
-            return [UserModel.model_validate(user) for user in users]
-
 
 Users = UsersTable()

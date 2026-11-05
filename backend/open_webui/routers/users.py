@@ -6,7 +6,6 @@ from open_webui.models.groups import Groups
 from open_webui.models.chats import Chats
 from open_webui.models.users import (
     UserModel,
-    UserNameResponse,
     UserRoleUpdateForm,
     Users,
     UserSettings,
@@ -51,19 +50,6 @@ async def get_users(
 @router.get("/groups")
 async def get_user_groups(user=Depends(get_verified_user)):
     return Groups.get_groups_by_member_id(user.id)
-
-
-@router.get("/search", response_model=list[UserNameResponse])
-async def search_users(q: str = "", user=Depends(get_verified_user)):
-    return [
-        UserNameResponse(
-            id=u.id,
-            name=u.name,
-            role=u.role,
-            profile_image_url=u.profile_image_url,
-        )
-        for u in Users.search_users(q)
-    ]
 
 
 ############################
