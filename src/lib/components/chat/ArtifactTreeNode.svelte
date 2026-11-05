@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { getContext, createEventDispatcher } from 'svelte';
-	import ArtifactProvenance from './ArtifactProvenance.svelte';
+	import ProvenanceTree from './ProvenanceTree.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
-	import { getArtifactArchiveUrl, getArtifactContentUrl } from '$lib/apis/artifacts';
+	import {
+		getArtifactArchiveUrl,
+		getArtifactContentUrl,
+		getArtifactProvenance
+	} from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
 	const i18n = getContext('i18n');
@@ -25,6 +29,10 @@
 		if (kind === 'directory' || n.file?.is_dir) return true;
 		return n.children?.length > 0 && !n.file;
 	};
+
+	// Listings carry each branch's skill names; opening one loads its steps.
+	const loadProvenanceSteps = async () =>
+		(await getArtifactProvenance(localStorage.token, $chatId, file.path))?.branches ?? [];
 
 	const kindLabel = (file) => {
 		if (!file) return 'folder';
@@ -105,9 +113,12 @@
 				rel="noreferrer">{$i18n.t('Download')}</a
 			>
 		</div>
-		{#if file.provenance?.length}
+		{#if file.provenance_branches?.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
-				<ArtifactProvenance {file} />
+				<!-- A rewritten file loads its steps again. -->
+				{#key `${file.path}:${file.modified}`}
+					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+				{/key}
 			</div>
 		{/if}
 	</div>
@@ -172,9 +183,12 @@
 				{/if}
 			</div>
 		</div>
-		{#if file.provenance?.length}
+		{#if file.provenance_branches?.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
-				<ArtifactProvenance {file} />
+				<!-- A rewritten file loads its steps again. -->
+				{#key `${file.path}:${file.modified}`}
+					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+				{/key}
 			</div>
 		{/if}
 	</div>

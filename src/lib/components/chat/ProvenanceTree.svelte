@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import Collapsible from '../common/Collapsible.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -9,6 +10,27 @@
 		steps?: Array<any>;
 		crumbs?: string[];
 	}> = [];
+	// When branches arrive without steps (artifact listings carry only names),
+	// the first branch opened calls this for the full branches, in the same order.
+	export let loadSteps: (() => Promise<Array<{ steps?: Array<any> }> | null>) | null = null;
+
+	let loaded: Array<{ steps?: Array<any> }> | null = null;
+	let loading = false;
+	let failed = false;
+
+	const onBranchToggle = async (open: boolean) => {
+		if (!open || !loadSteps || loaded || loading) return;
+		loading = true;
+		failed = false;
+		try {
+			loaded = (await loadSteps()) ?? [];
+		} catch (e) {
+			console.error(e);
+			failed = true;
+		} finally {
+			loading = false;
+		}
+	};
 
 	const formatArgValue = (value: any): string => {
 		if (value === null || value === undefined) return 'null';
@@ -56,7 +78,7 @@
 {#if branches?.length}
 	<div class="mt-0.5 space-y-1">
 		{#each branches as branch, branchIdx}
-			{@const steps = branch?.steps || []}
+			{@const steps = branch?.steps || loaded?.[branchIdx]?.steps || []}
 			{@const branchTitle = crumbLabel(branch, branchIdx, branches.length)}
 			<Collapsible
 				title={null}
@@ -64,10 +86,15 @@
 				chevron={true}
 				buttonClassName="w-full min-w-0 text-[10px] leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
 				className="w-full min-w-0"
+				on:change={(e) => onBranchToggle(e.detail)}
 			>
 				<span class="min-w-0 flex-1 truncate text-left" title={branchTitle}>{branchTitle}</span>
 				<div class="mb-1 pl-1 space-y-1" slot="content">
-					{#if steps.length === 0}
+					{#if !branch?.steps && loadSteps && loading}
+						<Spinner className="size-3" />
+					{:else if !branch?.steps && loadSteps && failed}
+						<div class="text-[10px] text-gray-400">{$i18n.t('Could not load provenance.')}</div>
+					{:else if steps.length === 0}
 						<div class="text-[10px] text-gray-400">{$i18n.t('No steps recorded.')}</div>
 					{:else}
 						{#each steps as step, stepIdx}

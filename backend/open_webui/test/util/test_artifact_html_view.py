@@ -181,8 +181,9 @@ class HtmlProvenanceTest(unittest.TestCase):
         item = self._listing()["plot.html"]
         self.assertEqual(item["kind"], "html")
         self.assertEqual(item["provenance"], ["dynamical-fetch", "plot"])
-        # The listing is pushed to every watching tab, so branches load per entry.
+        # The listing is pushed to every watching tab: branch names only, steps load per entry.
         self.assertNotIn("provenance_detail", item)
+        self.assertEqual(item["provenance_branches"], [{"label": None, "crumbs": ["dynamical-fetch", "plot"]}])
         steps = artifact_provenance("chat-p", "plot.html")["branches"][0]["steps"]
         self.assertEqual([s["skill"] for s in steps], ["dynamical-fetch", "plot"])
         self.assertEqual(steps[0]["args"], {"dataset": "imerg"})

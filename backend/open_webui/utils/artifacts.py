@@ -713,9 +713,13 @@ def list_artifacts(
             }
             prov = _provenance_for_entry(path, kind) if provenance else None
             if prov:
-                # Crumbs only: full branches grow with every step and the list is
+                # Names only: full steps grow with every step and the list is
                 # pushed to every watching tab. artifact_provenance reads them.
                 item["provenance"] = prov.get("crumbs") or []
+                item["provenance_branches"] = [
+                    {"label": branch.get("label"), "crumbs": branch.get("crumbs") or []}
+                    for branch in prov.get("branches") or []
+                ]
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
             level = rel.count("/") + 1 - base_levels
