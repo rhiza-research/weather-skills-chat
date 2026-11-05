@@ -810,7 +810,11 @@ async def clone_chat_by_id(
 
 
 @router.post("/{id}/clone/shared", response_model=Optional[ChatResponse])
-async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
+async def clone_shared_chat_by_id(
+    id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
 
     if user.role == "admin":
         chat = await asyncio.to_thread(Chats.get_chat_by_id, id)
@@ -827,7 +831,13 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
 
         source_id = chat.id
         chat = await asyncio.to_thread(
-            Chats.insert_new_chat, user.id, ChatForm(**{"chat": updated_chat})
+            Chats.insert_new_chat,
+            user.id,
+            ChatForm(
+                chat=updated_chat,
+                organization_id=organization_id,
+                visibility="private",
+            ),
         )
         try:
             from open_webui.utils.artifacts import copy_sandbox

@@ -75,7 +75,9 @@ class ShareLinkFilesTest(unittest.TestCase):
         (self.files / "private.csv").write_bytes(b"later")
         viewer = SimpleNamespace(id=f"viewer-{uuid.uuid4()}", role="user")
 
-        clone = asyncio.run(chats_router.clone_shared_chat_by_id(shared.id, viewer))
+        clone = asyncio.run(
+            chats_router.clone_shared_chat_by_id(shared.id, viewer, organization_id=viewer.id)
+        )
         self.addCleanup(Chats.delete_chat_by_id, clone.id)
 
         cloned = self.artifacts / clone.id
