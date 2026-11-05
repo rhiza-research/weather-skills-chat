@@ -179,6 +179,24 @@ def repair_unclosed_details(content: str) -> str:
     return "".join(out)
 
 
+def close_open_reasoning_block(content_blocks: list) -> None:
+    """End every in-flight reasoning block before tool calls / final text.
+
+    Not only the last: a reasoning block followed by other blocks would
+    otherwise be saved as still thinking.
+    """
+    now = time.time()
+    last_was_open = False
+    for block in content_blocks:
+        last_was_open = False
+        if block.get("type") == "reasoning" and block.get("ended_at") is None:
+            block["ended_at"] = now
+            block["duration"] = max(int(now - (block.get("started_at") or now)), 0)
+            last_was_open = True
+    if last_was_open:
+        content_blocks.append({"type": "text", "content": ""})
+
+
 async def completion_revision(
     chat_id: str | None, written: Optional[int] = None
 ) -> int:
@@ -2113,20 +2131,6 @@ async def process_chat_response(
                         content = f"{content}{block['type']}: {block_content}\n"
 
                 return repair_unclosed_details(content.strip())
-
-            def close_open_reasoning_block(content_blocks):
-                """End an in-flight reasoning block before tool calls / final text."""
-                if not content_blocks:
-                    return
-                block = content_blocks[-1]
-                if block.get("type") != "reasoning":
-                    return
-                if block.get("ended_at") is not None:
-                    return
-                block["ended_at"] = time.time()
-                started = block.get("started_at") or block["ended_at"]
-                block["duration"] = max(int(block["ended_at"] - started), 0)
-                content_blocks.append({"type": "text", "content": ""})
 
             def convert_content_blocks_to_messages(content_blocks):
                 from open_webui.utils.model_messages import (

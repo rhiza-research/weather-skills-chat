@@ -47,6 +47,7 @@
 	import Citations from './Citations.svelte';
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
+	import { clearSpinningToolCalls } from '$lib/utils/generationLiveness';
 	import { endsWithActivity, isInlineStatus } from '$lib/utils/activityStatus';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 
@@ -696,7 +697,9 @@
 									<ContentRenderer
 										id={message.id}
 										{history}
-										content={message.content}
+										content={message.done
+											? clearSpinningToolCalls(message.content)
+											: message.content}
 										sources={message.sources}
 										status={latestStatus}
 										floatingButtons={message?.done && !readOnly}

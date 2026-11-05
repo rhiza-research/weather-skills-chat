@@ -194,3 +194,25 @@ class StreamEmitTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CloseOpenReasoningTest(unittest.TestCase):
+    def test_closes_reasoning_that_is_not_last(self):
+        blocks = [
+            {"type": "reasoning", "content": "a", "started_at": 1.0},
+            {"type": "text", "content": "after"},
+        ]
+        mw.close_open_reasoning_block(blocks)
+        self.assertIsNotNone(blocks[0].get("duration"))
+        self.assertEqual(len(blocks), 2)
+
+    def test_last_open_reasoning_gets_a_text_block(self):
+        blocks = [{"type": "reasoning", "content": "a", "started_at": 1.0}]
+        mw.close_open_reasoning_block(blocks)
+        self.assertIsNotNone(blocks[0].get("duration"))
+        self.assertEqual(blocks[-1], {"type": "text", "content": ""})
+
+    def test_closed_reasoning_is_left_alone(self):
+        blocks = [{"type": "reasoning", "content": "a", "ended_at": 2.0, "duration": 1}]
+        mw.close_open_reasoning_block(blocks)
+        self.assertEqual(blocks, [{"type": "reasoning", "content": "a", "ended_at": 2.0, "duration": 1}])
