@@ -37,17 +37,17 @@
 			</button>
 		{:else}
 			<div class="text-xs text-gray-600 dark:text-gray-400">
-				{$i18n.t('If this keeps happening,')}
+				{$i18n.t('If this keeps happening, please let us know by filling out the')}
 				<button
 					type="button"
-					class="underline"
+					class="underline font-medium hover:text-gray-900 dark:hover:text-gray-200"
 					on:click={() => {
 						const text = typeof content === 'string' ? content : JSON.stringify(content);
 						feedbackDraft.set(`Error: ${text}\n\n`);
 					}}
 				>
-					{$i18n.t('send feedback')}
-				</button>
+					{$i18n.t('feedback form')}</button
+				>.
 			</div>
 		{/if}
 	</div>
