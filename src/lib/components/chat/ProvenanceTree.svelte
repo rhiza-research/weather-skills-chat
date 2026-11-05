@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import Collapsible from '../common/Collapsible.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -18,6 +19,8 @@
 	let failed = false;
 	// Branches opened once their steps loaded.
 	let opened: Record<number, boolean> = {};
+	// The branch whose press is waiting on its steps; its row shows a spinner.
+	let pressed: number | null = null;
 
 	const load = async () => {
 		if (!loadSteps || loading) return;
@@ -42,7 +45,9 @@
 		event.stopPropagation();
 		event.preventDefault();
 		if (loading) return;
+		pressed = branchIdx;
 		await load();
+		pressed = null;
 		opened = { ...opened, [branchIdx]: true };
 	};
 
@@ -105,6 +110,11 @@
 					on:change={(e) => e.detail && failed && load()}
 				>
 					<span class="min-w-0 flex-1 truncate text-left" title={branchTitle}>{branchTitle}</span>
+					{#if pressed === branchIdx}
+						<div class="shrink-0 self-start translate-y-0.5 mx-1">
+							<Spinner className="size-3" />
+						</div>
+					{/if}
 					<div class="mb-1 pl-1 space-y-1" slot="content">
 						{#if !branch?.steps && loadSteps && failed}
 							<div class="text-[10px] text-gray-400">{$i18n.t('Could not load provenance.')}</div>
