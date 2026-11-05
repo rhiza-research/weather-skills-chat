@@ -180,6 +180,17 @@ class StreamEmitTest(unittest.IsolatedAsyncioTestCase):
         during = {seen for seen in ticks if 0 < seen < 200}
         self.assertGreater(len(during), 50)
 
+    async def test_stop_while_thinking_saves_the_thinking_as_done(self):
+        async def body():
+            delta = {"reasoning_content": "Let me think"}
+            yield f'data: {json.dumps({"choices": [{"delta": delta}]})}\n\n'
+            raise asyncio.CancelledError()
+
+        await self._run(StreamingResponse(body(), media_type="text/event-stream"))
+        done = [e["data"] for e in self.events if e.get("type") == "chat:completion" and e["data"].get("done")]
+        self.assertIn('type="reasoning" done="true"', done[-1]["content"])
+        self.assertNotIn('done="false"', done[-1]["content"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3474,6 +3474,7 @@ async def process_chat_response(
                 # Lets a scheduled task's run tell a stop from a finished reply.
                 metadata["cancelled"] = True
                 complete_open_tool_calls("Cancelled by user.")
+                close_open_reasoning_block(content_blocks)
 
                 cancelled_content = serialize_content_blocks(content_blocks)
                 from open_webui.utils.chat_realtime import (
@@ -3520,6 +3521,7 @@ async def process_chat_response(
                 )
                 note_loop_exit("generation_exception", error=str(e))
                 complete_open_tool_calls(f"Interrupted: {e}")
+                close_open_reasoning_block(content_blocks)
                 failed_content = serialize_content_blocks(content_blocks)
                 error_payload = {
                     "content": (
