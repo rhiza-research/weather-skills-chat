@@ -16,6 +16,14 @@ When you are done, call report_task_result once to say whether the task succeede
 
 _HEADLESS_MARKER = "This chat is a scheduled task"
 
+# The chat renders a link to #feedback as a button that opens the in-app feedback form.
+FEEDBACK_LINK_PROMPT = (
+    "When the user hits a problem the Weather Skills team should know about, or "
+    "asks how to get help or report a bug, offer the link [Send feedback](#feedback). "
+    "It opens a form in this app that sends the team a message with this chat "
+    "attached. Use that link instead of writing out a support email address."
+)
+
 
 def inject_headless_context(form_data: dict) -> dict:
     """Tell the model it is running without a user (a scheduled task)."""

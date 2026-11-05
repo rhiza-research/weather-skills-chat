@@ -16,7 +16,7 @@
 	whenAppIdle(loadShortcutsModal);
 </script>
 
-<div class=" hidden lg:flex fixed bottom-0 right-0 px-1 py-1 z-20">
+<div class=" hidden lg:flex fixed bottom-0 right-0 p-2 z-20">
 	<button
 		id="show-shortcuts-button"
 		class="hidden"
@@ -35,7 +35,7 @@
 	>
 		<Tooltip content={$i18n.t('Help')} placement="left">
 			<button
-				class="text-gray-600 dark:text-gray-300 bg-gray-300/20 size-4 flex items-center justify-center text-[0.7rem] rounded-full"
+				class="text-gray-600 dark:text-gray-300 bg-gray-300/20 hover:bg-gray-300/40 size-7 flex items-center justify-center text-sm font-medium rounded-full transition"
 			>
 				?
 			</button>

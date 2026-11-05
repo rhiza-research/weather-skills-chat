@@ -3,8 +3,7 @@
 
 	import Info from '$lib/components/icons/Info.svelte';
 	import CreditRequestModal from '$lib/components/chat/Messages/CreditRequestModal.svelte';
-	import { config } from '$lib/stores';
-	import { helpEmailAddress } from '$lib/constants';
+	import { feedbackDraft } from '$lib/stores';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
 
 	const i18n = getContext('i18n');
@@ -13,7 +12,6 @@
 
 	let showCreditRequest = false;
 
-	$: email = helpEmailAddress($config?.help_email);
 	$: usageLimit = isUsageLimitMessage(content);
 </script>
 
@@ -39,8 +37,17 @@
 			</button>
 		{:else}
 			<div class="text-xs text-gray-600 dark:text-gray-400">
-				If this keeps happening, contact
-				<a class="underline" href={`mailto:${email}`}>{email}</a>
+				{$i18n.t('If this keeps happening,')}
+				<button
+					type="button"
+					class="underline"
+					on:click={() => {
+						const text = typeof content === 'string' ? content : JSON.stringify(content);
+						feedbackDraft.set(`Error: ${text}\n\n`);
+					}}
+				>
+					{$i18n.t('send feedback')}
+				</button>
 			</div>
 		{/if}
 	</div>

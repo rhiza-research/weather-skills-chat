@@ -14,9 +14,14 @@
 		getArtifactViewUrl,
 		isHtmlArtifact
 	} from '$lib/apis/artifacts';
-	import { WEBUI_BASE_URL } from '$lib/constants';
-	import { chatId } from '$lib/stores';
+	import { WEBUI_BASE_URL, helpEmailAddress } from '$lib/constants';
+	import { chatId, config, feedbackDraft } from '$lib/stores';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
+
+	// The model is told to link #feedback; a link to the help address opens the same form.
+	$: isFeedbackLink = (href: string) =>
+		href === '#feedback' ||
+		href.toLowerCase() === `mailto:${helpEmailAddress($config?.help_email)}`.toLowerCase();
 
 	const isInternalAppPath = (text: string) => {
 		const path = text.trim();
@@ -62,6 +67,18 @@
 				{token.text}
 			{/if}
 		</HtmlArtifactLink>
+	{:else if token.type === 'link' && isFeedbackLink(token.href ?? '')}
+		<button
+			type="button"
+			class="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 text-sm transition"
+			on:click={() => feedbackDraft.set('')}
+		>
+			{#if token.tokens}
+				<svelte:self id={`${id}-a`} tokens={token.tokens} {onSourceClick} />
+			{:else}
+				{token.text}
+			{/if}
+		</button>
 	{:else if token.type === 'link'}
 		{@const sandboxHref = artifactHrefForChat(token.href ?? '', $chatId)}
 		{@const href = sandboxHref ?? token.href}

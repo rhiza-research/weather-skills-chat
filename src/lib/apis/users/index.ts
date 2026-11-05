@@ -364,3 +364,20 @@ export const updateUserById = async (token: string, userId: string, user: UserUp
 
 	return res;
 };
+
+export const sendFeedback = async (
+	token: string,
+	body: { subject: string; description: string; chat_id: string | null }
+): Promise<{ status: boolean }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/users/feedback`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(body)
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
+};

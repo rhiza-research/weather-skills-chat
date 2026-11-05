@@ -69,6 +69,8 @@ export const showSidebar = writable(false);
 export const showSettings = writable(false);
 export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);
+// Opens the feedback form; the string pre-fills its description. Set back to null once opened.
+export const feedbackDraft: Writable<string | null> = writable(null);
 
 export const showControls = writable(false);
 export const showOverview = writable(false);
@@ -202,6 +204,7 @@ type Config = {
 		enable_admin_chat_access: boolean;
 		enable_community_sharing: boolean;
 		enable_autocomplete_generation: boolean;
+		enable_feedback_email?: boolean;
 	};
 	oauth: {
 		providers: {

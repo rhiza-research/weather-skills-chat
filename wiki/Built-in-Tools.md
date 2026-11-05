@@ -82,7 +82,7 @@ The model can email the user and the people they work with. Allowed recipients a
 
 Each email is sent in the user's name from the app's sender address, and replies go to the user. A footer names the user and links to a shared copy of the chat. The link uses the public address set on [[Deployment]].
 
-The same mail settings send [[Invitations]], access requests and approvals (see [[Requesting Access]]), and credit requests (see [[Usage and Spending Caps]]):
+The same mail settings send [[Invitations]], access requests and approvals (see [[Requesting Access]]), credit requests (see [[Usage and Spending Caps]]), and feedback (see [[Getting Help]]):
 
 | Env var | Default | Effect |
 |-|-|-|
