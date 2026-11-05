@@ -68,7 +68,11 @@ from open_webui.utils.misc import (
     prepend_to_first_user_message_content,
     convert_logit_bias_input_to_json,
 )
-from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
+from open_webui.utils.payload import (
+    FEEDBACK_LINK_PROMPT,
+    inject_headless_context,
+    inject_rendering_prompt,
+)
 from open_webui.utils.tools import get_tools
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.tool_parallel import (
@@ -1518,6 +1522,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         form_data = inject_rendering_prompt(
             form_data, request.app.state.config.RENDERING_PROMPT
         )
+        if not metadata.get("headless"):
+            form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
     except Exception:
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
