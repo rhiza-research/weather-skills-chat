@@ -180,6 +180,16 @@ def _snapshot_chat_files(chat_id: str, snapshot_id: str) -> None:
         log.exception("Failed to snapshot files of chat %s for its share link", chat_id)
 
 
+def _delete_snapshot_files(snapshot_ids: list[str]) -> None:
+    from open_webui.utils.artifacts import delete_sandbox
+
+    for snapshot_id in snapshot_ids:
+        try:
+            delete_sandbox(snapshot_id)
+        except Exception:
+            log.exception("Failed to delete share link files %s", snapshot_id)
+
+
 class ChatTable:
 
     @staticmethod
@@ -914,13 +924,7 @@ class ChatTable:
                 db.commit()
         except Exception:
             return False
-        for snapshot_id in snapshot_ids:
-            try:
-                from open_webui.utils.artifacts import delete_sandbox
-
-                delete_sandbox(snapshot_id)
-            except Exception:
-                log.exception("Failed to delete share link files %s", snapshot_id)
+        _delete_snapshot_files(snapshot_ids)
         return True
 
     def update_chat_share_id_by_id(
@@ -1593,13 +1597,17 @@ class ChatTable:
             with get_db() as db:
                 chats_by_user = db.query(Chat).filter_by(user_id=user_id).all()
                 shared_chat_ids = [f"shared-{chat.id}" for chat in chats_by_user]
+                snapshot_ids = [
+                    row.id
+                    for row in db.query(Chat.id).filter(Chat.user_id.in_(shared_chat_ids))
+                ]
 
                 db.query(Chat).filter(Chat.user_id.in_(shared_chat_ids)).delete()
                 db.commit()
-
-                return True
         except Exception:
             return False
+        _delete_snapshot_files(snapshot_ids)
+        return True
 
 
 Chats = ChatTable()

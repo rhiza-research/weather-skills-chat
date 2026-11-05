@@ -61,6 +61,15 @@ class ShareLinkFilesTest(unittest.TestCase):
         self.assertFalse((self.artifacts / shared.id).exists())
         self.assertIsNone(Chats.get_chat_by_id(shared.id))
 
+    def test_deleting_all_chats_removes_their_snapshots(self):
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        self.assertTrue((self.artifacts / shared.id / "map.png").exists())
+
+        self.assertTrue(Chats.delete_chats_by_user_id(self.chat.user_id))
+
+        self.assertFalse((self.artifacts / shared.id).exists())
+        self.assertIsNone(Chats.get_chat_by_id(shared.id))
+
     def test_cloning_from_the_link_copies_the_snapshot_files(self):
         shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         (self.files / "private.csv").write_bytes(b"later")
