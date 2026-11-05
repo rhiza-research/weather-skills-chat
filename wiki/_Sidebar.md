@@ -6,6 +6,7 @@
 - [[Organizations]]
 - [[Model Fallback]]
 - [[Usage and Spending Caps]]
+- [[Requesting Access]]
 - [[Invitations]]
 - [[Scheduled Tasks]]
 - [[Secrets]]
