@@ -169,6 +169,17 @@ def _chat_visible_filter(user_id: str, organization_id: str):
     )
 
 
+def _snapshot_chat_files(chat_id: str, snapshot_id: str) -> None:
+    """Give a share link its own copy of the chat's files, frozen like its messages."""
+    try:
+        from open_webui.utils.artifacts import copy_sandbox, delete_sandbox
+
+        delete_sandbox(snapshot_id)
+        copy_sandbox(chat_id, snapshot_id)
+    except Exception:
+        log.exception("Failed to snapshot files of chat %s for its share link", chat_id)
+
+
 class ChatTable:
 
     @staticmethod
@@ -864,7 +875,10 @@ class ChatTable:
                 .update({"share_id": shared_chat.id})
             )
             db.commit()
-            return shared_chat if (shared_result and result) else None
+        if not (shared_result and result):
+            return None
+        _snapshot_chat_files(chat_id, shared_chat.id)
+        return shared_chat
 
     def update_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
         try:
@@ -883,20 +897,31 @@ class ChatTable:
                 shared_chat.updated_at = int(time.time())
                 db.commit()
                 db.refresh(shared_chat)
-
-                return ChatModel.model_validate(shared_chat)
+                shared = ChatModel.model_validate(shared_chat)
+            _snapshot_chat_files(chat_id, shared.id)
+            return shared
         except Exception:
             return None
 
     def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
         try:
             with get_db() as db:
+                snapshot_ids = [
+                    row.id
+                    for row in db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
+                ]
                 db.query(Chat).filter_by(user_id=f"shared-{chat_id}").delete()
                 db.commit()
-
-                return True
         except Exception:
             return False
+        for snapshot_id in snapshot_ids:
+            try:
+                from open_webui.utils.artifacts import delete_sandbox
+
+                delete_sandbox(snapshot_id)
+            except Exception:
+                log.exception("Failed to delete share link files %s", snapshot_id)
+        return True
 
     def update_chat_share_id_by_id(
         self, id: str, share_id: Optional[str]

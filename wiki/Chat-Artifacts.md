@@ -25,9 +25,11 @@ Archive downloads have a size limit, and so do the files copied into and out of 
 
 Anyone who can read a chat can list and download its files. Only the chat's owner can add or change them. Who can read a chat is described on [[Organizations]].
 
-## Copying and deleting chats
+## Copying, sharing, and deleting chats
 
 Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
+
+Sharing a chat by link saves a copy of its files with the shared messages, as they are at that moment. Files added or changed in the chat afterwards stay out of the link until the owner updates the share. The shared page does not show the files, but anyone who clones the chat from the link gets that copy. Removing the share, or deleting the chat, deletes the copy. A link with no saved copy gives no files; updating the share saves one.
 
 ## Settings
 

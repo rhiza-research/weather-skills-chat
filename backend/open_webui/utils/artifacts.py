@@ -833,7 +833,7 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
 
 def delete_sandbox(chat_id: str) -> None:
     root = (ARTIFACTS_DIR / chat_id).resolve()
-    if root.exists() and ARTIFACTS_DIR in root.parents:
+    if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:
         shutil.rmtree(root, ignore_errors=True)
 
 
