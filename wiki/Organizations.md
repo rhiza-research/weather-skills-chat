@@ -49,7 +49,7 @@ Chats, scheduled tasks, preferences, and folders are either private or shared wi
 
 - A chat's owner can share it with the organization. Every member can then read it. Only the owner can change it.
 - If the owner makes a shared chat private, it leaves other members' chat lists. They can no longer open it.
-- Cloning a chat makes a private copy for the person who cloned it, in the same organization.
+- Cloning a chat makes a private copy for the person who cloned it, in the same organization. Cloning from a share link puts the private copy in the organization the person is working in.
 - Shared chats go in the organization's team folders, and private chats in their owner's own folders.
 
 | Env var | Default | Effect |
