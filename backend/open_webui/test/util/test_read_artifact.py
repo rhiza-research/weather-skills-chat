@@ -5,14 +5,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from open_webui.utils.builtin_tools import _rag_from_artifact_file, read_artifact
+from open_webui.utils.builtin_tools import (
+    PNG_TRAILER,
+    _rag_from_artifact_file,
+    read_artifact,
+)
 from open_webui.utils.middleware import files_ready_for_model
 from open_webui.utils.model_messages import (
     attach_read_artifact_images,
     read_artifact_image_urls,
 )
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16 + PNG_TRAILER
 
 
 class ReadArtifactImageUrlsTest(unittest.TestCase):

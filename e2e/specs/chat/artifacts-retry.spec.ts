@@ -22,6 +22,16 @@ test('a failed first artifacts fetch is retried the next time the panel opens', 
 		await route.continue();
 	});
 
+	// The upload pushes the list over the socket ~0.4 s later. If that lands
+	// after the page connects, it fills the cache and no fetch is retried.
+	await page.routeWebSocket(/socket\.io/, (ws) => {
+		const server = ws.connectToServer();
+		server.onMessage((message) => {
+			if (typeof message === 'string' && message.includes('"chat:artifacts"')) return;
+			ws.send(message);
+		});
+	});
+
 	const socket = waitForSocket(page);
 	await page.goto(`/c/${id}`);
 	await socket;
