@@ -248,6 +248,7 @@
 	let chat = null;
 	let tags = [];
 	let chatOwnerName = '';
+	let cloning = false;
 	$: chatWritable =
 		!chat || !chat.user_id || !$user?.id || chat.user_id === $user.id || $user?.role === 'admin';
 
@@ -3057,19 +3058,29 @@
 											{$i18n.t('Clone to continue.')}
 										</div>
 										<button
-											class="shrink-0 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-[11px]"
+											class="shrink-0 flex items-center gap-1 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-[11px] disabled:opacity-70"
+											disabled={cloning}
+											aria-busy={cloning}
 											on:click={async () => {
-												const cloned = await cloneChatById(localStorage.token, $chatId).catch(
-													(error) => {
-														toast.error(`${error}`);
-														return null;
+												cloning = true;
+												try {
+													const cloned = await cloneChatById(localStorage.token, $chatId).catch(
+														(error) => {
+															toast.error(`${error}`);
+															return null;
+														}
+													);
+													if (cloned) {
+														await goto(`/c/${cloned.id}`);
 													}
-												);
-												if (cloned) {
-													await goto(`/c/${cloned.id}`);
+												} finally {
+													cloning = false;
 												}
 											}}
 										>
+											{#if cloning}
+												<Spinner className="size-3" />
+											{/if}
 											{$i18n.t('Clone to continue')}
 										</button>
 									</div>
