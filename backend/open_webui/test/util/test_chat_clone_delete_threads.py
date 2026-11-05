@@ -51,6 +51,20 @@ class CloneDeleteThreadsTest(unittest.IsolatedAsyncioTestCase):
         for name in ("read", "copy"):
             self.assertIsNot(self.ran_on[name], self.loop_thread, name)
 
+    async def test_clone_from_share_link_copies_the_original_chats_files(self):
+        snapshot = SimpleNamespace(
+            id="share-1", user_id="shared-chat-1", title="Weekly rainfall", chat=CHAT.chat
+        )
+        clone = MagicMock(model_dump=lambda: {"id": "chat-2", "user_id": "u1", "title": "Copy", "chat": {}, "created_at": 1, "updated_at": 1, "archived": False, "pinned": False, "meta": {}, "folder_id": None, "share_id": None})
+        clone.id = "chat-2"
+        with patch.object(chats_router.Chats, "get_chat_by_share_id", return_value=snapshot), patch.object(
+            chats_router.Chats, "insert_new_chat", return_value=clone
+        ), patch("open_webui.utils.artifacts.copy_sandbox") as copy:
+            response = await self.client.post("/api/v1/chats/share-1/clone/shared")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        copy.assert_called_once_with("chat-1", "chat-2")
+
     async def test_delete_checks_access_and_removes_files_on_a_worker_thread(self):
         with patch.object(chats_router, "has_permission", return_value=True), patch.object(
             chats_router, "_require_writable_chat", self.record("check", CHAT)

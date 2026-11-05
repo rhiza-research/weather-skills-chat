@@ -27,7 +27,7 @@ Anyone who can read a chat can list and download its files. Only the chat's owne
 
 ## Copying and deleting chats
 
-Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
+Cloning a chat copies its files into the new chat. Cloning from a share link does the same: anyone with the link gets a copy of the chat's files as they are when they clone it, even though the shared page itself does not show them. Deleting a chat deletes its files.
 
 ## Settings
 

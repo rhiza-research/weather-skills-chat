@@ -825,7 +825,13 @@ async def clone_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
             "title": f"Clone of {chat.title}",
         }
 
-        source_id = chat.id
+        # A share link points at a snapshot row owned by "shared-<chat id>"; the
+        # files live under the original chat's id.
+        source_id = (
+            chat.user_id.removeprefix("shared-")
+            if chat.user_id.startswith("shared-")
+            else chat.id
+        )
         chat = await asyncio.to_thread(
             Chats.insert_new_chat, user.id, ChatForm(**{"chat": updated_chat})
         )
