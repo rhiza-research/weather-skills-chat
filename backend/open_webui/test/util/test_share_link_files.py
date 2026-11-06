@@ -8,8 +8,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from open_webui.models.chats import ChatForm, Chats
+from open_webui.routers import artifacts as artifacts_router
 from open_webui.routers import chats as chats_router
+from open_webui.utils.auth import get_verified_user
 
 
 class ShareLinkFilesTest(unittest.TestCase):
@@ -83,6 +88,55 @@ class ShareLinkFilesTest(unittest.TestCase):
         cloned = self.artifacts / clone.id
         self.assertEqual((cloned / "map.png").read_bytes(), b"v1")
         self.assertFalse((cloned / "private.csv").exists())
+
+
+class ShareLinkFileRoutesTest(unittest.TestCase):
+    """Anyone who can open the link reads the snapshot's files; no one writes them."""
+
+    def setUp(self):
+        ShareLinkFilesTest.setUp(self)
+        self.shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        (self.files / "map.png").write_bytes(b"v2")
+        (self.files / "private.csv").write_bytes(b"later")
+        app = FastAPI()
+        app.include_router(artifacts_router.router, prefix="/chats")
+        viewer = SimpleNamespace(id=f"viewer-{uuid.uuid4()}", role="user")
+        app.dependency_overrides[get_verified_user] = lambda: viewer
+        self.client = TestClient(app)
+
+    def url(self, chat_id, rest=""):
+        return f"/chats/{chat_id}/artifacts{rest}"
+
+    def test_link_holder_lists_and_downloads_the_snapshot(self):
+        listed = self.client.get(self.url(self.shared.id))
+        self.assertEqual(listed.status_code, 200)
+        paths = [f["path"] for f in listed.json()]
+        self.assertIn("map.png", paths)
+        self.assertNotIn("private.csv", paths)
+
+        content = self.client.get(self.url(self.shared.id, "/content?path=map.png"))
+        self.assertEqual(content.status_code, 200)
+        self.assertEqual(content.content, b"v1")
+
+    def test_live_files_stay_out_of_reach(self):
+        missing = self.client.get(self.url(self.shared.id, "/content?path=private.csv"))
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(self.client.get(self.url(self.chat.id)).status_code, 401)
+
+    def test_no_one_writes_to_the_snapshot(self):
+        upload = self.client.post(
+            self.url(self.shared.id),
+            data={"path": "map.png"},
+            files={"file": ("map.png", b"evil")},
+        )
+        self.assertEqual(upload.status_code, 401)
+        snapshot = self.artifacts / self.shared.id / "map.png"
+        self.assertEqual(snapshot.read_bytes(), b"v1")
+
+    def test_removed_link_gives_nothing(self):
+        Chats.delete_shared_chat_by_chat_id(self.chat.id)
+        Chats.update_chat_share_id_by_id(self.chat.id, None)
+        self.assertEqual(self.client.get(self.url(self.shared.id)).status_code, 401)
 
 
 if __name__ == "__main__":

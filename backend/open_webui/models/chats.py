@@ -1153,17 +1153,14 @@ class ChatTable:
         except Exception:
             return None
 
+    def is_live_share(self, id: str) -> bool:
+        """Whether id is a share link's snapshot whose chat still shares it."""
+        with get_db() as db:
+            return db.query(Chat.id).filter_by(share_id=id).first() is not None
+
     def get_chat_by_share_id(self, id: str) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                # it is possible that the shared link was deleted. hence,
-                # we check if the chat is still shared by checking if a chat with the share_id exists
-                chat = db.query(Chat).filter_by(share_id=id).first()
-
-                if chat:
-                    return self.get_chat_by_id(id)
-                else:
-                    return None
+            return self.get_chat_by_id(id) if self.is_live_share(id) else None
         except Exception:
             return None
 

@@ -34,6 +34,7 @@ class ArtifactRoutesTest(unittest.TestCase):
         (root / "plots" / "map.png").write_bytes(PNG)
         (root / "old.zarrview.json").write_text('{"type": "zarr_view", "zarr": "x.zarr"}')
         self.chats = MagicMock()
+        self.chats.is_live_share.return_value = False
         self.chats.get_chat_access_row.return_value = ChatAccessRow(
             id=CHAT, user_id="u1", organization_id="u1", visibility="private"
         )
