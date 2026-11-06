@@ -80,7 +80,7 @@ The model is told to use search to support the weather analysis rather than as a
 
 The model can email the user and the people they work with. Allowed recipients are the user and every member of each active workspace or platform organization the user belongs to. The model can attach files, folders, and Zarr stores from the chat's files. Folders and Zarr stores are sent as zip files. The number and total size of attachments is limited.
 
-Each email is sent in the user's name from the app's sender address, and replies go to the user. A footer names the user and links to a shared copy of the chat. Sending creates the chat's share link, or updates it so the copy matches the chat when the email is sent; see [[Chat Artifacts]]. The link uses the public address set on [[Deployment]].
+Each email is sent in the user's name from the app's sender address, and replies go to the user. A footer names the user and gives a new link to the chat as it is when the email is sent, with the date the link expires; see [[Share Links]]. The link uses the public address set on [[Deployment]].
 
 The same mail settings send [[Invitations]], access requests and approvals (see [[Requesting Access]]), credit requests (see [[Usage and Spending Caps]]), and feedback (see [[Getting Help]]):
 

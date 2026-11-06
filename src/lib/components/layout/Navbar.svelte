@@ -18,7 +18,7 @@
 
 	import { slide } from 'svelte/transition';
 	import ModelSelector from '../chat/ModelSelector.svelte';
-	import { copyChatShareLink } from '$lib/apis/chats';
+	import ShareChatModal from '$lib/components/chat/ShareChatModal.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Menu from './Navbar/Menu.svelte';
 	import { page } from '$app/stores';
@@ -41,6 +41,7 @@
 	export let showModelSelector = true;
 
 	let showDownloadChatModal = false;
+	let showShareChatModal = false;
 
 	$: artifactsPanelOpen = $showControls && $showArtifacts;
 
@@ -62,6 +63,8 @@
 		await showControls.set(true);
 	};
 </script>
+
+<ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
 
 <div class="sticky top-0 z-30 w-full px-1.5 py-1.5 -mb-8 flex items-center">
 	<div
@@ -105,13 +108,8 @@
 					<Menu
 						{chat}
 						{shareEnabled}
-						shareHandler={async () => {
-							try {
-								await copyChatShareLink(localStorage.token, $chatId);
-								toast.success($i18n.t('Copied shared chat URL to clipboard!'));
-							} catch (error) {
-								toast.error(`${error}`);
-							}
+						shareHandler={() => {
+							showShareChatModal = true;
 						}}
 						downloadHandler={() => {
 							showDownloadChatModal = !showDownloadChatModal;

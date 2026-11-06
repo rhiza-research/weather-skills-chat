@@ -88,11 +88,29 @@ def remove_automation_job(automation_id: str) -> None:
         scheduler.remove_job(job_id)
 
 
+async def _delete_expired_share_links() -> None:
+    from open_webui.models.chats import Chats
+
+    try:
+        deleted = await asyncio.to_thread(Chats.delete_expired_shared_chats)
+        if deleted:
+            log.info("Deleted %d expired share links", deleted)
+    except Exception:
+        log.exception("Failed to delete expired share links")
+
+
 def start_scheduler(app) -> None:
     global _app
     _app = app
     if not scheduler.running:
         scheduler.start()
+    scheduler.add_job(
+        _delete_expired_share_links,
+        trigger="interval",
+        hours=1,
+        id="share-link-cleanup",
+        replace_existing=True,
+    )
     # A run left running by a restart will never finish. This holds only while
     # one process runs tasks: with more, another one may still be running it.
     interrupted = AutomationRuns.mark_interrupted()

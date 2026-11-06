@@ -8,6 +8,7 @@ import mimetypes
 import os
 import re
 import time
+from datetime import datetime, timezone
 from uuid import uuid4
 import smtplib
 from email.message import EmailMessage
@@ -20,7 +21,7 @@ from open_webui.models.automations import (
     Automations,
     AutomationUpdateForm,
 )
-from open_webui.models.chats import Chats
+from open_webui.models.chats import SHARE_LINK_DEFAULT_DAYS, Chats
 from open_webui.models.organizations import ORG_KIND_PERSONAL, Organizations
 from open_webui.models.users import Users
 from open_webui.utils.automation_scheduler import (
@@ -2297,20 +2298,17 @@ LIST_EMAIL_RECIPIENTS_SPEC = {
 }
 
 
-def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
-    chat = Chats.get_chat_by_id(chat_id)
-    if not chat:
-        return ""
-    # Refresh an existing link so recipients see the chat as it is now.
-    if getattr(chat, "share_id", None):
-        shared = Chats.update_shared_chat_by_chat_id(chat_id)
-    else:
-        shared = Chats.insert_shared_chat_by_chat_id(chat_id)
-    share_id = getattr(shared, "id", None) if shared else None
+def _create_chat_share_link(chat_id: str, base_url: str) -> str:
+    """A new share link for the email footer, with its expiry date."""
     base = (base_url or "").rstrip("/")
-    if not (base and share_id):
+    if not base:
         return ""
-    return f"{base}/s/{share_id}"
+    expires_at = int(time.time()) + SHARE_LINK_DEFAULT_DAYS * 86400
+    shared = Chats.insert_shared_chat_by_chat_id(chat_id, expires_at)
+    if not shared:
+        return ""
+    expires = datetime.fromtimestamp(expires_at, timezone.utc)
+    return f"{base}/s/{shared.id} (expires {expires:%B} {expires.day}, {expires.year})"
 
 
 def _attachment_filename(rel: str, *, is_archive: bool = False) -> str:
@@ -2512,7 +2510,7 @@ def send_email(
     if not from_email:
         return "Email delivery is not configured (missing EMAIL_TOOL_FROM_EMAIL)."
 
-    share_link = _ensure_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
+    share_link = _create_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
     footer = (
         "\n\n---\n"
         f"This email was generated from Weather Skills Chat by user {user.email}. "
