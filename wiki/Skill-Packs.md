@@ -35,7 +35,7 @@ When two packs offer a skill with the same name, the model runs the one with the
 
 ## Choosing skills in a chat
 
-A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens **Available Tools and Skills**, which lists skills and Workspace tools under **Weather Skills**, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
+A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
 
 If the model calls a skill that is off for the message, the skill does not run, and the model is told to tell the user to turn it on there and send the message again.
 

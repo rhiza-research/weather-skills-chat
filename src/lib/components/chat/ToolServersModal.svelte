@@ -132,7 +132,7 @@
 
 		{#if builtinOptions.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-				<div class=" text-base font-medium self-center">{$i18n.t('Builtin Tools')}</div>
+				<div class=" text-base font-medium self-center">{$i18n.t('Built-in Tools')}</div>
 			</div>
 			<div class="px-3 pb-2 w-full flex flex-col">
 				{#each builtinOptions as option (option.key)}
