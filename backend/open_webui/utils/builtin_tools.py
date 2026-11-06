@@ -2301,10 +2301,12 @@ def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
     chat = Chats.get_chat_by_id(chat_id)
     if not chat:
         return ""
-    share_id = getattr(chat, "share_id", None)
-    if not share_id:
+    # Refresh an existing link so recipients see the chat as it is now.
+    if getattr(chat, "share_id", None):
+        shared = Chats.update_shared_chat_by_chat_id(chat_id)
+    else:
         shared = Chats.insert_shared_chat_by_chat_id(chat_id)
-        share_id = getattr(shared, "id", None) if shared else None
+    share_id = getattr(shared, "id", None) if shared else None
     base = (base_url or "").rstrip("/")
     if not (base and share_id):
         return ""

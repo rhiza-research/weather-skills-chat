@@ -75,6 +75,17 @@ class ShareLinkFilesTest(unittest.TestCase):
         self.assertFalse((self.artifacts / shared.id).exists())
         self.assertIsNone(Chats.get_chat_by_id(shared.id))
 
+    def test_emailing_the_chat_refreshes_its_share_link(self):
+        from open_webui.utils.builtin_tools import _ensure_chat_share_link
+
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        (self.files / "map.png").write_bytes(b"v2")
+
+        link = _ensure_chat_share_link(self.chat.id, "https://chat.example")
+
+        self.assertEqual(link, f"https://chat.example/s/{shared.id}")
+        self.assertEqual((self.artifacts / shared.id / "map.png").read_bytes(), b"v2")
+
     def test_cloning_from_the_link_copies_the_snapshot_files(self):
         shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         (self.files / "private.csv").write_bytes(b"later")
