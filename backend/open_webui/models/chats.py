@@ -890,11 +890,9 @@ class ChatTable:
                     row.id
                     for row in db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
                 ]
-                db.query(Chat).filter_by(user_id=f"shared-{chat_id}").delete()
-                db.commit()
+            self._delete_shared_chats(snapshot_ids)
         except Exception:
             return False
-        _delete_snapshot_files(snapshot_ids)
         return True
 
     def delete_expired_shared_chats(self) -> int:
@@ -907,17 +905,23 @@ class ChatTable:
                 for row in rows
                 if (row.meta or {}).get("expires_at", now + 1) <= now
             ]
-            if not expired:
-                return 0
-            db.query(Chat).filter(Chat.id.in_(expired)).delete(
+        self._delete_shared_chats(expired)
+        return len(expired)
+
+    def _delete_shared_chats(self, snapshot_ids: list[str]) -> None:
+        if not snapshot_ids:
+            return
+        # Files first: if deleting the rows then fails, the rows remain and
+        # the next delete retries, rather than leaving files nothing points to.
+        _delete_snapshot_files(snapshot_ids)
+        with get_db() as db:
+            db.query(Chat).filter(Chat.id.in_(snapshot_ids)).delete(
                 synchronize_session=False
             )
-            db.query(Chat).filter(Chat.share_id.in_(expired)).update(
+            db.query(Chat).filter(Chat.share_id.in_(snapshot_ids)).update(
                 {"share_id": None}, synchronize_session=False
             )
             db.commit()
-        _delete_snapshot_files(expired)
-        return len(expired)
 
     def update_chat_share_id_by_id(
         self, id: str, share_id: Optional[str]

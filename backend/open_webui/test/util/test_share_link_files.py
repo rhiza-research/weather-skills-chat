@@ -81,6 +81,21 @@ class ShareLinkFilesTest(unittest.TestCase):
             self.assertTrue(Chats.is_live_share(kept.id))
             self.assertTrue((self.artifacts / kept.id / "map.png").exists())
 
+    def test_a_failed_row_delete_is_retried_by_the_next_cleanup(self):
+        from sqlalchemy.orm import Query
+
+        expired = Chats.insert_shared_chat_by_chat_id(self.chat.id, int(time.time()) - 1)
+
+        with patch.object(Query, "delete", side_effect=RuntimeError("db down")):
+            with self.assertRaises(RuntimeError):
+                Chats.delete_expired_shared_chats()
+            self.assertFalse(Chats.delete_shared_chat_by_chat_id(self.chat.id))
+
+        self.assertFalse((self.artifacts / expired.id).exists())
+        self.assertIsNotNone(Chats.get_chat_by_id(expired.id))
+        Chats.delete_expired_shared_chats()
+        self.assertIsNone(Chats.get_chat_by_id(expired.id))
+
     def test_unsharing_and_deleting_the_chat_remove_the_snapshot(self):
         shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         self.assertTrue(Chats.delete_shared_chat_by_chat_id(self.chat.id))
