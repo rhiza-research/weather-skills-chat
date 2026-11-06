@@ -20,13 +20,18 @@ test('reconnect refreshes the sidebar and recent cache, not only cached transcri
 		},
 		refreshArtifacts: async () => {
 			calls.push('artifacts');
+		},
+		refreshScheduledTasks: async () => {
+			calls.push('scheduled-tasks');
 		}
 	});
 	expect(calls).toContain('recent');
 	expect(calls).toContain('sidebar');
 	expect(calls).toContain('artifacts');
+	expect(calls).toContain('scheduled-tasks');
 });
 
 test('the live socket reconnect path calls afterSocketReconnect', () => {
 	expect(socketSource).toMatch(/afterSocketReconnect/);
+	expect(socketSource).toMatch(/refreshScheduledTasks: \(\) => scheduledTaskStore\.loadScheduledTasks/);
 });

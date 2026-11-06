@@ -40,8 +40,12 @@ async function openSocket(): Promise<Socket> {
 
 	liveSocket.on('connect', () => {
 		console.log('connected', liveSocket.id);
-		Promise.all([import('$lib/chat/cache'), import('$lib/chat/reconnect')]).then(
-			async ([cache, reconnectHooks]) => {
+		Promise.all([
+			import('$lib/chat/cache'),
+			import('$lib/chat/reconnect'),
+			import('$lib/utils/scheduledTaskStore')
+		]).then(
+			async ([cache, reconnectHooks, scheduledTaskStore]) => {
 				const reconnect = socketOpened;
 				socketOpened = true;
 				cache.setSocketUp(true);
@@ -51,7 +55,8 @@ async function openSocket(): Promise<Socket> {
 					await reconnectHooks.afterSocketReconnect({
 						refreshRecent: () => cache.refreshRecent(localStorage.token),
 						refreshSidebar: () => reconnectHooks.refreshSidebar(),
-						refreshArtifacts: () => cache.refreshCachedArtifacts(localStorage.token)
+						refreshArtifacts: () => cache.refreshCachedArtifacts(localStorage.token),
+						refreshScheduledTasks: () => scheduledTaskStore.loadScheduledTasks(localStorage.token)
 					});
 				}
 				cache.syncWatch(liveSocket);
