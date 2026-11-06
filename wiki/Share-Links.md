@@ -10,7 +10,7 @@ Each link is separate. Sharing the chat again makes a new link with the chat as 
 
 ## Expiry and removal
 
-When a link expires it stops working, and the app deletes its copy of the chat and files within about an hour. Links made before share links had an expiry do not expire.
+When a link expires it stops working, and the app deletes its copy of the chat and files within about an hour. Opening an expired or removed link shows a message saying so and goes to the home page. Links made before share links had an expiry do not expire.
 
 Deleting a chat deletes all of its links and their copies.
 

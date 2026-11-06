@@ -91,6 +91,8 @@
 		);
 		await chatId.set($page.params.id);
 		chat = await getChatByShareId(localStorage.token, $chatId).catch(async (error) => {
+			// Expired and removed links look the same to the server.
+			toast.error($i18n.t('This share link has expired or been removed.'));
 			await goto('/');
 			return null;
 		});
