@@ -32,7 +32,7 @@ Only a chat's owner can change it, but the owner can have it open in several tab
 
 ## Losing the connection
 
-When the connection to the server drops and comes back, the page catches up: the chat list, the chats kept in the browser, and their files are loaded again. If a reply stops arriving and the server is no longer working on it, the reply is marked as interrupted, and the user can retry it.
+When the connection to the server drops and comes back, the page catches up: the chat list, the chats kept in the browser, their files, and the scheduled tasks with their latest runs are loaded again. If a reply stops arriving and the server is no longer working on it, the reply is marked as interrupted, and the user can retry it.
 
 ## Running several replicas
 
