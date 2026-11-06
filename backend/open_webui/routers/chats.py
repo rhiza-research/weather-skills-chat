@@ -13,6 +13,8 @@ from open_webui.models.chats import (
     ChatWriteError,
     Chats,
     ChatTitleIdResponse,
+    SHARE_LINK_DEFAULT_DAYS,
+    SHARE_LINK_MAX_DAYS,
 )
 from open_webui.models.tags import TagModel, Tags
 from open_webui.models.folders import Folders
@@ -22,7 +24,7 @@ from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS, ENABLE_E2E_FIXTURES
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -888,18 +890,24 @@ async def archive_chat_by_id(id: str, user=Depends(get_verified_user)):
 ############################
 
 
+class ShareChatForm(BaseModel):
+    expires_in_days: int = Field(SHARE_LINK_DEFAULT_DAYS, ge=1, le=SHARE_LINK_MAX_DAYS)
+
+
 @router.post("/{id}/share", response_model=Optional[ChatResponse])
-async def share_chat_by_id(id: str, user=Depends(get_verified_user)):
+async def share_chat_by_id(
+    id: str,
+    form_data: Optional[ShareChatForm] = None,
+    user=Depends(get_verified_user),
+):
     chat = _require_writable_chat(id, user)
     if chat:
-        if chat.share_id:
-            shared_chat = await asyncio.to_thread(
-                Chats.update_shared_chat_by_chat_id, chat.id
-            )
-        else:
-            shared_chat = await asyncio.to_thread(
-                Chats.insert_shared_chat_by_chat_id, chat.id
-            )
+        days = (form_data or ShareChatForm()).expires_in_days
+        shared_chat = await asyncio.to_thread(
+            Chats.insert_shared_chat_by_chat_id,
+            chat.id,
+            int(time.time()) + days * 86400,
+        )
         if not shared_chat:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -923,9 +931,7 @@ async def share_chat_by_id(id: str, user=Depends(get_verified_user)):
 async def delete_shared_chat_by_id(id: str, user=Depends(get_verified_user)):
     chat = _require_writable_chat(id, user)
     if chat:
-        if not chat.share_id:
-            return False
-
+        # Removes every link to the chat, not only the newest one.
         result = await asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id)
         update_result = await asyncio.to_thread(
             Chats.update_chat_share_id_by_id, id, None

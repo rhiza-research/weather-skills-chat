@@ -29,7 +29,7 @@ Anyone who can read a chat can list and download its files. Only the chat's owne
 
 Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
 
-Sharing a chat by link saves a copy of its files with the shared messages, as they are at that moment. Files added or changed in the chat afterwards stay out of the link until the owner updates the share. The shared page does not show the files, but anyone who clones the chat from the link gets that copy. Removing the share, or deleting the chat, deletes the copy. A link with no saved copy gives no files; updating the share saves one.
+Each share link keeps its own copy of the chat's files as they were when the link was made. Anyone who can open the link can browse, preview, and download that copy, but no one can add to or change it, and cloning from the link copies it. See [[Share Links]].
 
 ## Settings
 

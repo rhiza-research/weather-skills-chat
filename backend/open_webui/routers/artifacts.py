@@ -35,7 +35,7 @@ from open_webui.utils.artifacts import (
     write_bytes,
 )
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.organizations import require_chat_read, require_chat_write
+from open_webui.utils.organizations import require_chat_files_read, require_chat_write
 from open_webui.utils.precompressed_static import accepts_brotli
 
 log = logging.getLogger(__name__)
@@ -51,14 +51,14 @@ async def get_artifacts(
     provenance: bool = True,
     user=Depends(get_verified_user),
 ):
-    await asyncio.to_thread(require_chat_read, chat_id, user)
+    await asyncio.to_thread(require_chat_files_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
 
 
 @router.get("/{chat_id}/artifacts/provenance")
 def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_user)):
     """Full provenance branches for one entry; the listing carries only crumbs."""
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         return artifact_provenance(chat_id, path)
     except ValueError as e:
@@ -73,7 +73,7 @@ def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_u
 def get_artifact_content(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -201,7 +201,7 @@ def _not_modified(request: Request, etag: str, last_modified: str) -> bool:
 def view_html_artifact(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -239,7 +239,7 @@ def get_artifact_archive(
     format: str = Query("tar.gz"),
     user=Depends(get_verified_user),
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     fmt = (format or "tar.gz").lower().strip()
     if fmt not in ("tar.gz", "zip"):
         raise HTTPException(
@@ -312,7 +312,7 @@ async def upload_artifact(
 
 @router.get("/{chat_id}/artifacts/zarr/meta")
 def zarr_meta(chat_id: str, path: str, user=Depends(get_verified_user)):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:

@@ -5,13 +5,15 @@
 
 	import dayjs from 'dayjs';
 
-	import { settings, chatId, WEBUI_NAME, models, config } from '$lib/stores';
+	import { settings, chatId, WEBUI_NAME, models, config, showArtifacts } from '$lib/stores';
 	import { createMessagesList } from '$lib/utils';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 
 	import { getChatByShareId, cloneSharedChatById } from '$lib/apis/chats';
 
 	import Messages from '$lib/components/chat/Messages.svelte';
+	import Artifacts from '$lib/components/chat/Artifacts.svelte';
+	import DocumentChartBar from '$lib/components/icons/DocumentChartBar.svelte';
 	import Navbar from '$lib/components/layout/Navbar.svelte';
 
 	import { getUserById, getUserSettings } from '$lib/apis/users';
@@ -89,6 +91,8 @@
 		);
 		await chatId.set($page.params.id);
 		chat = await getChatByShareId(localStorage.token, $chatId).catch(async (error) => {
+			// Expired and removed links look the same to the server.
+			toast.error($i18n.t('This share link has expired or been removed.'));
 			await goto('/');
 			return null;
 		});
@@ -153,9 +157,9 @@
 
 {#if loaded}
 	<div
-		class="h-screen max-h-[100dvh] w-full flex flex-col text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900"
+		class="h-screen max-h-[100dvh] w-full flex text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900"
 	>
-		<div class="flex flex-col flex-auto justify-center relative">
+		<div class="flex flex-col flex-auto min-w-0 justify-center relative">
 			<div class=" flex flex-col w-full flex-auto overflow-auto h-0" id="messages-container">
 				<div
 					class="pt-5 px-2 w-full {($settings?.widescreenMode ?? null)
@@ -171,6 +175,15 @@
 							<div class="text-gray-400">
 								{dayjs(chat.chat.timestamp).format('LLL')}
 							</div>
+							<button
+								type="button"
+								class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+								on:click={() => showArtifacts.set(!$showArtifacts)}
+								aria-pressed={$showArtifacts}
+							>
+								<DocumentChartBar className="size-4 shrink-0" />
+								{$showArtifacts ? $i18n.t('Hide artifacts') : $i18n.t('Show artifacts')}
+							</button>
 						</div>
 					</div>
 				</div>
@@ -209,5 +222,13 @@
 				</div>
 			</div>
 		</div>
+
+		{#if $showArtifacts}
+			<div
+				class="fixed inset-0 z-40 md:static md:z-auto md:w-[28rem] md:shrink-0 md:border-l border-gray-100 dark:border-gray-800"
+			>
+				<Artifacts {history} readOnly />
+			</div>
+		{/if}
 	</div>
 {/if}

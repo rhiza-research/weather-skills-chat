@@ -27,7 +27,7 @@ class HtmlViewRouteTest(unittest.TestCase):
         (root / "data.csv").write_bytes(b"a,b\n")
         self.patches = [
             patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts),
-            patch("open_webui.utils.organizations.Chats", MagicMock()),
+            patch("open_webui.utils.organizations.Chats", MagicMock(**{"is_live_share.return_value": False})),
             patch("open_webui.utils.organizations.can_read_chat", return_value=True),
         ]
         for p in self.patches:

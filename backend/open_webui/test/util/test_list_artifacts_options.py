@@ -154,7 +154,7 @@ class ArtifactsRouteOptionsTest(SandboxCase):
     def setUp(self):
         super().setUp()
         self.route_patches = [
-            patch("open_webui.utils.organizations.Chats", MagicMock()),
+            patch("open_webui.utils.organizations.Chats", MagicMock(**{"is_live_share.return_value": False})),
             patch("open_webui.utils.organizations.can_read_chat", return_value=True),
         ]
         for p in self.route_patches:

@@ -722,7 +722,7 @@ export const cloneSharedChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const shareChatById = async (token: string, id: string) => {
+export const shareChatById = async (token: string, id: string, expiresInDays: number) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/share`, {
@@ -732,7 +732,8 @@ export const shareChatById = async (token: string, id: string) => {
 			'Content-Type': 'application/json',
 			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
-		}
+		},
+		body: JSON.stringify({ expires_in_days: expiresInDays })
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await parseApiError(res);
@@ -756,11 +757,11 @@ export const shareChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const copyChatShareLink = async (token: string, id: string) => {
+export const copyChatShareLink = async (token: string, id: string, expiresInDays: number) => {
 	const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
 	const getShareUrl = async () => {
-		const sharedChat = await shareChatById(token, id);
+		const sharedChat = await shareChatById(token, id, expiresInDays);
 		if (!sharedChat?.id) {
 			throw new Error('Failed to create share link');
 		}

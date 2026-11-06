@@ -178,6 +178,13 @@ def require_chat_read(chat_id: str, user: UserModel):
     return chat
 
 
+def require_chat_files_read(chat_id: str, user: UserModel) -> None:
+    """require_chat_read for a chat's files. A share link's frozen copy is
+    readable by anyone who can open the link, as its messages are."""
+    if not Chats.is_live_share(chat_id):
+        require_chat_read(chat_id, user)
+
+
 def require_chat_write(chat_id: str, user: UserModel):
     """The chat's access row, or 401 when the user cannot change the chat."""
     chat = Chats.get_chat_access_row(chat_id)

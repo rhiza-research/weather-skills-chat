@@ -2,6 +2,7 @@
 - [[Skill Packs]]
 - [[Tool Runner]]
 - [[Chat Artifacts]]
+- [[Share Links]]
 - [[Built-in Tools]]
 - [[Organizations]]
 - [[Model Fallback]]

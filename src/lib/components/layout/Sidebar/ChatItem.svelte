@@ -14,9 +14,9 @@
 		getChatList,
 		getChatListByTagName,
 		getPinnedChatList,
-		updateChatById,
-		copyChatShareLink
+		updateChatById
 	} from '$lib/apis/chats';
+	import ShareChatModal from '$lib/components/chat/ShareChatModal.svelte';
 	import {
 		chatId,
 		chatTitle as _chatTitle,
@@ -185,6 +185,7 @@
 	});
 
 	let showDeleteConfirm = false;
+	let showShareChatModal = false;
 
 	const chatTitleInputKeydownHandler = (e) => {
 		if (e.key === 'Enter') {
@@ -199,6 +200,8 @@
 		}
 	};
 </script>
+
+<ShareChatModal bind:show={showShareChatModal} chatId={id} />
 
 <DeleteConfirmDialog
 	bind:show={showDeleteConfirm}
@@ -370,13 +373,8 @@
 					cloneChatHandler={() => {
 						cloneChatHandler(id);
 					}}
-					shareHandler={async () => {
-						try {
-							await copyChatShareLink(localStorage.token, id);
-							toast.success($i18n.t('Copied shared chat URL to clipboard!'));
-						} catch (error) {
-							toast.error(`${error}`);
-						}
+					shareHandler={() => {
+						showShareChatModal = true;
 					}}
 					archiveChatHandler={() => {
 						archiveChatHandler(id);
