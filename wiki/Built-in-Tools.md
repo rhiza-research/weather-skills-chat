@@ -2,7 +2,7 @@
 
 Besides the skills on [[Skill Packs]] and any Workspace tools selected for a chat, the model has a set of built-in tools. Users do not need to select them.
 
-Some built-in tools can be turned off for a chat in the Built-in group of the chat's Tools list, and for a scheduled task in the same list on its page. They are on unless turned off:
+Some built-in tools can be turned off for a chat in the **Builtin Tools** group of the chat's **Available Tools and Skills** list, and for a scheduled task in the same list on its page. They are on unless turned off:
 
 - **Email**: `list_email_recipients` and `send_email`.
 - **Scheduled tasks**: the scheduled task tools. Only chats have this switch, since a scheduled task's run never gets these tools.
