@@ -96,6 +96,40 @@ jobs:
           path: test-results/pytest.xml
           reporter: java-junit
 
+  backend-perf:
+    name: Backend performance tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+          cache-dependency-glob: uv.lock
+
+      - name: Install backend
+        run: uv sync --frozen --no-install-project
+
+      # Event-loop scenarios under production-like DB and JuiceFS latency. Each
+      # fails when it holds the loop past its budget. See backend/perf/README.md.
+      - name: Run performance tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}/backend/open_webui
+        run: |
+          mkdir -p test-results
+          uv run --frozen --no-sync python -m pytest backend/perf -s --junitxml=test-results/perf.xml
+
+      - name: Publish performance test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Backend performance tests
+          path: test-results/perf.xml
+          reporter: java-junit
+
   e2e:
     name: Playwright smoke tests
     # ubuntu-22.04 ships kernel 6.8, the series staging and prod run.
