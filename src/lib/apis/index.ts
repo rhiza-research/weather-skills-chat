@@ -126,6 +126,8 @@ export const stopTask = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
+			// The backend no longer has the task, so there is nothing left to stop.
+			if (res.status === 404) return null;
 			if (!res.ok) throw await parseApiError(res);
 			return res.json();
 		})
