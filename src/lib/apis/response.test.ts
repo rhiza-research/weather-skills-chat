@@ -29,3 +29,11 @@ test('a busy-chat write error stays user-readable', async () => {
 	expect(String(error.detail)).toMatch(/another window/i);
 	expect(String(error.detail)).not.toMatch(/^409$/);
 });
+
+test('a 503 says it is our server and how long to wait', async () => {
+	const error = await parseApiError(
+		new Response('<html><h1>Unavailable</h1></html>', { status: 503 })
+	);
+	expect(error.status).toBe(503);
+	expect(String(error.detail)).toMatch(/our server.*about two minutes/i);
+});

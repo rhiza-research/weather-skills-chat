@@ -63,7 +63,7 @@ export async function parseApiError(
 		404: 'Not found.',
 		413: 'Request too large. This chat may have grown too big to save — try a new chat or remove large tool outputs.',
 		502: 'Bad gateway — the server or proxy is temporarily unavailable.',
-		503: 'Service unavailable — the server is temporarily overloaded.',
+		503: 'Service unavailable — our server is temporarily overloaded. Wait about two minutes, then try again.',
 		504: 'Gateway timeout — the request took too long.'
 	};
 
