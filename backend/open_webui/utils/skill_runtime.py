@@ -146,6 +146,19 @@ def normalize_env_secret_names(env_secrets: Optional[list] = None) -> list[str]:
     return names
 
 
+def unread_env_names(skill_path: Path, names: list[str]) -> tuple[list[str], list[str]]:
+    """The skill's `metadata.required-env`, and which of `names` its SKILL.md never mentions."""
+    from open_webui.utils.skills import _parse_skill_md
+
+    skill_md = Path(skill_path) / "SKILL.md"
+    if not skill_md.is_file():
+        return [], []
+    meta, _ = _parse_skill_md(skill_md)
+    required = str((meta.get("metadata") or {}).get("required-env") or "").split()
+    text = skill_md.read_text()
+    return required, [n for n in names if required and n not in text]
+
+
 def resolve_env_secrets_for_user(
     names: list[str],
     __user__: Optional[dict] = None,
@@ -284,6 +297,11 @@ def prepare_skill_run(
 
     try:
         secret_names = normalize_env_secret_names(env_secrets)
+        required, wrong = unread_env_names(skill_path, secret_names)
+        if wrong:
+            raise ValueError(
+                f"This skill reads {', '.join(sorted(required))}, not {', '.join(wrong)}."
+            )
         used_secrets = resolve_env_secrets_for_user(
             secret_names,
             __user__,
