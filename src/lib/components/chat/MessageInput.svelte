@@ -1143,7 +1143,7 @@
 										<div class="flex flex-wrap gap-1 items-center flex-1 min-w-0">
 											{#if toolServers.length + selectedToolIds.length + ($tools?.length ?? 0) > 0}
 												<Tooltip
-													content={$i18n.t('{{COUNT}} Available Tools', {
+													content={$i18n.t('{{COUNT}} Available Tools and Skills', {
 														COUNT: toolServers.length + selectedToolIds.length
 													})}
 												>
