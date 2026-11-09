@@ -5,6 +5,7 @@
   import { sendFeedback } from "$lib/apis/users";
   import { helpEmailAddress } from "$lib/constants";
   import { chatId, config, feedbackDraft, user } from "$lib/stores";
+  import { FEEDBACK_DESCRIPTION_MAX } from "$lib/utils/feedback";
   import Modal from "$lib/components/common/Modal.svelte";
 
   const i18n = getContext("i18n");
@@ -18,7 +19,8 @@
   let chat: string | null = null;
 
   $: if ($feedbackDraft !== null) {
-    description = $feedbackDraft;
+    // The draft can come from model text; bind:value shows it as plain text, maxlength doesn't cap it.
+    description = $feedbackDraft.slice(0, FEEDBACK_DESCRIPTION_MAX);
     feedbackDraft.set(null);
     subject = "";
     sent = false;
@@ -135,7 +137,7 @@
             <textarea
               class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition resize-none"
               rows="6"
-              maxlength="5000"
+              maxlength={FEEDBACK_DESCRIPTION_MAX}
               bind:value={description}
               placeholder={$i18n.t("Describe the problem")}
             />

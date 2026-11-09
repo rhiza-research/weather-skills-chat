@@ -17,11 +17,15 @@
 	import { WEBUI_BASE_URL, helpEmailAddress } from '$lib/constants';
 	import { chatId, config, feedbackDraft } from '$lib/stores';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
+	import { feedbackLinkDescription } from '$lib/utils/feedback';
 
 	// The model is told to link #feedback; a link to the help address opens the same form.
-	$: isFeedbackLink = (href: string) =>
-		href === '#feedback' ||
-		href.toLowerCase() === `mailto:${helpEmailAddress($config?.help_email)}`.toLowerCase();
+	// Returns the description to pre-fill, or null when the link is not a feedback link.
+	$: feedbackLinkDraft = (href: string) =>
+		feedbackLinkDescription(href) ??
+		(href.toLowerCase() === `mailto:${helpEmailAddress($config?.help_email)}`.toLowerCase()
+			? ''
+			: null);
 
 	const isInternalAppPath = (text: string) => {
 		const path = text.trim();
@@ -67,11 +71,11 @@
 				{token.text}
 			{/if}
 		</HtmlArtifactLink>
-	{:else if token.type === 'link' && isFeedbackLink(token.href ?? '')}
+	{:else if token.type === 'link' && feedbackLinkDraft(token.href ?? '') !== null}
 		<button
 			type="button"
 			class="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 text-sm transition"
-			on:click={() => feedbackDraft.set('')}
+			on:click={() => feedbackDraft.set(feedbackLinkDraft(token.href ?? '') ?? '')}
 		>
 			{#if token.tokens}
 				<svelte:self id={`${id}-a`} tokens={token.tokens} {onSourceClick} />
