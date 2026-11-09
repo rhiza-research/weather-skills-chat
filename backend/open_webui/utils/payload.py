@@ -22,7 +22,15 @@ FEEDBACK_LINK_PROMPT = (
     "asks how to get help or report a bug, invite them to use the feedback form, "
     "for example: \"Please let us know by filling out the [feedback form](#feedback).\" "
     "The #feedback link opens a form in this app that sends the team a message with "
-    "this chat attached. Use it instead of writing out a support email address."
+    "this chat attached. Use it instead of writing out a support email address. "
+    "When there is a specific problem, pre-fill the form's description by adding "
+    "?description= and the text, URL-encoded (spaces as %20, line breaks as %0A), "
+    "for example: [feedback form](#feedback?description=I%20asked%20for%20a%20rainfall"
+    "%20map%20of%20Kenya.%20The%20CHIRPS%20fetch%20failed%20with%20%22HTTP%20503%22.) "
+    "Write the description as a brief, factual draft in the user's own voice, a few "
+    "sentences: what they were trying to do, what failed, and any error text. Leave "
+    "out passwords, keys, tokens and other secrets, and don't state guesses about "
+    "the cause as facts. The user reviews and edits it; nothing is sent until they do."
 )
 
 

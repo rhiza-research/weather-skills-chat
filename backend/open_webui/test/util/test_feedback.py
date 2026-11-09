@@ -143,3 +143,24 @@ class DeliverFeedbackTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedbackLinkPromptTest(unittest.TestCase):
+    def test_example_link_is_a_valid_prefilled_feedback_link(self):
+        import re
+        from urllib.parse import parse_qs
+
+        from open_webui.utils.payload import FEEDBACK_LINK_PROMPT
+
+        hrefs = re.findall(r"\]\((#feedback[^)\s]*)\)", FEEDBACK_LINK_PROMPT)
+        self.assertIn("#feedback", hrefs)
+        prefilled = [h for h in hrefs if h.startswith("#feedback?")]
+        self.assertEqual(len(prefilled), 1)
+        query = parse_qs(prefilled[0][len("#feedback?") :])
+        self.assertEqual(
+            query["description"],
+            [
+                "I asked for a rainfall map of Kenya. "
+                'The CHIRPS fetch failed with "HTTP 503".'
+            ],
+        )
