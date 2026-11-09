@@ -32,8 +32,8 @@ The cluster offers tool runners in several sizes, each with its own CPU and memo
 |-|-|-|-|-|
 | Standard | 8 CPU, 8 GB | Yes | 10 minutes | No |
 | Medium | 8 CPU, 16 GB | No; starts in seconds to about 2 minutes | 10 minutes | No |
-| Large | 8 CPU, 52 GB | No; about 2 minutes | 5 minutes | Yes |
-| XLarge | 16 CPU, 108 GB | No; about 2 minutes | 5 minutes | Yes |
+| Large | 8 CPU, 52 GB | No; about 2 minutes | 15 minutes | Yes |
+| XLarge | 16 CPU, 108 GB | No; about 2 minutes | 15 minutes | Yes |
 
 The sizes, their limits, and which ones need approval are set in the infrastructure repository's runner chart; the chat reads them from the cluster. A cluster that publishes no sizes offers only the standard runner.
 
