@@ -29,6 +29,7 @@
 		showControls,
 		showCallOverlay,
 		temporaryChatEnabled,
+		mobile,
 		showOverview,
 		chatTitle,
 		showArtifacts,
@@ -682,7 +683,7 @@
 			if (!chatAlive || get(showControls) !== value) return;
 			const panelShown =
 				get(showArtifacts) || get(showOverview) || get(showCallOverlay);
-			if (controlPane && controlPaneComponent) {
+			if (controlPane && controlPaneComponent && !$mobile) {
 				try {
 					if (value && panelShown) {
 						controlPaneComponent.openPane();

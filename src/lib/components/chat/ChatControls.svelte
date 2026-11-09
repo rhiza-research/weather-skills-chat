@@ -5,6 +5,7 @@
 	import { showControls, showCallOverlay, showOverview, showArtifacts } from '$lib/stores';
 
 	import Drawer from '../common/Drawer.svelte';
+	import SidePanel from '../common/Sidebar.svelte';
 	import EllipsisVertical from '../icons/EllipsisVertical.svelte';
 	import { whenAppIdle } from '$lib/utils/idle';
 
@@ -21,13 +22,21 @@
 
 	export let pane;
 
-	// Only a phone gets the full-screen drawer. A narrow desktop window keeps the
-	// pane beside the chat, capped at MAX_SIZE.
-	const PHONE_QUERY = '(max-width: 767px) and (pointer: coarse)';
-
 	let mediaQuery;
 	let largeScreen =
-		typeof window !== 'undefined' ? !window.matchMedia(PHONE_QUERY).matches : true;
+		typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true;
+	// Below 768px a phone gets the full-screen drawer; a desktop window gets a
+	// panel that slides over the chat, like the app sidebar.
+	const touchScreen =
+		typeof window !== 'undefined' ? window.matchMedia('(pointer: coarse)').matches : false;
+	// Set when narrowing the window closed the Chat Data pane, so widening reopens it.
+	let autoCollapsed = false;
+	$: if ($showControls) autoCollapsed = false;
+
+	const closePanel = () => {
+		showControls.set(false);
+		showArtifacts.set(false);
+	};
 
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
@@ -59,12 +68,20 @@
 
 	const handleMediaQuery = async (e) => {
 		const wasLarge = largeScreen;
-		largeScreen = !e.matches;
+		largeScreen = e.matches;
 
 		if ($showCallOverlay) {
 			showCallOverlay.set(false);
 			await tick();
 			showCallOverlay.set(true);
+		}
+
+		if (wasLarge && !largeScreen && !touchScreen && $showControls) {
+			autoCollapsed = $showArtifacts;
+			showControls.set(false);
+		} else if (!wasLarge && largeScreen && autoCollapsed) {
+			showArtifacts.set(true);
+			showControls.set(true);
 		}
 
 		if (!wasLarge && largeScreen && $showControls) {
@@ -78,9 +95,9 @@
 	};
 
 	onMount(() => {
-		mediaQuery = window.matchMedia(PHONE_QUERY);
+		mediaQuery = window.matchMedia('(min-width: 768px)');
 		mediaQuery.addEventListener('change', handleMediaQuery);
-		largeScreen = !mediaQuery.matches;
+		largeScreen = mediaQuery.matches;
 
 		const container = document.getElementById('chat-container');
 		if (container?.clientWidth) {
@@ -158,14 +175,25 @@
 	whenAppIdle(loadArtifacts);
 </script>
 
+	<svelte:window
+		on:keydown={(e) => {
+			if (e.key === 'Escape' && !largeScreen && !touchScreen && $showControls) closePanel();
+		}}
+	/>
+
 	{#if !largeScreen}
 		{#if $showControls && panelOpen}
-			<Drawer
+			<svelte:component
+				this={touchScreen ? Drawer : SidePanel}
 				show={$showControls}
-				on:close={() => {
-					showControls.set(false);
-					showArtifacts.set(false);
-				}}
+				{...touchScreen
+					? {}
+					: {
+							width: 'min(400px, 85vw)',
+							className:
+								'bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800'
+						}}
+				on:close={closePanel}
 			>
 				<div
 					class=" {$showCallOverlay || $showOverview || $showArtifacts
@@ -206,7 +234,7 @@
 						/>
 					{/if}
 				</div>
-			</Drawer>
+			</svelte:component>
 		{/if}
 	{:else}
 		{#if $showControls && panelOpen}
