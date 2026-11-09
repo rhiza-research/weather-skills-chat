@@ -19,7 +19,7 @@ Each chat also keeps its chat bar in this browser: the unsent draft, the tools c
 
 ## Reading position
 
-Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up — including when a skill finishes — the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Scrolling back to the newest message also clears that button. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
+Each chat remembers where the user was reading. Coming back to a chat returns to the same place, or to the newest message if the user was at the end. When a reply arrives while the user is reading further up — including when a skill finishes — the page stays where it is and a **New messages** button appears; it scrolls to the newest message. Whenever the user is scrolled up with nothing new below, the same button reads **Jump to latest**. Scrolling back to the newest message hides the button. The chat's scrollbar is always shown. Opening a chat from a reply notice goes to the newest message. Reply sounds and notices are described on [[Notifications]].
 
 ## Changes from two places at once
 
