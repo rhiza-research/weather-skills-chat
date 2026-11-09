@@ -392,7 +392,7 @@
 					: 'max-w-[58rem]'} w-full"
 			>
 				<div class="relative">
-					{#if newMessagesBelow && history?.currentId}
+					{#if (newMessagesBelow || !autoScroll) && history?.currentId}
 						<div
 							class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 						>
@@ -405,7 +405,7 @@
 								}}
 							>
 								<span class="text-xs font-medium whitespace-nowrap"
-									>{$i18n.t('New messages')}</span
+									>{newMessagesBelow ? $i18n.t('New messages') : $i18n.t('Jump to latest')}</span
 								>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
