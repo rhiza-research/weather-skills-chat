@@ -43,6 +43,8 @@ If the model calls a skill that is off for the message, the skill does not run, 
 
 The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. When a [[Tool Runner]] is on, the skill runs there instead of on the chat server. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
 
+Opening a skill call in the chat and then **Call** lists its arguments one per line, each flag next to its value. A JSON value, such as a plot spec, is shown pretty-printed, and other values that span several lines, such as Jsonnet, keep their line breaks. Long values start collapsed; **Expand** shows them in full.
+
 Each skill brings its own Python dependencies, which `uv` installs the first time they are needed and reuses afterward.
 
 ## Confinement

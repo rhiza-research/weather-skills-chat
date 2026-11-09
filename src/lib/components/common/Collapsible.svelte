@@ -37,6 +37,7 @@
 	import Image from './Image.svelte';
 	import HtmlArtifactInline from './HtmlArtifactInline.svelte';
 	import ToolCallDetails from './ToolCallDetails.svelte';
+	import { toolArgRows, toolCallHead } from '$lib/chat/toolArgs';
 	import { getArtifactContentUrl, getArtifactViewUrl, isHtmlArtifact } from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
@@ -88,77 +89,6 @@
 		} catch (e) {
 			return value;
 		}
-	}
-
-	function formatArgValue(value: any): string {
-		if (value === null || value === undefined) {
-			return 'null';
-		}
-		if (typeof value === 'string') {
-			if (value === '') {
-				return '""';
-			}
-			if (/[\s"'\\]/.test(value)) {
-				return JSON.stringify(value);
-			}
-			return value;
-		}
-		if (typeof value === 'number' || typeof value === 'boolean') {
-			return String(value);
-		}
-		try {
-			return JSON.stringify(value);
-		} catch (e) {
-			return String(value);
-		}
-	}
-
-	function formatToolCallSignature(name: string, argsRaw: string): string {
-		const toolName = name || 'tool';
-		const args = argumentsWithoutDisplay(argsRaw);
-
-		if (args && typeof args === 'object' && !Array.isArray(args) && Array.isArray(args.argv)) {
-			const parts = [toolName];
-			if (args.script) {
-				parts.push(formatArgValue(args.script));
-			}
-			for (const arg of args.argv) {
-				parts.push(formatArgValue(arg));
-			}
-			return parts.join(' ');
-		}
-
-		if (Array.isArray(args)) {
-			if (args.length === 0) {
-				return `${toolName}()`;
-			}
-			return [toolName, ...args.map(formatArgValue)].join(' ');
-		}
-
-		if (args && typeof args === 'object') {
-			const entries = Object.entries(args);
-			if (entries.length === 0) {
-				return `${toolName}()`;
-			}
-			const inner = entries.map(([key, value]) => `${key}=${formatArgValue(value)}`).join(', ');
-			return `${toolName}(${inner})`;
-		}
-
-		if (args === null || args === undefined || args === '') {
-			return `${toolName}()`;
-		}
-
-		return `${toolName}(${formatArgValue(args)})`;
-	}
-
-	function argumentsWithoutDisplay(argsRaw: string): any {
-		const args = unwrapJSON(argsRaw);
-		if (args && typeof args === 'object' && !Array.isArray(args) && 'display' in args) {
-			const copy = { ...args };
-			delete copy.display;
-			return copy;
-		}
-		return args;
 	}
 
 	function toolCallDisplay(name: string, argsRaw: string): string {
@@ -285,10 +215,10 @@
 	$: toolLabelIsCustom =
 		attributes?.type === 'tool_calls' &&
 		toolCallLabel !== (attributes?.name || 'tool');
-	$: toolCallSignature =
-		attributes?.type === 'tool_calls'
-			? formatToolCallSignature(attributes?.name ?? '', toolArgsRaw)
-			: '';
+	$: toolArgsParsed = attributes?.type === 'tool_calls' ? unwrapJSON(toolArgsRaw) : null;
+	$: toolCallArgs = attributes?.type === 'tool_calls' ? toolArgRows(toolArgsParsed) : [];
+	$: toolCallHeadLine =
+		attributes?.type === 'tool_calls' ? toolCallHead(attributes?.name ?? '', toolArgsParsed) : '';
 	$: executeCodeSource =
 		attributes?.type === 'tool_calls'
 			? extractExecuteCodeSource(attributes?.name ?? '', toolArgsRaw)
@@ -599,7 +529,8 @@
 					on:pointerup={(e) => e.stopPropagation()}
 				>
 					<ToolCallDetails
-						callSignature={toolCallSignature}
+						head={toolCallHeadLine}
+						args={toolCallArgs}
 						pythonCode={executeCodeSource ?? ''}
 						blockId={collapsibleId}
 						done={attributes?.done === 'true'}
