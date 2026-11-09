@@ -313,6 +313,14 @@ class RunnerLifecycleTest(IsolatedAsyncioTestCase):
         new_uid = next(iter(emulator._pods.values()))["metadata"]["uid"]
         self.assertNotEqual(new_uid, first_uid)
 
+    async def test_claim_skips_a_runner_port_already_in_use(self):
+        with socket.socket() as taken:
+            taken.bind(("0.0.0.0", emulator._next_port))
+            taken.listen()
+            await k8s.ensure_runner("port-taken")
+            self.assertEqual(await self._public_state("port-taken"), "ready")
+        self.assertEqual(self.runtime_starts, 1)
+
     async def test_one_in_flight_death_reads_degraded_and_tells_the_user_to_retry(self):
         chat_id = "one-in-flight"
         await k8s.ensure_runner(chat_id)
