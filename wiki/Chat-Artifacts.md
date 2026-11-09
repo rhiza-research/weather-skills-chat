@@ -6,7 +6,7 @@ Each chat also has an intermediate results folder, where skills leave data for t
 
 ## What users see
 
-The files open in a panel beside the chat. Dragging its edge resizes it, up to a little under half the window, and the chat keeps the rest of the width as the window is resized. On a phone the panel covers the chat instead.
+The files open in a panel beside the chat. Dragging its edge resizes it, up to a little under half the window. When the window gets narrow, the panel closes the way the chat sidebar does; opening it then slides it over the chat, and clicking outside it or pressing Escape closes it. Widening the window puts it back beside the chat. On a phone the panel covers the whole screen.
 
 The file list shows every file and folder in the chat. Some kinds of entries are recognized:
 

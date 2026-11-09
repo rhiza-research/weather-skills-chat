@@ -29,6 +29,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -230,6 +231,15 @@ def _workspace(chat_id: str) -> Path:
     path = _artifacts() / chat_id
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _port_in_use(port: int) -> bool:
+    with socket.socket() as sock:
+        try:
+            sock.bind(("0.0.0.0", port))
+        except OSError:
+            return True
+    return False
 
 
 def _start_runtime(key: str, chat_id: str, port: int) -> None:
@@ -496,8 +506,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 _json(self, 409, {"reason": "AlreadyExists"})
                 return
             global _next_port
+            # A runner whose port is taken dies at start, so skip ports in use.
             port = _next_port
-            _next_port += 1
+            while _port_in_use(port):
+                port += 1
+            _next_port = port + 1
             pod = _make_pod(chat_id, port, key=name, rtype=rtype)
             _pods[pod["metadata"]["name"]] = pod
             delay = _start_delay(spec)
