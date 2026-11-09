@@ -14,7 +14,84 @@ export type ToolArgRow = {
 const isFlag = (value: unknown): value is string =>
 	typeof value === 'string' && /^--?[A-Za-z]/.test(value);
 
-/** Pretty-print strings that are a JSON object or array; leave other strings as written. */
+// Brackets whose text is at most this long stay on one line.
+const INLINE_MAX = 60;
+
+/**
+ * Re-indent Jsonnet written on one line: each `local ...;` on its own line, and
+ * objects and arrays one entry per line unless short. Strings are left untouched.
+ */
+export function formatJsonnet(src: string): string {
+	const toks: string[] = [];
+	for (let i = 0; i < src.length; ) {
+		const ch = src[i];
+		if (ch === '"' || ch === "'") {
+			let j = i + 1;
+			while (j < src.length && src[j] !== ch) j += src[j] === '\\' ? 2 : 1;
+			toks.push(src.slice(i, j + 1));
+			i = j + 1;
+		} else if (/\s/.test(ch)) {
+			if (toks[toks.length - 1] !== ' ') toks.push(' ');
+			i++;
+		} else {
+			toks.push(ch);
+			i++;
+		}
+	}
+
+	const closeOf = (k: number) => {
+		for (let depth = 0, j = k; j < toks.length; j++) {
+			if (toks[j] === '{' || toks[j] === '[') depth++;
+			else if ((toks[j] === '}' || toks[j] === ']') && --depth === 0) return j;
+		}
+		return -1;
+	};
+
+	let out = '';
+	const stack: string[] = [];
+	const newline = () => {
+		out = out.trimEnd() + '\n' + '  '.repeat(stack.filter((s) => s !== '(').length);
+	};
+	for (let k = 0; k < toks.length; k++) {
+		const t = toks[k];
+		if (t === '{' || t === '[') {
+			const close = closeOf(k);
+			const inline = close < 0 ? '' : toks.slice(k, close + 1).join('');
+			if (inline && inline.length <= INLINE_MAX) {
+				out += inline;
+				k = close;
+			} else {
+				stack.push(t);
+				out += t;
+				newline();
+			}
+		} else if (t === '}' || t === ']') {
+			stack.pop();
+			newline();
+			out += t;
+		} else if (t === '(' || t === ')') {
+			if (t === '(') stack.push(t);
+			else stack.pop();
+			out += t;
+		} else if (t === ',' && stack.length && stack[stack.length - 1] !== '(') {
+			out += t;
+			newline();
+		} else if (t === ';') {
+			out += t;
+			newline();
+		} else if (t === ' ') {
+			if (!/\s$/.test(out) && out) out += t;
+		} else {
+			out += t;
+		}
+	}
+	return out.trim();
+}
+
+/**
+ * Pretty-print strings that are a JSON object or array, and re-indent one-line
+ * Jsonnet; leave other strings as written.
+ */
 export function formatToolArgValue(value: unknown): {
 	text: string;
 	lang: '' | 'json';
@@ -29,8 +106,12 @@ export function formatToolArgValue(value: unknown): {
 					return { text: JSON.stringify(parsed, null, 2), lang: 'json' };
 				}
 			} catch {
-				// Not JSON (e.g. Jsonnet): show the string with its own newlines.
+				// Not JSON: maybe Jsonnet, below.
 			}
+		}
+		// Multi-line Jsonnet keeps its author's layout; only one-liners are re-indented.
+		if (!value.includes('\n') && /^(local\s|\{|\[)/.test(trimmed)) {
+			return { text: formatJsonnet(trimmed), lang: '' };
 		}
 		return { text: value === '' ? '""' : value, lang: '' };
 	}

@@ -19,9 +19,41 @@ describe('formatToolArgValue', () => {
 		});
 	});
 
-	it('keeps Jsonnet and other non-JSON strings as written, newlines included', () => {
+	it('keeps multi-line Jsonnet as written', () => {
 		const jsonnet = 'local c = 1;\n{\n  a: c,\n}';
 		expect(formatToolArgValue(jsonnet)).toEqual({ text: jsonnet, lang: '' });
+	});
+
+	it('re-indents one-line Jsonnet, as the model writes plot specs', () => {
+		const spec =
+			"local ws = import 'ws.libsonnet'; local inputs = std.extVar('inputs'); local bbox = inputs.OBS.bbox; { data: [{type:'heatmap', x:'@OBS.longitude', y:'@OBS.latitude', z:'@OBS.precipitation_surface.isel(time=0)', coloraxis:'coloraxis'}] + ws.basemap(bbox), layout: ws.map(bbox) + ws.classBar(ws.palettes.ppt_week, 'mm day-1') + {title:{text:'IMERG precipitation, Kenya; 2026-11-09, 00:00 UTC'}} }";
+		expect(formatToolArgValue(spec).text).toBe(
+			[
+				"local ws = import 'ws.libsonnet';",
+				"local inputs = std.extVar('inputs');",
+				'local bbox = inputs.OBS.bbox;',
+				'{',
+				'  data: [',
+				'    {',
+				"      type:'heatmap',",
+				"      x:'@OBS.longitude',",
+				"      y:'@OBS.latitude',",
+				"      z:'@OBS.precipitation_surface.isel(time=0)',",
+				"      coloraxis:'coloraxis'",
+				'    }',
+				'  ] + ws.basemap(bbox),',
+				"  layout: ws.map(bbox) + ws.classBar(ws.palettes.ppt_week, 'mm day-1') + {",
+				"    title:{text:'IMERG precipitation, Kenya; 2026-11-09, 00:00 UTC'}",
+				'  }',
+				'}'
+			].join('\n')
+		);
+	});
+
+	it('leaves short one-line Jsonnet and plain text alone', () => {
+		expect(formatToolArgValue("{a: 'x, y'}").text).toBe("{a: 'x, y'}");
+		expect(formatToolArgValue('local x is a word').text).toBe('local x is a word');
+		expect(formatToolArgValue('rain, wind; sun').text).toBe('rain, wind; sun');
 	});
 
 	it('does not turn number-like or quoted strings into JSON', () => {
