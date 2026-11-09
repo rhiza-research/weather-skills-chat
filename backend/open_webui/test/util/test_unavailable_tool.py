@@ -114,6 +114,11 @@ class UnavailableToolTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("`plot` is not available", content)
         self.assertIn("wrench button", content)
 
+    async def test_report_in_a_follow_up_says_the_run_finished(self):
+        content = await self._tool_result("report_task_result")
+        self.assertIn("run has already finished", content)
+        self.assertNotIn("wrench button", content)
+
     async def test_offered_tool_still_runs(self):
         self.assertEqual(await self._tool_result("echo"), "ok")
 
