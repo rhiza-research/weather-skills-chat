@@ -2,6 +2,7 @@ import { APP_NAME } from '$lib/constants';
 import { type Writable, writable } from 'svelte/store';
 import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
+import type { FeedbackDraft } from '$lib/utils/feedback';
 import type { Socket } from 'socket.io-client';
 
 // Backend
@@ -69,8 +70,8 @@ export const showSidebar = writable(false);
 export const showSettings = writable(false);
 export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);
-// Opens the feedback form; the string pre-fills its description. Set back to null once opened.
-export const feedbackDraft: Writable<string | null> = writable(null);
+// Opens the feedback form, pre-filling the fields it gives. Set back to null once opened.
+export const feedbackDraft: Writable<FeedbackDraft | null> = writable(null);
 
 export const showControls = writable(false);
 export const showOverview = writable(false);

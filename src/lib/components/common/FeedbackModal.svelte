@@ -5,7 +5,10 @@
   import { sendFeedback } from "$lib/apis/users";
   import { helpEmailAddress } from "$lib/constants";
   import { chatId, config, feedbackDraft, user } from "$lib/stores";
-  import { FEEDBACK_DESCRIPTION_MAX } from "$lib/utils/feedback";
+  import {
+    FEEDBACK_DESCRIPTION_MAX,
+    FEEDBACK_SUBJECT_MAX,
+  } from "$lib/utils/feedback";
   import Modal from "$lib/components/common/Modal.svelte";
 
   const i18n = getContext("i18n");
@@ -20,9 +23,16 @@
 
   $: if ($feedbackDraft !== null) {
     // The draft can come from model text; bind:value shows it as plain text, maxlength doesn't cap it.
-    description = $feedbackDraft.slice(0, FEEDBACK_DESCRIPTION_MAX);
+    // The subject is one line, as the server sends it.
+    subject = ($feedbackDraft.subject ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, FEEDBACK_SUBJECT_MAX);
+    description = ($feedbackDraft.description ?? "").slice(
+      0,
+      FEEDBACK_DESCRIPTION_MAX,
+    );
     feedbackDraft.set(null);
-    subject = "";
     sent = false;
     openedAt = new Date();
     chat = $chatId && $chatId !== "local" ? $chatId : null;
@@ -124,7 +134,7 @@
             <input
               class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition"
               type="text"
-              maxlength="200"
+              maxlength={FEEDBACK_SUBJECT_MAX}
               bind:value={subject}
               placeholder={$i18n.t("e.g. Forecast plot did not load")}
             />

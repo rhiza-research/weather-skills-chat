@@ -43,7 +43,7 @@
 					class="underline font-medium hover:text-gray-900 dark:hover:text-gray-200"
 					on:click={() => {
 						const text = typeof content === 'string' ? content : JSON.stringify(content);
-						feedbackDraft.set(`Error: ${text}\n\n`);
+						feedbackDraft.set({ description: `Error: ${text}\n\n` });
 					}}
 				>
 					{$i18n.t('feedback form')}</button

@@ -157,6 +157,7 @@ class FeedbackLinkPromptTest(unittest.TestCase):
         prefilled = [h for h in hrefs if h.startswith("#feedback?")]
         self.assertEqual(len(prefilled), 1)
         query = parse_qs(prefilled[0][len("#feedback?") :])
+        self.assertEqual(query["subject"], ["Kenya rainfall map failed"])
         self.assertEqual(
             query["description"],
             [

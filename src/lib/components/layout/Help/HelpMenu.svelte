@@ -38,7 +38,7 @@
 				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 				id="chat-help-email-button"
 				on:click={() => {
-					feedbackDraft.set('');
+					feedbackDraft.set({});
 				}}
 			>
 				<QuestionMarkCircle className="size-5" />
