@@ -21,9 +21,13 @@
 
 	export let pane;
 
+	// Below this the pane is a full-screen drawer. Kept under the 768px mobile
+	// breakpoint so a half-screen window (~720px) still shows the chat beside it.
+	const SIDE_BY_SIDE_QUERY = '(min-width: 640px)';
+
 	let mediaQuery;
 	let largeScreen =
-		typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true;
+		typeof window !== 'undefined' ? window.matchMedia(SIDE_BY_SIDE_QUERY).matches : true;
 
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
@@ -74,7 +78,7 @@
 	};
 
 	onMount(() => {
-		mediaQuery = window.matchMedia('(min-width: 768px)');
+		mediaQuery = window.matchMedia(SIDE_BY_SIDE_QUERY);
 		mediaQuery.addEventListener('change', handleMediaQuery);
 		largeScreen = mediaQuery.matches;
 

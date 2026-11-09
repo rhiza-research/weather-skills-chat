@@ -6,6 +6,8 @@ Each chat also has an intermediate results folder, where skills leave data for t
 
 ## What users see
 
+The files open in a panel beside the chat. Dragging its edge resizes it, up to a little under half the window, and the chat keeps the rest of the width as the window is resized. On a phone-sized screen the panel covers the chat instead.
+
 The file list shows every file and folder in the chat. Some kinds of entries are recognized:
 
 - Images, which can be viewed in place.
