@@ -224,6 +224,16 @@ async def completion_revision(
 
 def unavailable_tool_message(tool_name: str) -> str:
     """Tool result when the model calls a tool this message does not offer."""
+    # Only a scheduled run gets this tool; no user can turn it on.
+    if tool_name == "report_task_result":
+        return (
+            "Error: `report_task_result` only works while a scheduled task is "
+            "running, so it did not run. This message is a follow-up in the "
+            "run's chat, not the run: the run has already finished and its "
+            "result was recorded when it ended. Do not call it again. Nothing "
+            "is turned off, so do not tell the user it is. If they ask about "
+            "the result, it is shown with the run on the task's page."
+        )
     name = f"`{tool_name}`" if tool_name else "That tool"
     return (
         f"Error: {name} is not available for this message, so it did not run. "
