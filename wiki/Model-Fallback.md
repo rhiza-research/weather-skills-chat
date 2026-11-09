@@ -35,9 +35,13 @@ A model call switches to the fallback whenever the model's provider fails before
 
 A provider that fails after the reply has started to appear is not switched.
 
-Once a reply has switched, the rest of that reply, including every skill or tool round, stays on the fallback. The next reply starts on the model's own provider again, unless that provider itself failed within the last minute. For that minute, replies for models with a fallback start on the fallback. Replies for models without a fallback keep calling the provider. A request the provider refuses as invalid, too large or for an unknown model still switches, but does not count as the provider failing.
+Once a reply has switched, the rest of that reply, including every skill or tool round, stays on the fallback. The next reply starts on the model's own provider again, unless that provider itself failed within the last minute. For that minute, replies for models with a fallback start on the fallback. Replies for models without a fallback keep calling the provider, and a call that gets a server error is tried once more on the same provider before the error is shown. A request the provider refuses as invalid, too large or for an unknown model still switches, but does not count as the provider failing.
 
 If the fallback fails too, the call goes back to the model's own provider. If both fail, the user sees the error from the model's own provider.
+
+## What the user sees when a provider fails
+
+When the provider reports a server error, sends back an error page instead of its usual reply, or cannot be reached, the chat shows a short message naming the connection, such as "The model provider (OpenRouter) had a temporary error. Try again in a moment." A request the provider refuses, such as when it is out of credits or rate limiting the app, shows the provider's own message when it is short; a long or unreadable one is replaced by a short message naming the connection. The provider's full answer is kept in the server log, not shown in the chat.
 
 ## Usage
 

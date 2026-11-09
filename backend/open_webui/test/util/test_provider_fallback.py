@@ -23,6 +23,9 @@ class _FakeResponse:
         self.closed = False
 
     async def json(self):
+        if isinstance(self.body, str):
+            # aiohttp raises ContentTypeError for a text/html body.
+            raise ValueError("not JSON")
         return self.body
 
     async def text(self):
@@ -49,7 +52,6 @@ class _FakeSession:
             raise reply
         return reply
 
-
     async def close(self):
         pass
 
@@ -60,6 +62,22 @@ def _ok(text="Rain outlook"):
 
 def _error(status, message="upstream failed", headers=None):
     return _FakeResponse(status, {"error": {"message": message}}, headers)
+
+
+CLOUDFLARE_PAGE = (
+    "<!DOCTYPE html><html><head><title>Worker exceeded resource limits | "
+    "openrouter.ai | Cloudflare</title></head><body><h1>Error 1102</h1>"
+    "<p>Cloudflare Ray ID: <strong>a559a408eefb104c</strong></p></body></html>"
+)
+
+
+def _html_error(status=503):
+    """Cloudflare's error page in front of a provider, not the provider's JSON."""
+    return _FakeResponse(
+        status,
+        CLOUDFLARE_PAGE,
+        {"Content-Type": "text/html; charset=UTF-8", "cf-ray": "a559a408eefb104c-SJC"},
+    )
 
 
 def _fake_prepare(fallback):
@@ -74,6 +92,7 @@ def _fake_prepare(fallback):
                 chat_id="chat-1",
                 url_idx=0,
                 fallback_model_id=fallback,
+                provider="OpenRouter",
             )
         return openai_router.ProviderCall(
             url=BACKUP,
@@ -82,6 +101,7 @@ def _fake_prepare(fallback):
             chat_id="chat-1",
             url_idx=1,
             fallback_model_id=None,
+            provider="Requesty",
         )
 
     return prepare
@@ -108,6 +128,7 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
                 "ClientSession",
                 side_effect=lambda **kwargs: _FakeSession(self.replies, self.sent),
             ),
+            patch.object(openai_router, "PROVIDER_RETRY_DELAY_S", 0),
         ]
         for p in self.patches:
             p.start()
@@ -206,15 +227,61 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.status_code, 400)
         self.assertIn("Prompt is too long", caught.exception.detail)
 
-    async def test_model_without_backup_fails_as_before(self):
+    async def test_model_without_backup_retries_a_server_error_once(self):
         self._without_backup()
-        self.replies[PRIMARY] += [_error(503)]
+        self.replies[PRIMARY] += [_error(503), _error(503)]
 
         with self.assertRaises(HTTPException) as caught:
             await self._call()
 
         self.assertEqual(caught.exception.status_code, 503)
+        self.assertEqual([url for url, _ in self.sent], [PRIMARY, PRIMARY])
+
+    async def test_model_without_backup_does_not_retry_a_refused_request(self):
+        self._without_backup()
+        self.replies[PRIMARY] += [_error(429, "Rate limit exceeded")]
+
+        with self.assertRaises(HTTPException) as caught:
+            await self._call()
+
+        self.assertEqual(caught.exception.status_code, 429)
+        self.assertEqual(caught.exception.detail, "Rate limit exceeded")
         self.assertEqual([url for url, _ in self.sent], [PRIMARY])
+
+    async def test_html_error_page_without_backup_is_retried(self):
+        self._without_backup()
+        self.replies[PRIMARY] += [_html_error(), _ok("After retry")]
+
+        response = await self._call()
+
+        self.assertEqual(response["choices"][0]["message"]["content"], "After retry")
+
+    async def test_html_error_page_is_resent_to_the_backup(self):
+        self.replies[PRIMARY] += [_html_error()]
+        self.replies[BACKUP] += [_ok("From backup")]
+
+        response = await self._call()
+
+        self.assertEqual(response["choices"][0]["message"]["content"], "From backup")
+
+    async def test_html_error_page_shows_a_short_message_and_logs_the_page(self):
+        self._without_backup()
+        self.replies[PRIMARY] += [_html_error(), _html_error()]
+
+        with self.assertLogs(openai_router.log, "ERROR") as logs:
+            with self.assertRaises(HTTPException) as caught:
+                await self._call()
+
+        detail = caught.exception.detail
+        self.assertEqual(caught.exception.status_code, 503)
+        self.assertEqual(
+            detail,
+            "The model provider (OpenRouter) had a temporary error. Try again in a moment.",
+        )
+        self.assertNotIn("<", detail)
+        logged = "\n".join(logs.output)
+        self.assertIn("cf-ray=a559a408eefb104c-SJC", logged)
+        self.assertIn("Error 1102", logged)
 
     async def test_when_both_fail_the_primary_error_is_raised(self):
         self.replies[PRIMARY] += [_error(503, "primary down")]
@@ -224,7 +291,7 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
             await self._call()
 
         self.assertEqual(caught.exception.status_code, 503)
-        self.assertIn("primary down", caught.exception.detail)
+        self.assertIn("OpenRouter", caught.exception.detail)
 
     async def test_rest_of_the_reply_stays_on_the_backup(self):
         request = SimpleNamespace(state=SimpleNamespace())
@@ -281,7 +348,9 @@ class ProviderFallbackTest(unittest.IsolatedAsyncioTestCase):
         def prepare(request, form_data, user, bypass_filter, upstream_model_id=None):
             if upstream_model_id:
                 raise HTTPException(status_code=404, detail="Model not found")
-            return _fake_prepare("requesty.gone")(request, form_data, user, bypass_filter)
+            return _fake_prepare("requesty.gone")(
+                request, form_data, user, bypass_filter
+            )
 
         openai_router.prepare_provider_call.side_effect = prepare
         self.replies[PRIMARY] += [_error(503, "primary down")]
@@ -339,7 +408,9 @@ class PrepareBackupCallTest(unittest.TestCase):
         self.assertEqual(call.url, PRIMARY)
         self.assertEqual(call.url_idx, 0)
         self.assertEqual(call.fallback_model_id, "requesty.anthropic/claude-sonnet-4-5")
-        self.assertEqual(json.loads(call.payload)["model"], "anthropic/claude-sonnet-4.5")
+        self.assertEqual(
+            json.loads(call.payload)["model"], "anthropic/claude-sonnet-4.5"
+        )
 
     def test_backup_call_goes_to_the_backup_connection_with_the_wrapper_prompt(self):
         call = self._prepare("requesty.anthropic/claude-sonnet-4-5")
@@ -349,7 +420,9 @@ class PrepareBackupCallTest(unittest.TestCase):
         self.assertEqual(call.key, "key-1")
         self.assertIsNone(call.fallback_model_id)
         self.assertEqual(payload["model"], "anthropic/claude-sonnet-4-5")
-        self.assertEqual(payload["messages"][0], {"role": "system", "content": "Be brief."})
+        self.assertEqual(
+            payload["messages"][0], {"role": "system", "content": "Be brief."}
+        )
 
 
 class ConnectionPrefixTest(unittest.TestCase):
@@ -389,33 +462,36 @@ class FallbackModelCheckTest(unittest.TestCase):
 
     def test_backup_on_another_connection_is_accepted(self):
         self.assertIsNone(
-            self.check("anthropic/claude-sonnet-4.5", "requesty.anthropic/claude-sonnet-4-5")
+            self.check(
+                "anthropic/claude-sonnet-4.5", "requesty.anthropic/claude-sonnet-4-5"
+            )
         )
 
     def test_no_backup_is_accepted(self):
         self.assertIsNone(self.check("anthropic/claude-sonnet-4.5", None))
 
     def test_backup_on_the_same_connection_is_refused(self):
-        self.assertIsNotNone(
-            self.check("anthropic/claude-sonnet-4.5", "openai/gpt-5")
-        )
+        self.assertIsNotNone(self.check("anthropic/claude-sonnet-4.5", "openai/gpt-5"))
 
     def test_backup_with_no_connection_is_refused(self):
         request = _app_request(
             [PRIMARY, BACKUP],
-            {"0": {"model_ids": ["anthropic/claude-sonnet-4.5"]}, "1": {"enable": False}},
+            {
+                "0": {"model_ids": ["anthropic/claude-sonnet-4.5"]},
+                "1": {"enable": False},
+            },
         )
         self.assertIsNotNone(
             openai_router.fallback_model_error(
-                request, "anthropic/claude-sonnet-4.5", "requesty.anthropic/claude-sonnet-4-5"
+                request,
+                "anthropic/claude-sonnet-4.5",
+                "requesty.anthropic/claude-sonnet-4-5",
             )
         )
 
 
 def test_connection_name_is_the_admins_name_else_the_host():
-    request = _app_request(
-        [PRIMARY, BACKUP], {"0": {}, "1": {"name": " requesty "}}
-    )
+    request = _app_request([PRIMARY, BACKUP], {"0": {}, "1": {"name": " requesty "}})
     assert openai_router.connection_name(request, 0) == "openrouter.ai"
     assert openai_router.connection_name(request, 1) == "requesty"
 
@@ -438,3 +514,28 @@ def test_requesty_usage_cost_is_read_in_usd():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_a_short_refusal_keeps_the_providers_message():
+    body = {"error": {"message": "Insufficient credits", "code": 402}}
+    assert (
+        openai_router.provider_error_detail(402, body, "OpenRouter")
+        == "Insufficient credits"
+    )
+
+
+def test_a_long_or_html_body_is_replaced_by_a_short_message():
+    long_body = {"error": {"message": "x" * 2000}}
+    html_body = {"error": {"message": CLOUDFLARE_PAGE}}
+    no_message = {"error": {"metadata": {"raw": "upstream detail"}}}
+    for body in (long_body, html_body, no_message, CLOUDFLARE_PAGE):
+        assert (
+            openai_router.provider_error_detail(403, body, "OpenRouter")
+            == "The model provider (OpenRouter) returned an error (403)."
+        )
+
+
+def test_an_unreachable_provider_is_named():
+    assert openai_router.provider_error_detail(None, None, "Requesty") == (
+        "The model provider (Requesty) could not be reached. Try again in a moment."
+    )
