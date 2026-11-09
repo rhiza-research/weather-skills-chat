@@ -21,9 +21,13 @@
 
 	export let pane;
 
+	// Only a phone gets the full-screen drawer. A narrow desktop window keeps the
+	// pane beside the chat, capped at MAX_SIZE.
+	const PHONE_QUERY = '(max-width: 767px) and (pointer: coarse)';
+
 	let mediaQuery;
 	let largeScreen =
-		typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true;
+		typeof window !== 'undefined' ? !window.matchMedia(PHONE_QUERY).matches : true;
 
 	let minSize = 25;
 	const DEFAULT_SIZE = 30;
@@ -55,7 +59,7 @@
 
 	const handleMediaQuery = async (e) => {
 		const wasLarge = largeScreen;
-		largeScreen = e.matches;
+		largeScreen = !e.matches;
 
 		if ($showCallOverlay) {
 			showCallOverlay.set(false);
@@ -74,9 +78,9 @@
 	};
 
 	onMount(() => {
-		mediaQuery = window.matchMedia('(min-width: 768px)');
+		mediaQuery = window.matchMedia(PHONE_QUERY);
 		mediaQuery.addEventListener('change', handleMediaQuery);
-		largeScreen = mediaQuery.matches;
+		largeScreen = !mediaQuery.matches;
 
 		const container = document.getElementById('chat-container');
 		if (container?.clientWidth) {
