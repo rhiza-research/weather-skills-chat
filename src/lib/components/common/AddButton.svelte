@@ -10,7 +10,7 @@
 	this={href ? 'a' : 'button'}
 	{href}
 	type={href ? undefined : 'button'}
-	class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+	class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium text-sm flex items-center gap-1.5"
 	on:click
 >
 	<Plus className="size-3.5" strokeWidth="2.5" />
