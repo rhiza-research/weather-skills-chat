@@ -83,7 +83,7 @@
 			{:else}
 				<ChevronRight className="size-3 shrink-0 text-gray-400" />
 			{/if}
-			<span class="truncate min-w-0">{node.name}</span>
+			<span class="truncate min-w-0" title={node.name}>{node.name}</span>
 			<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
 		</button>
 		{#if open}
@@ -103,7 +103,7 @@
 	<div class="flex flex-col gap-0.5">
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1 rounded-md" style={pad}>
 			<div class="truncate flex items-center gap-1 min-w-0">
-				<span class="truncate">{node.name}</span>
+				<span class="truncate" title={node.name}>{node.name}</span>
 				<span class="text-gray-400 shrink-0">zarr</span>
 			</div>
 			<a
@@ -135,12 +135,12 @@
 					class="truncate flex items-center gap-1 text-left hover:underline min-w-0"
 					on:click={() => dispatch('openImage', { path: file.path })}
 				>
-					<span class="truncate">{node.name}</span>
+					<span class="truncate" title={node.name}>{node.name}</span>
 					<span class="text-gray-400 shrink-0">{file.kind}</span>
 				</button>
 			{:else}
 				<div class="truncate flex items-center gap-1 min-w-0">
-					<span class="truncate">{node.name}</span>
+					<span class="truncate" title={node.name}>{node.name}</span>
 					<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
 				</div>
 			{/if}

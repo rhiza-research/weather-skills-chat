@@ -377,8 +377,8 @@
 				? 'h-[38%]'
 				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
 		>
-			<div class="flex items-center justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-[11px] text-gray-600 dark:text-gray-300 truncate min-w-0" title={previewTitle}>
+			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
+				<div class="text-[11px] leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
 					{previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
