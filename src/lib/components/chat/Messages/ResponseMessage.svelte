@@ -47,6 +47,7 @@
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
 	import { clearSpinningToolCalls } from '$lib/utils/generationLiveness';
+	import { hideUnfinishedFeedbackLink } from '$lib/utils/streamingLinks';
 	import { endsWithActivity, isInlineStatus } from '$lib/utils/activityStatus';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 
@@ -696,7 +697,7 @@
 										{history}
 										content={message.done
 											? clearSpinningToolCalls(message.content)
-											: message.content}
+											: hideUnfinishedFeedbackLink(message.content)}
 										sources={message.sources}
 										status={latestStatus}
 										floatingButtons={message?.done && !readOnly}
