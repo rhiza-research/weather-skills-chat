@@ -12,7 +12,7 @@
 
 	import Badge from '$lib/components/common/Badge.svelte';
 	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
-	import Plus from '$lib/components/icons/Plus.svelte';
+	import AddButton from '$lib/components/common/AddButton.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
@@ -158,15 +158,7 @@
 					placeholder={$i18n.t('Search Secrets')}
 				/>
 			</div>
-			<div>
-				<button
-					class="px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
-					aria-label={$i18n.t('Add a secret')}
-					on:click={openAdd}
-				>
-					<Plus className="size-3.5" />
-				</button>
-			</div>
+			<AddButton label={$i18n.t('Add a secret')} on:click={openAdd} />
 		</div>
 	</div>
 
