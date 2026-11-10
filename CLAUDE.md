@@ -27,3 +27,12 @@ Page rules:
 - When a page is removed, fix every `[[...]]` link that pointed to it.
 - Current behavior only. No history.
 - Each fact lives on one page; other pages link to it.
+
+## Performance
+
+The backend runs one event loop per worker: a synchronous database query, JuiceFS call, or long CPU step inside `async def` code stalls every user and the `/health` liveness probe. `backend/perf/` measures that under production-like database and JuiceFS latency; its README explains the harness.
+
+Every PR that aims to improve performance:
+
+- Adds or extends a test in `backend/perf/` that reproduces the slow path, with a budget the old code fails and the new code meets.
+- Runs `scripts/perf_compare.py <base> <branch>` and puts the before/after table in the PR description.
