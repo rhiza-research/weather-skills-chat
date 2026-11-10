@@ -208,6 +208,7 @@
 
 <!-- A run never gets the scheduled task tools, so only these can be switched. -->
 <ToolServersModal
+	showTextSkills={false}
 	bind:show={showTools}
 	bind:selectedToolIds
 	bind:builtinFeatures={form.features}

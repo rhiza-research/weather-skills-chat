@@ -1,5 +1,6 @@
 - [[Home]]
 - [[Skill Packs]]
+- [[Skills]]
 - [[Tool Runner]]
 - [[Chat Artifacts]]
 - [[Share Links]]

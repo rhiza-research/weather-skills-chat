@@ -6,6 +6,7 @@ import {
 	models,
 	organizations,
 	switchingOrganization,
+	textSkills,
 	tools,
 	user
 } from '$lib/stores';
@@ -56,6 +57,7 @@ export const reloadOrganizationCatalog = async (token: string) => {
 	const [nextModels, nextTools] = await loadOrganizationCatalog(token);
 	await models.set(nextModels);
 	await tools.set(nextTools);
+	textSkills.set(null);
 };
 
 /**

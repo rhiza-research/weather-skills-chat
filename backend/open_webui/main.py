@@ -82,6 +82,7 @@ from open_webui.routers import (
     secrets,
     preferences,
     skills,
+    text_skills,
     files,
     functions,
     memories,
@@ -1118,6 +1119,9 @@ app.include_router(
     preferences.router, prefix="/api/v1/preferences", tags=["preferences"]
 )
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
+app.include_router(
+    text_skills.router, prefix="/api/v1/text_skills", tags=["text_skills"]
+)
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(functions.router, prefix="/api/v1/functions", tags=["functions"])
 app.include_router(
