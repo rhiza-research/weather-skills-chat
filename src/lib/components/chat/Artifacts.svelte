@@ -101,6 +101,27 @@
 		modalAlt = path;
 	};
 
+	// Left / right step through the open file's folder of images and plots, in list order.
+	const stepPreview = async (event: KeyboardEvent) => {
+		const current = selectedImage;
+		if (!current || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+		if ((event.target as HTMLElement)?.closest?.('input, textarea, [contenteditable]')) return;
+		const dir = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
+		const media = files
+			.filter(
+				(file) =>
+					(file?.kind === 'image' || file?.kind === 'html') && dir(file.path) === dir(current)
+			)
+			.sort((a, b) => a.path.localeCompare(b.path));
+		const i = media.findIndex((file) => file.path === current);
+		const next = media[i + (event.key === 'ArrowRight' ? 1 : -1)];
+		if (!next) return;
+		event.preventDefault();
+		const expanded = showImageModal || showHtmlModal;
+		await openImage(next.path);
+		if (expanded) expandPreview();
+	};
+
 	const clearPreview = () => {
 		selectedImage = null;
 		modalAlt = '';
@@ -356,6 +377,8 @@
 		revokePreview();
 	});
 </script>
+
+<svelte:window on:keydown={stepPreview} />
 
 <ImagePreview
 	bind:show={showImageModal}
