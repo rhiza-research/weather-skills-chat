@@ -702,7 +702,9 @@ async def chat_completion_tools_handler(
                         )
                     else:
                         lf_tool = start_tool_observation(
-                            tool_function_name, tool_function_params
+                            tool_function_name,
+                            tool_function_params,
+                            version=tool.get("version"),
                         )
                         try:
                             tool_function = tool["callable"]
@@ -2979,7 +2981,9 @@ async def process_chat_response(
 
                                 else:
                                     lf_tool = start_tool_observation(
-                                        tool_name, tool_function_params
+                                        tool_name,
+                                        tool_function_params,
+                                        version=tool.get("version"),
                                     )
                                     try:
                                         tool_function = tool["callable"]

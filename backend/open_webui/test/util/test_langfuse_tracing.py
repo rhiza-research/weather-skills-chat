@@ -245,6 +245,74 @@ class RealToolSpanTest(unittest.TestCase):
         output = json.loads(attrs["langfuse.observation.output"])
         self.assertEqual(output["tool_resource_usage"], usage)
 
+    def test_skill_version_is_the_tool_span_version(self):
+        from langfuse._client.attributes import LangfuseOtelSpanAttributes as A
+
+        trace = self.client.start_observation(name="weather-skills-chat", as_type="span")
+        lf._trace_var.set(trace)
+
+        for name, version in (("skill", "1.2.0"), ("server", None), ("blank", "")):
+            span = lf.start_tool_observation(name, {}, version=version)
+            lf.end_tool_observation(span, output={"ok": True})
+        trace.end()
+        self.client.flush()
+
+        attrs = {
+            s.name: s.attributes
+            for s in self.exporter.get_finished_spans()
+            if s.name.startswith("tool:")
+        }
+        self.assertEqual(attrs["tool:skill"][A.VERSION], "1.2.0")
+        self.assertNotIn(A.VERSION, attrs["tool:server"])
+        self.assertNotIn(A.VERSION, attrs["tool:blank"])
+
+    def test_client_release_is_on_root_and_tool_spans(self):
+        from langfuse import Langfuse
+        from langfuse._client.attributes import LangfuseOtelSpanAttributes as A
+        from opentelemetry.sdk.trace import TracerProvider
+
+        # Same public key, so this client shares setUp's exporter.
+        client = Langfuse(
+            public_key=self.PUBLIC_KEY,
+            secret_key="test-secret",
+            release="sha-abc1234",
+            tracer_provider=TracerProvider(),
+            span_exporter=self.exporter,
+        )
+        trace = client.start_observation(name="weather-skills-chat", as_type="span")
+        lf._trace_var.set(trace)
+        span = lf.start_tool_observation("run_x", {})
+        lf.end_tool_observation(span, output={"ok": True})
+        trace.end()
+        client.flush()
+
+        attrs = {s.name: s.attributes for s in self.exporter.get_finished_spans()}
+        self.assertEqual(attrs["weather-skills-chat"][A.RELEASE], "sha-abc1234")
+        self.assertEqual(attrs["tool:run_x"][A.RELEASE], "sha-abc1234")
+
+
+class ClientReleaseTest(unittest.TestCase):
+    def setUp(self):
+        lf._client = None
+        lf._client_failed = False
+
+    def tearDown(self):
+        lf._client = None
+        lf._client_failed = False
+
+    def _release_passed(self, image_tag):
+        with patch.object(lf, "tracing_enabled", return_value=True), patch.object(
+            lf, "WEBUI_IMAGE_TAG", image_tag
+        ), patch("langfuse.Langfuse") as langfuse_cls:
+            lf.get_client()
+        return langfuse_cls.call_args.kwargs["release"]
+
+    def test_image_tag_is_the_release(self):
+        self.assertEqual(self._release_passed("sha-abc1234"), "sha-abc1234")
+
+    def test_empty_image_tag_passes_no_release(self):
+        self.assertIsNone(self._release_passed(""))
+
 
 class StartChatTraceTest(unittest.TestCase):
     def setUp(self):
@@ -467,6 +535,18 @@ class ApplyProviderTraceFieldsTest(unittest.TestCase):
         self.assertEqual(json.dumps(out), before)
 
     @patch.object(lf, "tracing_enabled", return_value=True)
+    def test_openrouter_trace_carries_release_only_when_set(self, _enabled):
+        lf._trace_var.set(MagicMock(trace_id="a" * 32, id="b" * 16))
+        for image_tag, expected in (("sha-abc1234", "sha-abc1234"), ("", None)):
+            with patch.object(lf, "WEBUI_IMAGE_TAG", image_tag):
+                out = lf.apply_provider_trace_fields(
+                    self._body(), "openrouter", user=self.user, metadata=self.metadata
+                )
+            self.assertEqual(out["trace"].get("release"), expected)
+            self.assertEqual("release" in out["trace"], expected is not None)
+
+    @patch.object(lf, "tracing_enabled", return_value=True)
+    @patch.object(lf, "WEBUI_IMAGE_TAG", "")
     def test_openrouter_with_trace(self, _enabled):
         lf._trace_var.set(MagicMock(trace_id="a" * 32, id="b" * 16))
         lf._trace_metadata_var.set(
