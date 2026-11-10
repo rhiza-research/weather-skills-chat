@@ -1,6 +1,6 @@
 # Skill Packs
 
-A skill is a small Python program that does one weather task, such as fetching a forecast, cutting data to a region, or drawing a map. A skill pack is a public git repository that holds one or more skills. Once a pack is installed, the model can run its skills as tools in a chat, and their output lands in the chat's files described on [[Chat Artifacts]].
+A weather skill is a small Python program that does one weather task, such as fetching a forecast, cutting data to a region, or drawing a map. A skill pack is a public git repository that holds one or more skills. Once a pack is installed, the model can run its skills as tools in a chat, and their output lands in the chat's files described on [[Chat Artifacts]].
 
 Admins manage skill packs on the Skills page of the admin settings or the Workspace.
 
@@ -35,7 +35,7 @@ When two packs offer a skill with the same name, the model runs the one with the
 
 ## Choosing skills in a chat
 
-A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row.
+A new chat starts with every skill the user can use turned on. The wrench button beside the message box shows how many are on and opens the list of skills and Workspace tools, where the user turns each one on or off for that chat. The list can be searched by name. Descriptions are hidden until the user opens a skill's row. The same list has a section for the written instructions described on [[Skills]].
 
 If the model calls a skill that is off for the message, the skill does not run, and the model is told to tell the user to turn it on there and send the message again.
 

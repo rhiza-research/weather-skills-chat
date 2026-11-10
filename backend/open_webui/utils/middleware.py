@@ -1082,13 +1082,14 @@ class PayloadContext:
     secret_hint: str  # empty unless function calling is native
     model_params: Optional[dict]  # the workspace model's, for its system prompt
     preferences: Optional[str]  # the user's saved preferences prompt
+    text_skills: str = ""  # the skills block for the chat's chosen skills
 
 
 def load_payload_context(
     request, user, metadata: dict, tool_extra: dict, model_id: Optional[str], clock
 ) -> PayloadContext:
-    """The chat's tools, the secrets hint, the model's params and the user's
-    preferences.
+    """The chat's tools, the secrets hint, the model's params, the user's
+    preferences and the chat's skills.
 
     Synchronous: the tool catalog, skill records, tool access and modules,
     secrets, the model row and preferences are database reads, so
@@ -1162,12 +1163,25 @@ def load_payload_context(
     except Exception:
         log.debug("Preference prompt inject skipped", exc_info=True)
 
+    text_skills = ""
+    try:
+        from open_webui.utils.text_skills import text_skills_prompt
+
+        org_id = metadata.get("organization_id") or getattr(user, "id", None)
+        if org_id:
+            text_skills = text_skills_prompt(
+                user, org_id, metadata.get("text_skill_ids") or []
+            )
+    except Exception:
+        log.debug("Text skills prompt skipped", exc_info=True)
+
     return PayloadContext(
         tools=tools,
         tool_ids=tool_ids,
         secret_hint=secret_hint,
         model_params=model_params,
         preferences=preferences,
+        text_skills=text_skills,
     )
 
 
@@ -1298,7 +1312,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         # Anthropic, which rejects a trailing assistant prefill.
 
     clock.mark("features")
-    tool_ids = form_data.pop("tool_ids", None)
+    from open_webui.utils.text_skills import split_text_skill_ids
+
+    tool_ids, text_skill_ids = split_text_skill_ids(form_data.pop("tool_ids", None))
     files = form_data.pop("files", None)
 
     # Remove files duplicates
@@ -1308,6 +1324,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     metadata = {
         **metadata,
         "tool_ids": tool_ids,
+        "text_skill_ids": text_skill_ids,
         "files": files,
     }
     form_data["metadata"] = metadata
@@ -1546,6 +1563,15 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             )
     except Exception:
         log.debug("Preference prompt inject skipped", exc_info=True)
+
+    try:
+        from open_webui.utils.text_skills import inject_text_skills
+
+        form_data["messages"] = inject_text_skills(
+            form_data.get("messages") or [], context.text_skills
+        )
+    except Exception:
+        log.debug("Text skills inject skipped", exc_info=True)
 
     clock.done(n_tools=len(tools_dict) if tools_dict else 0)
     return form_data, metadata, events

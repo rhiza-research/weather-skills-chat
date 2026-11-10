@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext, tick } from 'svelte';
-	import { toolServers, tools, WEBUI_NAME } from '$lib/stores';
+	import { textSkills, toolServers, tools, WEBUI_NAME } from '$lib/stores';
+	import { loadTextSkills, textSkillToolId } from '$lib/utils/textSkills';
 
 	import { getToolSummary } from '$lib/apis/tools';
 	import {
@@ -26,6 +27,8 @@
 	export let builtinFeatures: Record<string, boolean> = {};
 	/** Which built-in groups to offer switches for. */
 	export let builtinGroups: string[] = [];
+	/** Offer the workspace's text skills (chats only; scheduled tasks do not use them yet). */
+	export let showTextSkills = true;
 
 	const i18n = getContext('i18n');
 
@@ -40,6 +43,10 @@
 	$: filteredTools = q
 		? visibleTools.filter((tool) => toolBaseName(tool).toLowerCase().includes(q))
 		: visibleTools;
+	$: visibleSkills = showTextSkills ? ($textSkills ?? []).filter((skill) => skill.enabled) : [];
+	$: filteredSkills = q
+		? visibleSkills.filter((skill) => skill.title.toLowerCase().includes(q))
+		: visibleSkills;
 	$: filteredToolServers = q
 		? $toolServers.filter((server) =>
 				(server?.openapi?.info?.title ?? '').toLowerCase().includes(q)
@@ -52,6 +59,7 @@
 		if ($tools === null) {
 			tools.set(await getToolSummary(localStorage.token));
 		}
+		await loadTextSkills();
 		selectedToolIds = remapSelectedToolIdsToHighestSkills(selectedToolIds ?? [], $tools ?? []);
 		await tick();
 		searchEl?.focus();
@@ -156,8 +164,31 @@
 			</div>
 		{/if}
 
+		{#if filteredSkills.length > 0}
+			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
+				<div class=" text-base font-medium self-center">{$i18n.t('Skills')}</div>
+			</div>
+			<div class="px-3 pb-2 w-full flex flex-col">
+				{#each filteredSkills as skill (skill.id)}
+					<div
+						class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition flex items-center gap-2"
+					>
+						<div class="flex-1 min-w-0 text-sm font-medium dark:text-gray-100 text-gray-800 truncate">
+							{skill.title}
+						</div>
+						<div class="shrink-0">
+							<Switch
+								state={selectedToolIds.includes(textSkillToolId(skill.id))}
+								on:change={(e) => setToolEnabled(textSkillToolId(skill.id), e.detail)}
+							/>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
 		{#if visibleTools.length > 0}
-			{#if builtinOptions.length > 0 || $toolServers.length > 0}
+			{#if builtinOptions.length > 0 || visibleSkills.length > 0 || $toolServers.length > 0}
 				<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
 					<div class=" text-base font-medium self-center">{$i18n.t('Weather Skills')}</div>
 				</div>

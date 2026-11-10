@@ -565,6 +565,7 @@ class OrganizationTable:
         from open_webui.models.preferences import Preference
         from open_webui.models.secrets import Secret
         from open_webui.models.skill_packs import SkillPack
+        from open_webui.models.text_skills import TextSkill
         from open_webui.models.usage import Usage
 
         with get_db() as db:
@@ -596,6 +597,7 @@ class OrganizationTable:
                 )
             db.query(Secret).filter_by(organization_id=organization_id).delete()
             db.query(Preference).filter_by(organization_id=organization_id).delete()
+            db.query(TextSkill).filter_by(organization_id=organization_id).delete()
             db.query(Folder).filter_by(organization_id=organization_id).delete()
             db.query(SkillPack).filter_by(organization_id=organization_id).delete()
             db.query(Knowledge).filter_by(organization_id=organization_id).delete()
@@ -627,6 +629,7 @@ class OrganizationTable:
         from open_webui.models.preferences import Preference
         from open_webui.models.secrets import Secret
         from open_webui.models.skill_packs import SkillPack
+        from open_webui.models.text_skills import TextSkill
 
         Chats.delete_shared_chats_by_user_id(user_id)
         with get_db() as db:
@@ -649,6 +652,7 @@ class OrganizationTable:
             db.query(Chat).filter_by(user_id=user_id, visibility="private").delete()
             db.query(Secret).filter_by(user_id=user_id, visibility="private").delete()
             db.query(Preference).filter_by(user_id=user_id, visibility="private").delete()
+            db.query(TextSkill).filter_by(user_id=user_id, visibility="private").delete()
             db.query(Folder).filter_by(user_id=user_id, visibility="private").delete()
             db.query(SkillPack).filter_by(user_id=user_id, visibility="private").delete()
             db.query(Knowledge).filter_by(
