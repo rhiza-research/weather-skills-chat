@@ -8,7 +8,7 @@ The form opens from:
 
 - **Contact support** in the **?** menu at the bottom right of the chat.
 - The **feedback form** link under an error in a chat. The error text is already in the description.
-- A **feedback form** button in the model's reply. Every chat tells the model to offer this button when the user hits a problem the team should know about, or asks how to get help. When the problem is specific, the model can fill in a short draft of the description: what the user was trying to do, what failed, and any error text. The user can edit or replace it before sending, and nothing is sent until they do. Scheduled task runs, which have no user present, don't get this instruction. A link to the support address in a reply also opens the form.
+- A **feedback form** button in the model's reply. Every chat tells the model to offer this button when the user hits a problem the team should know about, or asks how to get help. When the problem is specific, the model can fill in a short subject and a draft of the description: what the user was trying to do, what failed, and any error text. The user can edit or replace both before sending, and nothing is sent until they do. Scheduled task runs, which have no user present, don't get this instruction. A link to the support address in a reply also opens the form.
 
 ## What is sent
 

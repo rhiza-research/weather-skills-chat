@@ -2,7 +2,12 @@ import { marked } from "marked";
 import { get, writable } from "svelte/store";
 import { describe, expect, it, vi } from "vitest";
 
-import { FEEDBACK_DESCRIPTION_MAX, feedbackLinkDescription } from "./feedback";
+import {
+  FEEDBACK_DESCRIPTION_MAX,
+  FEEDBACK_SUBJECT_MAX,
+  type FeedbackDraft,
+  feedbackLinkDraft,
+} from "./feedback";
 
 // Server-render the form without the modal shell, which only renders after mount.
 vi.mock("$lib/components/common/Modal.svelte", () => ({
@@ -15,7 +20,7 @@ vi.mock("$lib/components/common/Modal.svelte", () => ({
 const tricky =
   "Line 1: a & b # c\n\"quoted\" 'single' <b>bold</b>\nÉté 🌧️ 雨 100%";
 
-// What the model writes: the description URL-encoded inside a markdown link.
+// What the model writes: the fields URL-encoded inside a markdown link.
 const linkHref = (markdown: string) => {
   const link = (marked.lexer(markdown)[0] as any).tokens.find(
     (t: any) => t.type === "link",
@@ -23,39 +28,52 @@ const linkHref = (markdown: string) => {
   return link.href as string;
 };
 
-describe("feedbackLinkDescription", () => {
-  it("round-trips encoded text through a markdown link", () => {
+const decode = (html: string) =>
+  html
+    .replace(/&lt;/g, "<")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+
+describe("feedbackLinkDraft", () => {
+  it("round-trips encoded subject and description through a markdown link", () => {
     const href = linkHref(
-      `Please fill out the [feedback form](#feedback?description=${encodeURIComponent(tricky)}).`,
+      `Please fill out the [feedback form](#feedback?subject=${encodeURIComponent("Map & plot #2 failed")}&description=${encodeURIComponent(tricky)}).`,
     );
-    expect(feedbackLinkDescription(href)).toBe(tricky);
+    expect(feedbackLinkDraft(href)).toEqual({
+      subject: "Map & plot #2 failed",
+      description: tricky,
+    });
   });
 
-  it("treats a plain link or a missing description as empty", () => {
-    expect(feedbackLinkDescription("#feedback")).toBe("");
-    expect(feedbackLinkDescription("#feedback?other=1")).toBe("");
-    expect(feedbackLinkDescription("#feedback?description=a+b%20c")).toBe(
-      "a b c",
-    );
+  it("leaves out fields the link doesn't give", () => {
+    expect(feedbackLinkDraft("#feedback")).toEqual({});
+    expect(feedbackLinkDraft("#feedback?other=1")).toEqual({});
+    expect(feedbackLinkDraft("#feedback?subject=a+b%20c")).toEqual({
+      subject: "a b c",
+    });
+    expect(feedbackLinkDraft("#feedback?description=x")).toEqual({
+      description: "x",
+    });
   });
 
   it("does not throw on malformed encoding", () => {
-    expect(feedbackLinkDescription("#feedback?description=100%%2")).toBe(
-      "100%%2",
-    );
+    expect(feedbackLinkDraft("#feedback?description=100%%2")).toEqual({
+      description: "100%%2",
+    });
   });
 
   it("ignores links that are not the feedback form", () => {
-    expect(feedbackLinkDescription("#feedbackx")).toBeNull();
+    expect(feedbackLinkDraft("#feedbackx")).toBeNull();
     expect(
-      feedbackLinkDescription("https://example.com/#feedback?description=x"),
+      feedbackLinkDraft("https://example.com/#feedback?description=x"),
     ).toBeNull();
-    expect(feedbackLinkDescription("")).toBeNull();
+    expect(feedbackLinkDraft("")).toBeNull();
   });
 });
 
 describe("FeedbackModal pre-fill", () => {
-  const render = async (draft: string) => {
+  const render = async (draft: FeedbackDraft) => {
     const { feedbackDraft } = await import("$lib/stores");
     const { default: FeedbackModal } = await import(
       "$lib/components/common/FeedbackModal.svelte"
@@ -66,27 +84,41 @@ describe("FeedbackModal pre-fill", () => {
       {},
       { context: new Map([["i18n", i18n]]) },
     );
-    return { html, draftLeft: get(feedbackDraft) };
+    return {
+      subject: html.match(/<input[^>]*value="([^"]*)"/)?.[1],
+      box: html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)?.[1],
+      draftLeft: get(feedbackDraft),
+    };
   };
 
-  it("fills the description box with the draft as plain text", async () => {
-    const { html, draftLeft } = await render(tricky);
-    const box = html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)?.[1];
+  it("fills the subject and description as plain text", async () => {
+    const { subject, box, draftLeft } = await render({
+      subject: '"Plot" <b>failed</b> & more',
+      description: tricky,
+    });
+    expect(subject).toBeDefined();
     expect(box).toBeDefined();
+    expect(subject).not.toContain("<b>");
     expect(box).not.toContain("<b>");
-    expect(
-      box!
-        .replace(/&lt;/g, "<")
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, "&"),
-    ).toBe(tricky);
+    expect(decode(subject!)).toBe('"Plot" <b>failed</b> & more');
+    expect(decode(box!)).toBe(tricky);
     expect(draftLeft).toBeNull();
   });
 
-  it("caps the draft at the form limit", async () => {
-    const { html } = await render("x".repeat(FEEDBACK_DESCRIPTION_MAX + 50));
-    const box = html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)?.[1] ?? "";
-    expect(box.length).toBe(FEEDBACK_DESCRIPTION_MAX);
+  it("puts the subject on one line and caps both fields", async () => {
+    const { subject, box } = await render({
+      subject: `  a\n\tb  ${"x".repeat(FEEDBACK_SUBJECT_MAX)}`,
+      description: "x".repeat(FEEDBACK_DESCRIPTION_MAX + 50),
+    });
+    expect(subject!.startsWith("a b x")).toBe(true);
+    expect(subject!.length).toBe(FEEDBACK_SUBJECT_MAX);
+    expect(box!.length).toBe(FEEDBACK_DESCRIPTION_MAX);
+  });
+
+  it("opens empty when the draft gives no fields", async () => {
+    const { subject, box } = await render({});
+    expect(subject ?? "").toBe("");
+    expect(box).toBe("");
   });
 });
 
@@ -97,7 +129,7 @@ describe("feedback link in a model reply", () => {
     );
     const tokens = (
       marked.lexer(
-        "[feedback form](#feedback?description=It%20broke)",
+        "[feedback form](#feedback?subject=Map%20failed&description=It%20broke)",
       )[0] as any
     ).tokens;
     const i18n = writable({ t: (s: string) => s });
