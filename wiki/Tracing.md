@@ -29,6 +29,8 @@ OpenRouter Broadcast records calls only when Broadcast to the same Langfuse proj
 3. Limit the Langfuse destination to the OpenRouter API keys the connection uses. OpenRouter records every request made with a key Broadcast covers, so every connection that uses those keys must be set to OpenRouter Broadcast, or its calls are recorded twice.
 4. In the admin settings, edit the connection and set Model-call tracing to OpenRouter Broadcast.
 
+A deployment can set Model-call tracing in the environment instead, with `OPENAI_API_CONFIGS` on [[Deployment]]: `{"0": {"model_call_tracing": "openrouter"}}` sets connection `0` to OpenRouter Broadcast.
+
 ## Settings
 
 | Env var | Default | Effect |
