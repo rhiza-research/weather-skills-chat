@@ -449,3 +449,28 @@ class TestOrganizations(AbstractPostgresTest):
                 self.create_url(f"/{workspace_id}/members/owner")
             )
         assert still_forbidden.status_code == 403
+
+    def test_only_platform_admins_add_accounts_directly(self):
+        from open_webui.models.organizations import OrganizationForm
+
+        workspace = self.orgs.insert_new_organization(
+            "member", OrganizationForm(name="Invite Only", description="")
+        )
+        self.orgs.ensure_platform("owner")
+
+        # The workspace's own owner must invite by email instead.
+        for role in ("user", "admin", "owner"):
+            with mock_webui_user(id="member"):
+                response = self.fast_api_client.post(
+                    self.create_url(f"/{workspace.id}/members"),
+                    json={"user_id": "outsider", "role": role},
+                )
+            assert response.status_code == 403
+        assert self.orgs.get_member(workspace.id, "outsider") is None
+
+        with mock_webui_user(id="owner"):
+            response = self.fast_api_client.post(
+                self.create_url(f"/{workspace.id}/members"),
+                json={"user_id": "outsider", "role": "user"},
+            )
+        assert response.status_code == 200

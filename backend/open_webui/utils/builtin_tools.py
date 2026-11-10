@@ -1,12 +1,14 @@
 from typing import Any, NamedTuple, Optional
 from pathlib import Path
 import asyncio
+import fnmatch
 import json
 import logging
 import mimetypes
 import os
 import re
 import time
+from datetime import datetime, timezone
 from uuid import uuid4
 import smtplib
 from email.message import EmailMessage
@@ -19,7 +21,7 @@ from open_webui.models.automations import (
     Automations,
     AutomationUpdateForm,
 )
-from open_webui.models.chats import Chats
+from open_webui.models.chats import SHARE_LINK_DEFAULT_DAYS, Chats
 from open_webui.models.organizations import ORG_KIND_PERSONAL, Organizations
 from open_webui.models.users import Users
 from open_webui.utils.automation_scheduler import (
@@ -86,6 +88,7 @@ TASK_FEATURE_ARGS = {
     "web_search": "web_search",
     "code_interpreter": "code_interpreter",
     "read_files": "read_artifacts",
+    "read_file_patterns": "read_artifact_paths",
     "email": "email",
     "preferences": "preferences",
 }
@@ -107,7 +110,7 @@ def _apply_task_settings(
     model: Optional[str] = None,
     skills: Optional[list[str]] = None,
     shared: Optional[bool] = None,
-    **features: Optional[bool],
+    **features,
 ) -> Optional[str]:
     """Set the passed settings on a task form, or say why one cannot be used.
 
@@ -143,6 +146,11 @@ def _apply_task_settings(
             )
         form.tool_ids = list(skills)
 
+    patterns = features.get("read_file_patterns")
+    if patterns is not None:
+        if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+            return "read_file_patterns must be a list of file names or patterns."
+        features["read_file_patterns"] = [p.strip() for p in patterns if p.strip()]
     chosen = {
         TASK_FEATURE_ARGS[arg]: value for arg, value in features.items() if value is not None
     }
@@ -165,6 +173,19 @@ def _apply_task_settings(
     return None
 
 
+def _no_readable_files_note(features) -> str:
+    """A reminder for the model when the task's runs can read no files."""
+    features = features if isinstance(features, dict) else {}
+    if features.get("read_artifacts") or features.get("read_artifact_paths"):
+        return ""
+    return (
+        "\n\nRuns of this task cannot read any files, including the ones they "
+        "make. If a run needs to look at its results, such as a plot to check "
+        "or a table to summarize, call update_scheduled_task with "
+        "read_file_patterns naming those files."
+    )
+
+
 def _task_settings_args(**kwargs) -> dict:
     """The settings arguments to pass on, without the unset ones."""
     return {key: value for key, value in kwargs.items() if value is not None}
@@ -181,6 +202,7 @@ async def create_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -290,6 +312,7 @@ async def create_scheduled_task(
             web_search=web_search,
             code_interpreter=code_interpreter,
             read_files=read_files,
+            read_file_patterns=read_file_patterns,
             email=email,
             preferences=preferences,
         ),
@@ -314,6 +337,7 @@ async def create_scheduled_task(
     return (
         f"Created scheduled task **{automation.name}** ({cron}) under {scope}."
         f"{tool_note} [Open scheduled tasks](/scheduled-tasks) to manage it."
+        + _no_readable_files_note(automation.features)
     )
 
 
@@ -340,9 +364,27 @@ TASK_SETTING_PROPERTIES = {
     "web_search": _switch("Allow the agent to search the web"),
     "code_interpreter": _switch("Allow the agent to write and run its own code"),
     "read_files": _switch(
-        "Allow the agent to read the run's files. A run has no one to ask, so "
-        "with this off it cannot read them."
+        "Allow the agent to read all of the run's files. A run has no one to "
+        "ask, so with this off it can read only the files read_file_patterns "
+        "names. Prefer read_file_patterns: turn this on only when the run must "
+        "read files whose names cannot be known in advance, and pass false "
+        "with read_file_patterns when this chat has it on."
     ),
+    "read_file_patterns": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "File names the run may read when read_files is off, relative to "
+            "the run's chat files, such as `stations.csv`, `plots/*.png`, or "
+            "`**/*.csv`. Set this whenever a run must look at a file, including "
+            "one it makes, since it cannot otherwise. They follow Unix glob "
+            "rules: * and ? match within one folder, and ** matches any number "
+            "of folders. Name the files the run needs as narrowly as you can, "
+            "rather than turning on read_files. Replaces the current list; an "
+            "empty list allows none. Each run's agent is told these names in "
+            "its prompt, so the task's prompt does not need to list them."
+        ),
+    },
     "email": _switch("Allow the agent to send email"),
     "preferences": _switch("Allow the agent to read and save preferences"),
     "shared": _switch(
@@ -358,7 +400,17 @@ CREATE_SCHEDULED_TASK_SPEC = {
         "model, skills, and switches unless they are passed. "
         "Use when the user asks to repeat this task on a schedule "
         "(for example: 'do this again every day at noon'). "
-        "Scheduled tasks run headless: no user is present to answer follow-up questions."
+        "Scheduled tasks run headless: no user is present to answer follow-up questions, "
+        "so a run reads only the files read_files or read_file_patterns allows. "
+        "A run cannot see any file unless the task allows it, including the "
+        "plots and tables the run makes itself. When the prompt has the run "
+        "check, summarize, or report on files it makes or reads, set "
+        "read_file_patterns to those files, worked out from the prompt and "
+        "from the files this chat read (for example `plots/*.png` for a plot "
+        "the run should check). Always prefer naming the files the run needs "
+        "with read_file_patterns over allowing every file with read_files. "
+        "When read_file_patterns is set, each run's agent sees those file names "
+        "at the end of its prompt."
     ),
     "parameters": {
         "type": "object",
@@ -423,6 +475,9 @@ def _describe_task_features(features: Optional[dict]) -> str:
         )
         if features.get(flag)
     ]
+    patterns = features.get("read_artifact_paths")
+    if not features.get("read_artifacts") and isinstance(patterns, list) and patterns:
+        on.append("read files " + ", ".join(f"`{p}`" for p in patterns))
     off = [
         f"{label} off"
         for flag, label in (("email", "email"), ("preferences", "preferences"))
@@ -553,6 +608,7 @@ async def update_scheduled_task(
     web_search: Optional[bool] = None,
     code_interpreter: Optional[bool] = None,
     read_files: Optional[bool] = None,
+    read_file_patterns: Optional[list[str]] = None,
     email: Optional[bool] = None,
     preferences: Optional[bool] = None,
     shared: Optional[bool] = None,
@@ -622,7 +678,8 @@ async def update_scheduled_task(
                 shared=shared,
                 web_search=web_search,
                 code_interpreter=code_interpreter,
-                    read_files=read_files,
+                read_files=read_files,
+                read_file_patterns=read_file_patterns,
                 email=email,
                 preferences=preferences,
             ),
@@ -641,8 +698,10 @@ async def update_scheduled_task(
         if not updated:
             return "Failed to update the scheduled task."
         sync_automation_job(updated)
-        return "Updated the scheduled task.\n\n" + _describe_task(
-            updated, user.id, full=False
+        return (
+            "Updated the scheduled task.\n\n"
+            + _describe_task(updated, user.id, full=False)
+            + _no_readable_files_note(updated.features)
         )
 
     return await asyncio.to_thread(save)
@@ -1285,7 +1344,7 @@ LIST_ARTIFACTS_SPEC = {
 
 
 DISPLAY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
-DISPLAY_IMAGE_WAIT_S = 6.0
+DISPLAY_IMAGE_WAIT_S = 10.0
 DISPLAY_IMAGE_POLL_S = 0.25
 DISPLAY_IMAGE_TYPES = {
     ".png": "image/png",
@@ -1297,18 +1356,33 @@ DISPLAY_IMAGE_TYPES = {
 }
 
 
+PNG_TRAILER = b"\x00\x00\x00\x00IEND\xaeB`\x82"
+
+
 def looks_like_display_image(data: bytes, suffix: str) -> bool:
+    """True when ``data`` is a whole image: its signature and its end marker.
+
+    A file read over JuiceFS soon after a runner wrote it can be cut short.
+    It still has the signature, and the provider rejects the whole request.
+    """
     if not data:
         return False
     kind = (suffix or "").lower()
     if kind == ".png":
-        return data.startswith(b"\x89PNG\r\n\x1a\n")
+        return data.startswith(b"\x89PNG\r\n\x1a\n") and data.endswith(PNG_TRAILER)
     if kind in (".jpg", ".jpeg"):
-        return data.startswith(b"\xff\xd8\xff")
+        return data.startswith(b"\xff\xd8\xff") and data.endswith(b"\xff\xd9")
     if kind == ".gif":
-        return data.startswith((b"GIF87a", b"GIF89a"))
+        return data.startswith((b"GIF87a", b"GIF89a")) and data.endswith(b";")
     if kind == ".webp":
-        return len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+        # The RIFF header holds the file length minus 8.
+        return (
+            len(data) >= 12
+            and data.startswith(b"RIFF")
+            and data[8:12] == b"WEBP"
+            and len(data) >= int.from_bytes(data[4:8], "little") + 8
+        )
+    # shortcut: AVIF has no cheap end marker, so only its signature is checked.
     if kind == ".avif":
         return len(data) >= 12 and data[4:8] == b"ftyp" and b"avif" in data[8:16]
     return False
@@ -1424,6 +1498,11 @@ def display_image(
 
     data = wait_for_sandbox_image(target, target.suffix)
     if data is None:
+        if target.is_file():
+            return (
+                f"`{rel}` is not a complete image yet. It may still be being "
+                "written; try again in a moment."
+            )
         return f"Image not found: `{rel}`"
 
     if len(data) > DISPLAY_IMAGE_MAX_BYTES:
@@ -1469,10 +1548,51 @@ DISPLAY_IMAGE_SPEC = {
 }
 
 
-async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
+def glob_match(path: str, pattern: str) -> bool:
+    """Unix glob: * ? and [...] stay within one folder; a ** segment spans any folders."""
+
+    def match(parts: list[str], pats: list[str]) -> bool:
+        if not pats:
+            return not parts
+        if pats[0] == "**":
+            return any(match(parts[i:], pats[1:]) for i in range(len(parts) + 1))
+        return (
+            bool(parts)
+            and fnmatch.fnmatchcase(parts[0], pats[0])
+            and match(parts[1:], pats[1:])
+        )
+
+    return match(path.split("/"), pattern.split("/"))
+
+
+def read_allowed_without_asking(rel: str, features) -> bool:
+    """Whether Read files, or a file pattern it allows, covers this path."""
+    if not isinstance(features, dict):
+        return False
+    if features.get("read_artifacts"):
+        return True
+    patterns = features.get("read_artifact_paths")
+    if not isinstance(patterns, list):
+        return False
+    return any(
+        isinstance(p, str) and (rel == p or glob_match(rel, p))
+        for p in patterns
+    )
+
+
+# Extra answers the read approval offers besides Allow and Cancel.
+READ_ALL_FILES = "all_files"
+READ_THIS_FILE = "this_file"
+
+
+async def _user_approved_artifact_read(
+    rel: str, event_call, metadata: dict
+) -> Optional[str]:
     """Ask the user to allow sending a sandbox file to the model.
 
-    Returns None when approved, or a message to give the model when not.
+    Returns None when approved, or a message to give the model when not. An
+    answer that allows more reads also applies to the rest of this reply; the
+    browser keeps it for the chat's later messages.
     """
     if event_call is None:
         return (
@@ -1488,6 +1608,12 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
                     "message": (
                         f"The model wants to read `{rel}` from this chat's files."
                     ),
+                    "path": rel,
+                    "confirm_label": "Allow once",
+                    "choices": [
+                        {"label": "Always allow this file", "value": READ_THIS_FILE},
+                        {"label": "Allow all files in this chat", "value": READ_ALL_FILES},
+                    ],
                 },
             }
         )
@@ -1498,7 +1624,291 @@ async def _user_approved_artifact_read(rel: str, event_call) -> Optional[str]:
         )
     if result is True:
         return None
+    features = metadata.get("features")
+    if not isinstance(features, dict):
+        features = metadata["features"] = {}
+    if result == READ_ALL_FILES:
+        features["read_artifacts"] = True
+        return None
+    if result == READ_THIS_FILE:
+        paths = features.get("read_artifact_paths")
+        features["read_artifact_paths"] = [*(paths if isinstance(paths, list) else []), rel]
+        return None
     return "The user declined to let you read that file."
+
+
+def _runner_size_text(rtype) -> str:
+    parts = []
+    if rtype.cpus:
+        parts.append(f"{rtype.cpus:g} CPU cores")
+    if rtype.memory_gib:
+        parts.append(f"{rtype.memory_gib:g} GiB memory")
+    return f"{rtype.display_name} ({', '.join(parts)})" if parts else rtype.display_name
+
+
+async def _user_approved_runner(rtype, reason: str, event_call) -> Optional[str]:
+    """Ask the user to allow a runner size that needs approval.
+
+    Returns None when approved, or a message to give the model when not.
+    """
+    if event_call is None:
+        return (
+            "Cannot ask the user to approve a larger tool runner in this session. "
+            "The runner was not changed."
+        )
+    minutes = max(1, round((rtype.idle_ttl_seconds or 600) / 60))
+    lines = [f"The model wants a {_runner_size_text(rtype)} tool runner for this chat."]
+    if reason:
+        lines.append(f"Reason: {reason}")
+    if rtype.description:
+        lines.append(rtype.description)
+    lines.append(
+        f"Skills run on it until it has been idle for {minutes} minutes; then the "
+        "chat goes back to the standard runner."
+    )
+    try:
+        result = await event_call(
+            {
+                "type": "confirmation",
+                "data": {
+                    "title": f"Switch to a {rtype.display_name} tool runner?",
+                    "message": "\n\n".join(lines),
+                },
+            }
+        )
+    except Exception:
+        return (
+            "Could not ask the user to approve a larger tool runner. "
+            "The runner was not changed."
+        )
+    if result is True:
+        return None
+    return f"The user declined the {rtype.display_name} tool runner. The runner was not changed."
+
+
+async def request_tool_runner(
+    size: str,
+    reason: str = "",
+    __user__: dict = {},
+    __metadata__: dict = None,
+    __event_call__=None,
+):
+    """Switch this chat's tool runner to another size."""
+    from open_webui.utils.chat_realtime import emit_chat_runner, schedule_runner_metrics
+    from open_webui.utils.runner_types import find
+    from open_webui.utils.skill_k8s_sandbox import (
+        default_runner_type,
+        effective_runner_type,
+        runner_catalog,
+        runner_size_public,
+        runner_types_for_org,
+        start_runner,
+        switch_runner_type,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "A temporary chat has no tool runner. Save the chat first."
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.readable:
+        return "You do not have access to this chat."
+
+    catalog = await runner_catalog()
+    allowed = await runner_types_for_org(metadata.get("organization_id"))
+    names = ", ".join(f"`{t.type}`" for t in allowed)
+    rtype = find(catalog, size)
+    if rtype is None:
+        return f"There is no `{size}` tool runner. Sizes this chat can use: {names}."
+    if not any(t.name == rtype.name for t in allowed):
+        return (
+            f"This organization cannot use {rtype.display_name} tool runners. A "
+            f"platform admin can allow them. Sizes this chat can use: {names}."
+        )
+    current = effective_runner_type(chat_id, catalog)
+    if rtype.name == current.name:
+        return f"This chat is already on the {_runner_size_text(rtype)} tool runner."
+
+    # Going smaller never asks; a size marked as needing approval does.
+    if rtype.requires_approval and rtype.order > current.order:
+        if metadata.get("headless"):
+            return (
+                f"A scheduled task cannot ask for a {rtype.display_name} tool runner. "
+                "Set the runner size on the task instead."
+            )
+        denied = await _user_approved_runner(rtype, (reason or "").strip(), __event_call__)
+        if denied:
+            return denied
+
+    switch_runner_type(chat_id, rtype, catalog)
+    # Start it now, so it boots while the reply goes on.
+    start_runner(chat_id)
+    schedule_runner_metrics(chat_id)
+    try:
+        await emit_chat_runner(
+            chat_id,
+            {"state": "starting", "metrics": None, "size": runner_size_public(chat_id)},
+        )
+    except Exception:
+        log.debug("runner switch emit failed", exc_info=True)
+
+    when = (
+        "It keeps a runner ready, so it starts in seconds."
+        if rtype.warm
+        else "It can take a few minutes to start; the next skill waits for it."
+    )
+    back = ""
+    if rtype.name != default_runner_type(catalog).name:
+        minutes = max(1, round((rtype.idle_ttl_seconds or 600) / 60))
+        back = (
+            f" The chat goes back to {default_runner_type(catalog).display_name} "
+            f"after the runner has been idle for {minutes} minutes."
+        )
+    return (
+        f"Switched this chat to the {_runner_size_text(rtype)} tool runner. Skill "
+        f"calls from now on run on it. {when} Calls already running finish on the "
+        f"previous runner; files in the chat are shared by both.{back}"
+    )
+
+
+def _ago(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 90:
+        return f"{seconds} seconds ago"
+    if seconds < 90 * 60:
+        return f"{round(seconds / 60)} minutes ago"
+    return f"{round(seconds / 3600, 1):g} hours ago"
+
+
+async def get_tool_runner_info(
+    __user__: dict = {},
+    __metadata__: dict = None,
+):
+    """This chat's tool runner: size, limits, state, memory now, and the last skill's use."""
+    from open_webui.utils.skill_k8s_sandbox import (
+        default_runner_type,
+        effective_runner_type,
+        last_skill_usage,
+        public_runner_state,
+        runner_calls_running,
+        runner_catalog,
+        runner_metrics,
+        runner_status,
+        runner_types_for_org,
+    )
+
+    metadata = __metadata__ or {}
+    chat_id = metadata.get("chat_id")
+    if not chat_id or chat_id == "local":
+        return "A temporary chat has no tool runner. Save the chat first."
+    access = await _chat_access(__user__.get("id"), chat_id)
+    if not access.readable:
+        return "You do not have access to this chat."
+
+    catalog = await runner_catalog()
+    current = effective_runner_type(chat_id, catalog)
+    lines = [f"Tool runner size: {_runner_size_text(current)}."]
+    try:
+        state = public_runner_state((await runner_status(chat_id)).get("state"))
+    except Exception:
+        state = "unknown"
+    lines.append(
+        {
+            "ready": "State: ready.",
+            "starting": "State: starting; the next skill waits for it.",
+            "degraded": "State: degraded; it is not answering or reports itself unhealthy.",
+            "paused": "State: not running; the next skill starts one.",
+        }.get(state, "State: unknown.")
+    )
+    if state == "ready":
+        try:
+            metrics = await runner_metrics(chat_id)
+            used = metrics.get("memory_bytes")
+            limit = metrics.get("memory_limit_bytes")
+            if isinstance(used, (int, float)) and isinstance(limit, (int, float)) and limit:
+                lines.append(
+                    f"Memory in use now: {used / 2**30:.1f} of {limit / 2**30:.0f} GiB "
+                    f"({used / limit:.0%})."
+                )
+        except Exception:
+            log.debug("runner metrics for get_tool_runner_info failed", exc_info=True)
+    running = runner_calls_running(chat_id)
+    if running:
+        lines.append(f"Skills running now: {running}.")
+
+    usage = last_skill_usage(chat_id)
+    if usage:
+        size = usage.get("rtype") or default_runner_type(catalog)
+        run = usage.get("run_seconds") or 0
+        cpu = usage.get("cpu_seconds") or 0
+        text = (
+            f"Most recent skill: `{usage.get('script')}` on the {size.display_name} "
+            f"runner, finished {_ago(time.time() - usage.get('finished_at', time.time()))}. "
+            f"Peak memory of its largest process: {usage.get('memory_mb', 0) / 1024:.1f} GiB. "
+            f"CPU: {cpu:.0f} CPU-seconds over {run:.0f} seconds"
+        )
+        if run > 0:
+            text += f" (about {cpu / run:.1f} cores on average)"
+        lines.append(text + ".")
+    else:
+        lines.append("No skill has reported its resource use in this chat since the server started.")
+
+    allowed = await runner_types_for_org(metadata.get("organization_id"))
+    others = [t for t in allowed if t.name != current.name]
+    if others:
+        lines.append(
+            "Other sizes this chat can use: "
+            + "; ".join(
+                _runner_size_text(t) + (" (needs the user's approval)" if t.requires_approval else "")
+                for t in others
+            )
+            + ". Switch with request_tool_runner."
+        )
+    return "\n".join(lines)
+
+
+GET_TOOL_RUNNER_INFO_SPEC = {
+    "name": "get_tool_runner_info",
+    "description": (
+        "Show this chat's tool runner (where skills run): its size and CPU and "
+        "memory limits, whether it is running, the memory it uses now, the "
+        "peak memory and CPU of the most recent skill, and the other sizes "
+        "this chat can switch to. Use it to judge whether work fits before "
+        "starting it, or whether to switch sizes."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+
+REQUEST_TOOL_RUNNER_SPEC = {
+    "name": "request_tool_runner",
+    "description": (
+        "Switch this chat's tool runner (where skills run) to another size. "
+        "Use it when work needs more memory or CPU than the current runner, "
+        "for example after a skill ran out of memory and the work cannot be "
+        "split, and to switch back to a smaller size once heavy work is done. "
+        "Call it by itself, before the skills that need the new size. Sizes "
+        "that need approval ask the user first. The system prompt lists the "
+        "sizes this chat can use."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "size": {
+                "type": "string",
+                "description": "The size to switch to, such as `medium` or `large`.",
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "One sentence for the user on why this size is needed, "
+                    "for example the region and period being processed."
+                ),
+            },
+        },
+        "required": ["size"],
+    },
+}
 
 
 def _content_loader(request):
@@ -1657,18 +2067,28 @@ async def read_artifact(
     if problem:
         return problem
 
-    # The Read files switch: on reads without asking. Off asks the user in a
-    # chat; a scheduled task has no one to ask, so off refuses.
-    features = metadata.get("features") or {}
-    if isinstance(features, dict) and features.get("read_artifacts"):
-        allowed_note = f"Read files is on, so `{rel}` was read without asking."
+    # The Read files switch, or a file pattern it allows: reads without asking.
+    # Otherwise it asks the user in a chat; a scheduled task has no one to ask,
+    # so it refuses.
+    if read_allowed_without_asking(rel, metadata.get("features")):
+        allowed_note = f"Reading `{rel}` is allowed, so it was read without asking."
     elif metadata.get("headless"):
+        features = metadata.get("features") or {}
+        patterns = features.get("read_artifact_paths") if isinstance(features, dict) else None
+        if isinstance(patterns, list) and patterns:
+            allowed = ", ".join(f"`{p}`" for p in patterns if isinstance(p, str))
+            return (
+                f"This scheduled task may read only files matching {allowed}. "
+                f"`{rel}` is not one of them, so it was not sent. The task's "
+                "owner can name more files on the task's page."
+            )
         return (
-            "Reading files is off for this scheduled task, so the file was not "
-            "sent. Turn on Read files for the task to allow it."
+            f"This scheduled task may not read any files, so `{rel}` was not "
+            "sent. The task's owner can name the files it may read on the "
+            "task's page."
         )
     else:
-        denied = await _user_approved_artifact_read(rel, __event_call__)
+        denied = await _user_approved_artifact_read(rel, __event_call__, metadata)
         if denied:
             return denied
         allowed_note = f"The user approved reading `{rel}`."
@@ -1878,18 +2298,17 @@ LIST_EMAIL_RECIPIENTS_SPEC = {
 }
 
 
-def _ensure_chat_share_link(chat_id: str, base_url: str) -> str:
-    chat = Chats.get_chat_by_id(chat_id)
-    if not chat:
-        return ""
-    share_id = getattr(chat, "share_id", None)
-    if not share_id:
-        shared = Chats.insert_shared_chat_by_chat_id(chat_id)
-        share_id = getattr(shared, "id", None) if shared else None
+def _create_chat_share_link(chat_id: str, base_url: str) -> str:
+    """A new share link for the email footer, with its expiry date."""
     base = (base_url or "").rstrip("/")
-    if not (base and share_id):
+    if not base:
         return ""
-    return f"{base}/s/{share_id}"
+    expires_at = int(time.time()) + SHARE_LINK_DEFAULT_DAYS * 86400
+    shared = Chats.insert_shared_chat_by_chat_id(chat_id, expires_at)
+    if not shared:
+        return ""
+    expires = datetime.fromtimestamp(expires_at, timezone.utc)
+    return f"{base}/s/{shared.id} (expires {expires:%B} {expires.day}, {expires.year})"
 
 
 def _attachment_filename(rel: str, *, is_archive: bool = False) -> str:
@@ -2091,7 +2510,7 @@ def send_email(
     if not from_email:
         return "Email delivery is not configured (missing EMAIL_TOOL_FROM_EMAIL)."
 
-    share_link = _ensure_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
+    share_link = _create_chat_share_link(chat_id, getattr(config, "WEBUI_URL", ""))
     footer = (
         "\n\n---\n"
         f"This email was generated from Weather Skills Chat by user {user.email}. "
@@ -2229,6 +2648,8 @@ async def list_available_tools(
         ("create_folder", "Create a folder in the chat artifact sandbox for organizing outputs."),
         ("list_artifacts", "List files/folders in the chat artifact sandbox."),
         ("read_artifact", "Ask the user for permission, then send a sandbox file to yourself."),
+        ("get_tool_runner_info", "Show this chat's tool runner size, limits, memory now, and the last skill's peak use."),
+        ("request_tool_runner", "Switch this chat's tool runner to a larger or smaller size."),
         ("list_email_recipients", "List your email and organization member emails allowed for send_email."),
         ("send_email", "Email results to yourself or people in your organizations; optional artifact sandbox attachments."),
         ("display_image", "Show a sandbox image inline, or link it with a relative markdown path. Do not do both."),
@@ -2968,6 +3389,12 @@ def get_builtin_tools(extra_params: dict) -> dict:
                 ),
             }
         )
+    from open_webui.env import tool_runner_enabled
+
+    chat_id = metadata.get("chat_id")
+    if tool_runner_enabled() and chat_id and chat_id != "local":
+        tools["request_tool_runner"] = _tool(request_tool_runner, REQUEST_TOOL_RUNNER_SPEC)
+        tools["get_tool_runner_info"] = _tool(get_tool_runner_info, GET_TOOL_RUNNER_INFO_SPEC)
     for name in _turned_off_builtins(metadata):
         tools.pop(name, None)
     features = metadata.get("features") or {}

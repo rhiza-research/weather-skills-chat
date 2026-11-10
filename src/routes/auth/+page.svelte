@@ -31,6 +31,8 @@
 
 	let ldapUsername = '';
 
+	let requestSent = false;
+
 	const querystringValue = (key) => {
 		const querystring = window.location.search;
 		const urlParams = new URLSearchParams(querystring);
@@ -40,7 +42,7 @@
 	const setSessionUser = async (sessionUser) => {
 		if (sessionUser) {
 			console.log(sessionUser);
-			toast.success($i18n.t(`You're now logged in.`));
+			if (sessionUser.role !== 'pending') toast.success($i18n.t(`You're now logged in.`));
 			if (sessionUser.token) {
 				localStorage.token = sessionUser.token;
 			}
@@ -52,7 +54,8 @@
 			const liveSocket = await socketReady;
 			liveSocket.emit('user-join', { auth: { token: sessionUser.token } });
 			await user.set(sessionUser);
-			const userConfig = await userConfigReady;
+			// A pending account gets 401 here; it still goes on to the pending page.
+			const userConfig = await userConfigReady.catch(() => null);
 			if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 
 			const redirectPath = querystringValue('redirect') || '/';
@@ -83,6 +86,13 @@
 			}
 		);
 
+		// A pending account can't use the app yet, so don't sign it in.
+		if (sessionUser?.role === 'pending') {
+			requestSent = true;
+			password = '';
+			description = '';
+			return;
+		}
 		await setSessionUser(sessionUser);
 	};
 
@@ -167,11 +177,7 @@
 			name = nameParam;
 		}
 		if (querystringValue('error') === 'oauth_not_allowed') {
-			toast.error(
-				$i18n.t(
-					'That email or domain name is not registered. Please sign up to request access.'
-				)
-			);
+			toast.error($i18n.t('That email or domain name is not registered. Please request access.'));
 		}
 
 		if ($user !== undefined) {
@@ -249,6 +255,23 @@
 							</div>
 						</div>
 					</div>
+				{:else if requestSent}
+					<div class="my-auto pb-10 w-full dark:text-gray-100">
+						<div class="text-2xl font-medium">{$i18n.t('Request sent')}</div>
+						<div class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+							{$i18n.t("You'll get an email once your access is approved.")}
+						</div>
+						<button
+							class="mt-5 bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition w-full rounded-full font-medium text-sm py-2.5"
+							type="button"
+							on:click={() => {
+								requestSent = false;
+								mode = 'signin';
+							}}
+						>
+							{$i18n.t('Back to sign in')}
+						</button>
+					</div>
 				{:else}
 					<div class="  my-auto pb-10 w-full dark:text-gray-100">
 						<form
@@ -267,7 +290,7 @@
 									{:else if mode === 'signin'}
 										{$i18n.t(`Sign in to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 									{:else}
-										{$i18n.t(`Sign up to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
+										{$i18n.t(`Request access to {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 									{/if}
 								</div>
 
@@ -375,7 +398,7 @@
 												? $i18n.t('Sign in')
 												: ($config?.onboarding ?? false)
 													? $i18n.t('Create Admin Account')
-													: $i18n.t('Create Account')}
+													: $i18n.t('Request access')}
 										</button>
 
 										{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
@@ -395,7 +418,7 @@
 														}
 													}}
 												>
-													{mode === 'signin' ? $i18n.t('Sign up') : $i18n.t('Sign in')}
+													{mode === 'signin' ? $i18n.t('Request access') : $i18n.t('Sign in')}
 												</button>
 											</div>
 										{/if}
@@ -404,7 +427,7 @@
 							</div>
 						</form>
 
-						{#if Object.keys($config?.oauth?.providers ?? {}).length > 0}
+						{#if mode !== 'signup' && Object.keys($config?.oauth?.providers ?? {}).length > 0}
 							<div class="inline-flex items-center justify-center w-full">
 								<hr class="w-32 h-px my-4 border-0 dark:bg-gray-100/10 bg-gray-700/10" />
 								{#if $config?.features.enable_login_form || $config?.features.enable_ldap}

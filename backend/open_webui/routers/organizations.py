@@ -123,7 +123,12 @@ async def update_organization(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
     raw = form_data.model_dump(exclude_unset=True)
-    flag_keys = {"can_add_models", "can_add_skills", "can_add_knowledge"}
+    flag_keys = {
+        "can_add_models",
+        "can_add_skills",
+        "can_add_knowledge",
+        "can_use_large_runners",
+    }
     flags = {k: raw.pop(k) for k in list(raw.keys()) if k in flag_keys}
     limit_set = "monthly_limit_usd" in raw
     limit_val = raw.pop("monthly_limit_usd", None)
@@ -171,13 +176,10 @@ async def add_organization_member(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    if form_data.role == "owner":
-        if not is_owner(id, user.id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-            )
-    elif not is_at_least(id, user.id, "admin") and not is_platform_admin(user.id):
+    # Only platform admins add accounts directly; org admins invite by email.
+    if not is_platform_admin(user.id) or (
+        form_data.role == "owner" and not is_owner(id, user.id)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

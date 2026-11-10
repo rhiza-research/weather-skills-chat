@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 
@@ -6,7 +7,6 @@ from open_webui.models.groups import Groups
 from open_webui.models.chats import Chats
 from open_webui.models.users import (
     UserModel,
-    UserNameResponse,
     UserRoleUpdateForm,
     Users,
     UserSettings,
@@ -18,7 +18,7 @@ from open_webui.socket.main import get_active_status_by_user_id
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from open_webui.utils.auth import get_admin_user, get_password_hash, get_verified_user
 from open_webui.utils.access_control import get_permissions
@@ -51,19 +51,6 @@ async def get_users(
 @router.get("/groups")
 async def get_user_groups(user=Depends(get_verified_user)):
     return Groups.get_groups_by_member_id(user.id)
-
-
-@router.get("/search", response_model=list[UserNameResponse])
-async def search_users(q: str = "", user=Depends(get_verified_user)):
-    return [
-        UserNameResponse(
-            id=u.id,
-            name=u.name,
-            role=u.role,
-            profile_image_url=u.profile_image_url,
-        )
-        for u in Users.search_users(q)
-    ]
 
 
 ############################
@@ -192,6 +179,54 @@ async def update_user_role(
         except Exception:
             log.exception("Failed to email %s about signup approval", updated.email)
     return updated
+
+
+############################
+# SendFeedback
+############################
+
+FEEDBACK_FAILED = "Your feedback could not be sent. Please try again later."
+
+
+class FeedbackForm(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=5000)
+    chat_id: Optional[str] = Field(
+        default=None, max_length=100, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+
+
+@router.post("/feedback")
+async def send_feedback(
+    request: Request, form_data: FeedbackForm, user=Depends(get_verified_user)
+):
+    """Email the user's feedback to the help address, with Reply-To set to the user."""
+    from open_webui.env import WEBUI_HELP_EMAIL
+    from open_webui.utils.invite_email import InviteEmailError, deliver_feedback
+
+    # Collapsing whitespace also keeps newlines out of the Subject header.
+    subject = " ".join(form_data.subject.split())
+    description = form_data.description.strip()
+    if not subject or not description:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Please add a subject and describe the problem.",
+        )
+    try:
+        await asyncio.to_thread(
+            deliver_feedback,
+            request.app.state.config,
+            WEBUI_HELP_EMAIL,
+            user.name,
+            user.email,
+            subject,
+            description,
+            form_data.chat_id or "",
+        )
+    except InviteEmailError as e:
+        log.warning("Feedback not sent user_id=%s: %s", user.id, e)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=FEEDBACK_FAILED)
+    return {"status": True}
 
 
 ############################

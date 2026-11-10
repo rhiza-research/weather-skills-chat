@@ -2,8 +2,7 @@
 	import { DropdownMenu } from 'bits-ui';
 	import { getContext } from 'svelte';
 
-	import { config, showSettings } from '$lib/stores';
-	import { helpEmailAddress } from '$lib/constants';
+	import { feedbackDraft } from '$lib/stores';
 	import { flyAndScale } from '$lib/utils/transitions';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
@@ -16,8 +15,6 @@
 	export let showShortcutsHandler: Function;
 
 	export let onClose: Function = () => {};
-
-	$: helpEmail = helpEmailAddress($config?.help_email);
 </script>
 
 <Dropdown
@@ -41,7 +38,7 @@
 				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 				id="chat-help-email-button"
 				on:click={() => {
-					window.location.href = `mailto:${helpEmail}`;
+					feedbackDraft.set({});
 				}}
 			>
 				<QuestionMarkCircle className="size-5" />

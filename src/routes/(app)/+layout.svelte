@@ -40,6 +40,7 @@
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import FeedbackModal from '$lib/components/common/FeedbackModal.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -297,6 +298,7 @@
 {#if ChangelogModal}
 	<svelte:component this={ChangelogModal} bind:show={$showChangelog} />
 {/if}
+<FeedbackModal />
 
 <div class="app relative">
 	{#if !$user}

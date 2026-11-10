@@ -93,6 +93,7 @@
 	export let webSearchEnabled = false;
 	export let codeInterpreterEnabled = false;
 	export let readArtifactsEnabled = false;
+	export let readArtifactPaths: string[] = [];
 	export let builtinFeatures: Record<string, boolean> = {};
 
 	$: onChange({
@@ -103,6 +104,7 @@
 		webSearchEnabled,
 		codeInterpreterEnabled,
 		readArtifactsEnabled,
+		readArtifactPaths,
 		builtinFeatures
 	});
 
@@ -390,7 +392,7 @@
 					: 'max-w-[58rem]'} w-full"
 			>
 				<div class="relative">
-					{#if newMessagesBelow && history?.currentId}
+					{#if (newMessagesBelow || !autoScroll) && history?.currentId}
 						<div
 							class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 						>
@@ -403,7 +405,7 @@
 								}}
 							>
 								<span class="text-xs font-medium whitespace-nowrap"
-									>{$i18n.t('New messages')}</span
+									>{newMessagesBelow ? $i18n.t('New messages') : $i18n.t('Jump to latest')}</span
 								>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -1141,7 +1143,7 @@
 										<div class="flex flex-wrap gap-1 items-center flex-1 min-w-0">
 											{#if toolServers.length + selectedToolIds.length + ($tools?.length ?? 0) > 0}
 												<Tooltip
-													content={$i18n.t('{{COUNT}} Available Tools', {
+													content={$i18n.t('{{COUNT}} Available Tools and Skills', {
 														COUNT: toolServers.length + selectedToolIds.length
 													})}
 												>

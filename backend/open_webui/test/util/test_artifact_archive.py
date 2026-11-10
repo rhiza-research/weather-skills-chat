@@ -7,6 +7,7 @@ import unittest
 import zipfile
 import zlib
 import struct
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -70,6 +71,64 @@ class CopySandboxTest(unittest.TestCase):
                 self.assertEqual((dest / "plots" / "map.png").read_bytes(), b"png")
                 self.assertEqual((dest / "data.zarr" / ".zgroup").read_text(), "{}")
                 self.assertFalse((dest / ".local").exists())
+
+    def _sandbox_with_results(self, artifacts: Path) -> Path:
+        src = artifacts / "src"
+        (src / "intermediate_results").mkdir(parents=True)
+        (src / "intermediate_results" / "run.nc").write_bytes(b"nc")
+        (src / "map.png").write_bytes(b"png")
+        (src / ".cache").mkdir()
+        return src
+
+    def test_uses_juicefs_clone_for_each_visible_entry_when_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                src = self._sandbox_with_results(artifacts)
+                dest = artifacts / "dest"
+
+                def fake_clone(cmd, **kwargs):
+                    # Clone refuses an existing target, so the empty folder must be gone.
+                    self.assertFalse(Path(cmd[-1]).exists(), cmd[-1])
+                    return subprocess.CompletedProcess(cmd, 0, "", "")
+
+                with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+                    "open_webui.utils.artifacts.subprocess.run", side_effect=fake_clone
+                ) as run, patch("open_webui.utils.artifacts._copy_sandbox_entry") as plain_copy:
+                    copy_sandbox("src", "dest")
+
+                cloned = sorted(call.args[0][-2:] for call in run.call_args_list)
+                self.assertEqual(
+                    cloned,
+                    [
+                        [str(src.resolve() / "intermediate_results"), str(dest.resolve() / "intermediate_results")],
+                        [str(src.resolve() / "map.png"), str(dest.resolve() / "map.png")],
+                    ],
+                )
+                self.assertTrue(all(call.args[0][:3] == ["juicefs", "clone", "--preserve"] for call in run.call_args_list))
+                plain_copy.assert_not_called()
+
+    def test_falls_back_to_plain_copy_when_juicefs_clone_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                self._sandbox_with_results(artifacts)
+
+                def failed_clone(cmd, **kwargs):
+                    Path(cmd[-1]).mkdir()  # partial output a failed clone may leave
+                    (Path(cmd[-1]) / "partial").write_bytes(b"x")
+                    return subprocess.CompletedProcess(cmd, 1, "", "not a JuiceFS mount")
+
+                with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+                    "open_webui.utils.artifacts.subprocess.run", side_effect=failed_clone
+                ):
+                    copy_sandbox("src", "dest")
+
+                dest = artifacts / "dest"
+                self.assertEqual((dest / "map.png").read_bytes(), b"png")
+                self.assertEqual((dest / "intermediate_results" / "run.nc").read_bytes(), b"nc")
+                self.assertFalse((dest / "intermediate_results" / "partial").exists())
+                self.assertFalse((dest / ".cache").exists())
 
 
 class ArchiveRoundTripTest(unittest.TestCase):
@@ -296,7 +355,7 @@ class ContentDownloadTest(unittest.IsolatedAsyncioTestCase):
             chat_id = "chat-zarr"
             with (
                 patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts),
-                patch("open_webui.routers.artifacts.require_chat_read"),
+                patch("open_webui.routers.artifacts.require_chat_files_read"),
             ):
                 root = artifacts / chat_id
                 (root / "intermediate_results").mkdir(parents=True)

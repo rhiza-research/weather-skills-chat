@@ -5,6 +5,7 @@ import {
 	activeOrganizationId,
 	models,
 	organizations,
+	switchingOrganization,
 	tools,
 	user
 } from '$lib/stores';
@@ -55,6 +56,41 @@ export const reloadOrganizationCatalog = async (token: string) => {
 	const [nextModels, nextTools] = await loadOrganizationCatalog(token);
 	await models.set(nextModels);
 	await tools.set(nextTools);
+};
+
+/**
+ * Make `orgId` the active organization and load its catalog, then run `then`.
+ * Does nothing for an organization the user is not a member of, the active one,
+ * or while another switch runs. On failure the previous organization comes back
+ * and the error is rethrown. Returns whether it switched.
+ */
+export const switchOrganization = async (
+	orgId: string | null | undefined,
+	token: string,
+	then: () => Promise<unknown> = async () => {}
+) => {
+	const previousId = get(activeOrganizationId);
+	if (
+		!orgId ||
+		orgId === previousId ||
+		get(switchingOrganization) ||
+		!(get(organizations) ?? []).some((org) => org.id === orgId)
+	) {
+		return false;
+	}
+	switchingOrganization.set(true);
+	activeOrganizationId.set(orgId);
+	try {
+		await reloadOrganizationCatalog(token);
+		await then();
+		return true;
+	} catch (error) {
+		activeOrganizationId.set(previousId);
+		await reloadOrganizationCatalog(token).catch(console.error);
+		throw error;
+	} finally {
+		switchingOrganization.set(false);
+	}
 };
 
 /**

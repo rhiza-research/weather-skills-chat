@@ -2,7 +2,7 @@
 
 An organization is a space that people share. Chats, scheduled tasks, secrets, preferences, folders, skill packs, knowledge bases, models, and usage all belong to an organization. The app works in one active organization at a time, and everything a user sees and does happens in it. Users who belong to several organizations switch between them, either from the Organization row near the top of the sidebar, above search, which always shows the active organization, or from the user menu. The app remembers the active organization in each browser.
 
-A chat stays in the organization it was created in. Its replies use that organization's skills, secrets, preferences, models, and limits, even when the user has another organization active. When the user is no longer a member of that organization, or it is inactive, the active organization is used instead.
+A chat stays in the organization it was created in. Its replies use that organization's skills, secrets, preferences, models, and limits, even when the user has another organization active. When the user is no longer a member of that organization, or it is inactive, the active organization is used instead. Opening a chat from another organization the user belongs to, whether from the sidebar, a link, or a notification, switches the app to that organization first. A chat the user can read in an organization they do not belong to opens without switching.
 
 ## Kinds of organization
 
@@ -22,7 +22,7 @@ An organization member is an owner, an admin, or a user.
 - Admins manage members, settings, shared preferences, and shared secrets, and can turn catalog items on or off for the organization.
 - Users work in the organization and use what it offers.
 
-An organization always keeps at least one owner. Adding a person whose account is waiting for approval activates the account.
+An organization always keeps at least one owner. Organization admins add people by inviting them by email, whether or not they already have an account; see [[Invitations]]. Only platform admins add existing accounts directly, by searching users by name or email. Adding a person whose account is waiting for approval activates the account.
 
 Admins and owners can change the organization's name, description, logo, and default models.
 
@@ -39,6 +39,8 @@ Models, skill packs, and knowledge bases form a catalog.
 - Public items are managed by platform admins in the platform organization and appear in every organization. A platform admin decides whether each one starts on or off. An organization admin can then turn it on or off for their own organization. A platform admin can also withdraw an item from every organization; it stays listed in the platform organization so it can be brought back.
 - Organization items are private to one organization. Its admins can add models, skill packs, or knowledge bases only when a platform admin allows that kind for the organization. All three are off by default.
 
+A platform admin can also allow an organization to use large tool runners, the runner sizes that need approval, with **Allow large runners** in the organizations list. It is off by default. The platform organization can always use them. See [[Tool Runner#runner-sizes]].
+
 [[Skill Packs]] adds controls for single skills inside a pack.
 
 ## Sharing
@@ -47,7 +49,7 @@ Chats, scheduled tasks, preferences, and folders are either private or shared wi
 
 - A chat's owner can share it with the organization. Every member can then read it. Only the owner can change it.
 - If the owner makes a shared chat private, it leaves other members' chat lists. They can no longer open it.
-- Cloning a chat makes a private copy for the person who cloned it, in the same organization.
+- Cloning a chat makes a private copy for the person who cloned it, in the same organization. Cloning from a share link puts the private copy in the organization the person is working in.
 - Shared chats go in the organization's team folders, and private chats in their owner's own folders.
 
 | Env var | Default | Effect |

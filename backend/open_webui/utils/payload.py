@@ -16,6 +16,25 @@ When you are done, call report_task_result once to say whether the task succeede
 
 _HEADLESS_MARKER = "This chat is a scheduled task"
 
+# The chat renders a link to #feedback as a button that opens the in-app feedback form.
+FEEDBACK_LINK_PROMPT = (
+    "When the user hits a problem the Weather Skills team should know about, or "
+    "asks how to get help or report a bug, invite them to use the feedback form, "
+    "for example: \"Please let us know by filling out the [feedback form](#feedback).\" "
+    "The #feedback link opens a form in this app that sends the team a message with "
+    "this chat attached. Use it instead of writing out a support email address. "
+    "When there is a specific problem, pre-fill the form by adding ?subject= with a "
+    "short title and &description= with the details, both URL-encoded (spaces as "
+    "%20, line breaks as %0A), for example: [feedback form](#feedback?subject=Kenya"
+    "%20rainfall%20map%20failed&description=I%20asked%20for%20a%20rainfall%20map"
+    "%20of%20Kenya.%20The%20CHIRPS%20fetch%20failed%20with%20%22HTTP%20503%22.) "
+    "Keep the subject to a few words. "
+    "Write the description as a brief, factual draft in the user's own voice, a few "
+    "sentences: what they were trying to do, what failed, and any error text. Leave "
+    "out passwords, keys, tokens and other secrets, and don't state guesses about "
+    "the cause as facts. The user reviews and edits it; nothing is sent until they do."
+)
+
 
 def inject_headless_context(form_data: dict) -> dict:
     """Tell the model it is running without a user (a scheduled task)."""
@@ -98,6 +117,8 @@ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
         "stop": lambda x: [bytes(s, "utf-8").decode("unicode_escape") for s in x],
         "logit_bias": lambda x: x,
         "response_format": dict,
+        # OpenRouter provider routing, e.g. {"quantizations": ["fp8"]}
+        "provider": dict,
     }
     return apply_model_params_to_body(params, form_data, mappings)
 

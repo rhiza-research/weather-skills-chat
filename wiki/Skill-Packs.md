@@ -17,6 +17,8 @@ An admin installs a pack from its `https://` git address and a branch, tag, or c
 
 An organization can install the same address and branch only once. To get newer code, update the pack.
 
+A deployment can also list public packs in `SKILL_PACKS`. On every start, before it answers requests, the app installs each listed pack that the platform organization does not already have at that address and branch, owned by the first admin account described on [[Deployment]]. A pack that is already installed is not fetched again, and only whether it starts on or off is set from the variable. A pack taken out of the variable stays installed. If a pack cannot be installed, or the variable lists an address and branch twice, the app does not start.
+
 ## Managing a pack
 
 - Update fetches the latest code for the pack's branch, or switches it to another branch, tag, or commit. Skills that were added appear as tools, and skills that were removed disappear.
@@ -42,6 +44,8 @@ If the model calls a skill that is off for the message, the skill does not run, 
 ## When a skill runs
 
 The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. When a [[Tool Runner]] is on, the skill runs there instead of on the chat server. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
+
+Opening a skill call in the chat and then **Call** lists its arguments one per line, each flag next to its value. A JSON value is shown pretty-printed. A Jsonnet plot spec written on one line is spread over several, one entry per line; Jsonnet that already spans several lines, like any other multi-line value, keeps its own line breaks. Long values start collapsed; **Expand** shows them in full.
 
 Each skill brings its own Python dependencies, which `uv` installs the first time they are needed and reuses afterward.
 
@@ -71,5 +75,6 @@ The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confi
 | `UV_CACHE_DIR` | `<DATA_DIR>/uv-cache` | Dependency cache when confinement is off |
 | `USER_CACHES_DIR` | `<DATA_DIR>/user_caches` | Per-user dependency caches when confinement is on and there is no per-chat volume |
 | `SKILL_PACK_COPY_WORKERS` | The number of CPUs | How many files are copied at once when a pack is installed or updated |
+| `SKILL_PACKS` | not set | Public packs to install on start, as a JSON array of objects, each with a `git_url`, and optionally a `ref` (default `main`) and `enabled_by_default` (default `true`) |
 
 The server needs `git` to install packs and `uv` to run skills.

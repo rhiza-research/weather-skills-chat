@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 import stat
+import subprocess
 import tarfile
 import time
 import zipfile
@@ -630,6 +631,29 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
     return list(payload.get("crumbs") or [])
 
 
+def _provenance_for_entry(path: Path, kind: str) -> dict | None:
+    if kind == "image" and path.suffix.lower() == ".png":
+        return provenance_for_png(path)
+    if kind == "html":
+        return provenance_for_html(path)
+    if kind == "zarr":
+        return provenance_for_zarr(path)
+    return None
+
+
+def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
+    """Crumbs and full branches for one sandbox entry, or None. Blocks on JuiceFS."""
+    path = resolve_in_sandbox(chat_id, rel_path)
+    if not path.exists():
+        raise FileNotFoundError(rel_path)
+    kind = classify_entry(path)
+    if kind == "file" and path.suffix.lower() in IMAGE_SUFFIXES:
+        kind = "image"
+    elif kind == "file" and path.suffix.lower() in HTML_SUFFIXES:
+        kind = "html"
+    return _provenance_for_entry(path, kind)
+
+
 def list_artifacts(
     chat_id: str,
     path: str | None = None,
@@ -687,18 +711,15 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            prov = None
-            if provenance:
-                if kind == "image" and path.suffix.lower() == ".png":
-                    prov = provenance_for_png(path)
-                elif kind == "html":
-                    prov = provenance_for_html(path)
-                elif kind == "zarr":
-                    prov = provenance_for_zarr(path)
+            prov = _provenance_for_entry(path, kind) if provenance else None
             if prov:
-                # crumbs kept for compact labels; branches carry full args.
+                # Names only: full steps grow with every step and the list is
+                # pushed to every watching tab. artifact_provenance reads them.
                 item["provenance"] = prov.get("crumbs") or []
-                item["provenance_detail"] = prov
+                item["provenance_branches"] = [
+                    {"label": branch.get("label"), "crumbs": branch.get("crumbs") or []}
+                    for branch in prov.get("branches") or []
+                ]
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
             level = rel.count("/") + 1 - base_levels
@@ -756,6 +777,42 @@ def _copy_sandbox_entry(src: Path, dest: Path) -> None:
         own_sandbox_path(dest)
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.is_symlink() or path.exists():
+        path.unlink()
+
+
+def _clone_sandbox_entry(src: Path, dest: Path) -> None:
+    """Copy-on-write clone with `juicefs clone`, else a plain copy.
+
+    The clone shares data with the source until either side changes, and
+    keeps the source's owner and mode. It only works on a JuiceFS mount; on
+    any other filesystem, or without the binary, the plain copy runs.
+    """
+    if shutil.which("juicefs"):
+        # The new chat's folder starts with an empty intermediate_results;
+        # clone refuses an existing target.
+        if dest.is_dir() and not dest.is_symlink() and not any(dest.iterdir()):
+            dest.rmdir()
+        if not (dest.exists() or dest.is_symlink()):
+            result = subprocess.run(
+                ["juicefs", "clone", "--preserve", str(src), str(dest)],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return
+            log.warning(
+                "juicefs clone of %s failed, copying instead: %s",
+                src,
+                result.stderr.strip(),
+            )
+            _remove_path(dest)
+    _copy_sandbox_entry(src, dest)
+
+
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
     """Copy visible sandbox files onto dest.
 
@@ -777,7 +834,7 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
             if entry.name.startswith("."):
                 continue
             try:
-                _copy_sandbox_entry(entry, dest / entry.name)
+                _clone_sandbox_entry(entry, dest / entry.name)
             except Exception:
                 log.exception(
                     "Failed to copy sandbox entry %s from %s to %s",
@@ -796,7 +853,7 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
 
 def delete_sandbox(chat_id: str) -> None:
     root = (ARTIFACTS_DIR / chat_id).resolve()
-    if root.exists() and ARTIFACTS_DIR in root.parents:
+    if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:
         shutil.rmtree(root, ignore_errors=True)
 
 

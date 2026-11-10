@@ -15,7 +15,7 @@ The others are always on, apart from those that need a chat feature such as web 
 | Tool | What it lets the model do |
 |-|-|
 | `list_available_tools` | List the tools and skills enabled in this chat, or every tool and skill the user can use. |
-| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. See [[Scheduled Tasks]]. |
+| `create_scheduled_task` | Turn the current chat into a scheduled task. It copies the chat's model, skills, and switches unless the model sets them, and can set anything the task page can, such as a time limit or sharing. A run cannot see any file the task does not allow, including the ones it makes, so the model is told to name the files a run needs, such as a plot the run should check, rather than let it read every file. When a task it creates or changes can read no files, the model is reminded. See [[Scheduled Tasks]]. |
 | `list_scheduled_tasks` | List the scheduled tasks in the chat's organization that the user can see, with each one's schedule, model, time limit, skills, switches, sharing, last run and its result, and the start of its prompt, or show one task's whole prompt. |
 | `update_scheduled_task` | Change any setting `create_scheduled_task` can set, turn the task's scheduled runs on or off, or remove its picture. |
 | `delete_scheduled_task` | Delete a scheduled task and its run history. The model is told to do this only when the user asks. |
@@ -25,6 +25,8 @@ The others are always on, apart from those that need a chat feature such as web 
 | `list_artifacts` | List the chat's files, or one folder of them. The model can limit how many folder levels are listed, and can ask which skills produced each image, HTML page, and Zarr store. |
 | `read_artifact` | Send a file from the chat's files to the model. The user approves each read in a popup, unless the user has allowed it to read files (see below). Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
 | `create_folder` | Create a folder in the chat's files. |
+| `get_tool_runner_info` | Show the chat's [[Tool Runner]]: its size and CPU and memory limits, whether it is running, the memory it uses now, how many skills are running on it, the peak memory and CPU of the most recent skill, and the other sizes the chat can use. It does not start a runner. Offered when `request_tool_runner` is. |
+| `request_tool_runner` | Switch the chat's [[Tool Runner]] to another size, for example a larger one for work that ran out of memory, or back to a smaller one. Sizes that need approval ask the user first. Offered when the tool runner is on, in saved chats and scheduled task runs. See [[Tool Runner#runner-sizes]]. |
 | `copy_intermediate_result` | Copy a file or folder between the chat's files and its intermediate results folder, which skills use to pass data from one step to the next. |
 | `display_image` | Show an image from the chat's files in the conversation, for the user. It also shows an `.html` page, such as an interactive Plotly figure, in a sandboxed frame with a button to open it full screen. If a skill in the same turn writes that file, the display waits for the skill. To send an image to the model, use `read_artifact`; the model cannot see an HTML page. |
 | `list_email_recipients` | List the addresses the model may email. |
@@ -36,7 +38,18 @@ The scheduled task tools act as the user, so the model can change or delete only
 
 ## Reading chat files
 
-A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to approve it in a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking. Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so a task with Read files off cannot read its files.
+A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to answer a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking.
+
+The popup names the file and offers:
+
+- **Allow once**: this read only.
+- **Always allow this file**: this read, and later reads of the same file in this chat, without asking.
+- **Allow all files in this chat**: turns the button on for this chat.
+- **Cancel**: the model is told the user declined.
+
+What the popup allows is kept with the chat's other chat bar switches (see [[Live Chat Updates]]). A popup for a chat the user is not looking at waits until they open it; see [[Notifications]].
+
+Scheduled tasks have the same switch on their page, where it reads **Agent allowed to read files** or **Agent not allowed to read files**. No one is present to approve a read during a run, so with the switch off a run reads only the files the task names in the field below it, and none when the field is empty. The field takes file names relative to the run's files, separated by commas, such as `stations.csv, plots/*.png, **/*.csv`. They follow Unix glob rules: `*` matches any characters within one folder, `?` matches one character, and `**` matches any number of folders, so `plots/*.png` does not match `plots/old/a.png` but `plots/**/*.png` does. Each run is told these names at the end of its prompt. A task made from a chat starts with the files that chat always allows.
 
 ## Running code
 
@@ -46,6 +59,14 @@ When the code interpreter is turned on for a chat, the model can also run Python
 - `jupyter` runs the code on a Jupyter server. File copying is not available.
 
 PNG images the code prints are shown in the conversation.
+
+| Env var | Default | Effect |
+|-|-|-|
+| `CODE_INTERPRETER_JUPYTER_URL` | empty | Address of the Jupyter server |
+| `CODE_INTERPRETER_JUPYTER_AUTH` | empty | How the app signs in to the Jupyter server |
+| `CODE_INTERPRETER_JUPYTER_AUTH_TOKEN` | empty | Jupyter token |
+| `CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD` | empty | Jupyter password |
+| `CODE_INTERPRETER_JUPYTER_TIMEOUT` | `60` | Timeout, in seconds, for code run on the Jupyter server |
 
 ## Web search
 
@@ -62,14 +83,15 @@ The model is told to use search to support the weather analysis rather than as a
 | `ENABLE_WEB_LOADER_SSL_VERIFICATION` | `True` | Check the certificates of the pages loaded |
 | `WEB_SEARCH_TRUST_ENV` | `False` | Load pages through the proxy configured in the server's environment |
 | `WEB_SEARCH_TOOL_DESCRIPTION` | The guidance above | What the model is told about when and how to search |
+| `WEB_SEARCH_DOMAIN_FILTER_LIST` | empty | Domains search results are limited to, as a JSON array of strings |
 
 ## Email
 
 The model can email the user and the people they work with. Allowed recipients are the user and every member of each active workspace or platform organization the user belongs to. The model can attach files, folders, and Zarr stores from the chat's files. Folders and Zarr stores are sent as zip files. The number and total size of attachments is limited.
 
-Each email is sent in the user's name from the app's sender address, and replies go to the user. A footer names the user and links to a shared copy of the chat. The link uses the public address set on [[Deployment]].
+Each email is sent in the user's name from the app's sender address, and replies go to the user. A footer names the user and gives a new link to the chat as it is when the email is sent, with the date the link expires; see [[Share Links]]. The link uses the public address set on [[Deployment]].
 
-The same mail settings send [[Invitations]] and credit requests (see [[Usage and Spending Caps]]):
+The same mail settings send [[Invitations]], access requests and approvals (see [[Requesting Access]]), credit requests (see [[Usage and Spending Caps]]), and feedback (see [[Getting Help]]):
 
 | Env var | Default | Effect |
 |-|-|-|

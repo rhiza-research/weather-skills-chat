@@ -329,3 +329,42 @@ def deliver_credit_request(
         raise InviteEmailError(
             f"The request could not be sent. ({err})", saved=False
         )
+
+
+def deliver_feedback(
+    config,
+    help_email: str,
+    name: str,
+    email: str,
+    subject: str,
+    description: str,
+    chat_id: str = "",
+) -> None:
+    """Email a user's feedback to the help address; replies go to the user."""
+    missing = smtp_is_configured(config)
+    if missing:
+        raise InviteEmailError(missing, saved=False)
+
+    person = (name or "").strip() or email
+    sent_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    base = (getattr(config, "WEBUI_URL", "") or "").rstrip("/")
+    chat = f"{base}/c/{chat_id}" if chat_id and base else chat_id
+    details = [("Time", sent_at), ("Name", person), ("Email", email)]
+    if chat:
+        details.append(("Chat", chat))
+
+    body = "\n".join(f"{k}: {v}" for k, v in details) + f"\n\n{description}"
+    html_body = (
+        '<div style="font-family:Helvetica,Arial,sans-serif;color:#1c1917;font-size:16px;line-height:1.5;">'
+        + "<p>"
+        + "<br>".join(f"{html.escape(k)}: {html.escape(v)}" for k, v in details)
+        + "</p>"
+        + f'<p style="white-space:pre-wrap;">{html.escape(description)}</p>'
+        + "</div>"
+    )
+
+    ok, err = _send_app_email(
+        config, email, [help_email], subject, body, html_body, None
+    )
+    if not ok:
+        raise InviteEmailError(f"Feedback could not be sent. ({err})", saved=False)

@@ -68,7 +68,11 @@ from open_webui.utils.misc import (
     prepend_to_first_user_message_content,
     convert_logit_bias_input_to_json,
 )
-from open_webui.utils.payload import inject_headless_context, inject_rendering_prompt
+from open_webui.utils.payload import (
+    FEEDBACK_LINK_PROMPT,
+    inject_headless_context,
+    inject_rendering_prompt,
+)
 from open_webui.utils.tools import get_tools
 from open_webui.utils.chat_timing import StageClock, log_timing
 from open_webui.utils.tool_parallel import (
@@ -179,6 +183,24 @@ def repair_unclosed_details(content: str) -> str:
     return "".join(out)
 
 
+def close_open_reasoning_block(content_blocks: list) -> None:
+    """End every in-flight reasoning block before tool calls / final text.
+
+    Not only the last: a reasoning block followed by other blocks would
+    otherwise be saved as still thinking.
+    """
+    now = time.time()
+    last_was_open = False
+    for block in content_blocks:
+        last_was_open = False
+        if block.get("type") == "reasoning" and block.get("ended_at") is None:
+            block["ended_at"] = now
+            block["duration"] = max(int(now - (block.get("started_at") or now)), 0)
+            last_was_open = True
+    if last_was_open:
+        content_blocks.append({"type": "text", "content": ""})
+
+
 async def completion_revision(
     chat_id: str | None, written: Optional[int] = None
 ) -> int:
@@ -202,6 +224,16 @@ async def completion_revision(
 
 def unavailable_tool_message(tool_name: str) -> str:
     """Tool result when the model calls a tool this message does not offer."""
+    # Only a scheduled run gets this tool; no user can turn it on.
+    if tool_name == "report_task_result":
+        return (
+            "Error: `report_task_result` only works while a scheduled task is "
+            "running, so it did not run. This message is a follow-up in the "
+            "run's chat, not the run: the run has already finished and its "
+            "result was recorded when it ended. Do not call it again. Nothing "
+            "is turned off, so do not tell the user it is. If they ask about "
+            "the result, it is shown with the run on the task's page."
+        )
     name = f"`{tool_name}`" if tool_name else "That tool"
     return (
         f"Error: {name} is not available for this message, so it did not run. "
@@ -1372,12 +1404,28 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         from open_webui.utils.skill_k8s_sandbox import (
                             RUNNER_FAILURE_GUIDANCE,
                             runner_resources_guidance,
+                            runner_sizes_guidance,
+                            runner_types_for_org,
                         )
 
                         hints.append(RUNNER_FAILURE_GUIDANCE)
-                        resources = await runner_resources_guidance()
+                        chat_id = metadata.get("chat_id")
+                        resources = await runner_resources_guidance(chat_id)
                         if resources:
                             hints.append(resources)
+                        if chat_id and chat_id != "local":
+                            try:
+                                sizes = await runner_sizes_guidance(
+                                    chat_id,
+                                    await runner_types_for_org(
+                                        metadata.get("organization_id")
+                                    ),
+                                )
+                            except Exception:
+                                log.debug("runner sizes unavailable", exc_info=True)
+                                sizes = None
+                            if sizes:
+                                hints.append(sizes)
                 if hints:
                     combined = "\n\n".join(hints)
                     messages = form_data.get("messages") or []
@@ -1484,6 +1532,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         form_data = inject_rendering_prompt(
             form_data, request.app.state.config.RENDERING_PROMPT
         )
+        if not metadata.get("headless"):
+            form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
     except Exception:
         log.debug("Rendering prompt inject skipped", exc_info=True)
 
@@ -2097,20 +2147,6 @@ async def process_chat_response(
                         content = f"{content}{block['type']}: {block_content}\n"
 
                 return repair_unclosed_details(content.strip())
-
-            def close_open_reasoning_block(content_blocks):
-                """End an in-flight reasoning block before tool calls / final text."""
-                if not content_blocks:
-                    return
-                block = content_blocks[-1]
-                if block.get("type") != "reasoning":
-                    return
-                if block.get("ended_at") is not None:
-                    return
-                block["ended_at"] = time.time()
-                started = block.get("started_at") or block["ended_at"]
-                block["duration"] = max(int(block["ended_at"] - started), 0)
-                content_blocks.append({"type": "text", "content": ""})
 
             def convert_content_blocks_to_messages(content_blocks):
                 from open_webui.utils.model_messages import (
@@ -2819,7 +2855,18 @@ async def process_chat_response(
                         )
 
                         hide_runner_wait = emit_runner_waiting
-                        if not runner_ready(metadata.get("chat_id")):
+                        batch_tools = metadata.get("tools", {})
+                        # A batch of only built-in tools (request_tool_runner
+                        # among them) runs on the chat server: starting a
+                        # runner for it would start one of the old size.
+                        needs_runner = any(
+                            (batch_tools.get(call.get("function", {}).get("name")) or {}).get(
+                                "toolkit_id"
+                            )
+                            != "builtin"
+                            for call, _ in prepared_calls
+                        )
+                        if needs_runner and not runner_ready(metadata.get("chat_id")):
                             await await_runner_for_chat(
                                 metadata.get("chat_id"), event_emitter
                             )
@@ -3447,6 +3494,7 @@ async def process_chat_response(
                 # Lets a scheduled task's run tell a stop from a finished reply.
                 metadata["cancelled"] = True
                 complete_open_tool_calls("Cancelled by user.")
+                close_open_reasoning_block(content_blocks)
 
                 cancelled_content = serialize_content_blocks(content_blocks)
                 from open_webui.utils.chat_realtime import (
@@ -3493,6 +3541,7 @@ async def process_chat_response(
                 )
                 note_loop_exit("generation_exception", error=str(e))
                 complete_open_tool_calls(f"Interrupted: {e}")
+                close_open_reasoning_block(content_blocks)
                 failed_content = serialize_content_blocks(content_blocks)
                 error_payload = {
                     "content": (

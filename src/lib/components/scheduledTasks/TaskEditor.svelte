@@ -3,7 +3,12 @@
 	import { toast } from 'svelte-sonner';
 	import { config, models, tools, user } from '$lib/stores';
 	import { getToolSummary } from '$lib/apis/tools';
-	import { createAutomation, previewSchedule, updateAutomationById } from '$lib/apis/automations';
+	import {
+		createAutomation,
+		getRunnerSizes,
+		previewSchedule,
+		updateAutomationById
+	} from '$lib/apis/automations';
 	import { taskToolIds } from '$lib/utils/toolDisplay';
 	import { describeSchedule } from '$lib/utils/scheduledTasks';
 
@@ -24,6 +29,8 @@
 	export let onSaved: (task) => void = () => {};
 
 	let form = fromTask(task ?? prefill);
+	/** The files a run may read when Read files is off, as typed: names or wildcard patterns. */
+	let readPatterns = patternsText(form);
 	let selectedToolIds: string[] = [];
 	let toolsReady = false;
 	let showTools = false;
@@ -46,6 +53,17 @@
 		}, 300);
 	};
 
+	function patternsText(f) {
+		const paths = f.features?.read_artifact_paths;
+		return Array.isArray(paths) ? paths.join(', ') : '';
+	}
+
+	const parsePatterns = (text: string) =>
+		text
+			.split(/[,\n]/)
+			.map((p) => p.trim())
+			.filter(Boolean);
+
 	function fromTask(source) {
 		return {
 			name: source?.name ?? '',
@@ -56,16 +74,29 @@
 			source_chat_id: source?.source_chat_id ?? null,
 			tool_ids: source?.tool_ids ?? null,
 			features: { ...(source?.features ?? {}) },
-			timeout_minutes: source?.timeout_minutes ?? null
+			timeout_minutes: source?.timeout_minutes ?? null,
+			runner_type: source?.runner_type ?? ''
 		};
 	}
+
+	// Tool runner sizes this task's organization can use; none without a tool runner.
+	let runnerSizes: { type: string; display_name: string; cpus?: number; memory_gib?: number }[] =
+		[];
+	let defaultRunnerSize = '';
+	const sizeLabel = (size) => {
+		const parts = [
+			size.cpus ? `${size.cpus} CPU` : '',
+			size.memory_gib ? `${Math.round(size.memory_gib)} GB` : ''
+		].filter(Boolean);
+		return parts.length ? `${size.display_name} (${parts.join(', ')})` : size.display_name;
+	};
 
 	const allowed = (feature: string, configFlag: string) =>
 		!!$config?.features?.[configFlag] &&
 		($user?.role === 'admin' || !!$user?.permissions?.features?.[feature]);
 
-	// Worded as in the chat bar. A run has no one to ask, so reading files is
-	// either allowed or not.
+	// Worded as in the chat bar. A run has no one to ask, so it reads all files,
+	// only the ones named below the buttons, or none.
 	$: featureToggles = [
 		{
 			key: 'web_search',
@@ -84,7 +115,9 @@
 		{
 			key: 'read_artifacts',
 			on: $i18n.t('Agent allowed to read files'),
-			off: $i18n.t('Agent not allowed to read files'),
+			off: readPatterns.trim()
+				? $i18n.t('Agent allowed to read only these files')
+				: $i18n.t('Agent not allowed to read files'),
 			icon: Eye,
 			shown: true
 		}
@@ -101,6 +134,11 @@
 		}
 		selectedToolIds = taskToolIds(form.tool_ids, $tools ?? []);
 		toolsReady = true;
+		const sizes = await getRunnerSizes(localStorage.token, task?.organization_id).catch(
+			() => null
+		);
+		runnerSizes = sizes?.sizes ?? [];
+		defaultRunnerSize = sizes?.default ?? '';
 	});
 
 	const when = (seconds: number) => new Date(seconds * 1000).toLocaleString();
@@ -135,11 +173,15 @@
 				cron: form.cron || '',
 				visibility: isPersonal ? 'private' : form.visibility || 'private',
 				tool_ids: toolsReady ? selectedToolIds : form.tool_ids,
-				features: form.features,
+				features: {
+					...form.features,
+					read_artifact_paths: parsePatterns(readPatterns)
+				},
 				timeout_minutes:
 					form.timeout_minutes == null || form.timeout_minutes === ''
 						? null
-						: Number(form.timeout_minutes)
+						: Number(form.timeout_minutes),
+				...(runnerSizes.length > 1 ? { runner_type: form.runner_type || '' } : {})
 			};
 			const saved = task
 				? await updateAutomationById(localStorage.token, task.id, payload)
@@ -152,6 +194,7 @@
 			toast.success(task ? $i18n.t('Scheduled task saved') : $i18n.t('Scheduled task created'));
 			task = saved;
 			form = fromTask(saved);
+			readPatterns = patternsText(form);
 			editingSchedule = !saved?.cron;
 			previewCron = saved?.cron ?? null;
 			onSaved(saved);
@@ -276,6 +319,28 @@
 		</span>
 	</label>
 
+	{#if runnerSizes.length > 1}
+		<label class="flex flex-col gap-1 w-full max-w-sm">
+			<span class="text-xs font-medium text-gray-500">{$i18n.t('Tool runner size')}</span>
+			<select
+				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				bind:value={form.runner_type}
+				disabled={!canManage}
+			>
+				{#each runnerSizes as size}
+					<option value={size.type === defaultRunnerSize ? '' : size.type}>
+						{sizeLabel(size)}{size.type === defaultRunnerSize ? ` · ${$i18n.t('default')}` : ''}
+					</option>
+				{/each}
+			</select>
+			<span class="text-xs text-gray-500">
+				{$i18n.t(
+					'Where the skills of each run go. Larger sizes cost more and can take a few minutes to start.'
+				)}
+			</span>
+		</label>
+	{/if}
+
 	<div class="flex flex-col gap-1">
 		<span class="text-xs font-medium text-gray-500">{$i18n.t('Tools')}</span>
 		<div class="flex flex-col items-start gap-1.5">
@@ -304,6 +369,16 @@
 					{on ? toggle.on : toggle.off}
 				</button>
 			{/each}
+
+			{#if !form.features?.read_artifacts}
+				<input
+					class="w-full max-w-sm rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+					bind:value={readPatterns}
+					disabled={!canManage}
+					aria-label={$i18n.t('Files the agent may read')}
+					placeholder={$i18n.t('Files it may read, e.g. stations.csv, plots/*.png, **/*.csv')}
+				/>
+			{/if}
 		</div>
 	</div>
 

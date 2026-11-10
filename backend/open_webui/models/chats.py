@@ -73,6 +73,10 @@ class ChatAccessRow(BaseModel):
 
 
 CHAT_CONFLICT_MESSAGE = "Another user has edited the chat. Please try again."
+
+# A share link lasts this many days unless its creator picks another length.
+SHARE_LINK_DEFAULT_DAYS = 7
+SHARE_LINK_MAX_DAYS = 365
 CHAT_BUSY_MESSAGE = (
     "This chat is being edited by another window. Please try again shortly."
 )
@@ -167,6 +171,27 @@ def _chat_visible_filter(user_id: str, organization_id: str):
             Chat.user_id == user_id,
         ),
     )
+
+
+def _snapshot_chat_files(chat_id: str, snapshot_id: str) -> None:
+    """Give a share link its own copy of the chat's files, frozen like its messages."""
+    try:
+        from open_webui.utils.artifacts import copy_sandbox, delete_sandbox
+
+        delete_sandbox(snapshot_id)
+        copy_sandbox(chat_id, snapshot_id)
+    except Exception:
+        log.exception("Failed to snapshot files of chat %s for its share link", chat_id)
+
+
+def _delete_snapshot_files(snapshot_ids: list[str]) -> None:
+    from open_webui.utils.artifacts import delete_sandbox
+
+    for snapshot_id in snapshot_ids:
+        try:
+            delete_sandbox(snapshot_id)
+        except Exception:
+            log.exception("Failed to delete share link files %s", snapshot_id)
 
 
 class ChatTable:
@@ -827,17 +852,15 @@ class ChatTable:
                 )
             return refs
 
-    def insert_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
+    def insert_shared_chat_by_chat_id(
+        self, chat_id: str, expires_at: Optional[int] = None
+    ) -> Optional[ChatModel]:
+        """A new share link: its own frozen copy of the chat, readable until
+        expires_at. Earlier links are left as they are."""
         with get_db() as db:
-            # Get the existing chat to share
             chat = db.get(Chat, chat_id)
             if chat is None:
                 return None
-            # Check if the chat is already shared
-            if chat.share_id:
-                existing = db.get(Chat, chat.share_id)
-                if existing:
-                    return ChatModel.model_validate(existing)
             # Snapshot keeps the source organization so the row is valid, but stays
             # private so it does not appear in anyone's chat list.
             shared_chat = ChatModel(
@@ -850,53 +873,55 @@ class ChatTable:
                     "updated_at": int(time.time()),
                     "organization_id": chat.organization_id,
                     "visibility": "private",
+                    "meta": {"expires_at": expires_at} if expires_at else {},
                 }
             )
-            shared_result = Chat(**shared_chat.model_dump())
-            db.add(shared_result)
+            db.add(Chat(**shared_chat.model_dump()))
+            # share_id names the newest link.
+            db.query(Chat).filter_by(id=chat_id).update({"share_id": shared_chat.id})
             db.commit()
-            db.refresh(shared_result)
-
-            # Update the original chat with the share_id
-            result = (
-                db.query(Chat)
-                .filter_by(id=chat_id)
-                .update({"share_id": shared_chat.id})
-            )
-            db.commit()
-            return shared_chat if (shared_result and result) else None
-
-    def update_shared_chat_by_chat_id(self, chat_id: str) -> Optional[ChatModel]:
-        try:
-            with get_db() as db:
-                chat = db.get(Chat, chat_id)
-                shared_chat = (
-                    db.query(Chat).filter_by(user_id=f"shared-{chat_id}").first()
-                )
-
-                if shared_chat is None:
-                    return self.insert_shared_chat_by_chat_id(chat_id)
-
-                shared_chat.title = chat.title
-                shared_chat.chat = chat.chat
-
-                shared_chat.updated_at = int(time.time())
-                db.commit()
-                db.refresh(shared_chat)
-
-                return ChatModel.model_validate(shared_chat)
-        except Exception:
-            return None
+        _snapshot_chat_files(chat_id, shared_chat.id)
+        return shared_chat
 
     def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
         try:
             with get_db() as db:
-                db.query(Chat).filter_by(user_id=f"shared-{chat_id}").delete()
-                db.commit()
-
-                return True
+                snapshot_ids = [
+                    row.id
+                    for row in db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
+                ]
+            self._delete_shared_chats(snapshot_ids)
         except Exception:
             return False
+        return True
+
+    def delete_expired_shared_chats(self) -> int:
+        """Delete share links past their expiry, with their files."""
+        now = int(time.time())
+        with get_db() as db:
+            rows = db.query(Chat.id, Chat.meta).filter(Chat.user_id.like("shared-%"))
+            expired = [
+                row.id
+                for row in rows
+                if (row.meta or {}).get("expires_at", now + 1) <= now
+            ]
+        self._delete_shared_chats(expired)
+        return len(expired)
+
+    def _delete_shared_chats(self, snapshot_ids: list[str]) -> None:
+        if not snapshot_ids:
+            return
+        # Files first: if deleting the rows then fails, the rows remain and
+        # the next delete retries, rather than leaving files nothing points to.
+        _delete_snapshot_files(snapshot_ids)
+        with get_db() as db:
+            db.query(Chat).filter(Chat.id.in_(snapshot_ids)).delete(
+                synchronize_session=False
+            )
+            db.query(Chat).filter(Chat.share_id.in_(snapshot_ids)).update(
+                {"share_id": None}, synchronize_session=False
+            )
+            db.commit()
 
     def update_chat_share_id_by_id(
         self, id: str, share_id: Optional[str]
@@ -1124,17 +1149,23 @@ class ChatTable:
         except Exception:
             return None
 
+    def is_live_share(self, id: str) -> bool:
+        """Whether id is a share link that exists and has not expired. Links
+        made before share links expired have no expiry."""
+        with get_db() as db:
+            row = (
+                db.query(Chat.meta)
+                .filter(Chat.id == id, Chat.user_id.like("shared-%"))
+                .first()
+            )
+        if row is None:
+            return False
+        expires_at = (row.meta or {}).get("expires_at")
+        return expires_at is None or expires_at > time.time()
+
     def get_chat_by_share_id(self, id: str) -> Optional[ChatModel]:
         try:
-            with get_db() as db:
-                # it is possible that the shared link was deleted. hence,
-                # we check if the chat is still shared by checking if a chat with the share_id exists
-                chat = db.query(Chat).filter_by(share_id=id).first()
-
-                if chat:
-                    return self.get_chat_by_id(id)
-                else:
-                    return None
+            return self.get_chat_by_id(id) if self.is_live_share(id) else None
         except Exception:
             return None
 
@@ -1568,13 +1599,17 @@ class ChatTable:
             with get_db() as db:
                 chats_by_user = db.query(Chat).filter_by(user_id=user_id).all()
                 shared_chat_ids = [f"shared-{chat.id}" for chat in chats_by_user]
+                snapshot_ids = [
+                    row.id
+                    for row in db.query(Chat.id).filter(Chat.user_id.in_(shared_chat_ids))
+                ]
 
                 db.query(Chat).filter(Chat.user_id.in_(shared_chat_ids)).delete()
                 db.commit()
-
-                return True
         except Exception:
             return False
+        _delete_snapshot_files(snapshot_ids)
+        return True
 
 
 Chats = ChatTable()

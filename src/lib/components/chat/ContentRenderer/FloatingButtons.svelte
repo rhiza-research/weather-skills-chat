@@ -12,7 +12,6 @@
 	import ChatBubble from '$lib/components/icons/ChatBubble.svelte';
 	import LightBlub from '$lib/components/icons/LightBlub.svelte';
 	import Markdown from '../Messages/Markdown.svelte';
-	import Skeleton from '../Messages/Skeleton.svelte';
 
 	export let id = '';
 	export let model = null;
@@ -317,11 +316,7 @@
 				class="bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-xl px-3.5 py-3 w-full"
 			>
 				<div class=" max-h-80 overflow-y-auto w-full markdown-prose-xs" id="response-container">
-					{#if responseContent.trim() === ''}
-						<Skeleton size="sm" />
-					{:else}
-						<Markdown id={`${id}-float-response`} content={responseContent} />
-					{/if}
+					<Markdown id={`${id}-float-response`} content={responseContent} />
 
 					{#if responseDone}
 						<div class="flex justify-end pt-3 text-sm font-medium">

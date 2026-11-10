@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -834,6 +835,8 @@ class ProviderCall(NamedTuple):
     url_idx: int
     # The model's backup when this call goes to its own provider, else None.
     fallback_model_id: Optional[str]
+    # The connection's name as users see it in errors.
+    provider: str = ""
 
 
 def prepare_provider_call(
@@ -979,7 +982,15 @@ def prepare_provider_call(
         payload_bytes=len(payload),
     )
 
-    return ProviderCall(url, key, payload, chat_id, idx, fallback_model_id)
+    return ProviderCall(
+        url,
+        key,
+        payload,
+        chat_id,
+        idx,
+        fallback_model_id,
+        connection_name(request, idx),
+    )
 
 
 # A model with a backup has its call resent to the backup whenever its provider
@@ -994,6 +1005,12 @@ PROVIDER_CONNECT_TIMEOUT_S = 10
 PROVIDER_DOWN_S = 60
 # Statuses that reject one request rather than show the provider failing.
 REQUEST_ERROR_STATUSES = (400, 404, 413, 422)
+# A model without a backup has a call that hit a provider server error resent
+# once to the same provider after this wait.
+PROVIDER_RETRY_DELAY_S = 1
+# Longest provider error message shown to the user as the provider wrote it.
+PROVIDER_MESSAGE_MAX_CHARS = 500
+_HTML_RE = re.compile(r"<\s*(!doctype|html|head|body)\b", re.IGNORECASE)
 
 # Provider URL -> time.monotonic() until which it counts as down.
 _provider_down_until: dict[str, float] = {}
@@ -1001,6 +1018,32 @@ _provider_down_until: dict[str, float] = {}
 
 def _provider_failed(status_code: int) -> bool:
     return status_code not in REQUEST_ERROR_STATUSES
+
+
+def provider_error_detail(status: Optional[int], body, provider: str) -> str:
+    """The error a user sees when a model call fails.
+
+    A provider's own message is kept only for a request it refused (402 out of
+    credits, 429 rate limited, ...) and only when it is short plain text. A
+    server error, an HTML error page or a long body gets a short line naming
+    the provider instead; the raw body stays in the logs.
+    """
+    name = f"The model provider ({provider})" if provider else "The model provider"
+    if status is None:
+        return f"{name} could not be reached. Try again in a moment."
+    if status >= 500:
+        return f"{name} had a temporary error. Try again in a moment."
+    message = body.get("error") if isinstance(body, dict) else None
+    if isinstance(message, dict):
+        message = message.get("message")
+    if (
+        isinstance(message, str)
+        and message.strip()
+        and len(message) <= PROVIDER_MESSAGE_MAX_CHARS
+        and not _HTML_RE.search(message)
+    ):
+        return message
+    return f"{name} returned an error ({status})."
 
 
 def _reply_backups(request) -> Optional[set]:
@@ -1033,7 +1076,20 @@ async def generate_chat_completion(
         prepare_provider_call, request, form_data, user, bypass_filter
     )
     if not call.fallback_model_id:
-        return await _send_provider_call(call, user)
+        try:
+            return await _send_provider_call(call, user)
+        except HTTPException as e:
+            if e.status_code < 500:
+                raise
+            log.warning(
+                "Provider %s failed with %s for %s chat_id=%s, retrying once",
+                call.url,
+                e.status_code,
+                form_data.get("model"),
+                call.chat_id,
+            )
+            await asyncio.sleep(PROVIDER_RETRY_DELAY_S)
+            return await _send_provider_call(call, user)
 
     model_id = form_data.get("model")
     backups = _reply_backups(request)
@@ -1170,23 +1226,24 @@ async def _send_provider_call(call: ProviderCall, user):
                 response = await r.text()
 
             if r.status >= 400:
-                log.error("Upstream chat completion %s: %s", r.status, response)
+                log.error(
+                    "Upstream chat completion %s from %s cf-ray=%s chat_id=%s: %s",
+                    r.status,
+                    url,
+                    r.headers.get("cf-ray"),
+                    chat_id,
+                    response,
+                )
 
             r.raise_for_status()
             return response
     except Exception as e:
         log.exception(e)
-
-        detail = None
-        if isinstance(response, dict):
-            if "error" in response:
-                detail = f"{response['error']['message'] if 'message' in response['error'] else response['error']}"
-        elif isinstance(response, str):
-            detail = response
-
         raise HTTPException(
             status_code=r.status if r else 500,
-            detail=detail if detail else "Open WebUI: Server Connection Error",
+            detail=provider_error_detail(
+                r.status if r and r.status >= 400 else None, response, call.provider
+            ),
         )
     finally:
         if not streaming and session:

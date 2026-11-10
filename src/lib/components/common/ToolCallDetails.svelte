@@ -2,10 +2,12 @@
 	import { getContext } from 'svelte';
 	import Collapsible from './Collapsible.svelte';
 	import { toolUsageLine } from '$lib/chat/toolUsage';
+	import type { ToolArgRow } from '$lib/chat/toolArgs';
 
 	const i18n = getContext('i18n');
 
-	export let callSignature = '';
+	export let head = '';
+	export let args: ToolArgRow[] = [];
 	export let pythonCode = '';
 	export let blockId = 'tool-call';
 	export let done = false;
@@ -37,7 +39,10 @@
 		}
 		CodeBlockComponent = (await import('$lib/components/chat/Messages/CodeBlock.svelte')).default;
 	};
-	$: if (pythonCode) {
+	// Values longer than this start collapsed behind the code block's Expand button.
+	const COLLAPSE_LINES = 20;
+
+	$: if (pythonCode || args.some((arg) => arg.multiline)) {
 		loadCodeBlock();
 	}
 </script>
@@ -72,8 +77,38 @@
 		>
 			<div class="mb-1 space-y-1.5" slot="content">
 				<p class="m-0 break-words font-sans text-sm leading-relaxed text-gray-700 dark:text-gray-200">
-					{callSignature}
+					{head}
 				</p>
+				{#if args.length}
+					<!-- not-prose: the chat's prose styles give dt/dd large top margins. -->
+					<dl class="not-prose m-0 space-y-0.5 text-sm text-gray-700 dark:text-gray-200">
+						{#each args as arg, idx}
+							<div class={arg.multiline ? '' : 'flex items-baseline gap-x-2'}>
+								{#if arg.key}
+									<dt class="shrink-0 font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">
+										{arg.key}
+									</dt>
+								{/if}
+								<dd class="m-0 min-w-0 flex-1">
+									{#if arg.multiline && CodeBlockComponent}
+										<svelte:component
+											this={CodeBlockComponent}
+											id={`${blockId}-arg-${idx}`}
+											lang={arg.lang}
+											code={arg.value}
+											run={false}
+											collapsed={arg.value.split('\n').length > COLLAPSE_LINES}
+											token={{ text: arg.value, raw: arg.value }}
+											className="my-1"
+										/>
+									{:else}
+										<span class="whitespace-pre-wrap break-words font-mono text-xs text-gray-600 dark:text-gray-300">{arg.value}</span>
+									{/if}
+								</dd>
+							</div>
+						{/each}
+					</dl>
+				{/if}
 				{#if secretNames.length}
 					<div class="text-xs text-gray-500 dark:text-gray-400">
 						<span class="font-medium">{$i18n.t('Environment secrets')}:</span>

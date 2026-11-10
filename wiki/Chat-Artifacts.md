@@ -6,13 +6,17 @@ Each chat also has an intermediate results folder, where skills leave data for t
 
 ## What users see
 
+The files open in a panel beside the chat. Dragging its edge resizes it, up to a little under half the window. When the window gets narrow, the panel closes the way the chat sidebar does; opening it then slides it over the chat, and clicking outside it or pressing Escape closes it. Widening the window puts it back beside the chat. On a phone the panel covers the whole screen.
+
 The file list shows every file and folder in the chat. Some kinds of entries are recognized:
 
 - Images, which can be viewed in place.
 - HTML pages, such as interactive Plotly figures, which open in the side panel and full screen, where the user can zoom and hover. They run in a sandbox: the page cannot read the user's login or act in the chat as them. A Plotly figure saved with `include_plotlyjs='cdn'` is a few kilobytes and loads plotly.js from Plotly's CDN in the user's browser. In a reply, a markdown link to an HTML file, such as `[SST](plots/sst.html)`, opens it full screen, and image syntax, such as `![SST](plots/sst.html)`, shows it in the message.
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
 
-Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows it, so a user can see how a result was made.
+A long name is cut short in the list; hovering over it shows the full name. The name of the open file is shown in full above the list.
+
+Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows the chain of skill names under each entry; opening it shows each step's version, arguments, and inputs, so a user can see how a result was made.
 
 ## Downloading and uploading
 
@@ -25,9 +29,11 @@ Archive downloads have a size limit, and so do the files copied into and out of 
 
 Anyone who can read a chat can list and download its files. Only the chat's owner can add or change them. Who can read a chat is described on [[Organizations]].
 
-## Copying and deleting chats
+## Copying, sharing, and deleting chats
 
 Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
+
+Each share link keeps its own copy of the chat's files as they were when the link was made. Anyone who can open the link can browse, preview, and download that copy, but no one can add to or change it, and cloning from the link copies it. See [[Share Links]].
 
 ## Settings
 

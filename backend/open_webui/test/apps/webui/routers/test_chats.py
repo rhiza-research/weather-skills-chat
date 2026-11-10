@@ -113,20 +113,19 @@ class TestChats(AbstractPostgresTest):
 
     def test_get_shared_chat_by_id(self):
         chat_id = self.chats.get_chats()[0].id
-        self.chats.update_chat_share_id_by_id(chat_id, chat_id)
+        share_id = self.chats.insert_shared_chat_by_chat_id(chat_id).id
         with mock_webui_user(id="2"):
-            response = self.fast_api_client.get(self.create_url(f"/share/{chat_id}"))
+            response = self.fast_api_client.get(self.create_url(f"/share/{share_id}"))
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == chat_id
+        assert data["id"] == share_id
         assert data["chat"] == {
             "name": "chat1",
             "description": "chat1 description",
             "tags": ["tag1", "tag2"],
             "history": {"currentId": "1", "messages": []},
         }
-        assert data["id"] == chat_id
-        assert data["share_id"] == chat_id
+        assert data["user_id"] == f"shared-{chat_id}"
         assert data["title"] == "New Chat"
 
     def test_get_chat_by_id(self):

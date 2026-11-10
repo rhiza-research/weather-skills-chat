@@ -7,20 +7,28 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from open_webui.utils.builtin_tools import (
+    PNG_TRAILER,
     display_image,
     looks_like_display_image,
     wait_for_sandbox_image,
 )
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16 + PNG_TRAILER
 
 
 class LooksLikeDisplayImageTest(unittest.TestCase):
     def test_png_jpeg_gif_webp(self):
         self.assertTrue(looks_like_display_image(PNG, ".png"))
-        self.assertTrue(looks_like_display_image(b"\xff\xd8\xff\xe0rest", ".jpg"))
-        self.assertTrue(looks_like_display_image(b"GIF89a....", ".gif"))
-        self.assertTrue(looks_like_display_image(b"RIFF\x00\x00\x00\x00WEBP....", ".webp"))
+        self.assertTrue(looks_like_display_image(b"\xff\xd8\xff\xe0rest\xff\xd9", ".jpg"))
+        self.assertTrue(looks_like_display_image(b"GIF89a....;", ".gif"))
+        self.assertTrue(looks_like_display_image(b"RIFF\x08\x00\x00\x00WEBP....", ".webp"))
+
+    def test_cut_short_images_are_rejected(self):
+        """A file read before the runner's write arrived keeps its signature."""
+        self.assertFalse(looks_like_display_image(PNG[:-6], ".png"))
+        self.assertFalse(looks_like_display_image(b"\xff\xd8\xff\xe0rest", ".jpg"))
+        self.assertFalse(looks_like_display_image(b"GIF89a....", ".gif"))
+        self.assertFalse(looks_like_display_image(b"RIFF\x20\x00\x00\x00WEBP....", ".webp"))
 
     def test_empty_and_wrong_magic_are_rejected(self):
         self.assertFalse(looks_like_display_image(b"", ".png"))
@@ -44,6 +52,16 @@ class WaitForSandboxImageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "plot.png"
             target.write_bytes(b"")
+            writer = threading.Timer(0.05, target.write_bytes, args=(PNG,))
+            writer.start()
+            data = wait_for_sandbox_image(target, ".png", timeout_s=1.0, interval_s=0.02)
+            writer.join()
+            self.assertEqual(data, PNG)
+
+    def test_waits_for_cut_short_png_to_complete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "plot.png"
+            target.write_bytes(PNG[:-6])
             writer = threading.Timer(0.05, target.write_bytes, args=(PNG,))
             writer.start()
             data = wait_for_sandbox_image(target, ".png", timeout_s=1.0, interval_s=0.02)
@@ -123,6 +141,14 @@ class DisplayHtmlToolTest(unittest.TestCase):
     def test_missing_html_says_not_found(self):
         out = self._show({}, "nope.html")
         self.assertEqual(out, "File not found: `nope.html`")
+
+    def test_png_that_never_completes_says_try_again(self):
+        out = self._show({"plot.png": PNG[:-6]}, "plot.png")
+        self.assertEqual(
+            out,
+            "`plot.png` is not a complete image yet. It may still be being "
+            "written; try again in a moment.",
+        )
 
     def test_other_types_are_still_rejected(self):
         out = self._show({"data.csv": b"a,b\n"}, "data.csv")

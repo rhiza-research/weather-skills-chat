@@ -108,6 +108,7 @@ export const updateOrganizationById = async (
 		can_add_models?: boolean;
 		can_add_skills?: boolean;
 		can_add_knowledge?: boolean;
+		can_use_large_runners?: boolean;
 		monthly_limit_usd?: number | null;
 		logo?: string | null;
 	}

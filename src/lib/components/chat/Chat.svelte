@@ -9,7 +9,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
-	import { get, type Unsubscriber, type Writable } from 'svelte/store';
+	import { derived, get, type Unsubscriber, type Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -104,6 +104,7 @@
 		viewingLeafFor
 	} from '$lib/chat/cache';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
+	import { switchOrganization } from '$lib/utils/organizationContext';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getAndUpdateUserLocation, getUserById, getUserSettings } from '$lib/apis/users';
@@ -121,7 +122,13 @@
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
 	import { revealApp } from '$lib/utils/splash';
-	import { createPromptQueue } from '$lib/utils/eventPrompts';
+	import {
+		answerEventPrompt as answerPrompt,
+		eventPrompts,
+		nextEventPrompt,
+		type EventPrompt
+	} from '$lib/utils/eventPrompts';
+	import { chatInputWorthSaving, parseChatInput, type ChatInput } from '$lib/chat/chatInput';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -177,23 +184,49 @@
 	let eventConfirmationInput = false;
 	let eventConfirmationInputPlaceholder = '';
 	let eventConfirmationInputValue = '';
-	const eventPrompts = createPromptQueue<Record<string, any>>();
+	let eventConfirmationConfirmLabel = '';
+	let eventConfirmationChoices: { label: string; value: string }[] = [];
+	/** The prompt in the dialog. Prompts for other chats wait until that chat is open. */
+	let eventPrompt: EventPrompt | null = null;
 
-	const showEventPrompt = (data) => {
+
+	const showEventPrompt = async (next: EventPrompt | null) => {
+		eventPrompt = next;
+		showEventConfirmation = false;
+		if (!next) return;
+		// Let the dialog close before it opens for the next prompt.
+		await tick();
+		if (eventPrompt !== next) return;
+		const data = next.data;
 		eventConfirmationInput = data.input;
 		eventConfirmationTitle = data.title ?? '';
 		eventConfirmationMessage = data.message ?? '';
 		eventConfirmationInputPlaceholder = data.placeholder ?? '';
 		eventConfirmationInputValue = data.value ?? '';
+		eventConfirmationConfirmLabel = data.confirm_label ?? '';
+		eventConfirmationChoices = Array.isArray(data.choices) ? data.choices : [];
 		showEventConfirmation = true;
 	};
 
-	const answerEventPrompt = async (value) => {
-		const next = eventPrompts.answer(value);
-		if (!next) return;
-		// Let the dialog close before it opens for the next prompt.
-		await tick();
-		showEventPrompt(next.data);
+	// A store subscription, not `$:`: opening a chat sets chatId from a later
+	// reactive statement, which would not re-run an earlier one, so a popup
+	// waiting for that chat would not show.
+	const stopEventPromptWatch = derived([eventPrompts, chatId], ([list, id]) =>
+		nextEventPrompt(list, id)
+	).subscribe((next) => {
+		if (next !== eventPrompt) showEventPrompt(next);
+	});
+
+	const answerEventPrompt = (value) => {
+		const answered = eventPrompt;
+		if (!answered) return;
+		// A file read's wider answers stay on for this chat's later messages.
+		const path = answered.data?.path;
+		if (path && value === 'all_files') readArtifactsEnabled = true;
+		if (path && value === 'this_file' && !readArtifactPaths.includes(path)) {
+			readArtifactPaths = [...readArtifactPaths, path];
+		}
+		answerPrompt(answered, value);
 	};
 
 	let chatIdUnsubscriber: Unsubscriber | undefined;
@@ -209,12 +242,14 @@
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
 	let readArtifactsEnabled = false;
+	let readArtifactPaths: string[] = [];
 	// Built-in tool groups the user turned off or on; missing means on.
 	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
 	let tags = [];
 	let chatOwnerName = '';
+	let cloning = false;
 	$: chatWritable =
 		!chat || !chat.user_id || !$user?.id || chat.user_id === $user.id || $user?.role === 'admin';
 
@@ -317,6 +352,18 @@
 		}
 	};
 
+	const applyChatInput = (input: ChatInput) => {
+		prompt = input.prompt;
+		files = input.files;
+		selectedToolIds = input.selectedToolIds;
+		webSearchEnabled = input.webSearchEnabled;
+		imageGenerationEnabled = input.imageGenerationEnabled;
+		codeInterpreterEnabled = input.codeInterpreterEnabled;
+		readArtifactsEnabled = input.readArtifactsEnabled;
+		readArtifactPaths = input.readArtifactPaths;
+		builtinFeatures = input.builtinFeatures;
+	};
+
 	const loadChatForProp = async (id: string) => {
 		if (!id || loadingChatId === id) {
 			return;
@@ -330,14 +377,8 @@
 
 		queuedSends = readQueuedSends(id);
 		queueWaitsAfter = null;
-		prompt = '';
-		files = [];
-		selectedToolIds = [];
-		webSearchEnabled = false;
-		imageGenerationEnabled = false;
-		codeInterpreterEnabled = false;
-		readArtifactsEnabled = false;
-		builtinFeatures = {};
+		// Before the chat bar mounts again, so it starts with this chat's draft and switches.
+		applyChatInput(parseChatInput(localStorage.getItem(`chat-input-${id}`)));
 
 		try {
 			const ok = await loadChat(id);
@@ -357,20 +398,6 @@
 			await tick();
 			if (chatAlive && get(chatId) === id) await openArtifactsPanel(id);
 			revealApp();
-
-			if (localStorage.getItem(`chat-input-${id}`)) {
-				try {
-					const input = JSON.parse(localStorage.getItem(`chat-input-${id}`));
-					prompt = input.prompt;
-					files = input.files;
-					selectedToolIds = input.selectedToolIds;
-					webSearchEnabled = input.webSearchEnabled;
-					imageGenerationEnabled = input.imageGenerationEnabled;
-					codeInterpreterEnabled = input.codeInterpreterEnabled;
-					readArtifactsEnabled = input.readArtifactsEnabled ?? false;
-					builtinFeatures = input.builtinFeatures ?? {};
-				} catch (e) {}
-			}
 
 			document.getElementById('chat-input')?.focus();
 		} catch (e) {
@@ -522,8 +549,7 @@
 				toast.info(toastContent);
 			}
 		} else if (type === 'confirmation' || type === 'input') {
-			const prompt = { data: { ...data, input: type === 'input' }, respond: (v) => cb?.(v) };
-			if (eventPrompts.push(prompt)) showEventPrompt(prompt.data);
+			// The app layout queues these for every chat; see eventPrompts.
 		} else if (type === 'execute') {
 			try {
 				const asyncFunction = new Function(`return (async () => { ${data.code} })()`);
@@ -649,29 +675,6 @@
 			}
 		}
 
-		if (localStorage.getItem(`chat-input-${chatIdProp}`)) {
-			try {
-				const input = JSON.parse(localStorage.getItem(`chat-input-${chatIdProp}`));
-				prompt = input.prompt;
-				files = input.files;
-				selectedToolIds = input.selectedToolIds;
-				webSearchEnabled = input.webSearchEnabled;
-				imageGenerationEnabled = input.imageGenerationEnabled;
-				codeInterpreterEnabled = input.codeInterpreterEnabled;
-				readArtifactsEnabled = input.readArtifactsEnabled ?? false;
-				builtinFeatures = input.builtinFeatures ?? {};
-			} catch (e) {
-				prompt = '';
-				files = [];
-				selectedToolIds = [];
-				webSearchEnabled = false;
-				imageGenerationEnabled = false;
-				codeInterpreterEnabled = false;
-				readArtifactsEnabled = false;
-				builtinFeatures = {};
-			}
-		}
-
 		// The store calls this immediately with the current value. That first
 		// "closed" notice is async, so it can land after a later open and
 		// wipe the artifacts flag while leaving the pane expanded.
@@ -717,6 +720,7 @@
 		stopPaint();
 		stopTailRequest();
 		stopControlsWatch();
+		stopEventPromptWatch();
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
 		window.removeEventListener('message', onMessageHandler);
@@ -1157,6 +1161,11 @@
 			if (loadingChatId === id && !loadedChat) await goto('/');
 			return null;
 		}
+		// A chat from another of the user's orgs opens in that org, with its models and sidebar.
+		await switchOrganization(loadedChat.organization_id, token).catch((error) =>
+			toast.error(`${error}`)
+		);
+		if (loadingChatId !== id) return null;
 		if (!applyChatDocument(loadedChat)) return null;
 		loading = false;
 		if (messagesLoad) await messagesLoad;
@@ -2412,6 +2421,7 @@
 							? webSearchEnabled || ($settings?.webSearch ?? false) === 'always'
 							: false,
 					read_artifacts: readArtifactsEnabled,
+					read_artifact_paths: readArtifactPaths,
 					email: builtinFeatures.email !== false,
 					scheduled_tasks: builtinFeatures.scheduled_tasks !== false,
 					preferences: builtinFeatures.preferences !== false
@@ -2899,6 +2909,8 @@
 	input={eventConfirmationInput}
 	inputPlaceholder={eventConfirmationInputPlaceholder}
 	inputValue={eventConfirmationInputValue}
+	confirmLabel={eventConfirmationConfirmLabel || $i18n.t('Confirm')}
+	choices={eventConfirmationChoices}
 	on:confirm={(e) => answerEventPrompt(e.detail ? e.detail : true)}
 	on:cancel={() => answerEventPrompt(false)}
 />
@@ -2953,7 +2965,7 @@
 				<div class="flex flex-col flex-auto z-10 w-full @container">
 					{#if $settings?.landingPageMode === 'chat' || createMessagesList(history, history.currentId).length > 0}
 						<div
-							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10 scrollbar-hidden"
+							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10"
 							id="messages-container"
 							bind:this={messagesContainerElement}
 							use:stickToEnd
@@ -3052,19 +3064,29 @@
 											{$i18n.t('Clone to continue.')}
 										</div>
 										<button
-											class="shrink-0 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-[11px]"
+											class="shrink-0 flex items-center gap-1 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-[11px] disabled:opacity-70"
+											disabled={cloning}
+											aria-busy={cloning}
 											on:click={async () => {
-												const cloned = await cloneChatById(localStorage.token, $chatId).catch(
-													(error) => {
-														toast.error(`${error}`);
-														return null;
+												cloning = true;
+												try {
+													const cloned = await cloneChatById(localStorage.token, $chatId).catch(
+														(error) => {
+															toast.error(`${error}`);
+															return null;
+														}
+													);
+													if (cloned) {
+														await goto(`/c/${cloned.id}`);
 													}
-												);
-												if (cloned) {
-													await goto(`/c/${cloned.id}`);
+												} finally {
+													cloning = false;
 												}
 											}}
 										>
+											{#if cloning}
+												<Spinner className="size-3" />
+											{/if}
 											{$i18n.t('Clone to continue')}
 										</button>
 									</div>
@@ -3082,6 +3104,7 @@
 								bind:imageGenerationEnabled
 								bind:codeInterpreterEnabled
 								bind:readArtifactsEnabled
+								bind:readArtifactPaths
 								bind:builtinFeatures
 								bind:webSearchEnabled
 								bind:atSelectedModel
@@ -3090,7 +3113,8 @@
 								{stopResponse}
 								{createMessagePair}
 								onChange={(input) => {
-									if (input.prompt) {
+									if (!$chatId) return;
+									if (chatInputWorthSaving(input)) {
 										localStorage.setItem(`chat-input-${$chatId}`, JSON.stringify(input));
 									} else {
 										localStorage.removeItem(`chat-input-${$chatId}`);

@@ -13,6 +13,8 @@
 	export let confirmLabel = $i18n.t('Confirm');
 
 	export let onConfirm = () => {};
+	/** More answers besides Cancel and Confirm; choosing one confirms with its value. */
+	export let choices: { label: string; value: string }[] = [];
 
 	export let input = false;
 	export let inputPlaceholder = '';
@@ -60,6 +62,11 @@
 		show = false;
 		await onConfirm();
 		dispatch('confirm', inputValue);
+	};
+
+	const choose = (value: string) => {
+		show = false;
+		dispatch('confirm', value);
 	};
 
 	onMount(() => {
@@ -140,7 +147,21 @@
 					</div>
 				</slot>
 
-				<div class="mt-6 flex justify-between gap-1.5">
+				{#if choices.length}
+					<div class="mt-6 flex flex-col gap-1.5">
+						{#each choices as choice (choice.value)}
+							<button
+								class="border border-gray-200 hover:bg-gray-100 text-gray-800 dark:border-gray-800 dark:hover:bg-gray-850 dark:text-white font-medium w-full py-2.5 rounded-lg transition"
+								on:click={() => choose(choice.value)}
+								type="button"
+							>
+								{choice.label}
+							</button>
+						{/each}
+					</div>
+				{/if}
+
+				<div class="{choices.length ? 'mt-1.5' : 'mt-6'} flex justify-between gap-1.5">
 					<button
 						class="bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white font-medium w-full py-2.5 rounded-lg transition"
 						on:click={() => {

@@ -722,7 +722,7 @@ export const cloneSharedChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const shareChatById = async (token: string, id: string) => {
+export const shareChatById = async (token: string, id: string, expiresInDays: number) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/share`, {
@@ -732,7 +732,8 @@ export const shareChatById = async (token: string, id: string) => {
 			'Content-Type': 'application/json',
 			...organizationHeaders(),
 			...(token && { authorization: `Bearer ${token}` })
-		}
+		},
+		body: JSON.stringify({ expires_in_days: expiresInDays })
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await parseApiError(res);
@@ -756,11 +757,11 @@ export const shareChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const copyChatShareLink = async (token: string, id: string) => {
+export const copyChatShareLink = async (token: string, id: string, expiresInDays: number) => {
 	const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
 	const getShareUrl = async () => {
-		const sharedChat = await shareChatById(token, id);
+		const sharedChat = await shareChatById(token, id, expiresInDays);
 		if (!sharedChat?.id) {
 			throw new Error('Failed to create share link');
 		}
@@ -1174,6 +1175,35 @@ export const startToolRunner = async (token: string, chatId: string) => {
 		}
 	});
 	if (!res.ok) return { enabled: false, state: 'off' };
+	return res.json();
+};
+
+export const getToolRunnerSizes = async (token: string, chatId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner/sizes`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) return { enabled: false, sizes: [], current: null };
+	return res.json();
+};
+
+export const setToolRunnerSize = async (token: string, chatId: string, size: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/tool-runner/size`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({ size })
+	});
+	if (!res.ok) {
+		const err = await res.json().catch(() => ({}));
+		throw err?.detail ?? 'Could not change the tool runner size';
+	}
 	return res.json();
 };
 

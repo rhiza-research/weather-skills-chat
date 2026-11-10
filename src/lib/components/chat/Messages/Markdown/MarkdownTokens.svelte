@@ -17,7 +17,7 @@
 	import AlertRenderer, { alertComponent } from './AlertRenderer.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 	import ActivityLine from '$lib/components/chat/Messages/ActivityLine.svelte';
-	import { isInlineStatus } from '$lib/utils/activityStatus';
+	import { isInlineStatus, settleFollowedActivity } from '$lib/utils/activityStatus';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { decodeEntities } from '$lib/utils/entities';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
@@ -109,7 +109,8 @@
 		return true;
 	};
 
-	$: displayTokens = (groupActivity ? groupActivityTokens(tokens) : tokens) as any[];
+	$: settledTokens = settleFollowedActivity(tokens);
+	$: displayTokens = (groupActivity ? groupActivityTokens(settledTokens) : settledTokens) as any[];
 	$: lastActivityIdx = (() => {
 		let idx = -1;
 		for (let i = 0; i < displayTokens.length; i++) {

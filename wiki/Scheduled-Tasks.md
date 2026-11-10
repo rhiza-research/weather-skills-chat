@@ -8,6 +8,7 @@ A scheduled task sends the same prompt as a new chat on a schedule, for example 
 - The prompt each run sends.
 - The model to use. "Default model" uses the organization's default model, or the app's default when the organization has none.
 - A time limit for each run, from 1 minute to 24 hours, 60 minutes unless set. A run that takes longer is stopped and recorded as an error.
+- A tool runner size for its runs, when the tool runner is on and the organization can use more than one size. The standard size unless set. See [[Tool Runner#runner-sizes]].
 - A schedule, or no schedule for a task that only runs when someone presses Run now.
 - Whether scheduled runs are on.
 - The tools, skills, and chat features, such as web search, to offer the model. When no tools are chosen, the run offers every tool and skill its user can use in the organization.
@@ -27,7 +28,7 @@ The search box beside the sort button shows only the tasks whose name or prompt 
 
 ## The task page
 
-Each scheduled task has a page with its settings in a single column and its run history below. Next to the Save button, the page shows who created the task and when, and who last changed it and when. Changes made by the model in a chat count as the user's. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make, as described on [[Built-in Tools]]. With **Agent not allowed to read files**, a run cannot read them, since no one is present to approve. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
+Each scheduled task has a page with its settings in a single column and its run history below. Next to the Save button, the page shows who created the task and when, and who last changed it and when. Changes made by the model in a chat count as the user's. The **Tools** button opens the same list of tools and skills a chat uses, to turn each one on or off for the task. Web search and running code can be turned on for the task when the user may use them in a chat. Its buttons are worded as in the chat bar. **Agent allowed to read files** lets the task's runs read the files they make. With **Agent not allowed to read files**, a run reads only the files named in the field below it, since no one is present to approve; both are described on [[Built-in Tools]]. When a task has no tools chosen, its page starts with the tools a new chat starts with, and saving keeps that list.
 
 A new task starts with its scheduled runs on. They are turned off and back on with the task's switch on the Scheduled tasks page.
 
@@ -90,6 +91,8 @@ The model is told to report, when it finishes, whether it did what the prompt as
 - **Stopped**: someone stopped the run from its chat. A stopped run gets no dot in the sidebar.
 
 The model's summary is shown with the run, next to a success or failure.
+
+Messages sent later in a run's chat are ordinary chat replies. They cannot report or change the run's result.
 
 ## Picture
 

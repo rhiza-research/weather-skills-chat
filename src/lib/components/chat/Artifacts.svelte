@@ -31,6 +31,8 @@
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
 
 	export let history;
+	// A share link's frozen files: browse and download only.
+	export let readOnly = false;
 	let messages = [];
 
 	let contents: Array<{ type: string; content: string }> = [];
@@ -375,8 +377,8 @@
 				? 'h-[38%]'
 				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
 		>
-			<div class="flex items-center justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-[11px] text-gray-600 dark:text-gray-300 truncate min-w-0" title={previewTitle}>
+			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
+				<div class="text-[11px] leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
 					{previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
@@ -435,20 +437,22 @@
 		<div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
 			<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
 			<div class="flex items-center gap-2">
-				<button
-					type="button"
-					class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
-					disabled={uploading || !$chatId || $chatId === 'local'}
-					on:click={() => fileInput?.click()}
-				>
-					{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
-				</button>
-				<input
-					bind:this={fileInput}
-					type="file"
-					class="hidden"
-					on:change={onUpload}
-				/>
+				{#if !readOnly}
+					<button
+						type="button"
+						class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+						disabled={uploading || !$chatId || $chatId === 'local'}
+						on:click={() => fileInput?.click()}
+					>
+						{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
+					</button>
+					<input
+						bind:this={fileInput}
+						type="file"
+						class="hidden"
+						on:change={onUpload}
+					/>
+				{/if}
 				<button
 					type="button"
 					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"

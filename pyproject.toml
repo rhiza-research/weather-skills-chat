@@ -140,6 +140,7 @@ dependencies = [
     "opentelemetry-instrumentation-logging==0.65b0",
     "opentelemetry-instrumentation-httpx==0.65b0",
     "opentelemetry-instrumentation-aiohttp-client==0.65b0",
+    "brotli>=1.2.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.11, < 3.13.0a1"

@@ -117,33 +117,6 @@ export const updateUserRole = async (token: string, id: string, role: string) =>
 	return res;
 };
 
-export const searchUsers = async (token: string, q: string) => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/users/search?q=${encodeURIComponent(q)}`, {
-		method: 'GET',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await parseApiError(res);
-			return res.json();
-		})
-		.catch((err) => {
-			console.log(err);
-			error = err.detail;
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
-
-	return res ? res : [];
-};
-
 export const getUsers = async (token: string) => {
 	let error = null;
 
@@ -390,4 +363,21 @@ export const updateUserById = async (token: string, userId: string, user: UserUp
 	}
 
 	return res;
+};
+
+export const sendFeedback = async (
+	token: string,
+	body: { subject: string; description: string; chat_id: string | null }
+): Promise<{ status: boolean }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/users/feedback`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(body)
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return res.json();
 };

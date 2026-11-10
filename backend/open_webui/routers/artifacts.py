@@ -7,6 +7,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+import brotli
 from fastapi import (
     APIRouter,
     Depends,
@@ -24,6 +25,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
     HTML_SUFFIXES,
+    artifact_provenance,
     extract_sandbox_archive,
     is_zarr_store,
     list_artifacts_async,
@@ -33,7 +35,8 @@ from open_webui.utils.artifacts import (
     write_bytes,
 )
 from open_webui.utils.auth import get_verified_user
-from open_webui.utils.organizations import require_chat_read, require_chat_write
+from open_webui.utils.organizations import require_chat_files_read, require_chat_write
+from open_webui.utils.precompressed_static import accepts_brotli
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -48,15 +51,29 @@ async def get_artifacts(
     provenance: bool = True,
     user=Depends(get_verified_user),
 ):
-    await asyncio.to_thread(require_chat_read, chat_id, user)
+    await asyncio.to_thread(require_chat_files_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
+
+
+@router.get("/{chat_id}/artifacts/provenance")
+def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_user)):
+    """Full provenance branches for one entry; the listing carries only crumbs."""
+    require_chat_files_read(chat_id, user)
+    try:
+        return artifact_provenance(chat_id, path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
 
 
 @router.get("/{chat_id}/artifacts/content")
 def get_artifact_content(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -149,6 +166,14 @@ def _gzip_stream(chunks):
     yield compressor.flush()
 
 
+def _brotli_stream(chunks):
+    compressor = brotli.Compressor(quality=5)
+    for chunk in chunks:
+        if out := compressor.process(chunk):
+            yield out
+    yield compressor.finish()
+
+
 def _view_validators(target: Path) -> tuple[str, str]:
     st = target.stat()
     # Weak: the gzipped and plain bodies differ byte for byte.
@@ -176,7 +201,7 @@ def _not_modified(request: Request, etag: str, last_modified: str) -> bool:
 def view_html_artifact(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:
@@ -195,7 +220,11 @@ def view_html_artifact(
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     body = _html_with_size_report(target)
-    if "gzip" in request.headers.get("accept-encoding", "").lower():
+    accept = request.headers.get("accept-encoding", "")
+    if accepts_brotli(accept):
+        headers["Content-Encoding"] = "br"
+        body = _brotli_stream(body)
+    elif "gzip" in accept.lower():
         headers["Content-Encoding"] = "gzip"
         body = _gzip_stream(body)
     return StreamingResponse(
@@ -210,7 +239,7 @@ def get_artifact_archive(
     format: str = Query("tar.gz"),
     user=Depends(get_verified_user),
 ):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     fmt = (format or "tar.gz").lower().strip()
     if fmt not in ("tar.gz", "zip"):
         raise HTTPException(
@@ -283,7 +312,7 @@ async def upload_artifact(
 
 @router.get("/{chat_id}/artifacts/zarr/meta")
 def zarr_meta(chat_id: str, path: str, user=Depends(get_verified_user)):
-    require_chat_read(chat_id, user)
+    require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)
     except ValueError as e:

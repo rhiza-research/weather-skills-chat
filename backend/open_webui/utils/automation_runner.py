@@ -198,6 +198,24 @@ def _resolve_tool_ids(automation, model: Optional[dict], user=None) -> Optional[
     return None
 
 
+def readable_files_note(features) -> str:
+    """What a run is told about the files it may read, when the task allows only some."""
+    if not isinstance(features, dict) or features.get("read_artifacts"):
+        return ""
+    patterns = [
+        p for p in features.get("read_artifact_paths") or [] if isinstance(p, str) and p
+    ]
+    if not patterns:
+        return ""
+    return (
+        "\n\nWith read_artifact, this run may read only the files in its chat "
+        "that match these Unix glob patterns, where * and ? stay within one "
+        "folder and ** spans folders: "
+        + ", ".join(f"`{p}`" for p in patterns)
+        + "."
+    )
+
+
 async def _stream_automation_chat(
     request,
     *,
@@ -321,6 +339,37 @@ def _first_model_id(*model_lists: Optional[str]) -> Optional[str]:
     return None
 
 
+async def _use_task_runner_size(automation, chat_id: str) -> None:
+    """Put the run's chat on the task's tool runner size.
+
+    Choosing the size on the task counts as the approval a chat asks for.
+    A size the organization can no longer use leaves the default.
+    """
+    from open_webui.env import tool_runner_enabled
+
+    if not automation.runner_type or not tool_runner_enabled():
+        return
+    try:
+        from open_webui.utils.runner_types import find
+        from open_webui.utils.skill_k8s_sandbox import (
+            runner_catalog,
+            runner_types_for_org,
+            switch_runner_type,
+        )
+
+        rtype = find(await runner_types_for_org(automation.organization_id), automation.runner_type)
+        if rtype is None:
+            log.info(
+                "scheduled task %s runner size %s is not available; using the default",
+                automation.id,
+                automation.runner_type,
+            )
+            return
+        switch_runner_type(chat_id, rtype, await runner_catalog())
+    except Exception:
+        log.warning("could not set the runner size for task %s", automation.id, exc_info=True)
+
+
 async def execute_automation(
     request, automation_id: str, triggered_by: str, *, wait: bool = True
 ):
@@ -370,7 +419,9 @@ async def execute_automation(
         automation.id, status="running", triggered_by=triggered_by
     )
     title = f"{automation.name} — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-    user_message = _new_message("user", automation.prompt)
+    features = automation.features if isinstance(automation.features, dict) else {}
+    prompt = automation.prompt + readable_files_note(features)
+    user_message = _new_message("user", prompt)
     assistant = _new_message("assistant", "", model_id)
     assistant["parentId"] = user_message["id"]
     user_message["childrenIds"] = [assistant["id"]]
@@ -402,6 +453,7 @@ async def execute_automation(
             raise ValueError("Failed to create chat")
         run = AutomationRuns.update_run(run.id, chat_id=chat.id)
         await notify_run(automation, run)
+        await _use_task_runner_size(automation, chat.id)
 
         notify_ids = [owner_id]
         if automation.visibility == "organization" and automation.organization_id:
@@ -417,7 +469,6 @@ async def execute_automation(
         await _notify_chat_created(notify_ids, chat.id, title)
 
         tool_ids = _resolve_tool_ids(automation, model, user)
-        features = automation.features if isinstance(automation.features, dict) else {}
 
         timeout_minutes = automation.timeout_minutes or DEFAULT_RUN_TIMEOUT_MINUTES
 
@@ -431,7 +482,7 @@ async def execute_automation(
                     user=user,
                     model=model,
                     model_id=model_id,
-                    prompt=automation.prompt,
+                    prompt=prompt,
                     tool_ids=tool_ids,
                     features=features,
                     organization_id=org_id,

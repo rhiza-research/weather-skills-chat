@@ -54,6 +54,7 @@ from open_webui.utils.pyodide_assets import (
     should_spa_fallback,
 )
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
+from open_webui.utils.invite_email import smtp_is_configured
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
     app as socket_app,
@@ -565,9 +566,11 @@ async def lifespan(app: FastAPI):
     if RESET_CONFIG_ON_START:
         reset_config()
 
-    from open_webui.utils.bootstrap import bootstrap_admin_user
+    from open_webui.utils.bootstrap import bootstrap_admin_user, provision_from_env
 
     bootstrap_admin_user()
+    # Before yield, so a failure stops startup and requests wait for it.
+    await asyncio.to_thread(provision_from_env, app.state.TOOLS)
 
     if LICENSE_KEY:
         get_license_data(app, LICENSE_KEY)
@@ -1670,6 +1673,7 @@ def get_user_config(user=Depends(get_verified_user)):
             "enable_google_drive_integration": app.state.config.ENABLE_GOOGLE_DRIVE_INTEGRATION,
             "enable_onedrive_integration": app.state.config.ENABLE_ONEDRIVE_INTEGRATION,
             "enable_tool_runner": tool_runner_enabled(),
+            "enable_feedback_email": not smtp_is_configured(app.state.config),
         },
         "default_models": app.state.config.DEFAULT_MODELS,
         "default_prompt_suggestions": app.state.config.DEFAULT_PROMPT_SUGGESTIONS,

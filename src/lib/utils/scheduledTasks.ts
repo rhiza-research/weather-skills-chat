@@ -29,6 +29,7 @@ export const taskFromChat = (chatId: string, chat) => {
 				web_search: !!input.webSearchEnabled,
 				code_interpreter: !!input.codeInterpreterEnabled,
 				read_artifacts: !!input.readArtifactsEnabled,
+				read_artifact_paths: Array.isArray(input.readArtifactPaths) ? input.readArtifactPaths : [],
 				...(input.builtinFeatures ?? {})
 			};
 		}

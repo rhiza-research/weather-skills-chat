@@ -1,34 +1,45 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createPromptQueue } from './eventPrompts';
+import { get } from 'svelte/store';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { addEventPrompt, answerEventPrompt, eventPrompts, nextEventPrompt } from './eventPrompts';
 
-describe('createPromptQueue', () => {
+const prompt = (chatId: string, path: string) => ({
+	chatId,
+	data: { path },
+	respond: vi.fn()
+});
+
+describe('eventPrompts', () => {
+	beforeEach(() => eventPrompts.set([]));
+
 	it('answers each prompt with its own callback, in arrival order', () => {
-		const queue = createPromptQueue<string>();
-		const first = vi.fn();
-		const second = vi.fn();
+		const first = prompt('a', 'a.png');
+		const second = prompt('a', 'b.csv');
+		addEventPrompt(first);
+		addEventPrompt(second);
+		expect(nextEventPrompt(get(eventPrompts), 'a')).toBe(first);
 
-		expect(queue.push({ data: 'a.png', respond: first })).toBe(true);
-		expect(queue.push({ data: 'b.csv', respond: second })).toBe(false);
-		expect(queue.current()?.data).toBe('a.png');
+		answerEventPrompt(first, true);
+		expect(first.respond).toHaveBeenCalledWith(true);
+		expect(second.respond).not.toHaveBeenCalled();
+		expect(nextEventPrompt(get(eventPrompts), 'a')).toBe(second);
 
-		expect(queue.answer(true)?.data).toBe('b.csv');
-		expect(first).toHaveBeenCalledWith(true);
-		expect(second).not.toHaveBeenCalled();
-
-		expect(queue.answer(false)).toBeUndefined();
-		expect(second).toHaveBeenCalledWith(false);
-		expect(first).toHaveBeenCalledTimes(1);
+		answerEventPrompt(second, 'this_file');
+		expect(second.respond).toHaveBeenCalledWith('this_file');
+		expect(nextEventPrompt(get(eventPrompts), 'a')).toBeNull();
 	});
 
-	it('shows a prompt that arrives after the queue drains', () => {
-		const queue = createPromptQueue<string>();
-		queue.push({ data: 'a.png', respond: vi.fn() });
-		queue.answer(true);
-		expect(queue.push({ data: 'b.csv', respond: vi.fn() })).toBe(true);
+	it('keeps another chat’s prompt until that chat is open', () => {
+		const other = prompt('b', 'x.png');
+		addEventPrompt(other);
+		expect(nextEventPrompt(get(eventPrompts), 'a')).toBeNull();
+		expect(nextEventPrompt(get(eventPrompts), 'b')).toBe(other);
 	});
 
-	it('ignores an answer when nothing is pending', () => {
-		const queue = createPromptQueue<string>();
-		expect(queue.answer(true)).toBeUndefined();
+	it('answers a prompt only once', () => {
+		const only = prompt('a', 'a.png');
+		addEventPrompt(only);
+		answerEventPrompt(only, true);
+		answerEventPrompt(only, false);
+		expect(only.respond).toHaveBeenCalledTimes(1);
 	});
 });
