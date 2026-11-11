@@ -556,12 +556,6 @@ def generate_tool_content(
         "",
         "Usage / CLI flags (pass as argv list of strings):",
         usage.strip(),
-        "",
-        "Credentials: when this skill needs API keys or tokens from the environment, "
-        'pass their secret names via env_secrets (e.g. env_secrets=["ECMWF_API_KEY"]). '
-        "Each name is injected as an environment variable with the same name. "
-        "Prefer env_secrets over putting {{secret:NAME}} placeholders in argv when "
-        "the skill reads os.environ / getenv.",
     ]
     from open_webui.utils.skill_runtime import DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC
 
