@@ -34,6 +34,7 @@ from open_webui.models.users import UserModel
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import ENV, SRC_LOG_LEVELS
+from open_webui.utils.deferred_tools import apply_deferred_tools
 
 
 from open_webui.utils.payload import (
@@ -974,6 +975,7 @@ def prepare_provider_call(
             convert_logit_bias_input_to_json(payload["logit_bias"])
         )
 
+    payload = apply_deferred_tools(payload, defer="openrouter.ai" in (url or ""))
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
     payload = apply_provider_trace_fields(
         payload,
