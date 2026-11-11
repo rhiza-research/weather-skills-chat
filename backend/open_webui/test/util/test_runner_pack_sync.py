@@ -132,7 +132,7 @@ class CallPackSyncTest(_Packs, unittest.IsolatedAsyncioTestCase):
             return f"/workspace/.skill-packs/{name}"
 
         async def exec_on(chat_id, argv, **kw):
-            self.events.append(f"exec {argv[3]}")
+            self.events.append(f"exec {argv[4]}")
             return {"exit_code": 0, "stdout": "ok", "stderr": ""}
 
         patches = [

@@ -243,8 +243,8 @@ class RunSkillChatVenvWiringTest(unittest.TestCase):
             self.assertNotEqual(captured["env"].get("UV_CACHE_DIR"), str(user_uv))
             self.assertNotIn("UV_LINK_MODE", captured["env"])
             self.assertEqual(
-                captured["argv"][:3],
-                ["uv", "run", "--script"],
+                captured["argv"][:4],
+                ["uv", "run", "-q", "--script"],
             )
             writable = [str(Path(p).resolve()) for p in captured["writable"]]
             self.assertIn(str(expected_chat.resolve()), writable)

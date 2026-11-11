@@ -2273,7 +2273,7 @@ async def _run_skill_with_runner(
             # caught the same way.
             pack_name = await _unless_runner_lost(lost, _ensure_call_pack(info, skill_dir))
             remote_script = remote_script_path(skill_dir, script_path, pack_name)
-            argv = ["uv", "run", "--script", remote_script, *args]
+            argv = ["uv", "run", "-q", "--script", remote_script, *args]
             runner_env = {
                 "UV_PYTHON_INSTALL_DIR": os.environ.get(
                     "UV_PYTHON_INSTALL_DIR", "/opt/uv-python"
