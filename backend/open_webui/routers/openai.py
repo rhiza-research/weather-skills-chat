@@ -206,11 +206,20 @@ def enable_openrouter_prompt_caching(
     tools = payload.get("tools")
     if isinstance(tools, list) and tools:
         tools = [dict(t) if isinstance(t, dict) else t for t in tools]
-        last = tools[-1]
-        if isinstance(last, dict):
-            last = dict(last)
+        # The last loaded tool: a deferred one can't carry cache_control.
+        idx = next(
+            (
+                i
+                for i in range(len(tools) - 1, -1, -1)
+                if isinstance(tools[i], dict)
+                and not (tools[i].get("function") or {}).get("defer_loading")
+            ),
+            None,
+        )
+        if idx is not None:
+            last = dict(tools[idx])
             last["cache_control"] = {"type": "ephemeral"}
-            tools[-1] = last
+            tools[idx] = last
             payload["tools"] = tools
 
     messages = payload.get("messages")
