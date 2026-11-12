@@ -45,6 +45,8 @@ If the model calls a skill that is off for the message, the skill does not run, 
 
 The model chooses a skill, its arguments, and, for skills with several scripts, which script to run. It can also ask for [[Secrets]], which the skill receives as environment variables. The skill runs on the server, inside the chat's files, so what it writes appears in the chat. When a [[Tool Runner]] is on, the skill runs there instead of on the chat server. The user can stop a running skill with the Stop button, and a skill that runs too long is stopped. The model then sees the skill's output and whether it succeeded.
 
+With `DEFER_SKILL_TOOLS` on, the model is sent each skill's name and a one-line summary only. It loads a skill with `skill_search`, and that skill stays loaded for the rest of the chat. This works through OpenRouter; other connections still get every skill in full.
+
 Opening a skill call in the chat and then **Call** lists its arguments one per line, each flag next to its value. A JSON value is shown pretty-printed. A Jsonnet plot spec written on one line is spread over several, one entry per line; Jsonnet that already spans several lines, like any other multi-line value, keeps its own line breaks. Long values start collapsed; **Expand** shows them in full.
 
 Each skill brings its own Python dependencies, which `uv` installs the first time they are needed and reuses afterward.
@@ -68,6 +70,7 @@ When confinement is on, dependencies are kept in an environment per chat, on the
 
 The Helm chart sets those from one value, `sandbox.isolation`. `off` turns confinement off. `auto`, `sandlock`, and `landlock_only` confine on the chat server. `k8s` sends skills to a [[Tool Runner]] instead. Staging and production both use `k8s`. See [[Deployment]].
 | `SKILL_RUN_TIMEOUT` | `600` | How long, in seconds, a skill may run before it is stopped, unless the model asks for a different `timeout` on that call |
+| `DEFER_SKILL_TOOLS` | `false` | Send skills only once `skill_search` finds them (OpenRouter) |
 | `SKILL_RUN_TIMEOUT_MAX` | `1800` | The longest `timeout`, in seconds, the model may ask for on one call; longer requests are cut to this |
 | `SKILL_VENV_ROOT` | `/var/skill-venvs` | Volume for per-chat skill environments; used only when it exists and the app can write to it |
 | `SKILL_VENV_MAX_BYTES` | `0` | Space, in bytes, that per-chat environments may use; `0` means 85% of the volume |

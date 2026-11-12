@@ -1,5 +1,6 @@
 import time
 import logging
+from textwrap import shorten
 import sys
 import os
 import base64
@@ -82,6 +83,7 @@ from open_webui.utils.tool_parallel import (
     strip_display,
     with_implicit_depends_on,
 )
+from open_webui.utils.deferred_tools import add_skill_search, defer_tools
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
     get_sorted_filter_ids,
@@ -106,6 +108,7 @@ from open_webui.env import (
     SRC_LOG_LEVELS,
     GLOBAL_LOG_LEVEL,
     BYPASS_MODEL_ACCESS_CONTROL,
+    DEFER_SKILL_TOOLS,
     ENABLE_REALTIME_CHAT_SAVE,
 )
 from open_webui.constants import TASKS
@@ -1354,26 +1357,36 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if tools_dict:
         if metadata.get("function_calling") == "native":
             # If the function calling is native, then call the tools function calling handler
+            deferred = add_skill_search(tools_dict) if DEFER_SKILL_TOOLS else set()
             metadata["tools"] = tools_dict
-            form_data["tools"] = sorted(
-                [
-                    {"type": "function", "function": inject_depends_on_spec(tool.get("spec", {}))}
-                    for tool in tools_dict.values()
-                ],
-                key=lambda t: ((t.get("function") or {}).get("name") or ""),
+            form_data["tools"] = defer_tools(
+                sorted(
+                    [
+                        {"type": "function", "function": inject_depends_on_spec(tool.get("spec", {}))}
+                        for tool in tools_dict.values()
+                    ],
+                    key=lambda t: ((t.get("function") or {}).get("name") or ""),
+                ),
+                deferred,
             )
             try:
                 hints = []
                 if context.secret_hint:
                     hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
+                # A deferred skill has no schema yet, so say what it does.
                 tool_names = [
-                    (tool.get("spec") or {}).get("name")
-                    for tool in tools_dict.values()
-                    if (tool.get("spec") or {}).get("name")
+                    f"`{spec['name']}`"
+                    + (
+                        f" ({shorten((spec.get('description') or '').split('. ')[0], 80, placeholder='…')})"
+                        if key in deferred and spec.get("description")
+                        else ""
+                    )
+                    for key, tool in tools_dict.items()
+                    if (spec := tool.get("spec") or {}).get("name")
                 ]
                 if tool_names:
-                    shown = ", ".join(f"`{n}`" for n in tool_names)
+                    shown = ", ".join(tool_names)
                     hints.append(
                         "Tools/skills enabled for this chat: "
                         + shown

@@ -34,6 +34,7 @@ from open_webui.models.users import UserModel
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import ENV, SRC_LOG_LEVELS
+from open_webui.utils.deferred_tools import apply_deferred_tools
 
 
 from open_webui.utils.payload import (
@@ -206,11 +207,20 @@ def enable_openrouter_prompt_caching(
     tools = payload.get("tools")
     if isinstance(tools, list) and tools:
         tools = [dict(t) if isinstance(t, dict) else t for t in tools]
-        last = tools[-1]
-        if isinstance(last, dict):
-            last = dict(last)
+        # The last loaded tool: a deferred one can't carry cache_control.
+        idx = next(
+            (
+                i
+                for i in range(len(tools) - 1, -1, -1)
+                if isinstance(tools[i], dict)
+                and not (tools[i].get("function") or {}).get("defer_loading")
+            ),
+            None,
+        )
+        if idx is not None:
+            last = dict(tools[idx])
             last["cache_control"] = {"type": "ephemeral"}
-            tools[-1] = last
+            tools[idx] = last
             payload["tools"] = tools
 
     messages = payload.get("messages")
@@ -965,6 +975,7 @@ def prepare_provider_call(
             convert_logit_bias_input_to_json(payload["logit_bias"])
         )
 
+    payload = apply_deferred_tools(payload, defer="openrouter.ai" in (url or ""))
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
     payload = apply_provider_trace_fields(
         payload,
