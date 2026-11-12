@@ -6,6 +6,8 @@ Weather Skills Chat records the tokens and cost of every model call, and stops n
 
 Every model call made for a chat, for a [[Scheduled Tasks]] run, or for the app's background tasks, such as titling a chat, is recorded with its organization, user, chat, model, tokens, and cost. The cost is the amount the model provider reports. The app does not estimate costs, so calls to a provider that reports no cost count as free.
 
+The cache keep-alive calls described on [[Tracing]], which a chat with native function calling makes only when its tools are still running 4.5 minutes after the last model request started, are recorded the same way with the source `cache_keepalive`, and count toward the limits. A keep-alive refused by a limit does not stop the reply.
+
 Usage is totaled per user and per organization for each calendar month, in UTC.
 
 ## Limits

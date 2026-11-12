@@ -52,7 +52,11 @@ from open_webui.models.models import Models
 from open_webui.retrieval.utils import get_sources_from_files
 
 
-from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.chat import (
+    cache_keepalive_applies,
+    generate_cache_keepalive,
+    generate_chat_completion,
+)
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -109,7 +113,11 @@ from open_webui.env import (
     ENABLE_REALTIME_CHAT_SAVE,
 )
 from open_webui.constants import TASKS
-from open_webui.models.usage import UsageLimitExceeded
+from open_webui.models.usage import (
+    ORG_LIMIT_MESSAGE,
+    USER_LIMIT_MESSAGE,
+    UsageLimitExceeded,
+)
 
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -131,6 +139,20 @@ GENERATION_HEARTBEAT_ACTION = "generation_heartbeat"
 GENERATION_HEARTBEAT_INTERVAL_S = float(
     os.environ.get("GENERATION_HEARTBEAT_INTERVAL", "5")
 )
+
+
+# The provider's prompt cache lives this long from the start of the request
+# that wrote or last read it.
+PROMPT_CACHE_TTL_S = 300
+# While tools run, a turn's last model request is re-sent this long after the
+# previous request started, inside the cache's lifetime.
+CACHE_KEEPALIVE_INTERVAL_S = 270
+# When the tools finish, a keep-alive in flight gets this long to complete
+# before it is cancelled, so a stalled one cannot hold back the follow-up.
+CACHE_KEEPALIVE_FINISH_WAIT_S = 30
+# The keep-alive's clock and sleep. Tests replace both with a virtual clock.
+keepalive_clock = time.monotonic
+keepalive_sleep = asyncio.sleep
 
 
 # A streamed reply is serialized and sent at most this often; each delta still
@@ -467,6 +489,91 @@ class GenerationHeartbeat:
         if clear and was_active and not self._cleared:
             self._cleared = True
             await self._emit(done=True)
+
+
+class CacheKeepAlive:
+    """Re-sends a turn's last model request while a tool batch runs, so the
+    provider's prompt cache is still there for the follow-up.
+
+    Each keep-alive reads the cache, which restarts its lifetime. One is sent
+    CACHE_KEEPALIVE_INTERVAL_S after the previous request started, and only
+    while that request started less than PROMPT_CACHE_TTL_S ago: once the
+    cache is gone a keep-alive would write the whole context, which the
+    follow-up writes anyway. The first failure ends keep-alives for the batch.
+    """
+
+    def __init__(self, send, body: dict, started_at: float):
+        self._send = send  # async callable taking the request body
+        self._body = body
+        self._started_at = started_at  # keepalive_clock() of the last request
+        self._task = None
+        self._sending = False
+        self._finishing = False
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._loop())
+
+    async def _loop(self) -> None:
+        started_at = self._started_at
+        while not self._finishing:
+            wait = started_at + CACHE_KEEPALIVE_INTERVAL_S - keepalive_clock()
+            if wait > 0:
+                await keepalive_sleep(wait)
+            sent_at = keepalive_clock()
+            if self._finishing or sent_at - started_at >= PROMPT_CACHE_TTL_S:
+                return
+            self._sending = True
+            try:
+                await self._send(self._body)
+            except Exception as e:
+                if (
+                    isinstance(e, HTTPException)
+                    and e.status_code == 429
+                    and e.detail in (ORG_LIMIT_MESSAGE, USER_LIMIT_MESSAGE)
+                ):
+                    # A usage limit refuses every call alike; nothing failed.
+                    log.info("Cache keep-alive refused by a usage limit: %s", e.detail)
+                else:
+                    log.warning(
+                        "Cache keep-alive failed; none more for this tool batch",
+                        exc_info=True,
+                    )
+                return
+            finally:
+                self._sending = False
+            started_at = sent_at
+
+    async def finish(self) -> None:
+        """The tools finished: give a keep-alive in flight up to
+        CACHE_KEEPALIVE_FINISH_WAIT_S to complete, then cancel it."""
+        task = self._task
+        if task is None or task.done():
+            return
+        self._finishing = True
+        if not self._sending:
+            task.cancel()
+        # asyncio.wait, unlike awaiting the task, leaves the task running when
+        # this caller is cancelled; cancel() then stops it.
+        timer = asyncio.ensure_future(keepalive_sleep(CACHE_KEEPALIVE_FINISH_WAIT_S))
+        try:
+            await asyncio.wait({task, timer}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            timer.cancel()
+        if not task.done():
+            log.warning(
+                "Cache keep-alive still running %ss after the tools finished; cancelling it",
+                CACHE_KEEPALIVE_FINISH_WAIT_S,
+            )
+            task.cancel()
+            await asyncio.wait({task})
+
+    async def cancel(self) -> None:
+        """The turn stopped or failed: stop now, a keep-alive in flight included."""
+        task = self._task
+        if task is None or task.done():
+            return
+        task.cancel()
+        await asyncio.wait({task})
 
 
 def format_code_interpreter_result(output) -> str:
@@ -1743,7 +1850,12 @@ async def process_chat_response(
     tasks,
     detach=True,
     waiting_heartbeat=None,
+    model_call_started_at: Optional[float] = None,
 ):
+    """model_call_started_at is the time.monotonic() at which form_data was
+    sent to the model. Without it the turn's first tool batch sends no cache
+    keep-alives."""
+
     async def background_tasks_handler(turn: TurnEnd):
         message_map = turn.message_map
         message = message_map.get(metadata["message_id"]) if message_map else None
@@ -2422,6 +2534,42 @@ async def process_chat_response(
             await generation_heartbeat.start()
             preparing_tool_calls = PreparingToolCallsStatus(event_emitter)
 
+            # The turn's last model request and when it was sent, re-sent by
+            # the cache keep-alive while a tool batch runs.
+            last_model_call = {"body": form_data, "started_at": model_call_started_at}
+            cache_keepalive = None
+
+            async def start_cache_keepalive():
+                nonlocal cache_keepalive
+                if cache_keepalive is not None:
+                    await cache_keepalive.cancel()
+                cache_keepalive = None
+                body = last_model_call["body"]
+                started_at = last_model_call["started_at"]
+                if started_at is None or metadata.get("function_calling") != "native":
+                    return
+                if keepalive_clock() - started_at >= PROMPT_CACHE_TTL_S:
+                    return
+                try:
+                    applies = await asyncio.to_thread(
+                        cache_keepalive_applies, request, body.get("model")
+                    )
+                except Exception:
+                    log.debug("Cache keep-alive check failed", exc_info=True)
+                    return
+                if not applies:
+                    return
+
+                async def send(keepalive_body):
+                    await generate_cache_keepalive(request, keepalive_body, user)
+
+                cache_keepalive = CacheKeepAlive(send, body, started_at)
+                cache_keepalive.start()
+
+            async def cancel_cache_keepalive():
+                if cache_keepalive is not None:
+                    await cache_keepalive.cancel()
+
             try:
                 for event in events:
                     await event_emitter(
@@ -2846,6 +2994,9 @@ async def process_chat_response(
                         depends_list.append(deps)
 
                     close_open_reasoning_block(content_blocks)
+                    # Runs across the runner wait too: a cold runner can take
+                    # minutes. Stop and errors cancel it in the handlers below.
+                    await start_cache_keepalive()
                     hide_runner_wait = None
                     try:
                         from open_webui.utils.skill_k8s_sandbox import (
@@ -3066,6 +3217,9 @@ async def process_chat_response(
                             )
                         )
 
+                    if cache_keepalive is not None:
+                        await cache_keepalive.finish()
+
                     content_blocks[-1]["results"] = [
                         item for item in results if item is not None
                     ]
@@ -3108,25 +3262,26 @@ async def process_chat_response(
                             message_id=metadata.get("message_id"),
                             followup="tools",
                         )
-                        res = await generate_chat_completion(
-                            request,
-                            {
-                                "model": model_id,
-                                "stream": True,
-                                "tools": form_data["tools"],
-                                "messages": followup_messages,
-                                "metadata": {
-                                    "chat_id": metadata.get("chat_id"),
-                                    "message_id": metadata.get("message_id"),
-                                    "session_id": metadata.get("session_id"),
-                                    "user_id": metadata.get("user_id")
-                                    or getattr(user, "id", None),
-                                    "organization_id": metadata.get("organization_id"),
-                                    "usage_source": metadata.get("usage_source")
-                                    or "chat",
-                                },
+                        followup_body = {
+                            "model": model_id,
+                            "stream": True,
+                            "tools": form_data["tools"],
+                            "messages": followup_messages,
+                            "metadata": {
+                                "chat_id": metadata.get("chat_id"),
+                                "message_id": metadata.get("message_id"),
+                                "session_id": metadata.get("session_id"),
+                                "user_id": metadata.get("user_id")
+                                or getattr(user, "id", None),
+                                "organization_id": metadata.get("organization_id"),
+                                "usage_source": metadata.get("usage_source")
+                                or "chat",
                             },
-                            user,
+                        }
+                        last_model_call["body"] = followup_body
+                        last_model_call["started_at"] = keepalive_clock()
+                        res = await generate_chat_completion(
+                            request, followup_body, user
                         )
 
                         if isinstance(res, StreamingResponse):
@@ -3494,6 +3649,7 @@ async def process_chat_response(
                 # Lets a scheduled task's run tell a stop from a finished reply.
                 metadata["cancelled"] = True
                 complete_open_tool_calls("Cancelled by user.")
+                await cancel_cache_keepalive()
                 close_open_reasoning_block(content_blocks)
 
                 cancelled_content = serialize_content_blocks(content_blocks)
@@ -3534,6 +3690,7 @@ async def process_chat_response(
                 except Exception:
                     log.debug("Title generation after cancel failed", exc_info=True)
             except Exception as e:
+                await cancel_cache_keepalive()
                 log.exception(
                     "Generation failed chat_id=%s message_id=%s",
                     metadata.get("chat_id"),
@@ -3575,6 +3732,7 @@ async def process_chat_response(
                     log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
+                await cancel_cache_keepalive()
                 await waiting_heartbeat.stop(clear=True)
                 await preparing_tool_calls.clear()
                 await generation_heartbeat.stop(clear=True)

@@ -7,6 +7,7 @@ Weather Skills Chat can send a trace of every chat to Langfuse, so admins can se
 Each chat request, from a user or from a [[Scheduled Tasks]] run, becomes one trace. The trace is tagged with the user, the chat, the model, the tools offered, and whether it came from a chat or a scheduled task. Inside it are:
 
 - Each model call, with the messages sent, the tools offered, the model's reply, and token usage. When a connection hands its model calls to OpenRouter, OpenRouter's record of each call appears here in place of the app's. See below.
+- Each cache keep-alive call, named `cache-keepalive`, with its token usage. When a chat uses native function calling on an Anthropic model served through OpenRouter, and its tools are still running 4.5 minutes after the last model request started, the app re-sends the chat's last model request and asks for no reply, so the provider keeps the conversation in its prompt cache and the model call after the tools reads it at the cached price. The keep-alive's reply is never shown or saved in the chat. On a connection set to OpenRouter Broadcast, OpenRouter records these calls under the same name.
 - Each tool run, with its input and output. A tool run on the tool runner also shows its CPU time, the peak memory of its largest process, and how long the skill itself ran.
 
 Very long inputs and outputs are shortened.

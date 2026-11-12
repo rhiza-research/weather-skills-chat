@@ -26,6 +26,8 @@ from open_webui.functions import generate_function_chat_completion
 from open_webui.routers.openai import (
     generate_chat_completion as generate_openai_chat_completion,
     model_call_tracing_style_for_model,
+    prompt_caching_applies,
+    send_cache_keepalive,
 )
 
 from open_webui.routers.ollama import (
@@ -50,12 +52,16 @@ from open_webui.utils.response import (
     convert_streaming_response_ollama_to_openai,
 )
 from open_webui.utils.langfuse_tracing import (
+    CACHE_KEEPALIVE_GENERATION_NAME,
     MODEL_CALL_TRACING_APP,
     MODEL_CALL_TRACING_KEY,
+    end_open_generations,
     observe_generation,
+    own_generation_stack,
     tracing_enabled,
 )
 from open_webui.utils.usage import (
+    CACHE_KEEPALIVE_USAGE_SOURCE,
     bind_usage_to_response,
     enforce_usage_caps,
     inject_include_usage,
@@ -196,6 +202,98 @@ async def generate_chat_completion(
     return await bind_usage_to_response(
         response, resolve_usage_context(request, form_data, user)
     )
+
+
+def cache_keepalive_applies(request: Request, model_id: Optional[str]) -> bool:
+    """Whether the model's calls are marked for the provider's prompt cache.
+
+    Direct, arena, pipe and Ollama models never are. A direct connection's
+    model resolves to no catalog model (_catalog_model returns None for it),
+    so it is excluded with unknown models; the others are excluded by their
+    catalog entry.
+
+    Synchronous: reads the model row, so the caller runs this in a thread.
+    """
+    try:
+        model = _catalog_model(request, {"model": model_id})
+        if not model or model.get("owned_by") in ("arena", "ollama"):
+            return False
+        if model.get("pipe"):
+            return False
+        return prompt_caching_applies(request, model_id)
+    except Exception:
+        log.warning(
+            "Resolving prompt caching for %s failed", model_id, exc_info=True
+        )
+        return False
+
+
+def cache_keepalive_body(body: dict) -> dict:
+    """The keep-alive form of a model request: the same request, not
+    streamed, with no output, and its usage recorded as a keep-alive.
+
+    ``body`` is not changed.
+    """
+    form_data = {
+        key: value
+        for key, value in body.items()
+        if key not in ("stream_options", "max_completion_tokens")
+    }
+    form_data["stream"] = False
+    form_data["max_tokens"] = 0
+    metadata = body.get("metadata")
+    form_data["metadata"] = {
+        **(metadata if isinstance(metadata, dict) else {}),
+        "usage_source": CACHE_KEEPALIVE_USAGE_SOURCE,
+    }
+    return form_data
+
+
+async def generate_cache_keepalive(
+    request: Request, body: dict, user: Any, bypass_filter: bool = False
+) -> None:
+    """Re-send a model request with no output budget so the provider reads
+    its prompt cache, which restarts the cache's lifetime.
+
+    bypass_filter is the value the turn's own model calls used, so the
+    access check and the request built match the call being kept alive.
+
+    The reply is discarded. The call is checked against the usage caps,
+    recorded as usage and traced as its own generation. It runs in a task of
+    its own beside the tool runs, so it keeps its own generation stack.
+
+    Raises on any failure, including HTTPException 429 over a cap and a
+    reply that is not a completion.
+    """
+    form_data = cache_keepalive_body(body)
+    style = await asyncio.to_thread(
+        authorize_model_call, request, form_data, user, bypass_filter
+    )
+    _carry_model_call_tracing_style(form_data, style)
+    own_generation_stack()
+    try:
+        response = await observe_generation(
+            form_data,
+            send_cache_keepalive(request, form_data, user, bypass_filter),
+            style=style,
+            name=CACHE_KEEPALIVE_GENERATION_NAME,
+        )
+    except asyncio.CancelledError:
+        end_open_generations(error="cancelled")
+        raise
+    if not isinstance(response, dict):
+        # An unread stream holds the provider connection until its cleanup runs.
+        background = getattr(response, "background", None)
+        if background is not None:
+            await background()
+        raise Exception(
+            f"Cache keep-alive got a {type(response).__name__}, not a completion"
+        )
+    await bind_usage_to_response(
+        response, resolve_usage_context(request, form_data, user)
+    )
+    if response.get("error"):
+        raise Exception(f"Cache keep-alive failed: {response.get('error')}")
 
 
 def authorize_model_call(

@@ -691,7 +691,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         )
 
     async def _process_response(
-        self, request, response, form_data, user, metadata, model, events, tasks
+        self, request, response, form_data, user, metadata, model, events, tasks, **kwargs
     ):
         task_id, _ = task_registry.create_task(
             self.loop_body(), id=metadata["chat_id"]
@@ -832,7 +832,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         self.save_final_reply.assert_not_awaited()
 
     async def test_non_streaming_result_is_the_root_output(self):
-        async def process_response(*args):
+        async def process_response(*args, **kwargs):
             return {"choices": [{"message": {"content": "light rain"}}]}
 
         with patch.object(automation_runner, "process_chat_response", process_response):
@@ -853,7 +853,7 @@ class AutomationTraceTest(RealLangfuseTestCase):
         )
 
     async def test_missing_loop_task_still_ends_root(self):
-        async def process_response(*args):
+        async def process_response(*args, **kwargs):
             return {"status": True, "task_id": "not-registered"}
 
         with patch.object(automation_runner, "process_chat_response", process_response):
