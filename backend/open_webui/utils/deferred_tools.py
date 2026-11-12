@@ -6,7 +6,9 @@ returned it or the conversation has called it, and stays loaded for the chat.
 """
 
 import json
+import math
 import re
+from collections import Counter
 
 SKILL_SEARCH = "skill_search"
 SEARCH_RESULTS = 5
@@ -14,7 +16,7 @@ SEARCH_RESULTS = 5
 SKILL_SEARCH_SPEC = {
     "name": SKILL_SEARCH,
     "description": (
-        "Load skills before calling them. Every skill this chat has is named in "
+        "Load skills before calling them. Every skill this chat has is listed in "
         "the system prompt; call this with words from what you need, and the best "
         "matches can be called from your next step."
     ),
@@ -31,6 +33,10 @@ SKILL_SEARCH_SPEC = {
 }
 
 
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
 def add_skill_search(tools_dict: dict) -> set[str]:
     """Add ``skill_search`` to the chat's tools; return the names it can load."""
     deferred = {
@@ -41,14 +47,19 @@ def add_skill_search(tools_dict: dict) -> set[str]:
     if not deferred:
         return deferred
 
+    docs = {
+        name: _words(f"{name} {tools_dict[name]['spec'].get('description') or ''}")
+        for name in deferred
+    }
+    df = Counter(w for words in docs.values() for w in words)
+
     async def skill_search(query: str = "", **_ignored) -> str:
-        terms = set(re.findall(r"[a-z0-9]+", (query or "").lower()))
-        scored = []
-        for name in deferred:
-            text = f"{name} {tools_dict[name]['spec'].get('description') or ''}".lower()
-            score = sum(2 * (t in name) + (t in text) for t in terms)
-            if score:
-                scored.append((-score, name))
+        terms = _words(query or "")
+        scored = [
+            (-sum(math.log(1 + len(docs) / df[t]) for t in terms & words), name)
+            for name, words in docs.items()
+            if terms & words
+        ]
         found = [name for _, name in sorted(scored)[:SEARCH_RESULTS]]
         return json.dumps({"found": found})
 

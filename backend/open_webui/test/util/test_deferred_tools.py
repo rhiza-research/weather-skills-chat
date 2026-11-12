@@ -50,6 +50,12 @@ class DeferredToolsTest(unittest.TestCase):
         self.assertEqual(deferred, {"plot", "standardize_anomaly", "imerg_fetch"})
         self.assertIn(SKILL_SEARCH, tools_dict)
 
+    def test_search_matches_whole_words_not_substrings(self):
+        tools_dict = _tools_dict()
+        add_skill_search(tools_dict)
+        search = tools_dict[SKILL_SEARCH]["callable"]
+        self.assertEqual(json.loads(asyncio.run(search(query="an")))["found"], [])
+
     def test_search_ranks_name_matches_first(self):
         tools_dict = _tools_dict()
         add_skill_search(tools_dict)

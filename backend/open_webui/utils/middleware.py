@@ -1,5 +1,6 @@
 import time
 import logging
+from textwrap import shorten
 import sys
 import os
 import base64
@@ -1373,13 +1374,19 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 if context.secret_hint:
                     hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
+                # A deferred skill has no schema yet, so say what it does.
                 tool_names = [
-                    (tool.get("spec") or {}).get("name")
-                    for tool in tools_dict.values()
-                    if (tool.get("spec") or {}).get("name")
+                    f"`{spec['name']}`"
+                    + (
+                        f" ({shorten((spec.get('description') or '').split('. ')[0], 80, placeholder='…')})"
+                        if key in deferred and spec.get("description")
+                        else ""
+                    )
+                    for key, tool in tools_dict.items()
+                    if (spec := tool.get("spec") or {}).get("name")
                 ]
                 if tool_names:
-                    shown = ", ".join(f"`{n}`" for n in tool_names)
+                    shown = ", ".join(tool_names)
                     hints.append(
                         "Tools/skills enabled for this chat: "
                         + shown
