@@ -1367,11 +1367,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 if context.secret_hint:
                     hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
-                tool_names = [
+                # Sorted so the system message, and the provider's prompt cache,
+                # do not depend on the order the client sends tool_ids in.
+                tool_names = sorted(
                     (tool.get("spec") or {}).get("name")
                     for tool in tools_dict.values()
                     if (tool.get("spec") or {}).get("name")
-                ]
+                )
                 if tool_names:
                     shown = ", ".join(f"`{n}`" for n in tool_names)
                     hints.append(
