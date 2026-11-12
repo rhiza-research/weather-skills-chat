@@ -21,6 +21,10 @@ from open_webui.utils.langfuse_tracing import ingest_sse_chunk, new_sse_state
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
+# usage_source of a call that only keeps the provider's prompt cache alive
+# while tools run.
+CACHE_KEEPALIVE_USAGE_SOURCE = "cache_keepalive"
+
 
 def inject_include_usage(form_data: dict) -> dict:
     if form_data.get("stream"):

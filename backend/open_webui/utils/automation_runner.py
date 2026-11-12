@@ -280,9 +280,18 @@ async def _stream_automation_chat(
                 request, form_data, user, metadata, model
             )
 
+            model_call_started_at = time.monotonic()
             response = await chat_completion_handler(request, form_data, user)
             result = await process_chat_response(
-                request, response, form_data, user, metadata, model, events, None
+                request,
+                response,
+                form_data,
+                user,
+                metadata,
+                model,
+                events,
+                None,
+                model_call_started_at=model_call_started_at,
             )
 
             # Streaming path schedules the tool loop as a background task — wait for it.

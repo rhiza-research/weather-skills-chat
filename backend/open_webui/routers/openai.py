@@ -45,6 +45,8 @@ from open_webui.utils.misc import (
 )
 from open_webui.utils.chat_timing import log_timing
 from open_webui.utils.langfuse_tracing import (
+    CACHE_KEEPALIVE_GENERATION_NAME,
+    MODEL_CALL_GENERATION_NAME,
     MODEL_CALL_TRACING_APP,
     MODEL_CALL_TRACING_KEY,
     apply_provider_trace_fields,
@@ -143,6 +145,23 @@ def _is_openrouter_anthropic_model(model: Optional[str]) -> bool:
     )
 
 
+def upstream_model_id_for(model_id: str, prefix_id: Optional[str]) -> str:
+    """The model id a connection's provider knows: its prefix removed."""
+    return model_id.replace(f"{prefix_id}.", "") if prefix_id else model_id
+
+
+def marks_anthropic_prompt_cache(
+    url: Optional[str], upstream_model_id: Optional[str]
+) -> bool:
+    """Whether enable_openrouter_prompt_caching adds cache_control markers to
+    a call to this upstream model on this connection URL."""
+    return (
+        bool(url)
+        and "openrouter.ai" in url
+        and _is_openrouter_anthropic_model(upstream_model_id)
+    )
+
+
 def _openrouter_prompt_cache_key(
     metadata: Optional[dict] = None, user=None
 ) -> Optional[str]:
@@ -198,7 +217,7 @@ def enable_openrouter_prompt_caching(
     if cache_key:
         payload["prompt_cache_key"] = cache_key
 
-    if not _is_openrouter_anthropic_model(payload.get("model")):
+    if not marks_anthropic_prompt_cache(url, payload.get("model")):
         return payload
 
     payload["cache_control"] = {"type": "ephemeral"}
@@ -845,12 +864,18 @@ def prepare_provider_call(
     user,
     bypass_filter: bool,
     upstream_model_id: Optional[str] = None,
+    max_tokens: Optional[int] = None,
+    generation_name: str = MODEL_CALL_GENERATION_NAME,
 ) -> ProviderCall:
     """Check the model and build the provider request for one model call.
 
     With ``upstream_model_id`` the call is built for that model instead of
     the model's base model, keeping the model's own prompt and parameters.
     That is how a call is resent to the model's backup.
+
+    With ``max_tokens`` the call's output budget is that, whatever the
+    model's parameters say. ``generation_name`` names the call in a
+    provider's trace record.
 
     Synchronous: it reads the model row and the user's organizations, and
     serializes the whole conversation. Callers on the event loop run it in a
@@ -932,7 +957,7 @@ def prepare_provider_call(
 
     prefix_id = api_config.get("prefix_id", None)
     if prefix_id:
-        payload["model"] = payload["model"].replace(f"{prefix_id}.", "")
+        payload["model"] = upstream_model_id_for(payload["model"], prefix_id)
 
     # Add user info to the payload if the model is a pipeline
     if "pipeline" in model and model.get("pipeline"):
@@ -959,6 +984,10 @@ def prepare_provider_call(
     if "max_tokens" in payload and "max_completion_tokens" in payload:
         del payload["max_tokens"]
 
+    if max_tokens is not None:
+        payload.pop("max_completion_tokens", None)
+        payload["max_tokens"] = max_tokens
+
     # Convert the modified body back to JSON
     if "logit_bias" in payload:
         payload["logit_bias"] = json.loads(
@@ -971,6 +1000,7 @@ def prepare_provider_call(
         provider_trace_style(metadata, api_config),
         user=user,
         metadata=metadata,
+        generation_name=generation_name,
     )
 
     t_dump = time.perf_counter()
@@ -1062,6 +1092,39 @@ def _reply_backups(request) -> Optional[set]:
     return backups
 
 
+def prompt_caching_applies(request: Request, model_id: Optional[str]) -> bool:
+    """Whether this model's next call goes where it is marked for prompt caching.
+
+    True when the model's own connection is OpenRouter and its upstream model
+    is an Anthropic model, the calls enable_openrouter_prompt_caching marks.
+    False while the model's calls in this reply go to its backup, or would
+    because its provider is down: that is another connection's cache.
+
+    Synchronous: reads the model row.
+    """
+    if not model_id:
+        return False
+    model_info = Models.get_model_by_id(model_id)
+    base_model_id = base_model_id_for(model_info, model_id)
+    idx = connection_index_for_model(request, base_model_id)
+    if idx is None:
+        return False
+    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
+    prefix_id = api_config_for_index(request, idx).get("prefix_id")
+    if not marks_anthropic_prompt_cache(
+        url, upstream_model_id_for(base_model_id, prefix_id)
+    ):
+        return False
+    meta = getattr(model_info, "meta", None) if model_info else None
+    if getattr(meta, "fallback_model_id", None):
+        backups = getattr(getattr(request, "state", None), "provider_backups", None)
+        if backups and model_id in backups:
+            return False
+        if time.monotonic() < _provider_down_until.get(url, 0):
+            return False
+    return True
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
@@ -1148,6 +1211,34 @@ async def generate_chat_completion(
         return response
 
     raise primary_error or backup_error
+
+
+async def send_cache_keepalive(
+    request: Request, form_data: dict, user, bypass_filter: bool = False
+):
+    """Send a keep-alive call to the model's own provider once, with no output.
+
+    bypass_filter is handled as generate_chat_completion handles it, so the
+    request is built as the call being kept alive was.
+
+    Unlike generate_chat_completion it has no backup model, no retry, and its
+    failure never marks the provider down: a failed keep-alive only means the
+    next model call writes the cache instead of reading it.
+
+    Raises HTTPException when the call fails.
+    """
+    if BYPASS_MODEL_ACCESS_CONTROL:
+        bypass_filter = True
+    call = await asyncio.to_thread(
+        prepare_provider_call,
+        request,
+        form_data,
+        user,
+        bypass_filter,
+        max_tokens=0,
+        generation_name=CACHE_KEEPALIVE_GENERATION_NAME,
+    )
+    return await _send_provider_call(call, user)
 
 
 async def _send_provider_call(call: ProviderCall, user):
