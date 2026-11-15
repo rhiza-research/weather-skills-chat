@@ -3,7 +3,7 @@
 from open_webui.utils.payload import (
     FEEDBACK_LINK_PROMPT,
     apply_model_system_prompt_to_body,
-    inject_rendering_prompt,
+    append_system_prompt,
 )
 
 RENDERING = "Responses will be interpreted as github markdown."
@@ -18,8 +18,8 @@ def _middleware_order(model_first: bool) -> str:
     params = {"system": MODEL_PROMPT}
     if model_first:
         form_data = apply_model_system_prompt_to_body(params, form_data)
-    form_data = inject_rendering_prompt(form_data, RENDERING)
-    form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
+    form_data = append_system_prompt(form_data, RENDERING)
+    form_data = append_system_prompt(form_data, FEEDBACK_LINK_PROMPT)
     form_data = apply_model_system_prompt_to_body(params, form_data)  # the router's call
     form_data = apply_model_system_prompt_to_body(params, form_data)  # a later tool-loop round
     return form_data["messages"][0]["content"]

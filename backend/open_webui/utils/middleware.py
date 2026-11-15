@@ -71,7 +71,7 @@ from open_webui.utils.misc import (
 from open_webui.utils.payload import (
     FEEDBACK_LINK_PROMPT,
     inject_headless_context,
-    inject_rendering_prompt,
+    append_system_prompt,
 )
 from open_webui.utils.tools import get_tools
 from open_webui.utils.chat_timing import StageClock, log_timing
@@ -1529,13 +1529,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Universal rendering rules for every chat (Markdown escape guidance, etc.).
     try:
-        form_data = inject_rendering_prompt(
+        form_data = append_system_prompt(
             form_data, request.app.state.config.RENDERING_PROMPT
         )
         if not metadata.get("headless"):
-            form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
+            form_data = append_system_prompt(form_data, FEEDBACK_LINK_PROMPT)
     except Exception:
-        log.debug("Rendering prompt inject skipped", exc_info=True)
+        log.debug("Rendering/feedback prompt append skipped", exc_info=True)
 
     try:
         from open_webui.utils.preferences import inject_preferences
