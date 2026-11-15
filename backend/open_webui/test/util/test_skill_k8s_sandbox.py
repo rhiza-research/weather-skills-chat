@@ -1559,7 +1559,10 @@ class SkillTimeoutLimitTest(TestCase):
         method = namespace["Tools"].run_x
         self.assertEqual(inspect.signature(method).parameters["timeout"].default, 600)
         self.assertIn(":param timeout:", method.__doc__)
-        self.assertIn("at most 1800", method.__doc__)
+        # The default and the cap are explained once, in the system prompt.
+        from open_webui.utils.skills import skill_argument_guidance
+
+        self.assertIn("at most 1800", skill_argument_guidance())
 
 
 class RunSkillTimeoutTest(IsolatedAsyncioTestCase):

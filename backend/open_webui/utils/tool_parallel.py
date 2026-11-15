@@ -8,36 +8,39 @@ DEPENDS_ON_PARAM = "depends_on"
 DISPLAY_PARAM = "display"
 ACTIVITY_PARAM = "activity"
 
+# These parameters are added to every tool, so every model call carries one copy per
+# tool. Their descriptions stay short; TOOL_CALL_GUIDANCE explains them once in the
+# system prompt.
 DEPENDS_ON_SCHEMA = {
     "type": "array",
     "items": {"type": "string"},
-    "description": (
-        "Optional. Function names or tool_call ids in this same turn that must "
-        "finish before this call starts. Omit to run in parallel with sibling calls. "
-        "If this call needs another call's output, either set depends_on or wait "
-        "and invoke it in a later turn."
-    ),
+    "description": "Optional. Calls in this turn that must finish first.",
 }
 
 
 DISPLAY_SCHEMA = {
     "type": "string",
-    "description": (
-        "Optional. A short phrase shown to the user instead of the function name "
-        'while this call runs, such as "Checking the most recent available date '
-        'for IMERG" or "Grouping the data into weekly bins". Omit to show the '
-        "function name."
-    ),
+    "description": "Optional. Short phrase shown to the user while this call runs.",
 }
 
 ACTIVITY_SCHEMA = {
     "type": "string",
-    "description": (
-        "Optional. When several tools run in the same turn, a short phrase for "
-        'the whole batch, such as "Fetching IMERG and clipping to Kenya". '
-        "Set it on one of the calls. Each call should still set `display`."
-    ),
+    "description": "Optional. Short phrase for this turn's whole batch of calls.",
 }
+
+TOOL_CALL_GUIDANCE = (
+    "Tool calls issued in the same turn run in parallel. If a call needs another "
+    "call's output, set its `depends_on` argument to the function names or tool_call "
+    "ids of the calls in this same turn that must finish before it starts, or wait "
+    "and call it in a later turn. Omit `depends_on` for independent work.\n\n"
+    "When you call a tool, set its optional `display` argument to a short phrase the "
+    "user will see instead of the function name while the call runs, such as "
+    '"Checking the most recent available date for IMERG" or "Grouping the data into '
+    'weekly bins". Omit `display` to show the function name. When you call several '
+    "tools in one turn, also set optional `activity` on one of those calls to a short "
+    'phrase for the whole batch, such as "Fetching IMERG and clipping to Kenya"; '
+    "each call should still set `display`."
+)
 
 # These tools read files other same-turn calls may still be writing.
 SERIAL_AFTER_SIBLINGS = frozenset({"display_image", "read_artifact"})

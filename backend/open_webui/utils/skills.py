@@ -594,10 +594,10 @@ class Tools:
         """
 __DOC__
 
-        :param argv: CLI arguments after the script path, e.g. ["--start", "2024-01-01", "--output", "out.zarr"]
+        :param argv: CLI arguments after the script path.
         :param script: Optional scripts/ basename when the skill has multiple scripts
-        :param env_secrets: Secret names to inject into the process environment (same name as the secret). Example: ["ECMWF_API_KEY"]. Only request secrets this skill needs.
-        :param timeout: Seconds the skill may run before it is stopped. Default __DEFAULT_TIMEOUT__, at most __MAX_TIMEOUT__. Raise it only for work you expect to take longer.
+        :param env_secrets: Secret names to inject as environment variables.
+        :param timeout: Seconds before the skill is stopped.
         :return: Structured skill result with exit_code, stdout, and stderr
         """
         return await run_skill(
@@ -619,6 +619,20 @@ __DOC__
         .replace("__DOC__", doc_indented)
         .replace("__DEFAULT_TIMEOUT__", str(min(DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC)))
         .replace("__MAX_TIMEOUT__", str(MAX_TIMEOUT_SEC))
+    )
+
+
+def skill_argument_guidance() -> str:
+    """System-prompt text for the arguments every skill tool takes; their per-tool descriptions stay short."""
+    from open_webui.utils.skill_runtime import DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC
+
+    return (
+        "Skill tools take `argv`: the CLI arguments after the script path, as a list of "
+        'strings, such as ["--start", "2024-01-01", "--output", "out.zarr"], following '
+        "the usage in each skill's description. Their optional `timeout` is the seconds "
+        "a skill may run before it is stopped: default "
+        f"{min(DEFAULT_TIMEOUT_SEC, MAX_TIMEOUT_SEC)}, at most {MAX_TIMEOUT_SEC}. "
+        "Raise it only for work you expect to take longer."
     )
 
 
