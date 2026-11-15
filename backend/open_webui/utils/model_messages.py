@@ -10,7 +10,19 @@ from typing import Any, Optional
 from uuid import uuid4
 
 # Skill / tool result fields that are useful for the UI but not the model.
-_INFRA_KEYS = frozenset({"cwd", "sandlock", "landlock_backend"})
+# ``argv`` repeats the arguments of the model's own tool call, which it already has.
+_INFRA_KEYS = frozenset({"cwd", "sandlock", "landlock_backend", "argv"})
+
+# Resource usage stays visible to the model, as one short line instead of a JSON object.
+_RESOURCE_KEY = "tool_resource_usage"
+_RESOURCE_FIELDS = (("run_seconds", "ran {:.1f}s"), ("cpu_seconds", "CPU {:.1f}s"), ("memory_mb", "peak memory {:.0f} MB"))
+
+
+def _compact_resource_usage(usage: Any) -> Any:
+    if not isinstance(usage, dict):
+        return usage
+    parts = [fmt.format(usage[k]) for k, fmt in _RESOURCE_FIELDS if isinstance(usage.get(k), (int, float))]
+    return ", ".join(parts) if parts else usage
 
 # Cap noisy skill stdout/stderr so one tool cannot blow the context window.
 _MAX_STREAM_CHARS = 12_000
@@ -85,6 +97,9 @@ def _compact_skill_dict(data: dict) -> dict:
     for key in ("stdout", "stderr"):
         if key in compact and isinstance(compact[key], str):
             compact[key] = _truncate_stream(compact[key])
+
+    if _RESOURCE_KEY in compact:
+        compact[_RESOURCE_KEY] = _compact_resource_usage(compact[_RESOURCE_KEY])
 
     return compact
 
