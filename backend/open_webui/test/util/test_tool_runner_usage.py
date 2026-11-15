@@ -1,7 +1,4 @@
-"""Tool runner usage reaches the model and the tool's Langfuse observation with the same values.
-
-The model gets them as one short line; the observation keeps the full numbers.
-"""
+"""Tool runner usage reaches the model and the tool's Langfuse observation with the same values."""
 
 import json
 import unittest
@@ -191,7 +188,7 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(tool_messages), 1)
         content = json.loads(tool_messages[0]["content"])
         self.assertEqual(content["stdout"], "skill finished")
-        self.assertEqual(content[TOOL_RESOURCE_USAGE_KEY], "ran 2.2s, CPU 1.5s, peak memory 512 MB")
+        self.assertEqual(content[TOOL_RESOURCE_USAGE_KEY], USAGE)
 
         end_obs.assert_called_once()
         self.assertIs(end_obs.call_args.args[0], SPAN)

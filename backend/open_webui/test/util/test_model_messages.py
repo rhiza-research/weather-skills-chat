@@ -91,17 +91,6 @@ class CompactToolResultTest(unittest.TestCase):
             self.assertNotIn("argv", out)
             self.assertEqual(out["stdout"], "wrote a.png")
 
-    def test_compacts_resource_usage(self):
-        payload = {"ok": True, "exit_code": 0, "stdout": "",
-                   "tool_resource_usage": {"cpu_seconds": 7.46, "memory_mb": 244.5, "run_seconds": 9.45}}
-        out = json.loads(compact_tool_result_for_model(json.dumps(payload)))
-        self.assertEqual(out["tool_resource_usage"], "ran 9.4s, CPU 7.5s, peak memory 244 MB")
-
-    def test_resource_usage_with_missing_fields(self):
-        payload = {"ok": True, "exit_code": 0, "tool_resource_usage": {"run_seconds": 1.0}}
-        out = json.loads(compact_tool_result_for_model(json.dumps(payload)))
-        self.assertEqual(out["tool_resource_usage"], "ran 1.0s")
-
 
 class StripTaskHistoryTest(unittest.TestCase):
     def test_strips_tool_calls_and_reasoning(self):
