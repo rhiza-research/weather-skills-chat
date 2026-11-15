@@ -33,7 +33,7 @@ def test_inject_rendering_prompt_noop_when_empty():
     assert form_data["messages"][0]["role"] == "user"
 
 
-def test_inject_rendering_prompt_prepends_to_existing_system():
+def test_inject_rendering_prompt_appends_to_existing_system():
     form_data = {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -42,5 +42,5 @@ def test_inject_rendering_prompt_prepends_to_existing_system():
     }
     inject_rendering_prompt(form_data, DEFAULT)
     content = form_data["messages"][0]["content"]
-    assert content.startswith(DEFAULT)
-    assert "You are a helpful assistant." in content
+    assert content.startswith("You are a helpful assistant.")
+    assert content.endswith(DEFAULT)

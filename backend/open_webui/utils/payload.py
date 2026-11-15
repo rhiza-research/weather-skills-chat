@@ -56,7 +56,8 @@ def inject_rendering_prompt(form_data: dict, prompt: Optional[str]) -> dict:
         return form_data
 
     messages = form_data.get("messages") or []
-    form_data["messages"] = add_or_update_system_message(text, messages)
+    # Appended so the model system prompt stays first whichever step adds it first.
+    form_data["messages"] = add_or_update_system_message(text, messages, append=True)
     return form_data
 
 
