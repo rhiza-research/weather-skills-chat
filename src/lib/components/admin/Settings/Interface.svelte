@@ -14,6 +14,9 @@
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import Dropdown from '$lib/components/common/Dropdown.svelte';
+	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
+	import { DropdownMenu } from 'bits-ui';
 	import { BANNER_COLORS, LEGACY_BANNER_TYPES } from '$lib/components/common/Banner.svelte';
 	import dayjs from 'dayjs';
 	import Textarea from '$lib/components/common/Textarea.svelte';
@@ -333,24 +336,45 @@
 								<div
 									class="flex flex-row flex-1 border rounded-xl border-gray-100 dark:border-gray-850"
 								>
-									<select
-										class="w-fit capitalize rounded-xl py-2 px-4 mr-3 text-xs bg-transparent outline-hidden"
-										aria-label={$i18n.t('Color')}
-										bind:value={banner.type}
-									>
-										{#each Object.keys(BANNER_COLORS) as color}
-											<option value={color} class="text-gray-900">{$i18n.t(color)}</option>
-										{/each}
-									</select>
+									<Dropdown>
+										<div
+											class="flex items-center gap-1 ml-2 mr-5 my-1.5 px-2 py-0.5 whitespace-nowrap rounded-sm text-xs font-bold capitalize {BANNER_COLORS[
+												banner.type
+											] ?? BANNER_COLORS.blue}"
+											aria-label={$i18n.t('Color')}
+										>
+											{$i18n.t(banner.type)}
+											<ChevronDown className="size-3" strokeWidth="2.5" />
+										</div>
+
+										<div slot="content">
+											<DropdownMenu.Content
+												class="rounded-lg p-1 z-50 bg-white dark:bg-gray-850 shadow-lg flex flex-col gap-1"
+												sideOffset={4}
+												align="start"
+											>
+												{#each Object.keys(BANNER_COLORS) as color}
+													<DropdownMenu.Item
+														class="px-2 py-1 rounded-sm text-xs font-bold capitalize cursor-pointer hover:opacity-75 {BANNER_COLORS[
+															color
+														]}"
+														on:click={() => (banner.type = color)}
+													>
+														{$i18n.t(color)}
+													</DropdownMenu.Item>
+												{/each}
+											</DropdownMenu.Content>
+										</div>
+									</Dropdown>
 
 									<input
-										class="w-28 py-1.5 text-xs bg-transparent outline-hidden"
+										class="w-20 min-w-0 py-1.5 text-xs bg-transparent outline-hidden"
 										placeholder={$i18n.t('Title')}
 										bind:value={banner.title}
 									/>
 
 									<input
-										class="pr-5 py-1.5 text-xs w-full bg-transparent outline-hidden"
+										class="pr-5 py-1.5 text-xs flex-1 min-w-0 bg-transparent outline-hidden"
 										placeholder={$i18n.t('Content')}
 										bind:value={banner.content}
 									/>
