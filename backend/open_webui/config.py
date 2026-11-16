@@ -1374,7 +1374,7 @@ class BannerModel(BaseModel):
     type: str
     title: Optional[str] = None
     content: str
-    dismissible: bool
+    dismissible: bool = False  # unused; kept so saved banners still load
     timestamp: int
     expires_at: Optional[int] = None
 

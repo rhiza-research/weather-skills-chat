@@ -307,7 +307,6 @@
 											type: 'blue',
 											title: '',
 											content: '',
-											dismissible: true,
 											timestamp: Math.floor(Date.now() / 1000)
 										}
 									];
@@ -334,7 +333,7 @@
 									class="flex flex-row flex-1 border rounded-xl border-gray-100 dark:border-gray-850"
 								>
 									<select
-										class="w-fit capitalize rounded-xl py-2 px-4 text-xs bg-transparent outline-hidden"
+										class="w-fit capitalize rounded-xl py-2 px-4 mr-3 text-xs bg-transparent outline-hidden"
 										aria-label={$i18n.t('Color')}
 										bind:value={banner.type}
 									>
@@ -355,11 +354,13 @@
 										bind:value={banner.content}
 									/>
 
-									<Tooltip content={$i18n.t('Expires after')} className="flex items-center">
+									<label
+										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+									>
+										{$i18n.t('Expires at')}
 										<input
 											type="date"
-											class="py-1.5 pr-3 text-xs bg-transparent outline-hidden"
-											aria-label={$i18n.t('Expires after')}
+											class="py-1.5 text-xs text-gray-800 dark:text-gray-100 bg-transparent outline-hidden"
 											value={banner.expires_at
 												? dayjs.unix(banner.expires_at).format('YYYY-MM-DD')
 												: ''}
@@ -368,13 +369,7 @@
 												banner.expires_at = date ? dayjs(date).endOf('day').unix() : null;
 											}}
 										/>
-									</Tooltip>
-
-									<div class="relative top-1.5 -left-2">
-										<Tooltip content={$i18n.t('Dismissible')} className="flex h-fit items-center">
-											<Switch bind:state={banner.dismissible} />
-										</Tooltip>
-									</div>
+									</label>
 								</div>
 
 								<button
