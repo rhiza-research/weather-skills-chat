@@ -84,15 +84,15 @@ class ChatRevisionConflict(Exception):
         self.revision = revision
 
 
-def messages_for_model(
-    history: dict, message_id: str, artifact_note: str = ""
-) -> list[dict]:
-    """Linearize a stored history the way the client used to, minus hidden details.
+def messages_for_model(chat: dict, message_id: str) -> list[dict]:
+    """Linearize a stored chat the way the client used to, minus hidden details.
 
-    artifact_note: what files the chat started with; it goes after the first
-    user message on every turn so the transcript prefix never changes.
+    The chat's ``chatNotes`` go after the first user message on every turn,
+    so the transcript prefix never changes.
     """
-    bag = (history or {}).get("messages") or {}
+    chat = chat or {}
+    notes = "\n\n".join(note for note in chat.get("chatNotes") or [] if note)
+    bag = (chat.get("history") or {}).get("messages") or {}
     chain = get_message_list(bag, message_id) or []
     prepared = []
     for message in chain:
@@ -107,8 +107,8 @@ def messages_for_model(
             content = _HIDDEN_DETAILS.sub("", content)
         if role == "user":
             content = with_artifact_upload_note(content, message.get("files"))
-            content = _append_note(content, artifact_note)
-            artifact_note = ""  # first user message only
+            content = _append_note(content, notes)
+            notes = ""  # first user message only
         item = {"role": role, "content": content}
         if message.get("tool_calls"):
             item["tool_calls"] = message["tool_calls"]
@@ -239,9 +239,4 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
             detail="The chat could not be saved. Please try again.",
         )
 
-    stored_chat = stored.chat or {}
-    return messages_for_model(
-        stored_chat.get("history") or {},
-        assistant_message["id"],
-        stored_chat.get("artifactNote") or "",
-    )
+    return messages_for_model(stored.chat, assistant_message["id"])

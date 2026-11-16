@@ -2967,20 +2967,20 @@
 				/>
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
-					{#if chat?.id === $chatId && chat?.chat?.artifactNote}
-						<!-- What the model is told about the files this chat started with. -->
+					{#if chat?.id === $chatId && chat?.chat?.chatNotes?.length}
+						<!-- What the model is told about this chat, such as the files it started with. -->
 						<details
 							class="mx-auto w-full max-w-[58rem] px-2.5 mt-2 shrink-0 text-xs text-gray-600 dark:text-gray-400"
 						>
 							<summary
 								class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
 							>
-								{$i18n.t('Started with files from another chat')}
+								{$i18n.t('Chat notes')}
 							</summary>
 							<div
 								class="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 dark:bg-gray-900 px-2.5 py-2"
 							>
-								{chat.chat.artifactNote}
+								{chat.chat.chatNotes.join('\n\n')}
 							</div>
 						</details>
 					{/if}

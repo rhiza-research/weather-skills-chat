@@ -816,7 +816,7 @@ async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
     """Start an empty chat that has a copy of this chat's files.
 
     The model is told what the files are on every turn of the new chat
-    (``artifactNote``), so it does not have to rediscover them.
+    (a ``chatNotes`` entry), so it does not have to rediscover them.
     """
     from open_webui.utils.artifacts import artifact_carryover_note, copy_sandbox
 
@@ -838,7 +838,7 @@ async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
                 "messages": [],
                 "tags": [],
                 "timestamp": int(time.time() * 1000),
-                "artifactNote": note,
+                "chatNotes": [note] if note else [],
             },
             organization_id=source.organization_id,
             visibility="private",

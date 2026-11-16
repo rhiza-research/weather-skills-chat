@@ -82,7 +82,7 @@ class CloneDeleteThreadsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200, response.text)
         form = insert.call_args.args[1]
         self.assertEqual(form.chat["history"], {"messages": {}, "currentId": None})
-        self.assertEqual(form.chat["artifactNote"], "the files")
+        self.assertEqual(form.chat["chatNotes"], ["the files"])
         self.assertEqual(form.visibility, "private")
         for name in ("read", "note", "copy"):
             self.assertIsNot(self.ran_on[name], self.loop_thread, name)
