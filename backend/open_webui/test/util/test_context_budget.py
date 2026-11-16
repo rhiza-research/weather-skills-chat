@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import unittest
 
+from unittest.mock import patch
+
+from open_webui.utils import context_budget
 from open_webui.utils.context_budget import (
     CLEARED_RESULT,
+    FALLBACK_CONTEXT_WINDOW,
     IMAGE_TOKENS,
     KEEP_RECENT_ROUNDS,
     compact_messages,
     estimate_tokens,
+    token_budget,
 )
 
 BIG = "x" * 3_000  # 1,000 tokens
@@ -140,6 +145,21 @@ class CompactMessagesTest(unittest.TestCase):
             "image_url": {"url": "data:image/png;base64," + "A" * 3_000_000},
         }
         self.assertEqual(estimate_tokens(image), IMAGE_TOKENS)
+
+
+class TokenBudgetTest(unittest.TestCase):
+    def test_budget_is_a_share_of_the_providers_window(self):
+        self.assertEqual(token_budget({"context_length": 1_000_000}), 850_000)
+        self.assertEqual(token_budget({"context_window": 200_000}), 170_000)
+
+    def test_an_unlisted_model_gets_the_fallback_window(self):
+        expected = int(FALLBACK_CONTEXT_WINDOW * 0.85)
+        self.assertEqual(token_budget(None), expected)
+        self.assertEqual(token_budget({"context_length": None}), expected)
+
+    def test_zero_percent_turns_it_off(self):
+        with patch.object(context_budget, "MODEL_CONTEXT_BUDGET_PERCENT", 0):
+            self.assertEqual(token_budget({"context_length": 1_000_000}), 0)
 
 
 if __name__ == "__main__":

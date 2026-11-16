@@ -17,11 +17,16 @@ from __future__ import annotations
 
 import os
 
-# shortcut: one budget for every model, sized for 1M-token models; make it
-# per-model if smaller-context models start hitting provider limits.
-MODEL_CONTEXT_TOKEN_BUDGET = int(
-    os.environ.get("MODEL_CONTEXT_TOKEN_BUDGET", "800000")
+# Share of the model's context window the conversation may fill. The rest is
+# room for the reply and for the estimate being off.
+MODEL_CONTEXT_BUDGET_PERCENT = float(
+    os.environ.get("MODEL_CONTEXT_BUDGET_PERCENT", "85")
 )
+
+# shortcut: the window assumed when the provider's model list has none for the
+# model (the list is not loaded until someone opens the model picker after a
+# restart); fetch the list here if that trims 1M-token models too early.
+FALLBACK_CONTEXT_WINDOW = 200_000
 
 # Tool rounds at the end of the conversation that are never cleared.
 KEEP_RECENT_ROUNDS = 5
@@ -37,6 +42,23 @@ CLEARED_RESULT = (
     "[Output cleared to fit the model's context limit. "
     "Run the tool again if you need it.]"
 )
+
+
+def context_window(model: dict | None) -> int:
+    """The model's context window from its provider model-list entry.
+
+    OpenRouter calls it ``context_length``, Requesty ``context_window``.
+    """
+    for key in ("context_length", "context_window"):
+        value = (model or {}).get(key)
+        if isinstance(value, int) and value > 0:
+            return value
+    return FALLBACK_CONTEXT_WINDOW
+
+
+def token_budget(model: dict | None) -> int:
+    """Most tokens to send this model; 0 or less turns trimming off."""
+    return int(context_window(model) * MODEL_CONTEXT_BUDGET_PERCENT / 100)
 
 
 def estimate_tokens(value) -> int:
@@ -107,9 +129,7 @@ def drop_turn(turn: list[dict]) -> list[dict]:
     return []
 
 
-def compact_messages(
-    messages: list[dict], budget: int = MODEL_CONTEXT_TOKEN_BUDGET
-) -> tuple[list[dict], bool]:
+def compact_messages(messages: list[dict], budget: int) -> tuple[list[dict], bool]:
     """Fit ``messages`` under ``budget`` tokens; returns (messages, changed).
 
     The amount freed is rounded up to a quarter of the budget, so the trim

@@ -164,11 +164,11 @@ class ModelCallThreadsTest(unittest.IsolatedAsyncioTestCase):
         async def emit(event):
             emitted.append(event)
 
-        with (
-            patch("open_webui.utils.context_budget.MODEL_CONTEXT_TOKEN_BUDGET", 500),
-            patch("open_webui.socket.main.get_event_emitter", return_value=emit),
-        ):
-            await chat.generate_chat_completion(_request(), form, self._user())
+        request = _request()
+        # 85% of the provider's listed window is 510 tokens.
+        request.app.state.OPENAI_MODELS = {"weather-agent": {"context_length": 600}}
+        with patch("open_webui.socket.main.get_event_emitter", return_value=emit):
+            await chat.generate_chat_completion(request, form, self._user())
 
         self.assertEqual(
             self.sent[0]["messages"], [{"role": "user", "content": "Rain this week?"}]

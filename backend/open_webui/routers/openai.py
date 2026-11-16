@@ -970,13 +970,16 @@ def prepare_provider_call(
     context_trimmed = False
     if isinstance(payload.get("messages"), list):
         from open_webui.utils.context_budget import (
-            MODEL_CONTEXT_TOKEN_BUDGET,
             compact_messages,
             estimate_tokens,
+            token_budget,
         )
 
-        # Tool definitions are part of the prompt too.
-        budget = MODEL_CONTEXT_TOKEN_BUDGET - estimate_tokens(payload.get("tools"))
+        listed = getattr(request.app.state, "OPENAI_MODELS", None) or {}
+        budget = token_budget(listed.get(model_id))
+        if budget > 0:
+            # Tool definitions are part of the prompt too.
+            budget = max(budget - estimate_tokens(payload.get("tools")), 1)
         payload["messages"], context_trimmed = compact_messages(
             payload["messages"], budget
         )
@@ -1094,7 +1097,6 @@ async def generate_chat_completion(
     call = await asyncio.to_thread(
         prepare_provider_call, request, form_data, user, bypass_filter
     )
-    # A backup gets the same messages, so the first call speaks for both.
     if call.context_trimmed:
         await _note_context_trimmed(form_data.get("metadata"))
     if not call.fallback_model_id:
@@ -1143,6 +1145,9 @@ async def generate_chat_completion(
                     e.detail,
                 )
                 continue
+            # The backup's window can be smaller than the model's own.
+            if attempt.context_trimmed:
+                await _note_context_trimmed(form_data.get("metadata"))
         try:
             response = await _send_provider_call(attempt, user)
         except HTTPException as e:
