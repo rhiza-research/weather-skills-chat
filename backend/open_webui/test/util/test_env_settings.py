@@ -63,6 +63,7 @@ JSON_SETTINGS = {
             "type": "info",
             "title": "Maintenance",
             "content": "Back soon",
+            "dismissible": True,
             "timestamp": 1760400000,
             "expires_at": 1760486400,
         }

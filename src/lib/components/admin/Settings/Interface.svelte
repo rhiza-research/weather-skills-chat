@@ -307,6 +307,7 @@
 											type: 'blue',
 											title: '',
 											content: '',
+											dismissible: false,
 											timestamp: Math.floor(Date.now() / 1000)
 										}
 									];
@@ -369,6 +370,13 @@
 												banner.expires_at = date ? dayjs(date).endOf('day').unix() : null;
 											}}
 										/>
+									</label>
+
+									<label
+										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+									>
+										{$i18n.t('Dismissible')}
+										<Switch bind:state={banner.dismissible} />
 									</label>
 								</div>
 

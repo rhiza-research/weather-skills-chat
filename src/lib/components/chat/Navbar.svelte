@@ -237,8 +237,23 @@
 					/>
 				{/if}
 
-				{#each $banners.filter((b) => !b.expires_at || b.expires_at * 1000 > Date.now()) as banner}
-					<Banner {banner} />
+				{#each $banners.filter( (b) => (!b.expires_at || b.expires_at * 1000 > Date.now()) && (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
+					<Banner
+						{banner}
+						on:dismiss={(e) => {
+							const bannerId = e.detail;
+
+							localStorage.setItem(
+								'dismissedBannerIds',
+								JSON.stringify(
+									[
+										bannerId,
+										...JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]')
+									].filter((id) => $banners.find((b) => b.id === id))
+								)
+							);
+						}}
+					/>
 				{/each}
 			</div>
 		</div>
