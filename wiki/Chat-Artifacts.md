@@ -33,6 +33,8 @@ Anyone who can read a chat can list and download its files. Only the chat's owne
 
 Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
 
+**Start a new chat with these artifacts**, in the **…** menu at the top of the file list, opens an empty chat that has a copy of the chat's files and uses the same model. Anyone who can read the chat can use it; the new chat is private to them, in the same organization, like a clone. With every message, the model in the new chat is told how many files it starts with, the name of the chat they came from, and every file and folder, with the skills that made the first files, and is asked to explore them before downloading anything again. The top of the new chat shows the same note, collapsed under **Chat notes**. Changes in either chat do not affect the other's files.
+
 Each share link keeps its own copy of the chat's files as they were when the link was made. Anyone who can open the link can browse, preview, and download that copy, but no one can add to or change it, and cloning from the link copies it. See [[Share Links]].
 
 ## Settings

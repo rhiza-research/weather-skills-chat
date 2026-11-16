@@ -2796,26 +2796,30 @@
 
 		if (!$temporaryChatEnabled) {
 			void openArtifactsPanel();
-			chat = await createNewChat(
-				localStorage.token,
-				{
-					id: _chatId,
-					title: $i18n.t('New Chat'),
-					models: selectedModels,
-					params: params,
-					history: history,
-					messages: createMessagesList(history, history.currentId),
-					tags: [],
-					timestamp: Date.now()
-				},
-				get(activeOrganizationId)
-			);
+			// A chat started with another chat's artifacts already exists, empty;
+			// its first turn is stored like any later one.
+			if (!(_chatId && chat?.id === _chatId)) {
+				chat = await createNewChat(
+					localStorage.token,
+					{
+						id: _chatId,
+						title: $i18n.t('New Chat'),
+						models: selectedModels,
+						params: params,
+						history: history,
+						messages: createMessagesList(history, history.currentId),
+						tags: [],
+						timestamp: Date.now()
+					},
+					get(activeOrganizationId)
+				);
 
-			_chatId = chat.id;
-			putChat(chat, null);
-			await chatId.set(_chatId);
-			// Sends queued before the chat had an id are stored now.
-			if (queuedSends.length > 0) writeQueuedSends(_chatId, queuedSends);
+				_chatId = chat.id;
+				putChat(chat, null);
+				await chatId.set(_chatId);
+				// Sends queued before the chat had an id are stored now.
+				if (queuedSends.length > 0) writeQueuedSends(_chatId, queuedSends);
+			}
 
 			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
 			chats.update((list) => {
@@ -2963,6 +2967,23 @@
 				/>
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
+					{#if chat?.id === $chatId && chat?.chat?.chatNotes?.length}
+						<!-- What the model is told about this chat, such as the files it started with. -->
+						<details
+							class="mx-auto w-full max-w-[58rem] px-2.5 mt-2 shrink-0 text-xs text-gray-600 dark:text-gray-400"
+						>
+							<summary
+								class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
+							>
+								{$i18n.t('Chat notes')}
+							</summary>
+							<div
+								class="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 dark:bg-gray-900 px-2.5 py-2"
+							>
+								{chat.chat.chatNotes.join('\n\n')}
+							</div>
+						</details>
+					{/if}
 					{#if $settings?.landingPageMode === 'chat' || createMessagesList(history, history.currentId).length > 0}
 						<div
 							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10"

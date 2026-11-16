@@ -851,6 +851,43 @@ def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
     )
 
 
+# Reading provenance opens each file, so only this many files get it.
+ARTIFACT_NOTE_PROVENANCE_FILES = 40
+
+
+def artifact_carryover_note(chat_id: str, source_title: str) -> str:
+    """Tell the model which files a chat started with, or "" when there are none.
+
+    Lists every entry; the first files also name the skills that made them.
+    Blocks on JuiceFS.
+    """
+    root = chat_sandbox(chat_id)
+    entries = [
+        e
+        for e in list_artifacts(chat_id, provenance=False)
+        if e["path"] != INTERMEDIATE_RESULTS_DIRNAME
+    ]
+    files = [e for e in entries if e["kind"] != "directory"]
+    if not files:
+        return ""
+    traced = {e["path"] for e in files[:ARTIFACT_NOTE_PROVENANCE_FILES]}
+    lines = [
+        f"This chat has been started with {len(files)} "
+        f'file{"" if len(files) == 1 else "s"} from the chat "{source_title}". '
+        "Please check what exists and explore these files before downloading "
+        "anything again:"
+    ]
+    for entry in entries:
+        slash = "/" if entry["kind"] == "directory" else ""
+        line = f"- `{entry['path']}{slash}` ({entry['kind']})"
+        if entry["path"] in traced:
+            prov = _provenance_for_entry(root / entry["path"], entry["kind"])
+            if prov and prov.get("crumbs"):
+                line += " made by " + " → ".join(prov["crumbs"])
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def delete_sandbox(chat_id: str) -> None:
     root = (ARTIFACTS_DIR / chat_id).resolve()
     if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:

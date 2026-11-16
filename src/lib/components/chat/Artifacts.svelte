@@ -29,6 +29,11 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
+	import { DropdownMenu } from 'bits-ui';
+	import { goto } from '$app/navigation';
+	import Dropdown from '../common/Dropdown.svelte';
+	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
+	import { newChatWithArtifacts } from '$lib/apis/chats';
 
 	export let history;
 	// A share link's frozen files: browse and download only.
@@ -58,6 +63,19 @@
 	const htmlPreviewUrl = (path: string, modified: number | null) =>
 		modified ? `${getArtifactViewUrl($chatId, path)}?v=${modified}` : getArtifactViewUrl($chatId, path);
 	let modalAlt = '';
+
+	let startingChat = false;
+	const startChatWithArtifacts = async () => {
+		startingChat = true;
+		try {
+			const created = await newChatWithArtifacts(localStorage.token, $chatId);
+			await goto(`/c/${created.id}`);
+		} catch (error) {
+			toast.error(`${error}`);
+		} finally {
+			startingChat = false;
+		}
+	};
 	let uploading = false;
 	let fileInput: HTMLInputElement;
 	let loadingFiles = false;
@@ -452,6 +470,33 @@
 						class="hidden"
 						on:change={onUpload}
 					/>
+				{/if}
+				{#if !readOnly && files.length > 0 && $chatId && $chatId !== 'local'}
+					<Dropdown align="end">
+						<button
+							type="button"
+							class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							disabled={startingChat}
+							aria-label={$i18n.t('More')}
+						>
+							<EllipsisHorizontal className="size-3.5" />
+						</button>
+						<div slot="content">
+							<DropdownMenu.Content
+								class="rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
+								sideOffset={4}
+								side="bottom"
+								align="end"
+							>
+								<DropdownMenu.Item
+									class="flex items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+									on:click={startChatWithArtifacts}
+								>
+									{$i18n.t('Start a new chat with these artifacts')}
+								</DropdownMenu.Item>
+							</DropdownMenu.Content>
+						</div>
+					</Dropdown>
 				{/if}
 				<button
 					type="button"
