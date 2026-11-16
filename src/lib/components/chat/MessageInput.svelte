@@ -47,6 +47,7 @@
 
 	import RichTextInput from '../common/RichTextInput.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
+	import ContextRing from './MessageInput/ContextRing.svelte';
 	import FileItem from '../common/FileItem.svelte';
 	import Image from '../common/Image.svelte';
 	import Spinner from '../common/Spinner.svelte';
@@ -1447,6 +1448,8 @@
 												</Tooltip>
 											</div>
 										{/if}
+
+										<ContextRing {history} />
 									</div>
 								</div>
 							</div>

@@ -764,6 +764,30 @@ def base_model_id_for(model_info, model_id: str) -> str:
     return model_id
 
 
+_CONTEXT_WINDOW_TTL = 3600
+_context_windows: dict = {"at": float("-inf"), "by_id": {}}
+
+
+async def context_window_for(request: Request, user, model_id: str) -> Optional[int]:
+    """The model's context window in tokens from the provider's model list.
+
+    The list is fetched at most once an hour per process; a failed fetch keeps
+    the previous list.
+    """
+    if time.monotonic() - _context_windows["at"] > _CONTEXT_WINDOW_TTL:
+        _context_windows["at"] = time.monotonic()
+        try:
+            models = (await get_all_models(request, user=user))["data"]
+        except Exception:
+            log.warning("Could not fetch model list for context windows", exc_info=True)
+            models = []
+        by_id = {m["id"]: m["context_length"] for m in models if m.get("context_length")}
+        if by_id:
+            _context_windows["by_id"] = by_id
+    base_model_id = base_model_id_for(Models.get_model_by_id(model_id), model_id)
+    return _context_windows["by_id"].get(base_model_id)
+
+
 def api_config_for_index(request: Request, idx: int) -> dict:
     configs = request.app.state.config.OPENAI_API_CONFIGS or {}
     if str(idx) in configs:
