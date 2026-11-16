@@ -71,13 +71,17 @@
 		>
 			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit gap-1.5">
 				<div class="flex justify-between self-start">
-					{#if label}
-						<div
-							class=" text-xs font-bold {color} w-fit px-2 rounded-sm uppercase line-clamp-1 mr-0.5"
-						>
+					<div
+						class=" text-xs font-bold {color} w-fit {label
+							? 'px-2'
+							: 'p-1 self-center'} rounded-sm uppercase line-clamp-1 mr-0.5"
+					>
+						{#if label}
 							{label}
-						</div>
-					{/if}
+						{:else}
+							<div class="size-2 rounded-full bg-current"></div>
+						{/if}
+					</div>
 
 					{#if banner.url}
 						<div class="flex md:hidden group w-fit md:items-center">

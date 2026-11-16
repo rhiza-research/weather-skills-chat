@@ -335,7 +335,7 @@
 								>
 									<select
 										class="w-fit capitalize rounded-xl py-2 px-4 text-xs bg-transparent outline-hidden"
-										aria-label={$i18n.t('Label color')}
+										aria-label={$i18n.t('Color')}
 										bind:value={banner.type}
 									>
 										{#each Object.keys(BANNER_COLORS) as color}
@@ -345,7 +345,7 @@
 
 									<input
 										class="w-28 py-1.5 text-xs bg-transparent outline-hidden"
-										placeholder={$i18n.t('Label')}
+										placeholder={$i18n.t('Title')}
 										bind:value={banner.title}
 									/>
 
