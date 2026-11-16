@@ -149,6 +149,7 @@
 
 	$: if (
 		($settings?.landingPageMode === 'chat' ||
+			chatNotes.length > 0 ||
 			createMessagesList(history, history.currentId).length > 0) &&
 		!messagesComponent &&
 		!messagesLoad
@@ -247,6 +248,8 @@
 	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
+	// What the model is told about this chat, such as the files it started with.
+	$: chatNotes = ((chat?.id === $chatId && chat?.chat?.chatNotes) || []) as string[];
 	let tags = [];
 	let chatOwnerName = '';
 	let cloning = false;
@@ -2967,24 +2970,7 @@
 				/>
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
-					{#if chat?.id === $chatId && chat?.chat?.chatNotes?.length}
-						<!-- What the model is told about this chat, such as the files it started with. -->
-						<details
-							class="mx-auto w-full max-w-[58rem] px-2.5 mt-2 shrink-0 text-xs text-gray-600 dark:text-gray-400"
-						>
-							<summary
-								class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
-							>
-								{$i18n.t('Chat notes')}
-							</summary>
-							<div
-								class="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 dark:bg-gray-900 px-2.5 py-2"
-							>
-								{chat.chat.chatNotes.join('\n\n')}
-							</div>
-						</details>
-					{/if}
-					{#if $settings?.landingPageMode === 'chat' || createMessagesList(history, history.currentId).length > 0}
+					{#if $settings?.landingPageMode === 'chat' || chatNotes.length > 0 || createMessagesList(history, history.currentId).length > 0}
 						<div
 							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10"
 							id="messages-container"
@@ -3049,7 +3035,25 @@
 							}}
 						>
 							<div class=" min-h-full w-full flex flex-col">
-								{#if messagesComponent}
+								{#if chatNotes.length > 0}
+									<!-- Below the navbar, which overlaps the top of this pane. -->
+									<details
+										class="mx-auto w-full max-w-[58rem] px-2.5 pt-12 shrink-0 text-xs text-gray-600 dark:text-gray-400"
+									>
+										<summary
+											class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
+										>
+											{$i18n.t('The chat was started with the following notes as context:')}
+										</summary>
+										<div
+											class="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 dark:bg-gray-900 px-2.5 py-2"
+										>
+											{chatNotes.join('\n\n')}
+										</div>
+									</details>
+								{/if}
+								<!-- A chat with notes and no messages opens as a chat, not the welcome screen. -->
+								{#if messagesComponent && (chatNotes.length === 0 || Object.keys(history?.messages ?? {}).length > 0)}
 									<svelte:component
 										this={messagesComponent}
 										chatId={$chatId}
@@ -3068,6 +3072,7 @@
 										{chatActionHandler}
 										{addMessages}
 										bottomPadding={files.length > 0}
+										className={chatNotes.length > 0 ? 'h-full flex pt-2' : 'h-full flex pt-8'}
 									/>
 								{/if}
 							</div>
