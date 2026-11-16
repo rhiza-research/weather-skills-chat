@@ -483,11 +483,12 @@
 					<Dropdown align="start">
 						<button
 							type="button"
-							class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={startingChat}
 							aria-label={$i18n.t('More')}
 						>
-							<EllipsisHorizontal className="size-3.5" />
+							<!-- flex, not inline: inline sits on the trigger's text baseline, below the title. -->
+							<EllipsisHorizontal className="size-4" />
 						</button>
 						<div slot="content">
 							<DropdownMenu.Content
