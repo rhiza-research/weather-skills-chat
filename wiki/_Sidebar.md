@@ -15,6 +15,7 @@
 - [[Live Chat Updates]]
 - [[Queued Messages]]
 - [[Notifications]]
+- [[Banners]]
 - [[Getting Help]]
 - [[Tracing]]
 - [[Deployment]]

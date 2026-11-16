@@ -1376,6 +1376,7 @@ class BannerModel(BaseModel):
     content: str
     dismissible: bool
     timestamp: int
+    expires_at: Optional[int] = None
 
 
 class BannerEntry(BannerModel):
@@ -1390,7 +1391,8 @@ WEBUI_BANNERS = PersistentConfig(
         [],
         list[BannerEntry],
         'a JSON array of objects, each with string "id", "type" and "content", '
-        'a true or false "dismissible", an integer "timestamp" and an optional string "title"',
+        'a true or false "dismissible", an integer "timestamp", an optional string "title" '
+        'and an optional integer "expires_at"',
     ),
 )
 

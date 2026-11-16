@@ -1,3 +1,22 @@
+<script lang="ts" context="module">
+	// `type` holds the label color; old type names still render in their old colors.
+	export const BANNER_COLORS: Record<string, string> = {
+		blue: 'bg-blue-500/20 text-blue-700 dark:text-blue-200',
+		green: 'bg-green-500/20 text-green-700 dark:text-green-200',
+		yellow: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
+		orange: 'bg-orange-500/20 text-orange-700 dark:text-orange-200',
+		red: 'bg-red-500/20 text-red-700 dark:text-red-200',
+		purple: 'bg-purple-500/20 text-purple-700 dark:text-purple-200',
+		gray: 'bg-gray-500/20 text-gray-700 dark:text-gray-200'
+	};
+	export const LEGACY_BANNER_TYPES: Record<string, string> = {
+		info: 'blue',
+		success: 'green',
+		warning: 'yellow',
+		error: 'red'
+	};
+</script>
+
 <script lang="ts">
 	import type { Banner } from '$lib/types';
 	import { onMount, createEventDispatcher } from 'svelte';
@@ -29,12 +48,10 @@
 
 	let mounted = false;
 
-	const classNames: Record<string, string> = {
-		info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200 ',
-		success: 'bg-green-500/20 text-green-700 dark:text-green-200',
-		warning: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
-		error: 'bg-red-500/20 text-red-700 dark:text-red-200'
-	};
+	$: color =
+		BANNER_COLORS[LEGACY_BANNER_TYPES[banner.type] ?? banner.type] ?? BANNER_COLORS.blue;
+	// Banners saved before titles existed keep their old type name as the label.
+	$: label = banner.title || (LEGACY_BANNER_TYPES[banner.type] ? banner.type : '');
 
 	const dismiss = (id) => {
 		dismissed = true;
@@ -55,10 +72,15 @@
 			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit gap-1.5">
 				<div class="flex justify-between self-start">
 					<div
-						class=" text-xs font-bold {classNames[banner.type] ??
-							classNames['info']}  w-fit px-2 rounded-sm uppercase line-clamp-1 mr-0.5"
+						class=" text-xs font-bold {color} w-fit {label
+							? 'px-2'
+							: 'p-1 self-center'} rounded-sm uppercase line-clamp-1 mr-0.5"
 					>
-						{banner.type}
+						{#if label}
+							{label}
+						{:else}
+							<div class="size-2 rounded-full bg-current"></div>
+						{/if}
 					</div>
 
 					{#if banner.url}

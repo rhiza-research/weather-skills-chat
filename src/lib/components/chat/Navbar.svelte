@@ -237,7 +237,7 @@
 					/>
 				{/if}
 
-				{#each $banners.filter( (b) => (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
+				{#each $banners.filter( (b) => (!b.expires_at || b.expires_at * 1000 > Date.now()) && (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
 					<Banner
 						{banner}
 						on:dismiss={(e) => {

@@ -14,6 +14,8 @@
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
+	import { BANNER_COLORS, LEGACY_BANNER_TYPES } from '$lib/components/common/Banner.svelte';
+	import dayjs from 'dayjs';
 	import Textarea from '$lib/components/common/Textarea.svelte';
 
 	const dispatch = createEventDispatcher();
@@ -53,7 +55,10 @@
 		taskConfig = await getTaskConfig(localStorage.token);
 
 		promptSuggestions = $config?.default_prompt_suggestions ?? [];
-		banners = await getBanners(localStorage.token);
+		banners = (await getBanners(localStorage.token)).map((b) => ({
+			...b,
+			type: LEGACY_BANNER_TYPES[b.type] ?? b.type
+		}));
 	});
 
 	const updateBanners = async () => {
@@ -299,7 +304,7 @@
 										...banners,
 										{
 											id: uuidv4(),
-											type: '',
+											type: 'blue',
 											title: '',
 											content: '',
 											dismissible: true,
@@ -330,25 +335,40 @@
 								>
 									<select
 										class="w-fit capitalize rounded-xl py-2 px-4 text-xs bg-transparent outline-hidden"
+										aria-label={$i18n.t('Color')}
 										bind:value={banner.type}
-										required
 									>
-										{#if banner.type == ''}
-											<option value="" selected disabled class="text-gray-900"
-												>{$i18n.t('Type')}</option
-											>
-										{/if}
-										<option value="info" class="text-gray-900">{$i18n.t('Info')}</option>
-										<option value="warning" class="text-gray-900">{$i18n.t('Warning')}</option>
-										<option value="error" class="text-gray-900">{$i18n.t('Error')}</option>
-										<option value="success" class="text-gray-900">{$i18n.t('Success')}</option>
+										{#each Object.keys(BANNER_COLORS) as color}
+											<option value={color} class="text-gray-900">{$i18n.t(color)}</option>
+										{/each}
 									</select>
+
+									<input
+										class="w-28 py-1.5 text-xs bg-transparent outline-hidden"
+										placeholder={$i18n.t('Title')}
+										bind:value={banner.title}
+									/>
 
 									<input
 										class="pr-5 py-1.5 text-xs w-full bg-transparent outline-hidden"
 										placeholder={$i18n.t('Content')}
 										bind:value={banner.content}
 									/>
+
+									<Tooltip content={$i18n.t('Expires after')} className="flex items-center">
+										<input
+											type="date"
+											class="py-1.5 pr-3 text-xs bg-transparent outline-hidden"
+											aria-label={$i18n.t('Expires after')}
+											value={banner.expires_at
+												? dayjs.unix(banner.expires_at).format('YYYY-MM-DD')
+												: ''}
+											on:change={(e) => {
+												const date = e.currentTarget.value;
+												banner.expires_at = date ? dayjs(date).endOf('day').unix() : null;
+											}}
+										/>
+									</Tooltip>
 
 									<div class="relative top-1.5 -left-2">
 										<Tooltip content={$i18n.t('Dismissible')} className="flex h-fit items-center">
