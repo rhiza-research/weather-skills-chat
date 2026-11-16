@@ -89,34 +89,42 @@
 		}
 	};
 
-	const loadPreview = async (url: string) => {
-		revokePreview();
-		const res = await fetch(url, {
+	// The current image stays up until the new one has loaded, so switching does not flash.
+	const loadPreview = async (path: string) => {
+		const res = await fetch(getArtifactContentUrl($chatId, path), {
 			headers: { authorization: `Bearer ${localStorage.token}` }
 		});
+		if (path !== selectedImage) return null; // another file was opened meanwhile
 		if (!res.ok) {
+			revokePreview();
 			toast.error($i18n.t('Could not load preview'));
 			return null;
 		}
-		previewUrl = URL.createObjectURL(await res.blob());
+		const blob = await res.blob();
+		if (path !== selectedImage) return null;
+		revokePreview();
+		previewUrl = URL.createObjectURL(blob);
 		return previewUrl;
 	};
 
+	// Opening a file while full screen keeps it full screen.
 	const openImage = async (path: string) => {
 		selectedImage = path;
-		showImageModal = false;
-		showHtmlModal = false;
-		previewHtmlUrl = '';
+		modalAlt = path;
 		previewModified = fileModified(path);
 		if (isHtmlArtifact(path)) {
 			revokePreview();
 			previewHtmlUrl = htmlPreviewUrl(path, previewModified);
-			modalAlt = path;
+			showHtmlModal ||= showImageModal;
+			showImageModal = false;
 			return;
 		}
-		const url = await loadPreview(getArtifactContentUrl($chatId, path));
-		if (!url) return;
-		modalAlt = path;
+		const url = await loadPreview(path);
+		if (path !== selectedImage) return;
+		previewHtmlUrl = '';
+		showImageModal ||= showHtmlModal;
+		showHtmlModal = false;
+		if (!url) showImageModal = false;
 	};
 
 	// Left / right step through the open file's folder of images and plots, in list order.
@@ -135,9 +143,7 @@
 		const next = media[i + (event.key === 'ArrowRight' ? 1 : -1)];
 		if (!next) return;
 		event.preventDefault();
-		const expanded = showImageModal || showHtmlModal;
-		await openImage(next.path);
-		if (expanded) expandPreview();
+		openImage(next.path);
 	};
 
 	const clearPreview = () => {
@@ -170,7 +176,7 @@
 			if (isHtmlArtifact(selectedImage)) {
 				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
 			} else {
-				loadPreview(getArtifactContentUrl($chatId, selectedImage));
+				loadPreview(selectedImage);
 			}
 		}
 	}
