@@ -44,6 +44,7 @@ def test_a_batch_merges_into_the_stored_message():
     add_to_pending(pending, "usage", {"total_tokens": 6})
     add_to_pending(pending, "source", {"source": {"name": "new"}})
     add_to_pending(pending, "files", [{"url": "/b.png"}])
+    add_to_pending(pending, "context_trimmed", True)
     stored = {
         "id": "a1",
         "content": "kept",
@@ -58,3 +59,5 @@ def test_a_batch_merges_into_the_stored_message():
     assert merged["usage"] == {"total_tokens": 110}
     assert [s["source"]["name"] for s in merged["sources"]] == ["before the model ran", "new"]
     assert merged["files"] == [{"url": "/a.png"}, {"url": "/b.png"}]
+    assert merged["contextTrimmed"] is True
+    assert "contextTrimmed" not in apply_to_message(stored, {"usage": {"total_tokens": 1}})

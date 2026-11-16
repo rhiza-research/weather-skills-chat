@@ -317,6 +317,8 @@ def get_event_emitter(request_info, update_db=True):
                     save_part("code_execution", event_body)
                 else:
                     save_part("source", event_body)
+            elif event_type == "chat:message:context_trimmed":
+                save_part("context_trimmed", True)
             elif event_type in ("files", "chat:message:files") and isinstance(
                 event_body, dict
             ):

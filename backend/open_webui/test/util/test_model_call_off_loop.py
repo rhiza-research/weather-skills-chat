@@ -151,6 +151,31 @@ class ModelCallThreadsTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.sent[0]["model"], "weather-agent")
 
+    async def test_an_over_budget_conversation_is_trimmed_and_the_reply_marked(self):
+        form = _form()
+        form["metadata"].update(user_id="u1", message_id="m1")
+        form["messages"] = [
+            {"role": "user", "content": "x" * 3_000},
+            {"role": "assistant", "content": "ok"},
+            {"role": "user", "content": "Rain this week?"},
+        ]
+        emitted = []
+
+        async def emit(event):
+            emitted.append(event)
+
+        with (
+            patch("open_webui.utils.context_budget.MODEL_CONTEXT_TOKEN_BUDGET", 500),
+            patch("open_webui.socket.main.get_event_emitter", return_value=emit),
+        ):
+            await chat.generate_chat_completion(_request(), form, self._user())
+
+        self.assertEqual(
+            self.sent[0]["messages"], [{"role": "user", "content": "Rain this week?"}]
+        )
+        self.assertEqual(len(form["messages"]), 3)
+        self.assertEqual(emitted, [{"type": "chat:message:context_trimmed", "data": {}}])
+
     async def test_a_user_without_access_never_reaches_the_provider(self):
         self.mocks[1].side_effect = Exception("Model not found")
         with self.assertRaisesRegex(Exception, "Model not found"):

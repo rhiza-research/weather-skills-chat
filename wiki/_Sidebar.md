@@ -14,6 +14,7 @@
 - [[Preferences]]
 - [[Live Chat Updates]]
 - [[Queued Messages]]
+- [[Long Chats]]
 - [[Notifications]]
 - [[Getting Help]]
 - [[Tracing]]

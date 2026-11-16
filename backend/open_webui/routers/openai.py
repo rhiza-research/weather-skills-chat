@@ -837,6 +837,8 @@ class ProviderCall(NamedTuple):
     fallback_model_id: Optional[str]
     # The connection's name as users see it in errors.
     provider: str = ""
+    # Older messages were cleared or left out to fit the context budget.
+    context_trimmed: bool = False
 
 
 def prepare_provider_call(
@@ -965,6 +967,22 @@ def prepare_provider_call(
             convert_logit_bias_input_to_json(payload["logit_bias"])
         )
 
+    context_trimmed = False
+    if isinstance(payload.get("messages"), list):
+        from open_webui.utils.context_budget import (
+            MODEL_CONTEXT_TOKEN_BUDGET,
+            compact_messages,
+            estimate_tokens,
+        )
+
+        # Tool definitions are part of the prompt too.
+        budget = MODEL_CONTEXT_TOKEN_BUDGET - estimate_tokens(payload.get("tools"))
+        payload["messages"], context_trimmed = compact_messages(
+            payload["messages"], budget
+        )
+        if context_trimmed:
+            log.info("Trimmed model context for chat_id=%s", chat_id)
+
     payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
     payload = apply_provider_trace_fields(
         payload,
@@ -990,6 +1008,7 @@ def prepare_provider_call(
         idx,
         fallback_model_id,
         connection_name(request, idx),
+        context_trimmed,
     )
 
 
@@ -1075,6 +1094,9 @@ async def generate_chat_completion(
     call = await asyncio.to_thread(
         prepare_provider_call, request, form_data, user, bypass_filter
     )
+    # A backup gets the same messages, so the first call speaks for both.
+    if call.context_trimmed:
+        await _note_context_trimmed(form_data.get("metadata"))
     if not call.fallback_model_id:
         try:
             return await _send_provider_call(call, user)
@@ -1148,6 +1170,26 @@ async def generate_chat_completion(
         return response
 
     raise primary_error or backup_error
+
+
+async def _note_context_trimmed(metadata) -> None:
+    """Mark the reply so its chat says older context was left out."""
+    if not isinstance(metadata, dict):
+        return
+    if not (
+        metadata.get("user_id")
+        and metadata.get("chat_id")
+        and metadata.get("message_id")
+    ):
+        return
+    from open_webui.socket.main import get_event_emitter
+
+    try:
+        await get_event_emitter(metadata)(
+            {"type": "chat:message:context_trimmed", "data": {}}
+        )
+    except Exception:
+        log.exception("Could not mark context_trimmed for %s", metadata["chat_id"])
 
 
 async def _send_provider_call(call: ProviderCall, user):
