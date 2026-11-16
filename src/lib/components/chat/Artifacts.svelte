@@ -33,6 +33,7 @@
 	import { goto } from '$app/navigation';
 	import Dropdown from '../common/Dropdown.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
+	import PencilSquare from '../icons/PencilSquare.svelte';
 	import { newChatWithArtifacts } from '$lib/apis/chats';
 
 	export let history;
@@ -482,7 +483,38 @@
 
 	<div class="flex flex-col min-h-0 flex-1 overflow-hidden">
 		<div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-			<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
+			<div class="flex items-center gap-1">
+				<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
+				{#if !readOnly && files.length > 0 && $chatId && $chatId !== 'local'}
+					<Dropdown align="start">
+						<button
+							type="button"
+							class="flex items-center p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							disabled={startingChat}
+							aria-label={$i18n.t('More')}
+						>
+							<!-- flex, not inline: inline sits on the trigger's text baseline, below the title. -->
+							<EllipsisHorizontal className="size-4" />
+						</button>
+						<div slot="content">
+							<DropdownMenu.Content
+								class="rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
+								sideOffset={4}
+								side="bottom"
+								align="start"
+							>
+								<DropdownMenu.Item
+									class="flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+									on:click={startChatWithArtifacts}
+								>
+									<PencilSquare className="size-4" strokeWidth="2" />
+									{$i18n.t('Start a new chat with these artifacts')}
+								</DropdownMenu.Item>
+							</DropdownMenu.Content>
+						</div>
+					</Dropdown>
+				{/if}
+			</div>
 			<div class="flex items-center gap-2">
 				{#if !readOnly}
 					<button
@@ -499,33 +531,6 @@
 						class="hidden"
 						on:change={onUpload}
 					/>
-				{/if}
-				{#if !readOnly && files.length > 0 && $chatId && $chatId !== 'local'}
-					<Dropdown align="end">
-						<button
-							type="button"
-							class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
-							disabled={startingChat}
-							aria-label={$i18n.t('More')}
-						>
-							<EllipsisHorizontal className="size-3.5" />
-						</button>
-						<div slot="content">
-							<DropdownMenu.Content
-								class="rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
-								sideOffset={4}
-								side="bottom"
-								align="end"
-							>
-								<DropdownMenu.Item
-									class="flex items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-									on:click={startChatWithArtifacts}
-								>
-									{$i18n.t('Start a new chat with these artifacts')}
-								</DropdownMenu.Item>
-							</DropdownMenu.Content>
-						</div>
-					</Dropdown>
 				{/if}
 				<button
 					type="button"
