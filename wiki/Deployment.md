@@ -117,7 +117,7 @@ For a model served through OpenRouter, a catalog model's `params` can hold `prov
 | `WEBUI_NAME` | `Weather Skills` | App name |
 | `WEBUI_URL` | `http://localhost:3000` | The app's public address, used in links in emails and in what the model sends users |
 | `WEBUI_FAVICON_URL` | `<WEBUI_URL>/static/favicon.png` | Browser tab icon |
-| `WEBUI_BANNERS` | empty | Banners shown to users, as a JSON array of objects, each with `id`, `type`, `content`, `dismissible`, and `timestamp`, and optionally `title` |
+| `WEBUI_BANNERS` | empty | [[Banners]] shown to users, as a JSON array of objects, each with `id`, `type` (the label color: `blue`, `green`, `yellow`, `orange`, `red`, `purple`, or `gray`), `content`, `dismissible`, and `timestamp`, and optionally `title` (the label) and `expires_at` (Unix seconds after which the banner stops showing) |
 | `WEBUI_HELP_EMAIL` | `help@weather-skills.org` | Support address that receives feedback from the app (see [[Getting Help]]), shown on pages before sign-in |
 | `WEBUI_IMAGE_TAG` | empty | Release label shown in the app; when empty, the app version is shown. The Helm chart sets it to the image tag. |
 
