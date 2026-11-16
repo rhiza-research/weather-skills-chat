@@ -33,6 +33,7 @@
 	import { goto } from '$app/navigation';
 	import Dropdown from '../common/Dropdown.svelte';
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
+	import PencilSquare from '../icons/PencilSquare.svelte';
 	import { newChatWithArtifacts } from '$lib/apis/chats';
 
 	export let history;
@@ -496,9 +497,10 @@
 								align="start"
 							>
 								<DropdownMenu.Item
-									class="flex items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+									class="flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 									on:click={startChatWithArtifacts}
 								>
+									<PencilSquare className="size-4" strokeWidth="2" />
 									{$i18n.t('Start a new chat with these artifacts')}
 								</DropdownMenu.Item>
 							</DropdownMenu.Content>
