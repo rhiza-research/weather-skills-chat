@@ -215,5 +215,21 @@ class StoreRefusedTurnTest(unittest.TestCase):
         self.assertFalse(store_refused_turn("c1", {"user_message": {}}, MagicMock(), "x"))
 
 
+class ArtifactNoteTest(unittest.TestCase):
+    def test_note_follows_the_first_user_message_only(self):
+        history = {
+            "messages": {
+                "u1": {"id": "u1", "parentId": None, "role": "user", "content": "Plot it", "childrenIds": ["a1"]},
+                "a1": {"id": "a1", "parentId": "u1", "role": "assistant", "content": "Done.", "childrenIds": ["u2"]},
+                "u2": {"id": "u2", "parentId": "a1", "role": "user", "content": "Again", "childrenIds": []},
+            }
+        }
+
+        messages = messages_for_model(history, "u2", "Files: `map.png`")
+
+        self.assertEqual(messages[0]["content"], "Plot it\n\nFiles: `map.png`")
+        self.assertEqual(messages[2]["content"], "Again")
+
+
 if __name__ == "__main__":
     unittest.main()

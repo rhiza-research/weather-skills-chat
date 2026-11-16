@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.artifacts import (
+    artifact_carryover_note,
     SANDBOX_FILE_MODE,
     SANDBOX_OWNER_UID,
     copy_sandbox,
@@ -52,6 +53,35 @@ class CreateFolderTest(unittest.TestCase):
                     mode = stat.S_IMODE(path.stat().st_mode)
                     self.assertTrue(mode & stat.S_IWGRP, f"{path} not group-writable: {oct(mode)}")
                     self.assertTrue(mode & stat.S_ISGID, f"{path} missing setgid: {oct(mode)}")
+
+
+class ArtifactCarryoverNoteTest(unittest.TestCase):
+    def test_lists_every_file_with_skills_for_the_first_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.ARTIFACT_NOTE_PROVENANCE_FILES", 1
+            ), patch(
+                "open_webui.utils.artifacts._provenance_for_entry",
+                return_value={"crumbs": ["chirps-fetch", "plot"]},
+            ) as provenance:
+                write_bytes("c1", "plots/a.png", b"png")
+                write_bytes("c1", "plots/b.png", b"png")
+                note = artifact_carryover_note("c1", "Kenya rain")
+
+        self.assertTrue(note.startswith('This chat has been started with 2 files from the chat "Kenya rain".'))
+        self.assertIn("explore these files before downloading anything again", note)
+        self.assertIn("- `plots/` (directory)", note)
+        self.assertIn("- `plots/a.png` (image) made by chirps-fetch → plot", note)
+        self.assertIn("- `plots/b.png` (image)\n", note + "\n")
+        self.assertEqual(provenance.call_count, 1)
+        self.assertNotIn("intermediate_results/`", note)
+
+    def test_sandbox_without_files_gives_no_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", Path(tmp) / "artifacts"):
+                create_folder("c1", "empty")
+                self.assertEqual(artifact_carryover_note("c1", "Empty"), "")
 
 
 class CopySandboxTest(unittest.TestCase):

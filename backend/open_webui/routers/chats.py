@@ -807,6 +807,57 @@ async def clone_chat_by_id(
 
 
 ############################
+# NewChatWithArtifacts
+############################
+
+
+@router.post("/{id}/new-with-artifacts", response_model=Optional[ChatResponse])
+async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
+    """Start an empty chat that has a copy of this chat's files.
+
+    The model is told what the files are on every turn of the new chat
+    (``artifactNote``), so it does not have to rediscover them.
+    """
+    from open_webui.utils.artifacts import artifact_carryover_note, copy_sandbox
+
+    source = await asyncio.to_thread(_require_readable_chat, id, user)
+    try:
+        note = await asyncio.to_thread(artifact_carryover_note, source.id, source.title)
+    except Exception:
+        log.exception("Failed to list artifacts for the new chat's note")
+        note = ""
+    chat = await asyncio.to_thread(
+        Chats.insert_new_chat,
+        user.id,
+        ChatForm(
+            chat={
+                "title": "New Chat",
+                "models": source.chat.get("models", []),
+                "params": source.chat.get("params", {}),
+                "history": {"messages": {}, "currentId": None},
+                "messages": [],
+                "tags": [],
+                "timestamp": int(time.time() * 1000),
+                "artifactNote": note,
+            },
+            organization_id=source.organization_id,
+            visibility="private",
+        ),
+    )
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be created. Please try again.",
+        )
+    try:
+        # Copies every file of the chat on JuiceFS.
+        await asyncio.to_thread(copy_sandbox, source.id, chat.id)
+    except Exception:
+        log.exception("Failed to copy chat artifacts")
+    return ChatResponse(**chat.model_dump())
+
+
+############################
 # CloneSharedChatById
 ############################
 

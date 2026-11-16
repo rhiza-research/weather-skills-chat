@@ -641,6 +641,19 @@ export const toggleChatPinnedStatusById = async (token: string, id: string) => {
 	return res;
 };
 
+export const newChatWithArtifacts = async (token: string, id: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/new-with-artifacts`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) throw (await parseApiError(res)).detail;
+	return res.json();
+};
+
 export const cloneChatById = async (token: string, id: string, title?: string) => {
 	let error = null;
 

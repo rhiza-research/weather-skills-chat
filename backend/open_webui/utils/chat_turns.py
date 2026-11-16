@@ -42,11 +42,15 @@ def artifact_upload_note(files) -> str:
 
 
 def with_artifact_upload_note(content, files):
-    note = artifact_upload_note(files)
+    return _append_note(content, artifact_upload_note(files), _UPLOAD_NOTE_LINE)
+
+
+def _append_note(content, note, already=None):
+    """Add note after the text of a message; skip when ``already`` matches it."""
     if not note:
         return content
     if isinstance(content, str):
-        if _UPLOAD_NOTE_LINE.search(content):
+        if already and already.search(content):
             return content
         if content.strip():
             return f"{content}\n\n{note}"
@@ -61,7 +65,7 @@ def with_artifact_upload_note(content, files):
                 and part.get("type") == "text"
             ):
                 text = part.get("text") or ""
-                if _UPLOAD_NOTE_LINE.search(text):
+                if already and already.search(text):
                     return content
                 extra = f"{text}\n\n{note}" if text.strip() else note
                 parts.append({**part, "text": extra})
@@ -80,8 +84,14 @@ class ChatRevisionConflict(Exception):
         self.revision = revision
 
 
-def messages_for_model(history: dict, message_id: str) -> list[dict]:
-    """Linearize a stored history the way the client used to, minus hidden details."""
+def messages_for_model(
+    history: dict, message_id: str, artifact_note: str = ""
+) -> list[dict]:
+    """Linearize a stored history the way the client used to, minus hidden details.
+
+    artifact_note: what files the chat started with; it goes after the first
+    user message on every turn so the transcript prefix never changes.
+    """
     bag = (history or {}).get("messages") or {}
     chain = get_message_list(bag, message_id) or []
     prepared = []
@@ -97,6 +107,8 @@ def messages_for_model(history: dict, message_id: str) -> list[dict]:
             content = _HIDDEN_DETAILS.sub("", content)
         if role == "user":
             content = with_artifact_upload_note(content, message.get("files"))
+            content = _append_note(content, artifact_note)
+            artifact_note = ""  # first user message only
         item = {"role": role, "content": content}
         if message.get("tool_calls"):
             item["tool_calls"] = message["tool_calls"]
@@ -227,5 +239,9 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
             detail="The chat could not be saved. Please try again.",
         )
 
-    history = (stored.chat or {}).get("history") or {}
-    return messages_for_model(history, assistant_message["id"])
+    stored_chat = stored.chat or {}
+    return messages_for_model(
+        stored_chat.get("history") or {},
+        assistant_message["id"],
+        stored_chat.get("artifactNote") or "",
+    )
