@@ -202,7 +202,8 @@
 		try {
 			const id = $chatId;
 			const listed = await refreshArtifacts(localStorage.token, id);
-			files = Array.isArray(listed) ? listed : [];
+			// The user may have switched chats while this was in flight.
+			if (id === $chatId) files = Array.isArray(listed) ? listed : [];
 		} catch (e) {
 			files = [];
 			loadedArtifactKey = '';
@@ -252,6 +253,8 @@
 				loadedArtifactKey = $chatId;
 			} else if (shouldLoadArtifactList(listed) && loadedArtifactKey !== $chatId) {
 				loadedArtifactKey = $chatId;
+				// Drop the previous chat's list so it doesn't show while this one loads.
+				files = [];
 				loadFiles();
 			}
 		} else {
@@ -547,6 +550,7 @@
 			<ArtifactBrowser
 				{files}
 				{selectedImage}
+				loading={loadingFiles && !Array.isArray($chatArtifactLists[$chatId])}
 				on:openImage={(e) => openImage(e.detail.path)}
 			/>
 		</div>

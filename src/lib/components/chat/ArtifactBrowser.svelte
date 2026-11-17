@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
 	import ArtifactTreeNode from './ArtifactTreeNode.svelte';
+	import Spinner from '../common/Spinner.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let files: any[] = [];
+	export let loading = false;
 	export let selectedImage: string | null = null;
 
 	type TreeNode = {
@@ -101,7 +103,12 @@
 	};
 </script>
 
-{#if tree.length === 0}
+{#if loading}
+	<div class="flex items-center gap-1.5 text-[11px] text-gray-400">
+		{$i18n.t('Loading artifacts')}
+		<Spinner className="size-3" />
+	</div>
+{:else if tree.length === 0}
 	<div class="text-[11px] text-gray-400">{$i18n.t('No files in this chat yet.')}</div>
 {:else}
 	<div class="flex flex-col gap-0.5">
