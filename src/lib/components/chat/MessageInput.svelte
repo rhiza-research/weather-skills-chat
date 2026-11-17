@@ -1210,7 +1210,12 @@
 												{/if}
 
 												{#if $config?.features?.enable_code_interpreter && ($_user.role === 'admin' || $_user?.permissions?.features?.code_interpreter)}
-													<Tooltip content={$i18n.t('Execute code for analysis')} placement="top">
+													<Tooltip
+														content={codeInterpreterEnabled
+															? $i18n.t('The agent can write and run its own code for analysis. Click to turn it off.')
+															: $i18n.t('The agent will not write or run its own code. Click to allow it.')}
+														placement="top"
+													>
 														<button
 															on:click|preventDefault={() =>
 																(codeInterpreterEnabled = !codeInterpreterEnabled)}
@@ -1222,9 +1227,7 @@
 														>
 															<CommandLine className="size-5" strokeWidth="1.75" />
 															<span class="whitespace-nowrap translate-y-[0.5px]"
-																>{codeInterpreterEnabled
-																	? $i18n.t('Agent allowed to write/execute its own code')
-																	: $i18n.t('Agent not allowed to write/execute its own code')}</span
+																>{$i18n.t('Run code')}</span
 															>
 														</button>
 													</Tooltip>
