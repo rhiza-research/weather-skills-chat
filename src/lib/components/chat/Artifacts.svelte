@@ -29,10 +29,8 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
-	import { DropdownMenu } from 'bits-ui';
 	import { goto } from '$app/navigation';
-	import Dropdown from '../common/Dropdown.svelte';
-	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
+	import ArrowUpTray from '../icons/ArrowUpTray.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import { newChatWithArtifacts } from '$lib/apis/chats';
 
@@ -484,50 +482,43 @@
 		</div>
 	{/if}
 
-	<div class="flex flex-col min-h-0 flex-1 overflow-hidden">
-		<div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-			<div class="flex items-center gap-1">
-				<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
+	<div class="flex flex-col min-h-0 flex-1 overflow-hidden @container">
+		<!-- mt-2 h-9 centres the row on the chat navbar's 36px buttons, which start 8px down. -->
+		<div class="flex items-center justify-between gap-2 px-3 mt-2 h-9 shrink-0">
+			<div class="text-sm font-medium">{$i18n.t('Artifacts')}</div>
+			<!-- The full row measures about 392px; narrower than 400px, the new-chat button drops its label. -->
+			<div class="flex items-center gap-3 whitespace-nowrap">
 				{#if !readOnly && files.length > 0 && $chatId && $chatId !== 'local'}
-					<Dropdown align="start">
+					<Tooltip content={$i18n.t('Start a new chat with a copy of these artifacts')} placement="bottom">
 						<button
 							type="button"
-							class="flex items-center p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={startingChat}
-							aria-label={$i18n.t('More')}
+							on:click={startChatWithArtifacts}
+							aria-label={$i18n.t('New chat with these artifacts')}
 						>
-							<!-- flex, not inline: inline sits on the trigger's text baseline, below the title. -->
-							<EllipsisHorizontal className="size-4" />
+							<PencilSquare className="size-4" strokeWidth="2" />
+							<span class="hidden @min-[400px]:inline">{$i18n.t('New chat with these artifacts')}</span>
 						</button>
-						<div slot="content">
-							<DropdownMenu.Content
-								class="rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
-								sideOffset={4}
-								side="bottom"
-								align="start"
-							>
-								<DropdownMenu.Item
-									class="flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
-									on:click={startChatWithArtifacts}
-								>
-									<PencilSquare className="size-4" strokeWidth="2" />
-									{$i18n.t('Start a new chat with these artifacts')}
-								</DropdownMenu.Item>
-							</DropdownMenu.Content>
-						</div>
-					</Dropdown>
+					</Tooltip>
 				{/if}
-			</div>
-			<div class="flex items-center gap-2">
 				{#if !readOnly}
-					<button
-						type="button"
-						class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
-						disabled={uploading || !$chatId || $chatId === 'local'}
-						on:click={() => fileInput?.click()}
+					<Tooltip
+						placement="bottom"
+						content={uploading
+							? $i18n.t('Uploading...')
+							: $i18n.t("Upload a file to this chat's artifacts")}
 					>
-						{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
-					</button>
+						<button
+							type="button"
+							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							disabled={uploading || !$chatId || $chatId === 'local'}
+							on:click={() => fileInput?.click()}
+						>
+							<ArrowUpTray className="size-4" strokeWidth="2" />
+							{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
+						</button>
+					</Tooltip>
 					<input
 						bind:this={fileInput}
 						type="file"
@@ -535,14 +526,16 @@
 						on:change={onUpload}
 					/>
 				{/if}
-				<button
-					type="button"
-					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-					on:click={closePanel}
-					aria-label="Close artifacts"
-				>
-					<XMark className="size-3.5" />
-				</button>
+				<Tooltip content={$i18n.t('Close artifacts')} placement="bottom">
+					<button
+						type="button"
+						class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+						on:click={closePanel}
+						aria-label="Close artifacts"
+					>
+						<XMark className="size-3.5" />
+					</button>
+				</Tooltip>
 			</div>
 		</div>
 
