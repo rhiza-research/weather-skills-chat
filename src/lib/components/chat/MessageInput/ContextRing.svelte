@@ -23,7 +23,7 @@
 		<!-- r = 100/2π so the circumference is 100 and the dash length is the percent -->
 		<svg
 			viewBox="0 0 36 36"
-			class="block size-5 -rotate-90 ml-2"
+			class="block size-5 -rotate-90 mr-1.5"
 			role="img"
 			aria-label={$i18n.t('Context usage')}
 		>
@@ -50,7 +50,7 @@
 			<DropdownMenu.Content
 				class="rounded-xl px-3 py-2 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm text-sm"
 				sideOffset={10}
-				side="top"
+				side="bottom"
 				align="end"
 				transition={flyAndScale}
 			>
