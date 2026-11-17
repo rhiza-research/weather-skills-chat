@@ -86,6 +86,7 @@ class DiscoveredSkill:
     relative_path: str
     usage: str
     scripts: list[str]
+    summary: Optional[str] = None
 
 
 def validate_public_git_url(url: str) -> str:
@@ -505,9 +506,10 @@ def discover_skills(root: Path) -> list[DiscoveredSkill]:
         meta, body = _parse_skill_md(skill_md)
         name = str(meta.get("name") or skill_dir.name).strip()
         description = str(meta.get("description") or name).strip()
-        version = None
+        version = summary = None
         metadata = meta.get("metadata") or {}
         if isinstance(metadata, dict):
+            summary = metadata.get("summary")
             version = metadata.get("version")
             if version is not None:
                 version = str(version)
@@ -530,6 +532,7 @@ def discover_skills(root: Path) -> list[DiscoveredSkill]:
                 relative_path=relative if relative != "." else skill_dir.name,
                 usage=_extract_usage(body),
                 scripts=scripts,
+                summary=summary,
             )
         )
     return found
@@ -665,6 +668,7 @@ def _upsert_skill_tool(
         "skill_dir": str(skill.skill_dir),
         "relative_path": skill.relative_path,
         "scripts": skill.scripts,
+        "summary": skill.summary,
         "enabled": bool(enabled),
     }
     meta = ToolMeta(
@@ -747,6 +751,7 @@ def _prepare_skill_tool(
             "skill_dir": str(skill.skill_dir),
             "relative_path": skill.relative_path,
             "scripts": skill.scripts,
+            "summary": skill.summary,
             "enabled": bool(enabled),
         },
     )
