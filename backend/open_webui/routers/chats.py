@@ -973,6 +973,18 @@ async def share_chat_by_id(
         )
 
 
+class ShareLinkResponse(BaseModel):
+    id: str
+    created_at: int
+    expires_at: Optional[int] = None
+
+
+@router.get("/{id}/shares", response_model=list[ShareLinkResponse])
+async def get_share_links_by_chat_id(id: str, user=Depends(get_verified_user)):
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await asyncio.to_thread(Chats.get_live_shares_by_chat_id, id)
+
+
 ############################
 # DeletedSharedChatById
 ############################

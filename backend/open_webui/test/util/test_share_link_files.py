@@ -67,6 +67,19 @@ class ShareLinkFilesTest(unittest.TestCase):
         self.assertTrue(Chats.is_live_share(live.id))
         self.assertFalse(Chats.is_live_share(self.chat.id))
 
+    def test_listing_shows_only_live_links_with_their_dates(self):
+        legacy = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        expires_at = int(time.time()) + 3600
+        live = Chats.insert_shared_chat_by_chat_id(self.chat.id, expires_at)
+        Chats.insert_shared_chat_by_chat_id(self.chat.id, int(time.time()) - 1)
+
+        links = {l["id"]: l for l in Chats.get_live_shares_by_chat_id(self.chat.id)}
+
+        self.assertEqual(set(links), {legacy.id, live.id})
+        self.assertIsNone(links[legacy.id]["expires_at"])
+        self.assertEqual(links[live.id]["expires_at"], expires_at)
+        self.assertAlmostEqual(links[live.id]["created_at"], time.time(), delta=60)
+
     def test_cleanup_deletes_only_expired_links_and_their_files(self):
         legacy = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         live = Chats.insert_shared_chat_by_chat_id(self.chat.id, int(time.time()) + 3600)
