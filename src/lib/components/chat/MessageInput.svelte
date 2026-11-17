@@ -1225,7 +1225,7 @@
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
-															<CommandLine className="size-5" strokeWidth="1.75" />
+															<CommandLine className="size-5" strokeWidth="1.75" slashed={!codeInterpreterEnabled} />
 															<span class="whitespace-nowrap translate-y-[0.5px]"
 																>{$i18n.t('Run code')}</span
 															>
