@@ -330,6 +330,7 @@ def get_tools(
                     "spec": spec,
                     "version": tool_version_from_record(tool),
                     "summary": _tool_manifest(tool).get("summary"),
+                    "kind": _tool_manifest(tool).get("kind"),
                     # Misc info
                     "metadata": {
                         "file_handler": hasattr(module, "file_handler")
