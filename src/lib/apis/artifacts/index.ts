@@ -9,6 +9,18 @@ export const getChatArtifacts = async (token: string, chatId: string) => {
 	return res.json();
 };
 
+/** Whether the chat's files are still being copied in from another chat. */
+export const getArtifactCopyState = async (
+	token: string,
+	chatId: string
+): Promise<'copying' | 'failed' | 'done'> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/copy`, {
+		headers: { authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return (await res.json()).state;
+};
+
 /** Full provenance branches for one entry. Listings carry only its crumbs. */
 export const getArtifactProvenance = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(

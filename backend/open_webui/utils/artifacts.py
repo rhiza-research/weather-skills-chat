@@ -754,8 +754,34 @@ async def list_artifacts_async(
     )
 
 
-def _copy_sandbox_entry(src: Path, dest: Path) -> None:
+# Measured on staging: 32 workers clone a 98k-file chat about 2.5x faster
+# than juicefs's default of 4.
+CLONE_THREADS = 32
+# Every copy gives up after this long. A "copying" marker older than this,
+# plus some slack, means the copy died, for example with its pod.
+COPY_TIMEOUT_SECONDS = 180
+COPY_MARKER_SLACK_SECONDS = 30
+# A failed or unavailable juicefs clone falls back to a plain copy only below
+# both limits: the plain copy managed about 20 files a second on staging.
+PLAIN_COPY_MAX_FILES = 500
+PLAIN_COPY_MAX_BYTES = 500 * 1024 * 1024
+COPY_MARKER = ".artifact-copy"
+COPY_STAGING_DIRNAME = ".artifact-copy-staging"
+
+
+class SandboxCopyError(Exception):
+    """A chat's files could not be copied; its copy marker says failed."""
+
+
+def _check_deadline(deadline: float) -> None:
+    if time.monotonic() > deadline:
+        raise SandboxCopyError("artifact copy timed out")
+
+
+def _copy_sandbox_entry(src: Path, dest: Path, deadline: float | None = None) -> None:
     """Copy a file or directory. Symlinks are kept as links, not followed."""
+    if deadline is not None:
+        _check_deadline(deadline)
     if src.is_symlink():
         if dest.is_symlink() or dest.exists():
             if dest.is_dir() and not dest.is_symlink():
@@ -768,7 +794,7 @@ def _copy_sandbox_entry(src: Path, dest: Path) -> None:
         dest.mkdir(parents=True, exist_ok=True)
         own_sandbox_path(dest)
         for child in src.iterdir():
-            _copy_sandbox_entry(child, dest / child.name)
+            _copy_sandbox_entry(child, dest / child.name, deadline)
         return
     if src.is_file():
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -784,71 +810,159 @@ def _remove_path(path: Path) -> None:
         path.unlink()
 
 
-def _clone_sandbox_entry(src: Path, dest: Path) -> None:
-    """Copy-on-write clone with `juicefs clone`, else a plain copy.
-
-    The clone shares data with the source until either side changes, and
-    keeps the source's owner and mode. It only works on a JuiceFS mount; on
-    any other filesystem, or without the binary, the plain copy runs.
-    """
+def _remove_tree(path: Path) -> None:
+    """``juicefs rmr`` deletes on the metadata server, much faster than a walk
+    for a large clone; whatever it leaves is removed the slow way."""
     if shutil.which("juicefs"):
-        # The new chat's folder starts with an empty intermediate_results;
-        # clone refuses an existing target.
-        if dest.is_dir() and not dest.is_symlink() and not any(dest.iterdir()):
-            dest.rmdir()
-        if not (dest.exists() or dest.is_symlink()):
-            result = subprocess.run(
-                ["juicefs", "clone", "--preserve", str(src), str(dest)],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                return
-            log.warning(
-                "juicefs clone of %s failed, copying instead: %s",
-                src,
-                result.stderr.strip(),
-            )
-            _remove_path(dest)
-    _copy_sandbox_entry(src, dest)
+        subprocess.run(["juicefs", "rmr", str(path)], capture_output=True)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def _small_enough_for_plain_copy(src: Path) -> bool:
+    """Count visible files and bytes, stopping as soon as either limit is passed."""
+    files = size = 0
+    for entry in src.iterdir():
+        if entry.name.startswith("."):
+            continue
+        if entry.is_dir() and not entry.is_symlink():
+            paths = (Path(root) / name for root, _, names in os.walk(entry) for name in names)
+        else:
+            paths = iter([entry])
+        for path in paths:
+            files += 1
+            try:
+                size += path.lstat().st_size
+            except OSError:
+                pass
+            if files > PLAIN_COPY_MAX_FILES or size > PLAIN_COPY_MAX_BYTES:
+                return False
+    return True
+
+
+def _juicefs_clone(src: Path, dest: Path, deadline: float) -> bool:
+    """Copy-on-write clone; False when juicefs reports a failure.
+
+    The clone shares data with the source until either side changes, keeps
+    the source's owner and mode, and only shows dest once it is complete.
+    """
+    _check_deadline(deadline)
+    try:
+        result = subprocess.run(
+            [
+                "juicefs",
+                "clone",
+                "--preserve",
+                "--threads",
+                str(CLONE_THREADS),
+                str(src),
+                str(dest),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=deadline - time.monotonic(),
+        )
+    except subprocess.TimeoutExpired:
+        # shortcut: the mount may finish the clone after the CLI is killed; it
+        # lands in the staging folder, which is deleted or replaced. Upgrade if
+        # stray clones show up in chat folders.
+        raise SandboxCopyError("artifact copy timed out")
+    if result.returncode == 0:
+        return True
+    log.warning("juicefs clone of %s failed: %s", src, result.stderr.strip())
+    return False
+
+
+def _write_copy_marker(root: Path, state: str, started: float) -> None:
+    (root / COPY_MARKER).write_text(json.dumps({"state": state, "started": started}))
+
+
+def mark_copy_started(chat_id: str) -> None:
+    """Show a chat's copy as running before copy_sandbox starts in the background."""
+    _write_copy_marker(chat_sandbox(str(chat_id)), "copying", time.time())
+
+
+def artifact_copy_state(chat_id: str) -> str:
+    """"copying", "failed", or "done" (no marker: nothing is being copied)."""
+    chat_id = str(chat_id)
+    if not chat_id or "/" in chat_id or "\\" in chat_id or chat_id in (".", ".."):
+        raise ValueError("Invalid chat id")
+    try:
+        marker = json.loads((_artifacts_root(ARTIFACTS_DIR) / chat_id / COPY_MARKER).read_text())
+    except FileNotFoundError:
+        return "done"
+    except (OSError, ValueError):
+        return "failed"
+    state = marker.get("state")
+    if state == "copying":
+        age = time.time() - float(marker.get("started") or 0)
+        if age > COPY_TIMEOUT_SECONDS + COPY_MARKER_SLACK_SECONDS:
+            return "failed"
+        return "copying"
+    return "failed"
 
 
 def copy_sandbox(src_chat_id: str, dest_chat_id: str) -> None:
-    """Copy visible sandbox files onto dest.
+    """Copy a chat's visible files into another chat, or raise SandboxCopyError.
 
-    Root dot entries (``.local``, ``.cache``, and similar HOME scratch) are
-    skipped. Dotfiles inside a copied directory, such as zarr ``.zarray``,
-    are kept. Each top-level entry is copied on its own so one failure does
-    not drop the rest.
+    Each top-level entry is cloned into a hidden staging folder in dest, and
+    only when all are there are they renamed into place, replacing the empty
+    intermediate_results a new chat starts with. Dest never shows half-copied
+    files. A ``.artifact-copy`` marker in dest says "copying" until the copy is
+    done, when it is removed, or "failed". A failed or unavailable juicefs
+    clone falls back to a plain copy only for a small chat, and the whole copy
+    gives up after COPY_TIMEOUT_SECONDS. Root dot entries (``.local``,
+    ``.cache``) are skipped; dotfiles inside copied folders, such as zarr
+    ``.zarray``, are kept.
     """
     t0 = time.perf_counter()
-    src = (ARTIFACTS_DIR / str(src_chat_id)).resolve()
+    started = time.time()
+    deadline = time.monotonic() + COPY_TIMEOUT_SECONDS
+    artifacts_root = _artifacts_root(ARTIFACTS_DIR)
+    src = (artifacts_root / str(src_chat_id)).resolve()
     dest = chat_sandbox(str(dest_chat_id))
-    artifacts_root = ARTIFACTS_DIR.resolve()
-    if (
-        src != dest
-        and src.is_dir()
-        and artifacts_root in src.parents
-    ):
+    if src == dest or not src.is_dir() or artifacts_root not in src.parents:
+        return
+    _write_copy_marker(dest, "copying", started)
+    staging = dest / COPY_STAGING_DIRNAME
+    juicefs = shutil.which("juicefs")
+    small = None  # counted only when a plain copy is needed
+    try:
+        _remove_tree(staging)
+        staging.mkdir()
         for entry in src.iterdir():
             if entry.name.startswith("."):
                 continue
-            try:
-                _clone_sandbox_entry(entry, dest / entry.name)
-            except Exception:
-                log.exception(
-                    "Failed to copy sandbox entry %s from %s to %s",
-                    entry.name,
-                    src_chat_id,
-                    dest_chat_id,
+            target = staging / entry.name
+            if juicefs and _juicefs_clone(entry, target, deadline):
+                continue
+            if small is None:
+                small = _small_enough_for_plain_copy(src)
+            if not small:
+                raise SandboxCopyError(
+                    f"chat {src_chat_id} is too large to copy without juicefs clone"
                 )
+            if target.exists() or target.is_symlink():
+                _remove_path(target)
+            _copy_sandbox_entry(entry, target, deadline)
+        for entry in staging.iterdir():
+            os.rename(entry, dest / entry.name)
+        staging.rmdir()
         make_sandbox_dir(dest / INTERMEDIATE_RESULTS_DIRNAME, dest)
-    log_timing(
-        "juicefs.copy_sandbox",
-        time.perf_counter() - t0,
-        src_chat_id=src_chat_id,
-        dest_chat_id=dest_chat_id,
-    )
+        (dest / COPY_MARKER).unlink()
+    except Exception as e:
+        log.exception("Failed to copy the files of chat %s to %s", src_chat_id, dest_chat_id)
+        _remove_tree(staging)
+        _write_copy_marker(dest, "failed", started)
+        if isinstance(e, SandboxCopyError):
+            raise
+        raise SandboxCopyError(str(e)) from e
+    finally:
+        log_timing(
+            "juicefs.copy_sandbox",
+            time.perf_counter() - t0,
+            src_chat_id=src_chat_id,
+            dest_chat_id=dest_chat_id,
+        )
 
 
 # Reading provenance opens each file, so only this many files get it.
