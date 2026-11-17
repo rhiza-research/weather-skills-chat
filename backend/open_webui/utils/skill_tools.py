@@ -86,3 +86,7 @@ def add_skill_tools(tools_dict: dict) -> set[str]:
     tools_dict[RUN_SKILL] = _builtin(run_skill, run_spec)
     return skills
 
+
+def call_name(name: str, params: dict) -> str:
+    """A ``run_skill`` call goes by its skill's name (``depends_on``, traces)."""
+    return params.get("skill") or name if name == RUN_SKILL else name
