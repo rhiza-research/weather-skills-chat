@@ -298,6 +298,10 @@ SKILL_K8S_TTL_SECONDS = int(os.getenv("SKILL_K8S_TTL_SECONDS", "600") or "600")
 SKILL_K8S_QUOTA_GIB = int(os.getenv("SKILL_K8S_QUOTA_GIB", "200") or "200")
 
 
+# Send skills' instructions only once read_skill reads them; run them with run_skill.
+SKILLS_ON_DEMAND = os.getenv("SKILLS_ON_DEMAND", "false").lower() in ("1", "true", "yes")
+
+
 def tool_runner_enabled() -> bool:
     return SKILL_SANDBOX_BACKEND == "k8s" and SKILL_K8S_SANDBOX_ENABLED
 
