@@ -38,7 +38,7 @@ The scheduled task tools act as the user, so the model can change or delete only
 
 ## Reading chat files
 
-A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to answer a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking.
+The **Read files** button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default, with a crossed-out eye: each read waits for the user to answer a popup. Turned on, it shows an open eye and the model reads files without asking. Hovering the button explains the current setting.
 
 The popup names the file and offers:
 
