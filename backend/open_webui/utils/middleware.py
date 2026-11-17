@@ -82,7 +82,7 @@ from open_webui.utils.tool_parallel import (
     with_implicit_depends_on,
     with_path_depends_on,
 )
-from open_webui.utils.skill_tools import add_skill_tools
+from open_webui.utils.skill_tools import add_skill_tools, call_name
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
     get_sorted_filter_ids,
@@ -3015,7 +3015,7 @@ async def process_chat_response(
 
                                 else:
                                     lf_tool = start_tool_observation(
-                                        tool_name,
+                                        call_name(tool_name, tool_function_params),
                                         tool_function_params,
                                         version=tool.get("version"),
                                     )
@@ -3086,8 +3086,8 @@ async def process_chat_response(
                         tool_call.get("id", "") for tool_call, _ in prepared_calls
                     ]
                     call_names = [
-                        tool_call.get("function", {}).get("name", "")
-                        for tool_call, _ in prepared_calls
+                        call_name(tool_call.get("function", {}).get("name", ""), params)
+                        for tool_call, params in prepared_calls
                     ]
                     for wave in execution_waves(
                         call_ids,

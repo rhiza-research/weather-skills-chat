@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from open_webui.utils.skill_tools import READ_SKILL, RUN_SKILL, add_skill_tools
+from open_webui.utils.skill_tools import READ_SKILL, RUN_SKILL, add_skill_tools, call_name
+from open_webui.utils.tool_parallel import execution_waves
 
 PARAMS = {
     "type": "object",
@@ -105,6 +106,16 @@ class SkillToolsTest(unittest.TestCase):
         params = tools_dict[RUN_SKILL]["spec"]["parameters"]
         self.assertEqual(list(params["properties"]), ["skill", "argv"])
         self.assertEqual(params["required"], ["skill"])
+
+    def test_depends_on_a_skill_name_waits_for_that_run_skill_call(self):
+        calls = [("run_skill", {"skill": "select"}), ("run_skill", {"skill": "label_group"})]
+        names = [call_name(n, p) for n, p in calls]
+        self.assertEqual(names, ["select", "label_group"])
+        self.assertEqual(execution_waves(["a", "b"], names, [[], ["select"]]), [[0], [1]])
+
+    def test_call_name_keeps_other_tools_names(self):
+        self.assertEqual(call_name("display_image", {"skill": "x"}), "display_image")
+        self.assertEqual(call_name("run_skill", {}), "run_skill")
 
 
 if __name__ == "__main__":
