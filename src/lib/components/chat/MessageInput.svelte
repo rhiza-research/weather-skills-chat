@@ -1188,9 +1188,7 @@
 														>
 															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" slashed={!webSearchOn} />
 															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]">
-																{webSearchOn
-																	? $i18n.t('Agent allowed to search the web')
-																	: $i18n.t('Agent not allowed to search the web')}
+																{$i18n.t('Search the web')}
 															</span>
 														</button>
 													</Tooltip>
@@ -1257,9 +1255,7 @@
 															<EyeSlash className="size-5" strokeWidth="1.75" />
 														{/if}
 														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
-															>{readArtifactsEnabled
-																? $i18n.t('Agent allowed to read files')
-																: $i18n.t('Agent asks before reading files')}</span
+															>{$i18n.t('Read files')}</span
 														>
 													</button>
 												</Tooltip>
