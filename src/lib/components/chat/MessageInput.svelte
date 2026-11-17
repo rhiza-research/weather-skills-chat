@@ -59,6 +59,7 @@
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import CommandLine from '../icons/CommandLine.svelte';
 	import Eye from '../icons/Eye.svelte';
+	import EyeSlash from '../icons/EyeSlash.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
 	import { whenAppIdle } from '$lib/utils/idle';
@@ -1185,7 +1186,7 @@
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
-															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" />
+															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" slashed={!webSearchOn} />
 															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]">
 																{webSearchOn
 																	? $i18n.t('Agent allowed to search the web')
@@ -1250,7 +1251,11 @@
 															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 															: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 													>
-														<Eye className="size-5" strokeWidth="1.75" />
+														{#if readArtifactsEnabled}
+															<Eye className="size-5" strokeWidth="1.75" />
+														{:else}
+															<EyeSlash className="size-5" strokeWidth="1.75" />
+														{/if}
 														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
 															>{readArtifactsEnabled
 																? $i18n.t('Agent allowed to read files')
