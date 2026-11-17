@@ -37,10 +37,8 @@
 	import { deleteFileById } from '$lib/apis/files';
 
 	import { WEBUI_BASE_URL, PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
-	import { fileFromDataUrl } from '$lib/apis/artifacts';
 	import { isReplyRunning } from '$lib/utils/generationLiveness';
 
-	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
 	import Commands from './MessageInput/Commands.svelte';
@@ -152,42 +150,8 @@
 		});
 	};
 
-	const screenCaptureHandler = async () => {
-		try {
-			// Request screen media
-			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-				video: { cursor: 'never' },
-				audio: false
-			});
-			// Once the user selects a screen, temporarily create a video element
-			const video = document.createElement('video');
-			video.srcObject = mediaStream;
-			// Ensure the video loads without affecting user experience or tab switching
-			await video.play();
-			// Set up the canvas to match the video dimensions
-			const canvas = document.createElement('canvas');
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
-			// Grab a single frame from the video stream using the canvas
-			const context = canvas.getContext('2d');
-			context.drawImage(video, 0, 0, canvas.width, canvas.height);
-			// Stop all video tracks (stop screen sharing) after capturing the image
-			mediaStream.getTracks().forEach((track) => track.stop());
-
-			// bring back focus to this current tab, so that the user can see the screen capture
-			window.focus();
-
-			// Convert the canvas to a Base64 image URL
-			const imageUrl = canvas.toDataURL('image/png');
-			const captureFile = await fileFromDataUrl(imageUrl, `capture-${Date.now()}.png`);
-			await attachImage(captureFile, imageUrl);
-			// Clean memory: Clear video srcObject
-			video.srcObject = null;
-		} catch (error) {
-			// Handle any errors (e.g., user cancels screen sharing)
-			console.error('Error capturing screen:', error);
-		}
-	};
+	$: fileUploadAllowed =
+		$_user?.role === 'admin' || ($_user?.permissions?.chat?.file_upload ?? true);
 
 	const attachImage = async (file: File, imageUrl: string = '') => {
 		const tempItemId = uuidv4();
@@ -1071,62 +1035,17 @@
 
 								<div class=" flex justify-between mt-1 mb-2.5 mx-0.5 max-w-full" dir="ltr">
 									<div class="ml-1 self-end flex items-end flex-1 min-w-0 max-w-[90%] gap-0.5">
-										<InputMenu
-											{screenCaptureHandler}
-											{inputFilesHandler}
-											uploadFilesHandler={() => {
-												filesInputElement.click();
-											}}
-											uploadGoogleDriveHandler={async () => {
-												try {
-													const { createPicker } = await import('$lib/utils/google-drive-picker');
-													const fileData = await createPicker();
-													if (fileData) {
-														const file = new File([fileData.blob], fileData.name, {
-															type: fileData.blob.type
-														});
-														await uploadFileHandler(file);
-													} else {
-														console.log('No file was selected from Google Drive');
-													}
-												} catch (error) {
-													console.error('Google Drive Error:', error);
-													toast.error(
-														$i18n.t('Error accessing Google Drive: {{error}}', {
-															error: error.message
-														})
-													);
-												}
-											}}
-											uploadOneDriveHandler={async () => {
-												try {
-													const { pickAndDownloadFile } = await import(
-														'$lib/utils/onedrive-file-picker'
-													);
-													const fileData = await pickAndDownloadFile();
-													if (fileData) {
-														const file = new File([fileData.blob], fileData.name, {
-															type: fileData.blob.type || 'application/octet-stream'
-														});
-														await uploadFileHandler(file);
-													} else {
-														console.log('No file was selected from OneDrive');
-													}
-												} catch (error) {
-													console.error('OneDrive Error:', error);
-												}
-											}}
-											onClose={async () => {
-												await tick();
-
-												const chatInput = document.getElementById('chat-input');
-												chatInput?.focus();
-											}}
+										<Tooltip
+											content={fileUploadAllowed
+												? $i18n.t('Attach a file')
+												: $i18n.t('You do not have permission to upload files')}
 										>
 											<button
-												class="bg-transparent hover:bg-gray-100 text-gray-800 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
+												class="bg-transparent hover:bg-gray-100 text-gray-800 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-hidden focus:outline-hidden disabled:opacity-50"
 												type="button"
-												aria-label="More"
+												aria-label={$i18n.t('Attach a file')}
+												disabled={!fileUploadAllowed}
+												on:click={() => filesInputElement.click()}
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -1139,7 +1058,7 @@
 													/>
 												</svg>
 											</button>
-										</InputMenu>
+										</Tooltip>
 
 										<div class="flex flex-wrap gap-1 items-center flex-1 min-w-0">
 											{#if toolServers.length + selectedToolIds.length + ($tools?.length ?? 0) > 0}
