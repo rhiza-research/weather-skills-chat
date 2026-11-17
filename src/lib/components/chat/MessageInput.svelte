@@ -1228,8 +1228,8 @@
 															<CommandLine className="size-5" strokeWidth="1.75" slashed={!codeInterpreterEnabled} />
 															<span class="whitespace-nowrap translate-y-[0.5px]"
 																>{codeInterpreterEnabled
-																? $i18n.t('Code run enabled')
-																: $i18n.t('Code run disabled')}</span
+																? $i18n.t('Code execution enabled')
+																: $i18n.t('Code execution disabled')}</span
 															>
 														</button>
 													</Tooltip>
