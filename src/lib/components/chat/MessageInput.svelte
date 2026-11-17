@@ -1184,7 +1184,7 @@
 														>
 															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" slashed={!webSearchOn} />
 															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]">
-																{$i18n.t('Search the web')}
+																{webSearchOn ? $i18n.t('Web search enabled') : $i18n.t('Web search disabled')}
 															</span>
 														</button>
 													</Tooltip>
@@ -1227,7 +1227,9 @@
 														>
 															<CommandLine className="size-5" strokeWidth="1.75" slashed={!codeInterpreterEnabled} />
 															<span class="whitespace-nowrap translate-y-[0.5px]"
-																>{$i18n.t('Run code')}</span
+																>{codeInterpreterEnabled
+																? $i18n.t('Code run enabled')
+																: $i18n.t('Code run disabled')}</span
 															>
 														</button>
 													</Tooltip>
@@ -1254,7 +1256,9 @@
 															<EyeSlash className="size-5" strokeWidth="1.75" />
 														{/if}
 														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
-															>{$i18n.t('Read files')}</span
+															>{readArtifactsEnabled
+															? $i18n.t('File reading enabled')
+															: $i18n.t('File reading disabled')}</span
 														>
 													</button>
 												</Tooltip>
