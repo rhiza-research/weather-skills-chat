@@ -1175,8 +1175,8 @@
 														webSearchEnabled || ($settings?.webSearch ?? false) === 'always'}
 													<Tooltip
 														content={webSearchOn
-															? $i18n.t('Agent allowed to search the web')
-															: $i18n.t('Agent not allowed to search the web')}
+															? $i18n.t('The agent can search the web to answer this chat. Click to turn web search off.')
+															: $i18n.t('The agent will not search the web. Click to allow it to search the web.')}
 														placement="top"
 													>
 														<button
@@ -1236,8 +1236,8 @@
 
 												<Tooltip
 													content={readArtifactsEnabled
-														? $i18n.t('Agent allowed to read files')
-														: $i18n.t('Agent asks before reading files')}
+														? $i18n.t('The agent can read your uploaded and generated files without asking. Click to make it ask first.')
+														: $i18n.t('The agent asks before reading your files. Click to let it read files without asking.')}
 													placement="top"
 												>
 													<button
