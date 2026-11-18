@@ -68,9 +68,10 @@ class LoopWatchdogTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.2)
             await dog.stop()
 
-        summaries = [r for r in logs.records if " summary window=" in r.getMessage()]
+        summaries = [r.args for r in logs.records if " summary window=" in r.getMessage()]
         self.assertTrue(summaries)
-        _, window_s, max_lag_ms, blocked_pct, stalls = summaries[0].args
+        # The stall's window, not the first: CI once logged a quiet window before it.
+        _, window_s, max_lag_ms, blocked_pct, stalls = max(summaries, key=lambda a: a[2])
         self.assertGreaterEqual(max_lag_ms, 150)
         self.assertGreater(blocked_pct, 20)
         self.assertEqual(stalls, 1)
