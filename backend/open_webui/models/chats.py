@@ -982,10 +982,12 @@ class ChatTable:
         except Exception:
             return None
 
-    def archive_all_chats_by_user_id(self, user_id: str) -> bool:
+    def archive_all_chats_by_user_id(self, user_id: str, organization_id: str) -> bool:
         try:
             with get_db() as db:
-                db.query(Chat).filter(_chat_visible_filter(user_id, user_id)).update(
+                db.query(Chat).filter(
+                    _chat_visible_filter(user_id, organization_id)
+                ).update(
                     {"archived": True}
                 )
                 db.commit()
@@ -994,12 +996,12 @@ class ChatTable:
             return False
 
     def get_archived_chat_list_by_user_id(
-        self, user_id: str, skip: int = 0, limit: int = 50
+        self, user_id: str, organization_id: str, skip: int = 0, limit: int = 50
     ) -> list[ChatModel]:
         with get_db() as db:
             all_chats = (
                 db.query(Chat)
-                .filter(_chat_visible_filter(user_id, user_id))
+                .filter(_chat_visible_filter(user_id, organization_id))
                 .filter_by(archived=True)
                 .order_by(Chat.updated_at.desc())
                 .all()
