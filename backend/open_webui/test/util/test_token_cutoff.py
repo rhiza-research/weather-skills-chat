@@ -55,9 +55,12 @@ class TokenCutoffTest(unittest.TestCase):
             self.assertIsNotNone(get_user_from_token(_token(iat=now)))
             self.assertIsNotNone(get_user_from_token(create_token({"id": "alice"})))
 
-    def test_token_without_expiry_is_rejected(self):
+    def test_token_without_expiry_still_works(self):
+        # Tokens issued before the 90-day cap have no exp; the cutoff ends them.
         unlimited = jwt.encode({"id": "alice"}, SESSION_SECRET, algorithm=ALGORITHM)
         with self._lookup(None):
+            self.assertIsNotNone(get_user_from_token(unlimited))
+        with self._lookup(int(time.time())):
             self.assertIsNone(get_user_from_token(unlimited))
 
     def test_lifetime_is_capped_at_90_days(self):

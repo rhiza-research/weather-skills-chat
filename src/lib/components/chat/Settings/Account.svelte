@@ -8,7 +8,8 @@
 		createAPIKey,
 		getAPIKey,
 		getSessionUser,
-		signOutEverywhere
+		signOutEverywhere,
+		userSignOut
 	} from '$lib/apis/auths';
 
 	import UpdatePassword from './Account/UpdatePassword.svelte';
@@ -39,8 +40,11 @@
 			return null;
 		});
 		if (res) {
-			localStorage.token = res.token;
-			toast.success($i18n.t('Signed out of all other devices.'));
+			// Then sign out here the way the user menu does.
+			await userSignOut().catch((error) => console.error(error));
+			user.set(null);
+			localStorage.removeItem('token');
+			location.href = '/auth';
 		}
 	};
 
@@ -289,9 +293,9 @@
 
 		<div class="flex justify-between items-center text-sm py-0.5">
 			<div>
-				<div class="font-medium">{$i18n.t('Sign out of all devices')}</div>
+				<div class="font-medium">{$i18n.t('Sign out everywhere')}</div>
 				<div class="text-xs text-gray-500">
-					{$i18n.t('Ends every session except this one. Changing your password does this too.')}
+					{$i18n.t('Ends every session on every device, including this one.')}
 				</div>
 			</div>
 			<button
@@ -305,9 +309,9 @@
 
 		<ConfirmDialog
 			bind:show={showSignOutEverywhereConfirm}
-			title={$i18n.t('Sign out of all devices?')}
+			title={$i18n.t('Sign out everywhere?')}
 			message={$i18n.t(
-				'Every other browser and device signed in to your account will need to sign in again.'
+				'Every browser and device signed in to your account, including this one, will need to sign in again.'
 			)}
 			confirmLabel={$i18n.t('Sign out')}
 			on:confirm={signOutEverywhereHandler}

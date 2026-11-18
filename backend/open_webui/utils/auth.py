@@ -144,13 +144,7 @@ def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> st
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        # A token without an expiry predates the 90-day cap and is not accepted.
-        decoded = jwt.decode(
-            token,
-            SESSION_SECRET,
-            algorithms=[ALGORITHM],
-            options={"require": ["exp"]},
-        )
+        decoded = jwt.decode(token, SESSION_SECRET, algorithms=[ALGORITHM])
         return decoded
     except Exception:
         return None

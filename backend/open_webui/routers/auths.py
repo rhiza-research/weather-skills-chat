@@ -586,11 +586,10 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         raise HTTPException(500, detail="An internal error occurred during signup.")
 
 
-@router.post("/signout/all", response_model=SessionUserResponse)
-def signout_all(request: Request, response: Response, user=Depends(get_current_user)):
-    # Every token issued so far stops working; this browser gets a new one.
-    Users.end_sessions_by_id(user.id)
-    return get_session_user(request, response, user)
+@router.post("/signout/all", response_model=bool)
+def signout_all(user=Depends(get_current_user)):
+    # Every token issued so far stops working, this browser's included.
+    return Users.end_sessions_by_id(user.id) is not None
 
 
 @router.get("/signout")

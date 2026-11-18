@@ -134,8 +134,8 @@ class TestAuths(AbstractPostgresTest):
             response = self.fast_api_client.post(self.create_url("/signout/all"))
         assert response.status_code == 200
         assert self.users.get_user_by_id(user.id).tokens_valid_after
+        assert response.json() is True
         assert get_user_from_token(old_token) is None
-        assert get_user_from_token(response.json()["token"]) is not None
 
     def test_signin(self):
         from open_webui.utils.auth import get_password_hash

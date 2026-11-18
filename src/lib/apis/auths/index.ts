@@ -364,7 +364,7 @@ export const userSignOut = async () => {
 	}
 };
 
-// Ends every session for the user; the response carries this browser's new token.
+// Ends every session for the user, this browser's included.
 export const signOutEverywhere = async (token: string) => {
 	let error = null;
 
