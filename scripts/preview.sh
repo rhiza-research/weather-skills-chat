@@ -3,7 +3,7 @@
 # settings, models, skill packs, and sample chats. ./run-compose.sh --name runs it
 # with Docker Compose; this script adds the staging data. See wiki/Development.md.
 #
-#   scripts/preview.sh up [NAME] [run-compose options]   e.g. --isolation=emulator --testing
+#   scripts/preview.sh up [NAME] [run-compose options]   e.g. --testing, --isolation=off
 #   scripts/preview.sh down [NAME]                       remove the stack, its data and image
 #   scripts/preview.sh ls                                list running stacks
 #
@@ -57,7 +57,10 @@ export BOOTSTRAP_ADMIN_EMAIL=admin@example.com BOOTSTRAP_ADMIN_PASSWORD=preview 
 new=true
 docker volume inspect "$stack-data" >/dev/null 2>&1 && new=false
 
-./run-compose.sh -q --build --name="$name" "$@"
+# Skills run on the emulated Kubernetes runners, as on staging, unless another isolation is given.
+isolation=(--isolation=emulator)
+[[ " $* " == *" --isolation"* ]] && isolation=()
+./run-compose.sh -q --build --name="$name" "${isolation[@]}" "$@"
 
 port="$(docker port "$stack" 8080 | head -1 | sed 's/.*://')"
 url="http://localhost:$port"

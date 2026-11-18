@@ -104,7 +104,7 @@ scripts/preview.sh up
 
 | Command | Effect |
 |-|-|
-| `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` and `--isolation=emulator` |
+| `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
 | `scripts/preview.sh down [NAME]` | Remove the stack, its data, and its image |
 | `scripts/preview.sh ls` | List running stacks and their ports |
 
@@ -113,7 +113,7 @@ scripts/preview.sh up
 `up` reads the staging admin's API key from the secret `weather-skills-chat-staging-api-key`, then:
 
 1. Reads staging's platform models and platform skill packs and passes them to the stack as `CATALOG_MODELS` and `SKILL_PACKS`.
-2. Runs `./run-compose.sh --name=NAME --build -q` with `ENABLE_DEV_LOGIN_BYPASS` on, and waits until the app answers. The first start takes longer while it installs the skill packs.
+2. Runs `./run-compose.sh --name=NAME --build -q` with `ENABLE_DEV_LOGIN_BYPASS` on, and waits until the app answers. Skills run on the emulated Kubernetes runners, as on staging, unless the options give another `--isolation`. The first start takes longer while it installs the skill packs.
 3. On a new stack, adds three accounts, all with the password `preview`: `admin@example.com`, the platform admin; `researcher@example.com`, a user; and `pending@example.com`, waiting for access. It also adds a workspace, Demo Org, with the admin as owner and the researcher as a member.
 4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files, into the local admin's chats. Tag a chat on staging to add it to new stacks.
 
