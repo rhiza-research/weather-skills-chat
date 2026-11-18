@@ -25,6 +25,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
     HTML_SUFFIXES,
+    IMAGE_SUFFIXES,
     artifact_copy_state,
     artifact_provenance,
     extract_sandbox_archive,
@@ -120,10 +121,16 @@ def get_artifact_content(
     }
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    # Images open in a tab from a copied link; the sandbox keeps an SVG's
+    # scripts from running as the user.
+    inline = target.suffix.lower() in IMAGE_SUFFIXES
+    if inline:
+        headers["Content-Security-Policy"] = "sandbox"
+        headers["X-Content-Type-Options"] = "nosniff"
     return FileResponse(
         target,
         filename=target.name,
-        content_disposition_type="attachment",
+        content_disposition_type="inline" if inline else "attachment",
         headers=headers,
         stat_result=st,
     )
