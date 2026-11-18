@@ -5,6 +5,7 @@ import os
 import pkgutil
 import sys
 import shutil
+from urllib.parse import urlparse
 from pathlib import Path
 
 import markdown
@@ -537,6 +538,12 @@ ENABLE_DEV_LOGIN_BYPASS = (
     os.environ.get("ENABLE_DEV_LOGIN_BYPASS", "false").lower() == "true"
 )
 if ENABLE_DEV_LOGIN_BYPASS:
+    # Refuse to run anywhere but a developer's own computer.
+    _webui_host = urlparse(os.environ.get("WEBUI_URL", "http://localhost:3000")).hostname
+    if _webui_host not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError(
+            "ENABLE_DEV_LOGIN_BYPASS is only allowed when WEBUI_URL is a localhost address"
+        )
     log.warning("ENABLE_DEV_LOGIN_BYPASS is on: anyone who can reach the app is an admin")
 
 ####################################

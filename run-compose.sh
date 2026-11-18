@@ -245,6 +245,8 @@ if [[ -n $stack_name ]]; then
         CADDY_CONTAINER_NAME="$stack-h2" EMULATOR_CONTAINER_NAME="$stack-emulator" \
         WEBUI_IMAGE=weather-skills-chat WEBUI_DOCKER_TAG="$stack" \
         WEBUI_DATA_VOLUME="$stack-data" CADDY_DATA_VOLUME="$stack-caddy"
+    # Only this computer can reach a named stack; it signs in without a password.
+    export BIND_ADDRESS=127.0.0.1
     taken=()
     pick_port() { # container, container port, base
         local p

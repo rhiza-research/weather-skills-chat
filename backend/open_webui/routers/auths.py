@@ -1,5 +1,6 @@
 import re
 import uuid
+from urllib.parse import urlparse
 import time
 import datetime
 import logging
@@ -333,6 +334,12 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
 ############################
 
 
+def same_origin(request: Request) -> bool:
+    """True unless the request comes from another site's page."""
+    origin = request.headers.get("origin")
+    return not origin or urlparse(origin).netloc == request.headers.get("host")
+
+
 def dev_login_user(email: str = ""):
     """With ENABLE_DEV_LOGIN_BYPASS on, the account with this email, else the
     oldest platform admin. None when the bypass is off."""
@@ -390,7 +397,8 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
             )
 
             user = Auths.authenticate_user(admin_email.lower(), admin_password)
-    elif dev_user := dev_login_user(form_data.email):
+    # Another site's page gets the password check, so it cannot sign in through the bypass.
+    elif same_origin(request) and (dev_user := dev_login_user(form_data.email)):
         user = dev_user
     else:
         user = Auths.authenticate_user(form_data.email.lower(), form_data.password)

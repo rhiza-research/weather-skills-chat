@@ -133,6 +133,13 @@ class TestAuths(AbstractPostgresTest):
         assert response.json()["email"] == "admin@x.org"
         assert as_user.json()["email"] == "user@x.org"
 
+        # Another site's page cannot use the bypass.
+        with patch.object(auths, "ENABLE_DEV_LOGIN_BYPASS", True):
+            cross_site = self.fast_api_client.post(
+                self.create_url("/signin"), json=bad_login, headers={"Origin": "https://evil.example"}
+            )
+        assert cross_site.status_code == 400
+
     def test_signup(self):
         response = self.fast_api_client.post(
             self.create_url("/signup"),

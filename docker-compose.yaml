@@ -11,7 +11,7 @@ services:
     volumes:
       - open-webui:/app/backend/data
     ports:
-      - ${OPEN_WEBUI_PORT-3000}:8080
+      - ${BIND_ADDRESS-0.0.0.0}:${OPEN_WEBUI_PORT-3000}:8080
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
@@ -55,8 +55,8 @@ services:
     image: caddy:2-alpine
     container_name: ${CADDY_CONTAINER_NAME-weather-skills-h2}
     ports:
-      - ${CADDY_HTTPS_PORT-3443}:443
-      - ${CADDY_HTTP_PORT-80}:80
+      - ${BIND_ADDRESS-0.0.0.0}:${CADDY_HTTPS_PORT-3443}:443
+      - ${BIND_ADDRESS-0.0.0.0}:${CADDY_HTTP_PORT-80}:80
     environment:
       CADDY_UPSTREAM: open-webui:8080
       CADDY_HTTPS_PORT: ${CADDY_HTTPS_PORT-3443}
