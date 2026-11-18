@@ -95,6 +95,11 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.content, PNG)
         self.assertEqual(first.headers["cache-control"], "private, no-cache")
+        # A copied image link shows the image, sandboxed so an SVG's scripts can't run.
+        self.assertTrue(first.headers["content-disposition"].startswith("inline"))
+        self.assertEqual(first.headers["content-security-policy"], "sandbox")
+        other = self.client.get(self.url("/content?path=notes.csv"))
+        self.assertTrue(other.headers["content-disposition"].startswith("attachment"))
         etag = first.headers["etag"]
         again = self.client.get(
             self.url("/content?path=plots/map.png"), headers={"If-None-Match": etag}
