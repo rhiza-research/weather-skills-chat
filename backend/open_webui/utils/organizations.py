@@ -178,11 +178,17 @@ def require_chat_read(chat_id: str, user: UserModel):
     return chat
 
 
-def require_chat_files_read(chat_id: str, user: UserModel) -> None:
+def require_chat_files_read(chat_id: str, user: Optional[UserModel]) -> None:
     """require_chat_read for a chat's files. A share link's frozen copy is
-    readable by anyone who can open the link, as its messages are."""
-    if not Chats.is_live_share(chat_id):
-        require_chat_read(chat_id, user)
+    readable by anyone who can open the link, signed in or not, as its
+    messages are."""
+    if Chats.is_live_share(chat_id):
+        return
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    require_chat_read(chat_id, user)
 
 
 def require_chat_write(chat_id: str, user: UserModel):

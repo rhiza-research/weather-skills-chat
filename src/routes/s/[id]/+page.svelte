@@ -87,7 +87,7 @@
 			await getModels(
 				localStorage.token,
 				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			).catch(() => [])
 		);
 		await chatId.set($page.params.id);
 		chat = await getChatByShareId(localStorage.token, $chatId).catch(async (error) => {
@@ -135,6 +135,10 @@
 
 	const cloneSharedChat = async () => {
 		if (!chat) return;
+		if (!localStorage.token) {
+			await goto(`/auth?redirect=${encodeURIComponent(`/s/${chat.id}`)}`);
+			return;
+		}
 
 		const res = await cloneSharedChatById(localStorage.token, chat.id).catch((error) => {
 			toast.error(`${error}`);

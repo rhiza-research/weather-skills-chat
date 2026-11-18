@@ -35,7 +35,7 @@ from open_webui.utils.artifacts import (
     resolve_in_sandbox,
     write_bytes,
 )
-from open_webui.utils.auth import get_verified_user
+from open_webui.utils.auth import get_optional_verified_user, get_verified_user
 from open_webui.utils.organizations import require_chat_files_read, require_chat_write
 from open_webui.utils.precompressed_static import accepts_brotli
 
@@ -50,21 +50,21 @@ async def get_artifacts(
     chat_id: str,
     depth: Optional[int] = Query(None, ge=1),
     provenance: bool = True,
-    user=Depends(get_verified_user),
+    user=Depends(get_optional_verified_user),
 ):
     await asyncio.to_thread(require_chat_files_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
 
 
 @router.get("/{chat_id}/artifacts/copy")
-async def get_artifact_copy(chat_id: str, user=Depends(get_verified_user)):
+async def get_artifact_copy(chat_id: str, user=Depends(get_optional_verified_user)):
     """Whether this chat's files are still being copied in: copying, failed, or done."""
     await asyncio.to_thread(require_chat_files_read, chat_id, user)
     return {"state": await asyncio.to_thread(artifact_copy_state, chat_id)}
 
 
 @router.get("/{chat_id}/artifacts/provenance")
-def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_user)):
+def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_optional_verified_user)):
     """Full provenance branches for one entry; the listing carries only crumbs."""
     require_chat_files_read(chat_id, user)
     try:
@@ -79,7 +79,7 @@ def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_u
 
 @router.get("/{chat_id}/artifacts/content")
 def get_artifact_content(
-    chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
+    chat_id: str, path: str, request: Request, user=Depends(get_optional_verified_user)
 ):
     require_chat_files_read(chat_id, user)
     try:
@@ -207,7 +207,7 @@ def _not_modified(request: Request, etag: str, last_modified: str) -> bool:
 
 @router.get("/{chat_id}/artifacts/view/{path:path}")
 def view_html_artifact(
-    chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
+    chat_id: str, path: str, request: Request, user=Depends(get_optional_verified_user)
 ):
     require_chat_files_read(chat_id, user)
     try:
@@ -245,7 +245,7 @@ def get_artifact_archive(
     chat_id: str,
     path: list[str] = Query(..., min_length=1),
     format: str = Query("tar.gz"),
-    user=Depends(get_verified_user),
+    user=Depends(get_optional_verified_user),
 ):
     require_chat_files_read(chat_id, user)
     fmt = (format or "tar.gz").lower().strip()
@@ -325,7 +325,7 @@ async def upload_artifact(
 
 
 @router.get("/{chat_id}/artifacts/zarr/meta")
-def zarr_meta(chat_id: str, path: str, user=Depends(get_verified_user)):
+def zarr_meta(chat_id: str, path: str, user=Depends(get_optional_verified_user)):
     require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, path)

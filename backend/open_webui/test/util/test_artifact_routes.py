@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from open_webui.models.chats import ChatAccessRow
 from open_webui.routers import artifacts as artifacts_router
 from open_webui.utils.artifacts import list_artifacts
-from open_webui.utils.auth import get_verified_user
+from open_webui.utils.auth import get_optional_verified_user, get_verified_user
 
 CHAT = "chat-r"
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -47,6 +47,8 @@ class ArtifactRoutesTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(artifacts_router.router, prefix="/api/v1/chats")
         app.dependency_overrides[get_verified_user] = lambda: MagicMock(id="u1")
+        app.dependency_overrides[get_optional_verified_user] = lambda: MagicMock(id="u1")
+        self.app = app
         self.client = TestClient(app)
 
     def tearDown(self):
@@ -70,6 +72,13 @@ class ArtifactRoutesTest(unittest.TestCase):
         with patch("open_webui.utils.organizations.is_member", return_value=False):
             res = self.client.get(self.url("/content?path=notes.csv"))
         self.assertEqual(res.status_code, 401)
+
+    def test_signed_out_visitor_reads_a_live_share_only(self):
+        self.app.dependency_overrides[get_optional_verified_user] = lambda: None
+        self.assertEqual(self.client.get(self.url("/content?path=notes.csv")).status_code, 401)
+        self.chats.is_live_share.return_value = True
+        self.assertEqual(self.client.get(self.url("/content?path=notes.csv")).status_code, 200)
+        self.assertEqual(self.client.get(self.url("/view/plots/map.html")).status_code, 200)
 
     def test_handlers_that_await_nothing_are_plain_functions(self):
         for handler in (

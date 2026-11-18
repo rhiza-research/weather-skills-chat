@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from open_webui.routers import artifacts as artifacts_router
 from open_webui.utils import artifacts as artifacts_utils
 from open_webui.utils.artifacts import list_artifacts, list_artifacts_async
-from open_webui.utils.auth import get_verified_user
+from open_webui.utils.auth import get_optional_verified_user, get_verified_user
 from open_webui.utils.builtin_tools import list_artifacts as list_artifacts_tool
 
 CHAIN = [
@@ -162,6 +162,7 @@ class ArtifactsRouteOptionsTest(SandboxCase):
         app = FastAPI()
         app.include_router(artifacts_router.router, prefix="/api/v1/chats")
         app.dependency_overrides[get_verified_user] = lambda: MagicMock(id="u1")
+        app.dependency_overrides[get_optional_verified_user] = lambda: MagicMock(id="u1")
         self.client = TestClient(app)
 
     def tearDown(self):
