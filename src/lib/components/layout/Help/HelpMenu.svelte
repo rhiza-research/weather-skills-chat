@@ -9,6 +9,7 @@
 	import QuestionMarkCircle from '$lib/components/icons/QuestionMarkCircle.svelte';
 	import Lifebuoy from '$lib/components/icons/Lifebuoy.svelte';
 	import Keyboard from '$lib/components/icons/Keyboard.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	const i18n = getContext('i18n');
 
 	export let showDocsHandler: Function;
@@ -43,6 +44,14 @@
 			>
 				<QuestionMarkCircle className="size-5" />
 				<div class="flex items-center">{$i18n.t('Contact support')}</div>
+			</DropdownMenu.Item>
+
+			<DropdownMenu.Item
+				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				on:click={() => import('$lib/utils/tour').then((m) => m.startTour($i18n.t))}
+			>
+				<Sparkles className="size-5" />
+				<div class="flex items-center">{$i18n.t('Take the tour')}</div>
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
