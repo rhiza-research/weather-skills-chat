@@ -33,6 +33,7 @@
 		showOverview,
 		chatTitle,
 		showArtifacts,
+		artifactCopy,
 		tools,
 		toolServers,
 		activeOrganizationId,
@@ -98,11 +99,13 @@
 		holdPendingTurn,
 		moveTurnToEnd,
 		refetchChat,
+		refreshArtifacts,
 		revisionOf,
 		settleLoadedTurn,
 		setViewingLeaf,
 		viewingLeafFor
 	} from '$lib/chat/cache';
+	import { getArtifactCopyState } from '$lib/apis/artifacts';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { switchOrganization } from '$lib/utils/organizationContext';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
@@ -278,6 +281,27 @@
 
 	let artifactPanelGeneration = 0;
 	let chatAlive = true;
+
+	// A chat started with another chat's artifacts gets its files in the
+	// background; until they are in, the panel says so and sending is blocked.
+	let artifactCopyTimer: ReturnType<typeof setTimeout> | undefined;
+	const watchArtifactCopy = async (id: string) => {
+		clearTimeout(artifactCopyTimer);
+		let state: 'copying' | 'failed' | 'done';
+		try {
+			state = await getArtifactCopyState(localStorage.token, id);
+		} catch {
+			state = 'done';
+		}
+		if (!chatAlive || get(chatId) !== id) return;
+		const wasCopying = get(artifactCopy)?.chatId === id && get(artifactCopy)?.state === 'copying';
+		artifactCopy.set(state === 'done' ? null : { chatId: id, state });
+		if (state === 'copying') {
+			artifactCopyTimer = setTimeout(() => watchArtifactCopy(id), 2000);
+		} else if (wasCopying) {
+			refreshArtifacts(localStorage.token, id).catch(console.error);
+		}
+	};
 	let stopControlsWatch: Unsubscriber = () => {};
 
 	const openArtifactsPanel = async (forChatId: string | null = null) => {
@@ -399,6 +423,7 @@
 
 			loading = false;
 			await tick();
+			void watchArtifactCopy(id);
 			if (chatAlive && get(chatId) === id) await openArtifactsPanel(id);
 			revealApp();
 
@@ -717,6 +742,8 @@
 
 	onDestroy(() => {
 		chatAlive = false;
+		clearTimeout(artifactCopyTimer);
+		artifactCopy.set(null);
 		if (scrollChatId) saveChatScroll(scrollChatId);
 		stopDocumentWatch();
 		stopLostWatch();
@@ -1944,6 +1971,10 @@
 	const canSubmit = (userPrompt, sendFiles) => {
 		if (!chatWritable) {
 			toast.error($i18n.t('Clone this chat to continue it.'));
+			return false;
+		}
+		if ($artifactCopy?.chatId === $chatId && $artifactCopy?.state === 'copying') {
+			toast.error($i18n.t('Wait for the artifact copy to finish before sending.'));
 			return false;
 		}
 		const messages = createMessagesList(history, history.currentId);

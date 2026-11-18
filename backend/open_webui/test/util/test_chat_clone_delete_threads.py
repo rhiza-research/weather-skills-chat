@@ -1,5 +1,6 @@
 """Cloning and deleting a chat copy or remove its files off the event loop."""
 
+import asyncio
 import threading
 import unittest
 from types import SimpleNamespace
@@ -69,23 +70,39 @@ class CloneDeleteThreadsTest(unittest.IsolatedAsyncioTestCase):
         form = insert.call_args.args[1]
         self.assertEqual((form.organization_id, form.visibility), ("org-team", "private"))
 
-    async def test_new_chat_with_artifacts_is_empty_and_carries_the_note(self):
+    async def test_new_chat_with_artifacts_returns_at_once_and_copies_in_the_background(self):
         clone = MagicMock(model_dump=lambda: {"id": "chat-2", "user_id": "u1", "title": "New Chat", "chat": {}, "created_at": 1, "updated_at": 1, "archived": False, "pinned": False, "meta": {}, "folder_id": None, "share_id": None})
         clone.id = "chat-2"
+        order = []
+        copy_may_finish = threading.Event()
+
+        def copy(src, dest):
+            self.ran_on["copy"] = threading.current_thread()
+            copy_may_finish.wait(5)
+            order.append(("copy", src, dest))
+
         with patch.object(chats_router, "_require_readable_chat", self.record("read", CHAT)), patch.object(
             chats_router.Chats, "insert_new_chat", return_value=clone
         ) as insert, patch(
             "open_webui.utils.artifacts.artifact_carryover_note", self.record("note", "the files")
-        ), patch("open_webui.utils.artifacts.copy_sandbox", self.record("copy")) as copy:
+        ), patch(
+            "open_webui.utils.artifacts.mark_copy_started", lambda chat_id: order.append(("marked", chat_id))
+        ), patch("open_webui.utils.artifacts.copy_sandbox", copy):
             response = await self.client.post("/api/v1/chats/chat-1/new-with-artifacts")
+            # The chat comes back while its files are still being copied.
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(order, [("marked", "chat-2")])
+            copy_may_finish.set()
+            await asyncio.gather(*chats_router._artifact_copies)
 
-        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(order, [("marked", "chat-2"), ("copy", "chat-1", "chat-2")])
         form = insert.call_args.args[1]
         self.assertEqual(form.chat["history"], {"messages": {}, "currentId": None})
         self.assertEqual(form.chat["chatNotes"], ["the files"])
         self.assertEqual(form.visibility, "private")
         for name in ("read", "note", "copy"):
             self.assertIsNot(self.ran_on[name], self.loop_thread, name)
+        self.assertEqual(chats_router._artifact_copies, set())
 
     async def test_delete_checks_access_and_removes_files_on_a_worker_thread(self):
         with patch.object(chats_router, "has_permission", return_value=True), patch.object(

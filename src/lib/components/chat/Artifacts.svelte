@@ -9,7 +9,8 @@
 		settings,
 		showArtifacts,
 		showControls,
-		chatArtifactLists
+		chatArtifactLists,
+		artifactCopy
 	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
@@ -33,6 +34,7 @@
 	import ArrowUpTray from '../icons/ArrowUpTray.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import { newChatWithArtifacts } from '$lib/apis/chats';
+	import Spinner from '../common/Spinner.svelte';
 
 	export let history;
 	// A share link's frozen files: browse and download only.
@@ -63,6 +65,8 @@
 		modified ? `${getArtifactViewUrl($chatId, path)}?v=${modified}` : getArtifactViewUrl($chatId, path);
 	let modalAlt = '';
 
+	// Set by Chat.svelte while this chat's files are copied in from another chat.
+	$: copyState = $artifactCopy?.chatId === $chatId ? $artifactCopy.state : null;
 	let startingChat = false;
 	const startChatWithArtifacts = async () => {
 		startingChat = true;
@@ -488,7 +492,7 @@
 			<div class="text-sm font-medium">{$i18n.t('Artifacts')}</div>
 			<!-- The full row measures about 392px; narrower than 400px, the new-chat button drops its label. -->
 			<div class="flex items-center gap-3 whitespace-nowrap">
-				{#if !readOnly && files.length > 0 && $chatId && $chatId !== 'local'}
+				{#if !readOnly && !copyState && files.length > 0 && $chatId && $chatId !== 'local'}
 					<Tooltip content={$i18n.t('Start a new chat with a copy of these artifacts')} placement="bottom">
 						<button
 							type="button"
@@ -502,7 +506,7 @@
 						</button>
 					</Tooltip>
 				{/if}
-				{#if !readOnly}
+				{#if !readOnly && copyState !== 'copying'}
 					<Tooltip
 						placement="bottom"
 						content={uploading
@@ -540,12 +544,24 @@
 		</div>
 
 		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
-			<ArtifactBrowser
-				{files}
-				{selectedImage}
-				loading={loadingFiles && !Array.isArray($chatArtifactLists[$chatId])}
-				on:openImage={(e) => openImage(e.detail.path)}
-			/>
+			{#if copyState === 'copying'}
+				<div class="flex items-center gap-2 text-xs text-gray-500" role="status">
+					<Spinner className="size-3.5" />
+					{$i18n.t('Artifact copy in progress...')}
+				</div>
+			{:else if copyState === 'failed'}
+				<div class="text-xs text-red-600 dark:text-red-400" role="alert">
+					{$i18n.t('Artifact copy failed, please try again')}
+				</div>
+			{/if}
+			{#if copyState !== 'copying'}
+				<ArtifactBrowser
+					{files}
+					{selectedImage}
+					loading={loadingFiles && !Array.isArray($chatArtifactLists[$chatId])}
+					on:openImage={(e) => openImage(e.detail.path)}
+				/>
+			{/if}
 		</div>
 
 		{#if contents.length > 0}

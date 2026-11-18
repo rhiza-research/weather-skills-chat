@@ -25,6 +25,7 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
     HTML_SUFFIXES,
+    artifact_copy_state,
     artifact_provenance,
     extract_sandbox_archive,
     is_zarr_store,
@@ -53,6 +54,13 @@ async def get_artifacts(
 ):
     await asyncio.to_thread(require_chat_files_read, chat_id, user)
     return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
+
+
+@router.get("/{chat_id}/artifacts/copy")
+async def get_artifact_copy(chat_id: str, user=Depends(get_verified_user)):
+    """Whether this chat's files are still being copied in: copying, failed, or done."""
+    await asyncio.to_thread(require_chat_files_read, chat_id, user)
+    return {"state": await asyncio.to_thread(artifact_copy_state, chat_id)}
 
 
 @router.get("/{chat_id}/artifacts/provenance")
@@ -299,6 +307,12 @@ async def upload_artifact(
     user=Depends(get_verified_user),
 ):
     await asyncio.to_thread(require_chat_write, chat_id, user)
+    # Copied files are renamed into place at the end and would replace an upload.
+    if await asyncio.to_thread(artifact_copy_state, chat_id) == "copying":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Wait for the artifact copy to finish before uploading.",
+        )
     data = await file.read()
     try:
         await asyncio.to_thread(write_bytes, chat_id, path, data)
