@@ -23,7 +23,7 @@
 		<!-- r = 100/2π so the circumference is 100 and the dash length is the percent -->
 		<svg
 			viewBox="0 0 36 36"
-			class="block size-5 -rotate-90 mr-1.5"
+			class="block size-[19.2px] -rotate-90 mr-3"
 			role="img"
 			aria-label={$i18n.t('Context usage')}
 		>

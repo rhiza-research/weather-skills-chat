@@ -108,7 +108,7 @@
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
-					<div class="self-center">
+					<div class="self-center flex">
 						<ContextRing {history} />
 					</div>
 					<div class="self-center">
