@@ -1,6 +1,6 @@
 # Share Links
 
-A share link gives a read-only view of a chat as it was when the link was made: its messages and a copy of its files. Anyone signed in to the app who has the link can open it until it expires. On the shared page they can read the messages, browse, preview, and download the files, and clone the chat to continue it. Where a clone goes is described on [[Organizations]].
+A share link gives a read-only view of a chat as it was when the link was made: its messages and a copy of its files. Anyone who has the link can open it until it expires, with or without an account or signing in. On the shared page they can read the messages and browse, preview, and download the files. Cloning the chat to continue it needs a sign-in; someone who is not signed in is asked to sign in first and then comes back to the link. Where a clone goes is described on [[Organizations]].
 
 ## Creating a link
 

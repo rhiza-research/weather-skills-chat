@@ -1,11 +1,19 @@
 <script lang="ts">
-	import { onMount, tick, getContext } from 'svelte';
+	import { onDestroy, tick, getContext } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 
 	import dayjs from 'dayjs';
 
-	import { settings, chatId, WEBUI_NAME, models, config, showArtifacts } from '$lib/stores';
+	import {
+		settings,
+		chatId,
+		sharedChatId,
+		WEBUI_NAME,
+		models,
+		config,
+		showArtifacts
+	} from '$lib/stores';
 	import { createMessagesList } from '$lib/utils';
 	import { convertMessagesToHistory } from '$lib/utils/history';
 
@@ -54,7 +62,7 @@
 				await tick();
 				loaded = true;
 			} else {
-				await goto('/');
+				await goto(localStorage.token ? '/' : '/auth');
 			}
 		})();
 	}
@@ -87,13 +95,14 @@
 			await getModels(
 				localStorage.token,
 				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
+			).catch(() => [])
 		);
+		sharedChatId.set($page.params.id);
 		await chatId.set($page.params.id);
 		chat = await getChatByShareId(localStorage.token, $chatId).catch(async (error) => {
 			// Expired and removed links look the same to the server.
 			toast.error($i18n.t('This share link has expired or been removed.'));
-			await goto('/');
+			await goto(localStorage.token ? '/' : '/auth');
 			return null;
 		});
 
@@ -133,8 +142,14 @@
 		}
 	};
 
+	onDestroy(() => sharedChatId.set(null));
+
 	const cloneSharedChat = async () => {
 		if (!chat) return;
+		if (!localStorage.token) {
+			await goto(`/auth?redirect=${encodeURIComponent(`/s/${chat.id}`)}`);
+			return;
+		}
 
 		const res = await cloneSharedChatById(localStorage.token, chat.id).catch((error) => {
 			toast.error(`${error}`);

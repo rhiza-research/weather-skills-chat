@@ -76,6 +76,8 @@ export const feedbackDraft: Writable<FeedbackDraft | null> = writable(null);
 export const showControls = writable(false);
 export const showOverview = writable(false);
 export const showArtifacts = writable(false);
+// The share link the page is showing; its files load from the public share API.
+export const sharedChatId: Writable<string | null> = writable(null);
 export const showCallOverlay = writable(false);
 /** Bump to force the artifacts panel to reload its file list. */
 export const artifactsRefresh = writable(0);

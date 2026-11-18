@@ -1,7 +1,8 @@
 import { get } from 'svelte/store';
 import { applyChatHistoryPatch, getChatById, getRecentChats } from '$lib/apis/chats';
-import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+import { WEBUI_BASE_URL } from '$lib/constants';
 import { markUnseenMessages } from '$lib/chat/scroll';
+import { artifactsBase } from '$lib/apis/artifacts';
 import { chatArtifactLists, chatId, socket, socketConnected } from '$lib/stores';
 import {
 	GENERATION_LOST_MESSAGE,
@@ -837,7 +838,7 @@ async function fetchArtifactList(
 	background: boolean
 ): Promise<any[] | null> {
 	try {
-		const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/artifacts`, {
+		const res = await fetch(artifactsBase(id), {
 			headers: { authorization: `Bearer ${token}` },
 			...(background ? { priority: 'low' as const } : {})
 		} as RequestInit);
