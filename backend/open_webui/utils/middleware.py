@@ -253,6 +253,21 @@ def model_call_error_message(e: Exception) -> str:
     return str(e)
 
 
+async def context_usage(request, user, model: Optional[dict], usage: dict) -> dict:
+    """How full the model's context was on this call, for the message input's ring.
+
+    Key names avoid "token" and "cost" so summing usage across a tool loop keeps
+    the latest call's values instead of adding them.
+    """
+    from open_webui.routers.openai import context_window_for
+
+    used = usage.get("prompt_tokens")
+    if not isinstance(used, (int, float)) or not (model or {}).get("id"):
+        return {}
+    window = await context_window_for(request, user, model["id"])
+    return {"context_used": used, "context_window": window} if window else {}
+
+
 def tool_call_files_for_display(
     tool_name: str, tool_result_files: Optional[list]
 ) -> Optional[list]:
@@ -2441,6 +2456,18 @@ async def process_chat_response(
                         bump_revision=False,
                     )
 
+                async def emit_usage(data):
+                    usage = data.get("usage")
+                    if not usage:
+                        return
+                    usage = {
+                        **usage,
+                        **await context_usage(request, user, model, usage),
+                    }
+                    await event_emitter(
+                        {"type": "chat:completion", "data": {"usage": usage}}
+                    )
+
                 async def stream_body_handler(response):
                     nonlocal content
                     nonlocal content_blocks
@@ -2539,6 +2566,9 @@ async def process_chat_response(
                                         )
                                     else:
                                         choices = data.get("choices", [])
+                                        # Some providers send usage on the last
+                                        # chunk that still carries choices.
+                                        await emit_usage(data)
                                         if not choices:
                                             error = data.get("error", {})
                                             if error:
@@ -2550,16 +2580,6 @@ async def process_chat_response(
                                                         "type": "chat:completion",
                                                         "data": {
                                                             "error": error,
-                                                        },
-                                                    }
-                                                )
-                                            usage = data.get("usage", {})
-                                            if usage:
-                                                await event_emitter(
-                                                    {
-                                                        "type": "chat:completion",
-                                                        "data": {
-                                                            "usage": usage,
                                                         },
                                                     }
                                                 )

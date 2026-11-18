@@ -883,6 +883,27 @@ class ChatTable:
         _snapshot_chat_files(chat_id, shared_chat.id)
         return shared_chat
 
+    def get_live_shares_by_chat_id(self, chat_id: str) -> list[dict]:
+        """The chat's share links that have not expired, newest first. A link's
+        snapshot keeps the chat's created_at, so updated_at is when it was made."""
+        now = int(time.time())
+        with get_db() as db:
+            rows = (
+                db.query(Chat.id, Chat.updated_at, Chat.meta)
+                .filter_by(user_id=f"shared-{chat_id}")
+                .order_by(Chat.updated_at.desc())
+                .all()
+            )
+        links = [
+            {
+                "id": row.id,
+                "created_at": row.updated_at,
+                "expires_at": (row.meta or {}).get("expires_at"),
+            }
+            for row in rows
+        ]
+        return [l for l in links if l["expires_at"] is None or l["expires_at"] > now]
+
     def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
         try:
             with get_db() as db:

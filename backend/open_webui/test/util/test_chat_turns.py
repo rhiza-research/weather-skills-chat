@@ -43,7 +43,7 @@ class MessagesForModelTest(unittest.TestCase):
             }
         }
 
-        messages = messages_for_model(history, "a2")
+        messages = messages_for_model({"history": history}, "a2")
         self.assertEqual([message["role"] for message in messages], ["user", "assistant", "user"])
         self.assertNotIn("secret", messages[1]["content"])
         self.assertIn('type="tool_calls"', messages[1]["content"])
@@ -69,7 +69,7 @@ class MessagesForModelTest(unittest.TestCase):
                 },
             }
         }
-        messages = messages_for_model(history, "a1")
+        messages = messages_for_model({"history": history}, "a1")
         content = messages[0]["content"]
         self.assertIsInstance(content, list)
         self.assertEqual(content[1]["type"], "image_url")
@@ -101,7 +101,7 @@ class MessagesForModelTest(unittest.TestCase):
                 },
             }
         }
-        messages = messages_for_model(history, "a1")
+        messages = messages_for_model({"history": history}, "a1")
         self.assertEqual(
             messages[0]["content"],
             "Look at this\n\nThe user uploaded an image at `photo.png`.",
@@ -134,7 +134,7 @@ class MessagesForModelTest(unittest.TestCase):
                 },
             }
         }
-        messages = messages_for_model(history, "a1")
+        messages = messages_for_model({"history": history}, "a1")
         self.assertEqual(
             messages[0]["content"],
             "see this\n\nThe user uploaded a file at `report.pdf`.",
@@ -166,7 +166,7 @@ class MessagesForModelTest(unittest.TestCase):
                 },
             }
         }
-        messages = messages_for_model(history, "a1")
+        messages = messages_for_model({"history": history}, "a1")
         self.assertEqual(messages[0]["content"], "The user uploaded an image at `photo.png`.")
 
 
@@ -213,6 +213,24 @@ class StoreRefusedTurnTest(unittest.TestCase):
 
     def test_malformed_turn_is_ignored(self):
         self.assertFalse(store_refused_turn("c1", {"user_message": {}}, MagicMock(), "x"))
+
+
+class ArtifactNoteTest(unittest.TestCase):
+    def test_model_notes_follow_the_first_user_message_only(self):
+        history = {
+            "messages": {
+                "u1": {"id": "u1", "parentId": None, "role": "user", "content": "Plot it", "childrenIds": ["a1"]},
+                "a1": {"id": "a1", "parentId": "u1", "role": "assistant", "content": "Done.", "childrenIds": ["u2"]},
+                "u2": {"id": "u2", "parentId": "a1", "role": "user", "content": "Again", "childrenIds": []},
+            }
+        }
+
+        messages = messages_for_model(
+            {"history": history, "chatNotes": ["Files: `map.png`", "Units: mm"]}, "u2"
+        )
+
+        self.assertEqual(messages[0]["content"], "Plot it\n\nFiles: `map.png`\n\nUnits: mm")
+        self.assertEqual(messages[2]["content"], "Again")
 
 
 if __name__ == "__main__":

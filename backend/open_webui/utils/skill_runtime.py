@@ -447,7 +447,7 @@ async def run_skill(
         # PVC. uv run --script manages per-script environments there. The two
         # paths must stay distinct (uv can hang under Landlock if equal).
         # Fallback: per-user dirs under USER_CACHES_DIR when skill-venvs is off.
-        inner_cmd = ["uv", "run", "--script", str(script_path), *args]
+        inner_cmd = ["uv", "run", "-q", "--script", str(script_path), *args]
         if skill_venvs_enabled(root=SKILL_VENV_ROOT):
             try:
                 lru_cleanup_skill_venvs(
@@ -501,7 +501,7 @@ async def run_skill(
         spawn_cwd = None
     else:
         env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
-        cmd = ["uv", "run", "--script", str(script_path), *args]
+        cmd = ["uv", "run", "-q", "--script", str(script_path), *args]
         spawn_cwd = str(cwd)
 
     log_cmd = ["uv", "run", "--script", script_path.name, *args]

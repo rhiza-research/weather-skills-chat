@@ -641,6 +641,19 @@ export const toggleChatPinnedStatusById = async (token: string, id: string) => {
 	return res;
 };
 
+export const newChatWithArtifacts = async (token: string, id: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/new-with-artifacts`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) throw (await parseApiError(res)).detail;
+	return res.json();
+};
+
 export const cloneChatById = async (token: string, id: string, title?: string) => {
 	let error = null;
 
@@ -757,6 +770,22 @@ export const shareChatById = async (token: string, id: string, expiresInDays: nu
 	return res;
 };
 
+export type ShareLink = { id: string; created_at: number; expires_at: number | null };
+
+export const getChatShareLinks = async (token: string, id: string): Promise<ShareLink[]> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/shares`, {
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) throw (await parseApiError(res)).detail;
+	return res.json();
+};
+
+export const shareLinkUrl = (shareId: string) => `${window.location.origin}/s/${shareId}`;
+
 export const copyChatShareLink = async (token: string, id: string, expiresInDays: number) => {
 	const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
@@ -765,7 +794,7 @@ export const copyChatShareLink = async (token: string, id: string, expiresInDays
 		if (!sharedChat?.id) {
 			throw new Error('Failed to create share link');
 		}
-		return `${window.location.origin}/s/${sharedChat.id}`;
+		return shareLinkUrl(sharedChat.id);
 	};
 
 	if (isSafari) {

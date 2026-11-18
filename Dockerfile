@@ -27,6 +27,8 @@ WORKDIR /app
 
 # The test runner is a devDependency. The image does not need its browsers.
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Nor does it need onnxruntime-node's CUDA binaries, which it downloads on Linux x64.
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 
 COPY package.json package-lock.json ./
 RUN npm ci

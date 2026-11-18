@@ -33,6 +33,7 @@
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Banner from '../common/Banner.svelte';
 	import ToolRunnerBand from './ToolRunnerBand.svelte';
+	import ContextRing from './MessageInput/ContextRing.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -107,6 +108,9 @@
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
+					<div class="self-center flex">
+						<ContextRing {history} />
+					</div>
 					<div class="self-center">
 						<ToolRunnerBand />
 					</div>
@@ -237,7 +241,7 @@
 					/>
 				{/if}
 
-				{#each $banners.filter( (b) => (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
+				{#each $banners.filter( (b) => (!b.expires_at || b.expires_at * 1000 > Date.now()) && (b.dismissible ? !JSON.parse(localStorage.getItem('dismissedBannerIds') ?? '[]').includes(b.id) : true) ) as banner}
 					<Banner
 						{banner}
 						on:dismiss={(e) => {

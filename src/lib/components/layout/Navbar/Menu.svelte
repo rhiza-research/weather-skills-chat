@@ -15,7 +15,8 @@
 		showArtifacts,
 		showCallOverlay,
 		temporaryChatEnabled,
-		theme
+		theme,
+		user
 	} from '$lib/stores';
 	import { flyAndScale } from '$lib/utils/transitions';
 
@@ -197,7 +198,8 @@
 				<div class="flex items-center">{$i18n.t('Settings')}</div>
 			</DropdownMenu.Item> -->
 
-			{#if !$temporaryChatEnabled}
+			<!-- Only the owner can share; others clone the chat first. -->
+			{#if !$temporaryChatEnabled && (!chat.user_id || chat.user_id === $user?.id)}
 				<DropdownMenu.Item
 					class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
 					id="chat-share-button"

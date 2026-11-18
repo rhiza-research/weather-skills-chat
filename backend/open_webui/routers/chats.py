@@ -796,13 +796,81 @@ async def clone_chat_by_id(
             }
         ),
     )
-    try:
-        from open_webui.utils.artifacts import copy_sandbox
+    await _copy_artifacts_in_background(source_id, chat.id)
+    return ChatResponse(**chat.model_dump())
 
-        # Copies every file of the chat on JuiceFS.
-        await asyncio.to_thread(copy_sandbox, source_id, chat.id)
+
+# Copies running in the background; a reference keeps each task alive.
+_artifact_copies: set[asyncio.Task] = set()
+
+
+async def _copy_artifacts_in_background(source_id: str, chat_id: str) -> None:
+    """Start copying a chat's files into a new chat and return at once.
+
+    Until the copy is done, ``GET /{id}/artifacts/copy`` reports "copying"
+    and the new chat does not send.
+    """
+    from open_webui.utils.artifacts import copy_sandbox, mark_copy_started
+
+    # Written before returning, so the new chat never looks done too early.
+    await asyncio.to_thread(mark_copy_started, chat_id)
+    task = asyncio.create_task(asyncio.to_thread(copy_sandbox, source_id, chat_id))
+    _artifact_copies.add(task)
+    task.add_done_callback(_artifact_copy_done)
+
+
+def _artifact_copy_done(task: asyncio.Task) -> None:
+    _artifact_copies.discard(task)
+    if not task.cancelled():
+        # copy_sandbox logged any failure and left a "failed" marker.
+        task.exception()
+
+
+############################
+# NewChatWithArtifacts
+############################
+
+
+@router.post("/{id}/new-with-artifacts", response_model=Optional[ChatResponse])
+async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
+    """Start an empty chat that gets a copy of this chat's files.
+
+    Like a clone, the chat is returned at once and its files are copied in
+    the background. The model is told what the files are on every turn of the
+    new chat (a ``chatNotes`` entry), so it does not have to rediscover them.
+    """
+    from open_webui.utils.artifacts import artifact_carryover_note
+
+    source = await asyncio.to_thread(_require_readable_chat, id, user)
+    try:
+        note = await asyncio.to_thread(artifact_carryover_note, source.id, source.title)
     except Exception:
-        log.exception("Failed to copy chat artifacts")
+        log.exception("Failed to list artifacts for the new chat's note")
+        note = ""
+    chat = await asyncio.to_thread(
+        Chats.insert_new_chat,
+        user.id,
+        ChatForm(
+            chat={
+                "title": "New Chat",
+                "models": source.chat.get("models", []),
+                "params": source.chat.get("params", {}),
+                "history": {"messages": {}, "currentId": None},
+                "messages": [],
+                "tags": [],
+                "timestamp": int(time.time() * 1000),
+                "chatNotes": [note] if note else [],
+            },
+            organization_id=source.organization_id,
+            visibility="private",
+        ),
+    )
+    if chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The chat could not be created. Please try again.",
+        )
+    await _copy_artifacts_in_background(source.id, chat.id)
     return ChatResponse(**chat.model_dump())
 
 
@@ -841,12 +909,7 @@ async def clone_shared_chat_by_id(
                 visibility="private",
             ),
         )
-        try:
-            from open_webui.utils.artifacts import copy_sandbox
-
-            await asyncio.to_thread(copy_sandbox, source_id, chat.id)
-        except Exception:
-            log.exception("Failed to copy shared chat artifacts")
+        await _copy_artifacts_in_background(source_id, chat.id)
         return ChatResponse(**chat.model_dump())
     else:
         raise HTTPException(
@@ -920,6 +983,18 @@ async def share_chat_by_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
+
+
+class ShareLinkResponse(BaseModel):
+    id: str
+    created_at: int
+    expires_at: Optional[int] = None
+
+
+@router.get("/{id}/shares", response_model=list[ShareLinkResponse])
+async def get_share_links_by_chat_id(id: str, user=Depends(get_verified_user)):
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await asyncio.to_thread(Chats.get_live_shares_by_chat_id, id)
 
 
 ############################
