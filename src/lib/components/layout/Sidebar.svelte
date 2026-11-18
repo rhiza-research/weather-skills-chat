@@ -765,6 +765,7 @@
 			<a
 				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
 				href="/scheduled-tasks"
+				data-tour="scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
 					chatId.set('');

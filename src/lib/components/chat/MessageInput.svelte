@@ -1247,6 +1247,7 @@
 														on:click|preventDefault={() =>
 															(readArtifactsEnabled = !readArtifactsEnabled)}
 														type="button"
+														data-tour="read-files"
 														aria-pressed={readArtifactsEnabled}
 														class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {readArtifactsEnabled
 															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
