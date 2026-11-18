@@ -63,6 +63,18 @@
 
 	let loaded = false;
 	$: if (loaded) markAppReady();
+
+	let tourStarted = false;
+	$: if (
+		loaded &&
+		!tourStarted &&
+		$page.url.pathname === '/' &&
+		['user', 'admin'].includes($user?.role) &&
+		!$settings?.tourSeen
+	) {
+		tourStarted = true;
+		import('$lib/utils/tour').then((m) => m.startTour($i18n.t, true));
+	}
 	$: if (loaded) {
 		const path = $page.url.pathname;
 		if (path !== '/' && !path.startsWith('/c/')) revealApp();
