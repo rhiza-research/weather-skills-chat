@@ -37,7 +37,9 @@ from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.auth import (
     create_api_key,
     create_token,
+    decode_token,
     get_admin_user,
+    get_http_authorization_cred,
     get_verified_user,
     get_current_user,
     get_password_hash,
@@ -72,15 +74,20 @@ class SessionUserResponse(Token, UserResponse):
 def get_session_user(
     request: Request, response: Response, user=Depends(get_current_user)
 ):
-    expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
-    expires_at = None
-    if expires_delta:
-        expires_at = int(time.time()) + int(expires_delta.total_seconds())
+    # The new token keeps the presented token's expiry, so a valid token
+    # can't be renewed forever; only signing in starts a new period.
+    cred = get_http_authorization_cred(request.headers.get("Authorization"))
+    presented = cred.credentials if cred else request.cookies.get("token")
+    expires_at = (decode_token(presented) or {}).get("exp") if presented else None
+    if expires_at is None:
+        expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+        if expires_delta:
+            expires_at = int(time.time()) + int(expires_delta.total_seconds())
 
-    token = create_token(
-        data={"id": user.id},
-        expires_delta=expires_delta,
-    )
+    data = {"id": user.id}
+    if expires_at:
+        data["exp"] = expires_at
+    token = create_token(data=data)
 
     datetime_expires_at = (
         datetime.datetime.fromtimestamp(expires_at, datetime.timezone.utc)

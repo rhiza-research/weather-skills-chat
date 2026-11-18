@@ -38,6 +38,26 @@ class TestAuths(AbstractPostgresTest):
         assert isinstance(data["token"], str) and data["token"]
         assert isinstance(data["permissions"], dict)
 
+    def test_session_refresh_keeps_expiry(self):
+        import time
+
+        import jwt
+        from open_webui.utils.auth import ALGORITHM, SESSION_SECRET, decode_token
+
+        exp = int(time.time()) + 600
+        presented = jwt.encode(
+            {"id": "1", "iat": int(time.time()), "exp": exp},
+            SESSION_SECRET,
+            algorithm=ALGORITHM,
+        )
+        with mock_webui_user():
+            response = self.fast_api_client.get(
+                self.create_url(""), headers={"Authorization": f"Bearer {presented}"}
+            )
+        assert response.status_code == 200
+        assert response.json()["expires_at"] == exp
+        assert decode_token(response.json()["token"])["exp"] == exp
+
     def test_update_profile(self):
         from open_webui.utils.auth import get_password_hash
 
