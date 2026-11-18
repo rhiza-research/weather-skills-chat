@@ -1,5 +1,6 @@
 import { driver, type DriveStep, type Side } from 'driver.js';
 import 'driver.js/dist/driver.css';
+import './tour.css';
 import { get } from 'svelte/store';
 import { updateUserSettings } from '$lib/apis/users';
 import { mobile, settings, showSidebar } from '$lib/stores';
@@ -73,6 +74,10 @@ export const startTour = async (t: (key: string) => string, markSeen = false) =>
 				})
 			),
 		showProgress: true,
+		popoverClass: 'wsc-tour',
+		overlayOpacity: 0.5,
+		stagePadding: 6,
+		stageRadius: 12,
 		nextBtnText: t('Next'),
 		prevBtnText: t('Back'),
 		doneBtnText: t('Done'),
