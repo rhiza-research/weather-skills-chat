@@ -13,6 +13,7 @@
 	} from '$lib/apis/chats';
 	import { copyToClipboard } from '$lib/utils';
 	import Modal from '$lib/components/common/Modal.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
 	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
@@ -30,6 +31,8 @@
 	let links: ShareLink[] = [];
 	// The link being created, shown greyed out above the others until it exists.
 	let pending: ShareLink | null = null;
+	let showDeleteConfirm = false;
+	let deleteId = '';
 
 	$: if (!show) {
 		days = DEFAULT_DAYS;
@@ -79,6 +82,14 @@
 		}
 	};
 </script>
+
+<ConfirmDialog
+	bind:show={showDeleteConfirm}
+	title={$i18n.t('Delete share link?')}
+	message={$i18n.t('Anyone who has this link will no longer be able to open it.')}
+	confirmLabel={$i18n.t('Delete')}
+	on:confirm={() => deleteLink(deleteId)}
+/>
 
 <Modal size="sm" bind:show>
 	<div>
@@ -147,7 +158,10 @@
 										class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
 										aria-label={$i18n.t('Delete link')}
 										title={$i18n.t('Delete link')}
-										on:click={() => deleteLink(link.id)}
+										on:click={() => {
+											deleteId = link.id;
+											showDeleteConfirm = true;
+										}}
 									>
 										<GarbageBin />
 									</button>
