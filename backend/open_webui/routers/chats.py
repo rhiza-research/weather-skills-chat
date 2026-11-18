@@ -796,14 +796,34 @@ async def clone_chat_by_id(
             }
         ),
     )
-    try:
-        from open_webui.utils.artifacts import copy_sandbox
-
-        # Copies every file of the chat on JuiceFS.
-        await asyncio.to_thread(copy_sandbox, source_id, chat.id)
-    except Exception:
-        log.exception("Failed to copy chat artifacts")
+    await _copy_artifacts_in_background(source_id, chat.id)
     return ChatResponse(**chat.model_dump())
+
+
+# Copies running in the background; a reference keeps each task alive.
+_artifact_copies: set[asyncio.Task] = set()
+
+
+async def _copy_artifacts_in_background(source_id: str, chat_id: str) -> None:
+    """Start copying a chat's files into a new chat and return at once.
+
+    Until the copy is done, ``GET /{id}/artifacts/copy`` reports "copying"
+    and the new chat does not send.
+    """
+    from open_webui.utils.artifacts import copy_sandbox, mark_copy_started
+
+    # Written before returning, so the new chat never looks done too early.
+    await asyncio.to_thread(mark_copy_started, chat_id)
+    task = asyncio.create_task(asyncio.to_thread(copy_sandbox, source_id, chat_id))
+    _artifact_copies.add(task)
+    task.add_done_callback(_artifact_copy_done)
+
+
+def _artifact_copy_done(task: asyncio.Task) -> None:
+    _artifact_copies.discard(task)
+    if not task.cancelled():
+        # copy_sandbox logged any failure and left a "failed" marker.
+        task.exception()
 
 
 ############################
@@ -811,25 +831,15 @@ async def clone_chat_by_id(
 ############################
 
 
-# Copies running in the background; a reference keeps each task alive.
-_artifact_copies: set[asyncio.Task] = set()
-
-
 @router.post("/{id}/new-with-artifacts", response_model=Optional[ChatResponse])
 async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
     """Start an empty chat that gets a copy of this chat's files.
 
-    The chat is returned at once and its files are copied in the background.
-    Until the copy is done, ``GET /{id}/artifacts/copy`` reports "copying"
-    and the chat does not send. The model is told what the files are on every
-    turn of the new chat (a ``chatNotes`` entry), so it does not have to
-    rediscover them.
+    Like a clone, the chat is returned at once and its files are copied in
+    the background. The model is told what the files are on every turn of the
+    new chat (a ``chatNotes`` entry), so it does not have to rediscover them.
     """
-    from open_webui.utils.artifacts import (
-        artifact_carryover_note,
-        copy_sandbox,
-        mark_copy_started,
-    )
+    from open_webui.utils.artifacts import artifact_carryover_note
 
     source = await asyncio.to_thread(_require_readable_chat, id, user)
     try:
@@ -860,19 +870,8 @@ async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The chat could not be created. Please try again.",
         )
-    # Written before returning, so the new chat never looks done too early.
-    await asyncio.to_thread(mark_copy_started, chat.id)
-    task = asyncio.create_task(asyncio.to_thread(copy_sandbox, source.id, chat.id))
-    _artifact_copies.add(task)
-    task.add_done_callback(_artifact_copy_done)
+    await _copy_artifacts_in_background(source.id, chat.id)
     return ChatResponse(**chat.model_dump())
-
-
-def _artifact_copy_done(task: asyncio.Task) -> None:
-    _artifact_copies.discard(task)
-    if not task.cancelled():
-        # copy_sandbox logged any failure and left a "failed" marker.
-        task.exception()
 
 
 ############################
@@ -910,12 +909,7 @@ async def clone_shared_chat_by_id(
                 visibility="private",
             ),
         )
-        try:
-            from open_webui.utils.artifacts import copy_sandbox
-
-            await asyncio.to_thread(copy_sandbox, source_id, chat.id)
-        except Exception:
-            log.exception("Failed to copy shared chat artifacts")
+        await _copy_artifacts_in_background(source_id, chat.id)
         return ChatResponse(**chat.model_dump())
     else:
         raise HTTPException(
