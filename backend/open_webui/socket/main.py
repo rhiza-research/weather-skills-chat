@@ -20,7 +20,7 @@ from open_webui.env import (
     WEBSOCKET_SENTINEL_PORT,
     WEBSOCKET_SENTINEL_HOSTS,
 )
-from open_webui.utils.auth import decode_token
+from open_webui.utils.auth import get_user_from_token
 from open_webui.socket.utils import RedisDict, RedisLock
 
 from open_webui.env import (
@@ -176,10 +176,7 @@ async def usage(sid, data):
 async def connect(sid, environ, auth):
     user = None
     if auth and "token" in auth:
-        data = decode_token(auth["token"])
-
-        if data is not None and "id" in data:
-            user = Users.get_user_by_id(data["id"])
+        user = get_user_from_token(auth["token"])
 
         if user:
             SESSION_POOL[sid] = user.model_dump()
@@ -200,11 +197,7 @@ async def user_join(sid, data):
     if not auth or "token" not in auth:
         return
 
-    data = decode_token(auth["token"])
-    if data is None or "id" not in data:
-        return
-
-    user = Users.get_user_by_id(data["id"])
+    user = get_user_from_token(auth["token"])
     if not user:
         return
 

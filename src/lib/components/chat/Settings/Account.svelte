@@ -3,7 +3,13 @@
 	import { onMount, getContext } from 'svelte';
 
 	import { user, config, settings } from '$lib/stores';
-	import { updateUserProfile, createAPIKey, getAPIKey, getSessionUser } from '$lib/apis/auths';
+	import {
+		updateUserProfile,
+		createAPIKey,
+		getAPIKey,
+		getSessionUser,
+		signOutEverywhere
+	} from '$lib/apis/auths';
 
 	import UpdatePassword from './Account/UpdatePassword.svelte';
 	import { getGravatarUrl } from '$lib/apis/utils';
@@ -12,6 +18,7 @@
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
+	import ConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -24,7 +31,18 @@
 	let webhookUrl = '';
 	let showAPIKeys = false;
 
-	let JWTTokenCopied = false;
+	let showSignOutEverywhereConfirm = false;
+
+	const signOutEverywhereHandler = async () => {
+		const res = await signOutEverywhere(localStorage.token).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
+		if (res) {
+			localStorage.token = res.token;
+			toast.success($i18n.t('Signed out of all other devices.'));
+		}
+	};
 
 	let APIKey = '';
 	let APIKeyCopied = false;
@@ -269,78 +287,53 @@
 			<UpdatePassword />
 		</div>
 
-		<hr class="border-gray-50 dark:border-gray-850 my-2" />
-
-		<div class="flex justify-between items-center text-sm">
-			<div class="  font-medium">{$i18n.t('API keys')}</div>
+		<div class="flex justify-between items-center text-sm py-0.5">
+			<div>
+				<div class="font-medium">{$i18n.t('Sign out of all devices')}</div>
+				<div class="text-xs text-gray-500">
+					{$i18n.t('Ends every session except this one. Changing your password does this too.')}
+				</div>
+			</div>
 			<button
-				class=" text-xs font-medium text-gray-500"
+				class="shrink-0 text-xs font-medium text-gray-500"
 				type="button"
 				on:click={() => {
-					showAPIKeys = !showAPIKeys;
-				}}>{showAPIKeys ? $i18n.t('Hide') : $i18n.t('Show')}</button
+					showSignOutEverywhereConfirm = true;
+				}}>{$i18n.t('Sign out')}</button
 			>
 		</div>
 
-		{#if showAPIKeys}
-			<div class="flex flex-col gap-4">
-				<div class="justify-between w-full">
-					<div class="flex justify-between w-full">
-						<div class="self-center text-xs font-medium">{$i18n.t('JWT Token')}</div>
-					</div>
+		<ConfirmDialog
+			bind:show={showSignOutEverywhereConfirm}
+			title={$i18n.t('Sign out of all devices?')}
+			message={$i18n.t(
+				'Every other browser and device signed in to your account will need to sign in again.'
+			)}
+			confirmLabel={$i18n.t('Sign out')}
+			on:confirm={signOutEverywhereHandler}
+		/>
 
-					<div class="flex mt-2">
-						<SensitiveInput value={localStorage.token} readOnly={true} />
+		{#if $config?.features?.enable_api_key ?? true}
+			<hr class="border-gray-50 dark:border-gray-850 my-2" />
 
-						<button
-							class="ml-1.5 px-1.5 py-1 dark:hover:bg-gray-850 transition rounded-lg"
-							on:click={() => {
-								copyToClipboard(localStorage.token);
-								JWTTokenCopied = true;
-								setTimeout(() => {
-									JWTTokenCopied = false;
-								}, 2000);
-							}}
-						>
-							{#if JWTTokenCopied}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-									class="w-4 h-4"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-										clip-rule="evenodd"
-									/>
-								</svg>
-							{:else}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 16 16"
-									fill="currentColor"
-									class="w-4 h-4"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M11.986 3H12a2 2 0 0 1 2 2v6a2 2 0 0 1-1.5 1.937V7A2.5 2.5 0 0 0 10 4.5H4.063A2 2 0 0 1 6 3h.014A2.25 2.25 0 0 1 8.25 1h1.5a2.25 2.25 0 0 1 2.236 2ZM10.5 4v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75V4h3Z"
-										clip-rule="evenodd"
-									/>
-									<path
-										fill-rule="evenodd"
-										d="M3 6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1H3Zm1.75 2.5a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5ZM4 11.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75Z"
-										clip-rule="evenodd"
-									/>
-								</svg>
-							{/if}
-						</button>
-					</div>
-				</div>
-				{#if $config?.features?.enable_api_key ?? true}
+			<div class="flex justify-between items-center text-sm">
+				<div class="  font-medium">{$i18n.t('API keys')}</div>
+				<button
+					class=" text-xs font-medium text-gray-500"
+					type="button"
+					on:click={() => {
+						showAPIKeys = !showAPIKeys;
+					}}>{showAPIKeys ? $i18n.t('Hide') : $i18n.t('Show')}</button
+				>
+			</div>
+
+			{#if showAPIKeys}
+				<div class="flex flex-col gap-4">
 					<div class="justify-between w-full">
 						<div class="flex justify-between w-full">
-							<div class="self-center text-xs font-medium">{$i18n.t('API Key')}</div>
+							<div class="self-center text-xs font-medium">
+								{$i18n.t('API Key')}
+							</div>
 						</div>
 						<div class="flex mt-2">
 							{#if APIKey}
@@ -427,8 +420,8 @@
 							{/if}
 						</div>
 					</div>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 

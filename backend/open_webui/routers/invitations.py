@@ -29,8 +29,8 @@ from open_webui.models.users import Users
 from open_webui.utils.access_control import get_permissions
 from open_webui.utils.auth import (
     create_token,
-    decode_token,
     get_password_hash,
+    get_user_from_token,
     get_verified_user,
 )
 from open_webui.utils.invite_email import InviteEmailError, deliver_invite_email, smtp_is_configured
@@ -91,13 +91,7 @@ def get_optional_user(request: Request):
         token = request.cookies.get("token")
     if not token or token.startswith("sk-"):
         return None
-    try:
-        data = decode_token(token)
-    except Exception:
-        return None
-    if not data or "id" not in data:
-        return None
-    return Users.get_user_by_id(data["id"])
+    return get_user_from_token(token)
 
 
 def _response(invite: InvitationModel) -> InvitationResponse:

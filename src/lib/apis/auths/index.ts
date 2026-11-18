@@ -364,6 +364,34 @@ export const userSignOut = async () => {
 	}
 };
 
+// Ends every session for the user; the response carries this browser's new token.
+export const signOutEverywhere = async (token: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/signout/all`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await parseApiError(res);
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const addUser = async (
 	token: string,
 	name: string,

@@ -9,6 +9,7 @@
 - [[Usage and Spending Caps]]
 - [[Requesting Access]]
 - [[Invitations]]
+- [[Signing In and Out]]
 - [[Scheduled Tasks]]
 - [[Secrets]]
 - [[Preferences]]

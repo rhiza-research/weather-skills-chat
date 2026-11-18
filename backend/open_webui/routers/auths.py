@@ -142,9 +142,12 @@ async def update_profile(
 ############################
 
 
-@router.post("/update/password", response_model=bool)
+@router.post("/update/password", response_model=SessionUserResponse)
 async def update_password(
-    form_data: UpdatePasswordForm, session_user=Depends(get_current_user)
+    request: Request,
+    response: Response,
+    form_data: UpdatePasswordForm,
+    session_user=Depends(get_current_user),
 ):
     if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
         raise HTTPException(400, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
@@ -153,7 +156,11 @@ async def update_password(
 
         if user:
             hashed = get_password_hash(form_data.new_password)
-            return Auths.update_user_password_by_id(user.id, hashed)
+            if not Auths.update_user_password_by_id(user.id, hashed):
+                raise HTTPException(400, detail=ERROR_MESSAGES.DEFAULT())
+            # Sign out other devices; this browser gets the new token.
+            Users.end_sessions_by_id(user.id)
+            return get_session_user(request, response, session_user)
         else:
             raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_PASSWORD)
     else:
@@ -573,6 +580,13 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
     except Exception as err:
         log.error(f"Signup error: {str(err)}")
         raise HTTPException(500, detail="An internal error occurred during signup.")
+
+
+@router.post("/signout/all", response_model=SessionUserResponse)
+def signout_all(request: Request, response: Response, user=Depends(get_current_user)):
+    # Every token issued so far stops working; this browser gets a new one.
+    Users.end_sessions_by_id(user.id)
+    return get_session_user(request, response, user)
 
 
 @router.get("/signout")

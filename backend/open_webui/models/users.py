@@ -34,6 +34,8 @@ class User(Base):
     info = Column(JSONField, nullable=True)
 
     oauth_sub = Column(Text, unique=True)
+    # Sign-in tokens issued before this epoch second are rejected.
+    tokens_valid_after = Column(BigInteger, nullable=True)
 
 
 class UserSettings(BaseModel):
@@ -58,6 +60,7 @@ class UserModel(BaseModel):
     info: Optional[dict] = None
 
     oauth_sub: Optional[str] = None
+    tokens_valid_after: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -273,6 +276,10 @@ class UsersTable:
                 # return UserModel(**user.dict())
         except Exception:
             return None
+
+    def end_sessions_by_id(self, id: str) -> Optional[UserModel]:
+        """Reject every sign-in token issued for the user before now."""
+        return self.update_user_by_id(id, {"tokens_valid_after": int(time.time())})
 
     def update_user_settings_by_id(self, id: str, updated: dict) -> Optional[UserModel]:
         try:
