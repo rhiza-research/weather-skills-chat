@@ -80,6 +80,8 @@ usage() {
     echo "  --playwright               Enable Playwright support for web scraping."
     echo "  --build                    Build the docker image before running the compose project."
     echo "  --drop                     Drop the compose project."
+    echo "  --name=NAME                Run a separate stack named NAME with its own containers, data, and free ports."
+    echo "                             With --drop, also remove its data and image."
     echo "  -q, --quiet                Run script in headless mode."
     echo "  -h, --help                 Show this help message."
     echo ""
@@ -104,10 +106,13 @@ usage() {
 }
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "$ROOT/.env" ]]; then
+# A git worktree has no .env of its own; it uses the main checkout's.
+env_file="$ROOT/.env"
+[[ -f $env_file ]] || env_file="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)/../.env"
+if [[ -f $env_file ]]; then
     set -a
-    # shellcheck disable=SC1091
-    source "$ROOT/.env"
+    # shellcheck disable=SC1090
+    source "$env_file"
     set +a
 fi
 # Run mode belongs on the command line, not in .env.
@@ -132,6 +137,7 @@ enable_ollama=false
 enable_gpu=false
 enable_api=false
 data_dir=
+stack_name=
 
 # Function to extract value from the parameter
 # A bash regex, because macOS sed does not accept the GNU "t; s/.*//" form.
@@ -188,6 +194,9 @@ while [[ $# -gt 0 ]]; do
             isolation=$(extract_value "$key")
             isolation=${isolation:-off}
             ;;
+        --name=*)
+            stack_name="$(echo "${key#--name=}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-')"
+            ;;
         --drop)
             kill_compose=true
             ;;
@@ -224,6 +233,44 @@ if [[ $enable_ollama != true ]]; then
         echo -e "${RED}${BOLD}$ollama_only requires --ollama.${NC}" >&2
         exit 1
     fi
+fi
+
+if [[ -n $stack_name ]]; then
+    # A stack beside any other: its own Compose project, containers, image tag,
+    # volumes, and ports. A running stack keeps its ports; otherwise each takes
+    # the first free port from its base. Another stack starting at the same time
+    # can take the same port first; the start below then picks again.
+    stack="wsc-$stack_name"
+    export COMPOSE_PROJECT_NAME="$stack" WEBUI_CONTAINER_NAME="$stack" \
+        CADDY_CONTAINER_NAME="$stack-h2" EMULATOR_CONTAINER_NAME="$stack-emulator" \
+        WEBUI_IMAGE=weather-skills-chat WEBUI_DOCKER_TAG="$stack" \
+        WEBUI_DATA_VOLUME="$stack-data" CADDY_DATA_VOLUME="$stack-caddy"
+    taken=()
+    pick_port() { # container, container port, base
+        local p
+        p="$(docker port "$1" "$2" 2>/dev/null | head -1 | sed 's/.*://' || true)"
+        if [[ -z $p ]]; then
+            p=$3
+            while lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1 || [[ " ${taken[*]} " == *" $p "* ]]; do
+                p=$((p + 1))
+            done
+        fi
+        echo "$p"
+    }
+    pick_stack_ports() {
+        taken=()
+        OPEN_WEBUI_PORT="$(pick_port "$stack" 8080 3100)"
+        taken+=("$OPEN_WEBUI_PORT")
+        CADDY_HTTPS_PORT="$(pick_port "$stack-h2" 443 4443)"
+        taken+=("$CADDY_HTTPS_PORT")
+        CADDY_HTTP_PORT="$(pick_port "$stack-h2" 80 8100)"
+        export OPEN_WEBUI_PORT CADDY_HTTPS_PORT CADDY_HTTP_PORT
+        export WEBUI_URL="http://localhost:$OPEN_WEBUI_PORT"
+        if [[ $enable_testing == true ]]; then
+            export WEBUI_URL="https://localhost:$CADDY_HTTPS_PORT"
+        fi
+    }
+    pick_stack_ports
 fi
 
 compose_profiles=()
@@ -273,7 +320,13 @@ for profile in testing emulator; do
 done
 
 if [[ $kill_compose == true ]]; then
-    docker compose "${profile_args[@]}" down --remove-orphans
+    if [[ -n $stack_name ]]; then
+        # A named stack is throwaway: its data and image go with it.
+        docker compose "${profile_args[@]}" down --remove-orphans --volumes
+        docker image rm "$WEBUI_IMAGE:$WEBUI_DOCKER_TAG" 2>/dev/null || true
+    else
+        docker compose "${profile_args[@]}" down --remove-orphans
+    fi
     echo -e "${GREEN}${BOLD}Compose project dropped successfully.${NC}"
     exit
 else
@@ -350,24 +403,28 @@ fi
 echo
 
 if [[ $choice == "" || $choice == "y" ]]; then
-    # Execute the command with the current user
-    eval "$DEFAULT_COMPOSE_COMMAND" &
-
-    # Capture the background process PID
-    PID=$!
-
-    # Display the loading animation
-    #show_loading $PID
-
-    # Wait for the command to finish
-    wait $PID
+    errors="$(mktemp)"
+    for attempt in 1 2 3 4 5; do
+        eval "$DEFAULT_COMPOSE_COMMAND" 2> >(tee "$errors" >&2)
+        status=$?
+        wait # for tee to finish writing $errors
+        # A named stack whose port another stack took first picks free ports again.
+        if [[ $status -ne 0 && -n $stack_name && -z $webui_port ]] &&
+            grep -qiE "port is already allocated|address already in use" "$errors"; then
+            echo -e "${WHITE}${BOLD}A port was taken; picking free ports again (attempt $attempt of 5).${NC}"
+            pick_stack_ports
+            continue
+        fi
+        break
+    done
+    rm -f "$errors"
 
     echo
-    # Check exit status
-    if [ $? -eq 0 ]; then
+    if [[ $status -eq 0 ]]; then
         echo -e "${GREEN}${BOLD}Compose project started successfully.${NC}"
     else
         echo -e "${RED}${BOLD}There was an error starting the compose project.${NC}"
+        exit "$status"
     fi
 else
     echo "Aborted."

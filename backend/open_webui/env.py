@@ -532,6 +532,13 @@ if OFFLINE_MODE:
 # Playwright fixtures (clear/age chats) when the test app is running.
 ENABLE_E2E_FIXTURES = os.environ.get("ENABLE_E2E_FIXTURES", "false").lower() == "true"
 
+# Local development only: the sign-in page signs straight in as the oldest platform admin.
+ENABLE_DEV_LOGIN_BYPASS = (
+    os.environ.get("ENABLE_DEV_LOGIN_BYPASS", "false").lower() == "true"
+)
+if ENABLE_DEV_LOGIN_BYPASS:
+    log.warning("ENABLE_DEV_LOGIN_BYPASS is on: anyone who can reach the app is an admin")
+
 ####################################
 # AUDIT LOGGING
 ####################################

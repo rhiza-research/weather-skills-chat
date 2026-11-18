@@ -19,6 +19,12 @@ services:
       - OPENAI_API_KEY
       - WEBUI_SECRET_KEY
       - WEBUI_URL
+      - ENABLE_DEV_LOGIN_BYPASS
+      - BOOTSTRAP_ADMIN_EMAIL
+      - BOOTSTRAP_ADMIN_PASSWORD
+      - BOOTSTRAP_ADMIN_NAME
+      - CATALOG_MODELS
+      - SKILL_PACKS
       - EMAIL_TOOL_SMTP_HOST
       - EMAIL_TOOL_SMTP_PORT
       - EMAIL_TOOL_SMTP_USERNAME
@@ -47,7 +53,7 @@ services:
     profiles:
       - testing
     image: caddy:2-alpine
-    container_name: weather-skills-h2
+    container_name: ${CADDY_CONTAINER_NAME-weather-skills-h2}
     ports:
       - ${CADDY_HTTPS_PORT-3443}:443
       - ${CADDY_HTTP_PORT-80}:80
@@ -72,7 +78,7 @@ services:
     profiles:
       - emulator
     image: ${SANDBOX_RUNNER_IMAGE:-ghcr.io/rhiza-research/weather-skills-sandbox-runner:src-8f4552f21a8b}
-    container_name: weather-skills-emulator
+    container_name: ${EMULATOR_CONTAINER_NAME-weather-skills-emulator}
     user: "0"
     working_dir: /opt/sandbox
     command:

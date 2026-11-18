@@ -180,7 +180,8 @@
 			toast.error($i18n.t('That email or domain name is not registered. Please request access.'));
 		}
 
-		if ($user !== undefined) {
+		// ?as= switches accounts, so it applies even when already signed in.
+		if ($user !== undefined && !querystringValue('as')) {
 			const redirectPath = querystringValue('redirect') || '/';
 			goto(redirectPath);
 		}
@@ -197,6 +198,8 @@
 			.catch(() => {});
 
 		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
+			// With the local login bypass, ?as=EMAIL picks the account.
+			email = querystringValue('as') ?? '';
 			await signInHandler();
 		} else {
 			onboarding = $config?.onboarding ?? false;

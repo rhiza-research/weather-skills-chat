@@ -110,6 +110,29 @@ class TestAuths(AbstractPostgresTest):
         assert data["token"] is not None and len(data["token"]) > 0
         assert data["token_type"] == "Bearer"
 
+    def test_signin_dev_login_bypass(self):
+        from unittest.mock import patch
+
+        from open_webui.routers import auths
+
+        from open_webui.models.organizations import Organizations
+
+        self.auths.insert_new_auth(email="user@x.org", password="x", name="u", role="user")
+        # Platform admin the way the bootstrap admin is made: role "user" plus the platform org.
+        admin = self.auths.insert_new_auth(email="admin@x.org", password="x", name="a", role="user")
+        Organizations.ensure_platform(admin.id)
+
+        bad_login = {"email": "nobody@x.org", "password": "wrong"}
+        assert self.fast_api_client.post(self.create_url("/signin"), json=bad_login).status_code == 400
+        with patch.object(auths, "ENABLE_DEV_LOGIN_BYPASS", True):
+            response = self.fast_api_client.post(self.create_url("/signin"), json=bad_login)
+            as_user = self.fast_api_client.post(
+                self.create_url("/signin"), json={"email": "user@x.org", "password": ""}
+            )
+        assert response.status_code == 200
+        assert response.json()["email"] == "admin@x.org"
+        assert as_user.json()["email"] == "user@x.org"
+
     def test_signup(self):
         response = self.fast_api_client.post(
             self.create_url("/signup"),

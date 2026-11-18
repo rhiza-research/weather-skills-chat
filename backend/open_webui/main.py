@@ -1644,7 +1644,8 @@ def get_app_config():
             }
         },
         "features": {
-            "auth": WEBUI_AUTH,
+            # False makes the sign-in page sign in without a form.
+            "auth": WEBUI_AUTH and not auths.dev_login_user(),
             "auth_trusted_header": bool(app.state.AUTH_TRUSTED_EMAIL_HEADER),
             "enable_ldap": app.state.config.ENABLE_LDAP,
             "enable_api_key": app.state.config.ENABLE_API_KEY,
