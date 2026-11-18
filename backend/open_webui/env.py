@@ -5,7 +5,6 @@ import os
 import pkgutil
 import sys
 import shutil
-from urllib.parse import urlparse
 from pathlib import Path
 
 import markdown
@@ -532,19 +531,6 @@ if OFFLINE_MODE:
 
 # Playwright fixtures (clear/age chats) when the test app is running.
 ENABLE_E2E_FIXTURES = os.environ.get("ENABLE_E2E_FIXTURES", "false").lower() == "true"
-
-# Local development only: the sign-in page signs straight in as the oldest platform admin.
-ENABLE_DEV_LOGIN_BYPASS = (
-    os.environ.get("ENABLE_DEV_LOGIN_BYPASS", "false").lower() == "true"
-)
-if ENABLE_DEV_LOGIN_BYPASS:
-    # Refuse to run anywhere but a developer's own computer.
-    _webui_host = urlparse(os.environ.get("WEBUI_URL", "http://localhost:3000")).hostname
-    if _webui_host not in ("localhost", "127.0.0.1", "::1"):
-        raise ValueError(
-            "ENABLE_DEV_LOGIN_BYPASS is only allowed when WEBUI_URL is a localhost address"
-        )
-    log.warning("ENABLE_DEV_LOGIN_BYPASS is on: anyone who can reach the app is an admin")
 
 ####################################
 # AUDIT LOGGING

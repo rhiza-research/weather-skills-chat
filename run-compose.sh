@@ -245,7 +245,8 @@ if [[ -n $stack_name ]]; then
         CADDY_CONTAINER_NAME="$stack-h2" EMULATOR_CONTAINER_NAME="$stack-emulator" \
         WEBUI_IMAGE=weather-skills-chat WEBUI_DOCKER_TAG="$stack" \
         WEBUI_DATA_VOLUME="$stack-data" CADDY_DATA_VOLUME="$stack-caddy"
-    # Only this computer can reach a named stack; it signs in without a password.
+    # Its test accounts share a known password, so only this computer can reach it,
+    # and only its own pages can read its responses (CORS).
     export BIND_ADDRESS=127.0.0.1
     taken=()
     pick_port() { # container, container port, base
@@ -267,6 +268,7 @@ if [[ -n $stack_name ]]; then
         taken+=("$CADDY_HTTPS_PORT")
         CADDY_HTTP_PORT="$(pick_port "$stack-h2" 80 8100)"
         export OPEN_WEBUI_PORT CADDY_HTTPS_PORT CADDY_HTTP_PORT
+        export CORS_ALLOW_ORIGIN="http://localhost:$OPEN_WEBUI_PORT;https://localhost:$CADDY_HTTPS_PORT"
         export WEBUI_URL="http://localhost:$OPEN_WEBUI_PORT"
         if [[ $enable_testing == true ]]; then
             export WEBUI_URL="https://localhost:$CADDY_HTTPS_PORT"

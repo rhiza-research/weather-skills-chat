@@ -625,16 +625,9 @@
 				toast.error(`${error}`);
 				return null;
 			});
-			// Pages read the app config as they open (the sign-in page decides there whether to sign
-			// in by itself), so it is loaded first, as in the signed-out case below.
-			const appConfig = await appConfigPromise;
 			if (!sessionUser) {
 				localStorage.removeItem('token');
-				// Already on the sign-in page, keep its own query (such as ?as=) instead of nesting it.
-				const path = $page.url.pathname;
-				if (path !== '/auth' && !path.startsWith('/auth/')) {
-					await goto(`/auth?redirect=${encodedUrl}`);
-				}
+				await goto(`/auth?redirect=${encodedUrl}`);
 			} else {
 				await user.set(sessionUser);
 				socketPromise
@@ -645,7 +638,9 @@
 						console.error(error);
 					});
 			}
-			if (!appConfig) await goto('/error');
+			appConfigPromise.then((appConfig) => {
+				if (!appConfig) goto('/error');
+			});
 		} else {
 			const appConfig = await appConfigPromise;
 			if (!appConfig) {

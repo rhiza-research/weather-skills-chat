@@ -8,13 +8,16 @@ bootstrap admin, with the app's own models:
 Running it again does nothing.
 """
 
+import os
+
 from open_webui.models.auths import Auths
 from open_webui.models.organizations import OrganizationForm, Organizations
 from open_webui.models.users import Users
 from open_webui.utils.auth import get_password_hash
 
-PASSWORD = "preview"
-ADMIN_EMAIL = "admin@example.com"
+# The same password as the bootstrap admin's, set by scripts/preview.sh.
+PASSWORD = os.environ["BOOTSTRAP_ADMIN_PASSWORD"]
+ADMIN_EMAIL = os.environ["BOOTSTRAP_ADMIN_EMAIL"]
 
 admin = Users.get_user_by_email(ADMIN_EMAIL)
 assert admin, f"{ADMIN_EMAIL} is missing: start the stack with BOOTSTRAP_ADMIN_EMAIL set"

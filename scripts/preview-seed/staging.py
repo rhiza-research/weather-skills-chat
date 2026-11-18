@@ -70,8 +70,8 @@ def multipart(name, filename, data):
 
 
 def import_into(local):
-    # The local login bypass signs in as the local admin.
-    token = call(local, "/api/v1/auths/signin", "", {"email": "", "password": ""})["token"]
+    admin = {"email": os.environ["BOOTSTRAP_ADMIN_EMAIL"], "password": os.environ["BOOTSTRAP_ADMIN_PASSWORD"]}
+    token = call(local, "/api/v1/auths/signin", "", admin)["token"]
 
     settings = staging("/api/v1/configs/export")
     for key in DROP_SETTINGS:

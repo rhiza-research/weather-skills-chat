@@ -66,7 +66,7 @@ docker rm -f weather-skills-chat weather-skills-h2
 | `--isolation=landlock` | Skills on the chat server with Landlock |
 | `--isolation=emulator` | k8s tool-runner path plus the local emulator |
 | `--build` | Builds the image from the checkout before starting |
-| `--name=NAME` | Runs a separate stack named `NAME`, beside the main one and other named stacks. Its containers, image, and volumes are named `wsc-NAME`. Only this computer can reach it, not other machines on the network. It takes the first free ports from 3100 for the app, 4443 for Caddy's HTTPS, and 8100 for Caddy's HTTP; a running stack keeps its ports. When another stack starting at the same time takes a port first, it picks free ports again, up to five tries. With `--drop`, its data and image are removed too |
+| `--name=NAME` | Runs a separate stack named `NAME`, beside the main one and other named stacks. Its containers, image, and volumes are named `wsc-NAME`. Only this computer can reach it, not other machines on the network, and only its own pages can read its responses, not pages of other sites. It takes the first free ports from 3100 for the app, 4443 for Caddy's HTTPS, and 8100 for Caddy's HTTP; a running stack keeps its ports. When another stack starting at the same time takes a port first, it picks free ports again, up to five tries. With `--drop`, its data and image are removed too |
 | `--drop` | Stops and removes the stack's containers |
 | `--webui[port=PORT]` | Serves the app on `PORT` in place of `OPEN_WEBUI_PORT` |
 | `--ollama` | Also starts an Ollama container, connects the app to it, and turns the Ollama API on |
@@ -76,9 +76,7 @@ docker rm -f weather-skills-chat weather-skills-h2
 
 The app needs a model provider: an OpenAI-compatible provider set in the admin settings or with `OPENAI_API_BASE_URL` and `OPENAI_API_KEY`, or Ollama with `--ollama`. With none, the app keeps its default OpenAI connection to `https://api.openai.com/v1` with no key.
 
-`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, `ENABLE_DEV_LOGIN_BYPASS`, the first-admin, catalog model, and skill pack settings on [[Deployment]] and [[Skill Packs]], the built-in email variables, and the settings on [[Tracing]] when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
-
-Set `ENABLE_DEV_LOGIN_BYPASS=true` to skip signing in: opening the app signs the browser in as the oldest platform admin, described on [[Organizations]], and signing out signs straight back in. Opening `/auth?as=EMAIL` signs in as that account instead, even when already signed in. On a new data volume with no platform admin yet, the app shows the usual first-admin sign-up until one exists. It is off by default. It works only from the app's own pages: a sign-in from another site's page gets the usual password check. The app does not start with it on unless `WEBUI_URL` is a `localhost` address. Anyone who can reach the app with it on can sign in as any account, so never set it on staging or production.
+`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, `CORS_ALLOW_ORIGIN`, the first-admin, catalog model, and skill pack settings on [[Deployment]] and [[Skill Packs]], the built-in email variables, and the settings on [[Tracing]] when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
 
 | Env var | Default | Effect |
 |-|-|-|
@@ -105,6 +103,7 @@ scripts/preview.sh up
 | Command | Effect |
 |-|-|
 | `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
+| `scripts/preview.sh shot [NAME] [PAGE] [--as EMAIL] [--out FILE]` | Sign in as `EMAIL` (the admin by default), open `PAGE` (`/` by default), and save a screenshot, by default in the temporary folder. It prints the file's path. It uses Playwright from the browser tests, from the main checkout in a git worktree |
 | `scripts/preview.sh down [NAME]` | Remove the stack, its data, and its image |
 | `scripts/preview.sh ls` | List running stacks and their ports |
 
@@ -113,9 +112,11 @@ scripts/preview.sh up
 `up` reads the staging admin's API key from the secret `weather-skills-chat-staging-api-key`, then:
 
 1. Reads staging's platform models and platform skill packs and passes them to the stack as `CATALOG_MODELS` and `SKILL_PACKS`.
-2. Runs `./run-compose.sh --name=NAME --build -q` with `ENABLE_DEV_LOGIN_BYPASS` on, and waits until the app answers. Skills run on the emulated Kubernetes runners, as on staging, unless the options give another `--isolation`. The first start takes longer while it installs the skill packs.
+2. Runs `./run-compose.sh --name=NAME --build -q` and waits until the app answers. Skills run on the emulated Kubernetes runners, as on staging, unless the options give another `--isolation`. The first start takes longer while it installs the skill packs.
 3. On a new stack, adds three accounts, all with the password `preview`: `admin@example.com`, the platform admin; `researcher@example.com`, a user; and `pending@example.com`, waiting for access. It also adds a workspace, Demo Org, with the admin as owner and the researcher as a member.
 4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files, into the local admin's chats. Tag a chat on staging to add it to new stacks.
+
+`up` ends by printing the address, the accounts, and how to sign in: the `shot` command, a line to run in an agent's browser tool that signs in through the API and reloads, and the sign-in page with the email filled in (`/auth?email=EMAIL`).
 
 A stack takes no tracing keys, email settings, or users from staging. When there is no `.env`, `up` makes one from `.env.example` with a new session key.
 
