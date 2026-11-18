@@ -6,6 +6,7 @@
 
 	import {
 		copyChatShareLink,
+		deleteChatShareLink,
 		getChatShareLinks,
 		shareLinkUrl,
 		type ShareLink
@@ -14,6 +15,7 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
+	import GarbageBin from '$lib/components/icons/GarbageBin.svelte';
 
 	const i18n = getContext('i18n');
 	dayjs.extend(localizedFormat);
@@ -65,6 +67,15 @@
 	const copyLink = async (id: string) => {
 		if (await copyToClipboard(shareLinkUrl(id))) {
 			toast.success($i18n.t('Copied shared chat URL to clipboard!'));
+		}
+	};
+
+	const deleteLink = async (id: string) => {
+		try {
+			await deleteChatShareLink(localStorage.token, chatId, id);
+			links = links.filter((link) => link.id !== id);
+		} catch (error) {
+			toast.error(`${error}`);
 		}
 	};
 </script>
@@ -121,15 +132,26 @@
 								</span>
 							</div>
 							{#if link.id}
-								<button
-									type="button"
-									class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
-									aria-label={$i18n.t('Copy link')}
-									title={$i18n.t('Copy link')}
-									on:click={() => copyLink(link.id)}
-								>
-									<Clipboard />
-								</button>
+								<div class="flex">
+									<button
+										type="button"
+										class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+										aria-label={$i18n.t('Copy link')}
+										title={$i18n.t('Copy link')}
+										on:click={() => copyLink(link.id)}
+									>
+										<Clipboard />
+									</button>
+									<button
+										type="button"
+										class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+										aria-label={$i18n.t('Delete link')}
+										title={$i18n.t('Delete link')}
+										on:click={() => deleteLink(link.id)}
+									>
+										<GarbageBin />
+									</button>
+								</div>
 							{:else}
 								<div class="p-1.5"><Spinner className="size-4" /></div>
 							{/if}

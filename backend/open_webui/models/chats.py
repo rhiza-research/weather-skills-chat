@@ -904,13 +904,16 @@ class ChatTable:
         ]
         return [l for l in links if l["expires_at"] is None or l["expires_at"] > now]
 
-    def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
+    def delete_shared_chat_by_chat_id(
+        self, chat_id: str, share_id: Optional[str] = None
+    ) -> bool:
+        """Delete the chat's share links, or only share_id when given."""
         try:
             with get_db() as db:
-                snapshot_ids = [
-                    row.id
-                    for row in db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
-                ]
+                query = db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
+                if share_id:
+                    query = query.filter_by(id=share_id)
+                snapshot_ids = [row.id for row in query]
             self._delete_shared_chats(snapshot_ids)
         except Exception:
             return False

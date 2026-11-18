@@ -784,6 +784,19 @@ export const getChatShareLinks = async (token: string, id: string): Promise<Shar
 	return res.json();
 };
 
+export const deleteChatShareLink = async (token: string, id: string, shareId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/shares/${shareId}`, {
+		method: 'DELETE',
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) throw (await parseApiError(res)).detail;
+	return res.json();
+};
+
 export const shareLinkUrl = (shareId: string) => `${window.location.origin}/s/${shareId}`;
 
 export const copyChatShareLink = async (token: string, id: string, expiresInDays: number) => {

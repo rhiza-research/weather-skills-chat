@@ -1007,6 +1007,14 @@ async def get_share_links_by_chat_id(id: str, user=Depends(get_verified_user)):
     return await asyncio.to_thread(Chats.get_live_shares_by_chat_id, id)
 
 
+@router.delete("/{id}/shares/{share_id}", response_model=bool)
+async def delete_share_link_by_id(
+    id: str, share_id: str, user=Depends(get_verified_user)
+):
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id, share_id)
+
+
 ############################
 # DeletedSharedChatById
 ############################
