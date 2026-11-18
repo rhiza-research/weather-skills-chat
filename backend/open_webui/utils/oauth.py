@@ -43,8 +43,7 @@ from open_webui.env import (
     WEBUI_AUTH_COOKIE_SAME_SITE,
     WEBUI_AUTH_COOKIE_SECURE,
 )
-from open_webui.utils.misc import parse_duration
-from open_webui.utils.auth import get_password_hash, create_token
+from open_webui.utils.auth import create_token, get_password_hash, token_lifetime
 from open_webui.utils.webhook import post_webhook
 
 from open_webui.env import SRC_LOG_LEVELS, GLOBAL_LOG_LEVEL
@@ -456,7 +455,7 @@ class OAuthManager:
 
         jwt_token = create_token(
             data={"id": user.id},
-            expires_delta=parse_duration(auth_manager_config.JWT_EXPIRES_IN),
+            expires_delta=token_lifetime(auth_manager_config.JWT_EXPIRES_IN),
         )
 
         if auth_manager_config.ENABLE_OAUTH_GROUP_MANAGEMENT and user.role != "admin":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import unittest
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,15 +12,17 @@ import jwt
 
 from open_webui.utils.auth import (
     ALGORITHM,
+    MAX_TOKEN_LIFETIME,
     SESSION_SECRET,
     create_token,
     decode_token,
     get_user_from_token,
+    token_lifetime,
 )
 
 
-def _token(iat=None):
-    payload = {"id": "alice"}
+def _token(iat=None, exp=None):
+    payload = {"id": "alice", "exp": exp or int(time.time()) + 600}
     if iat is not None:
         payload["iat"] = iat
     return jwt.encode(payload, SESSION_SECRET, algorithm=ALGORITHM)
@@ -51,6 +54,26 @@ class TokenCutoffTest(unittest.TestCase):
         with self._lookup(now):
             self.assertIsNotNone(get_user_from_token(_token(iat=now)))
             self.assertIsNotNone(get_user_from_token(create_token({"id": "alice"})))
+
+    def test_token_without_expiry_is_rejected(self):
+        unlimited = jwt.encode({"id": "alice"}, SESSION_SECRET, algorithm=ALGORITHM)
+        with self._lookup(None):
+            self.assertIsNone(get_user_from_token(unlimited))
+
+    def test_lifetime_is_capped_at_90_days(self):
+        self.assertEqual(token_lifetime("30d"), timedelta(days=30))
+        self.assertEqual(token_lifetime("-1"), MAX_TOKEN_LIFETIME)
+        self.assertEqual(token_lifetime("0"), MAX_TOKEN_LIFETIME)
+        self.assertEqual(token_lifetime("52w"), MAX_TOKEN_LIFETIME)
+
+    def test_create_token_never_exceeds_cap(self):
+        cap = int(time.time() + MAX_TOKEN_LIFETIME.total_seconds())
+        for token in (
+            create_token({"id": "alice"}),
+            create_token({"id": "alice"}, expires_delta=timedelta(days=365)),
+            create_token({"id": "alice", "exp": int(time.time()) + 10**8}),
+        ):
+            self.assertLessEqual(decode_token(token)["exp"], cap + 1)
 
     def test_bad_token_is_rejected(self):
         with self._lookup(None):

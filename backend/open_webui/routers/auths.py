@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 from open_webui.config import OPENID_PROVIDER_URL, ENABLE_OAUTH_SIGNUP, ENABLE_LDAP
 from pydantic import BaseModel
-from open_webui.utils.misc import parse_duration, validate_email_format
+from open_webui.utils.misc import validate_email_format
 from open_webui.utils.auth import (
     create_api_key,
     create_token,
@@ -43,6 +43,7 @@ from open_webui.utils.auth import (
     get_verified_user,
     get_current_user,
     get_password_hash,
+    token_lifetime,
 )
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.access_control import get_permissions
@@ -78,21 +79,17 @@ def get_session_user(
     # can't be renewed forever; only signing in starts a new period.
     cred = get_http_authorization_cred(request.headers.get("Authorization"))
     presented = cred.credentials if cred else request.cookies.get("token")
-    expires_at = (decode_token(presented) or {}).get("exp") if presented else None
-    if expires_at is None:
-        expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
-        if expires_delta:
-            expires_at = int(time.time()) + int(expires_delta.total_seconds())
-
-    data = {"id": user.id}
-    if expires_at:
-        data["exp"] = expires_at
-    token = create_token(data=data)
-
-    datetime_expires_at = (
-        datetime.datetime.fromtimestamp(expires_at, datetime.timezone.utc)
-        if expires_at
-        else None
+    exp = (decode_token(presented) or {}).get("exp") if presented else None
+    if exp:
+        token = create_token(data={"id": user.id, "exp": exp})
+    else:
+        token = create_token(
+            data={"id": user.id},
+            expires_delta=token_lifetime(request.app.state.config.JWT_EXPIRES_IN),
+        )
+    expires_at = decode_token(token)["exp"]
+    datetime_expires_at = datetime.datetime.fromtimestamp(
+        expires_at, datetime.timezone.utc
     )
 
     # Set the cookie token
@@ -306,7 +303,7 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
             if user:
                 token = create_token(
                     data={"id": user.id},
-                    expires_delta=parse_duration(
+                    expires_delta=token_lifetime(
                         request.app.state.config.JWT_EXPIRES_IN
                     ),
                 )
@@ -389,7 +386,7 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
 
     if user:
 
-        expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+        expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
         expires_at = None
         if expires_delta:
             expires_at = int(time.time()) + int(expires_delta.total_seconds())
@@ -520,7 +517,7 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         )
 
         if user:
-            expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+            expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
             expires_at = None
             if expires_delta:
                 expires_at = int(time.time()) + int(expires_delta.total_seconds())

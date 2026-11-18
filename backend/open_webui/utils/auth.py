@@ -14,6 +14,7 @@ from pytz import UTC
 from typing import Optional, Union, List, Dict
 
 from open_webui.models.users import Users
+from open_webui.utils.misc import parse_duration
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
@@ -35,6 +36,8 @@ log.setLevel(SRC_LOG_LEVELS["OAUTH"])
 
 SESSION_SECRET = WEBUI_SECRET_KEY
 ALGORITHM = "HS256"
+# No sign-in token lives longer than this, whatever JWT_EXPIRES_IN says.
+MAX_TOKEN_LIFETIME = timedelta(days=90)
 
 ##############
 # Auth Utils
@@ -115,13 +118,25 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
+def token_lifetime(setting: str) -> timedelta:
+    """JWT_EXPIRES_IN as a lifetime: no expiry (-1, 0) or anything longer than
+    MAX_TOKEN_LIFETIME becomes MAX_TOKEN_LIFETIME."""
+    lifetime = parse_duration(setting)
+    if not lifetime or lifetime <= timedelta(0):
+        return MAX_TOKEN_LIFETIME
+    return min(lifetime, MAX_TOKEN_LIFETIME)
+
+
 def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     payload = data.copy()
-    payload["iat"] = datetime.now(UTC)
+    now = datetime.now(UTC)
+    payload["iat"] = now
 
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-        payload.update({"exp": expire})
+    exp = now + expires_delta if expires_delta else payload.get("exp")
+    if isinstance(exp, (int, float)):
+        exp = datetime.fromtimestamp(exp, UTC)
+    latest = now + MAX_TOKEN_LIFETIME
+    payload["exp"] = min(exp, latest) if exp else latest
 
     encoded_jwt = jwt.encode(payload, SESSION_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
@@ -129,7 +144,13 @@ def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> st
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        decoded = jwt.decode(token, SESSION_SECRET, algorithms=[ALGORITHM])
+        # A token without an expiry predates the 90-day cap and is not accepted.
+        decoded = jwt.decode(
+            token,
+            SESSION_SECRET,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp"]},
+        )
         return decoded
     except Exception:
         return None

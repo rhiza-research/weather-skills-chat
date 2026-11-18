@@ -32,9 +32,10 @@ from open_webui.utils.auth import (
     get_password_hash,
     get_user_from_token,
     get_verified_user,
+    token_lifetime,
 )
 from open_webui.utils.invite_email import InviteEmailError, deliver_invite_email, smtp_is_configured
-from open_webui.utils.misc import parse_duration, validate_email_format
+from open_webui.utils.misc import validate_email_format
 from open_webui.utils.organizations import is_at_least, is_platform_admin
 
 log = logging.getLogger(__name__)
@@ -279,7 +280,7 @@ def _issue_organization(
 
 
 def _session_payload(request: Request, response: Response, user):
-    expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+    expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
     expires_at = None
     if expires_delta:
         expires_at = int(time.time()) + int(expires_delta.total_seconds())

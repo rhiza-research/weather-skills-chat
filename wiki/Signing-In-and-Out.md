@@ -4,7 +4,7 @@ Each time a person signs in on a browser or device, that sign-in lasts a set tim
 
 ## How long a sign-in lasts
 
-A sign-in ends after the time set by the admin, 30 days by default. The person is then sent to the sign-in page, and after signing in they return to the page they were on. Sign-ins made while no expiry was set do not expire; signing out of all devices ends them.
+A sign-in ends after the time set by the admin, 30 days by default and never more than 90 days. Using the app does not extend it. The person is then sent to the sign-in page, and after signing in they return to the page they were on.
 
 ## Signing out
 
@@ -22,4 +22,4 @@ API keys are not sign-ins. Signing out of all devices and changing the password 
 
 | Env var | Default | Effect |
 |-|-|-|
-| `JWT_EXPIRES_IN` | `30d` | How long a sign-in lasts, as a number and unit (`s`, `m`, `h`, `d`, `w`), or `-1` for no expiry. Also set in the admin settings under General as **JWT Expiration**; a value saved there replaces the env var. A change applies to sign-ins made after it. |
+| `JWT_EXPIRES_IN` | `30d` | How long a sign-in lasts, as a number and unit (`s`, `m`, `h`, `d`, `w`). Values over 90 days, and `-1`, mean 90 days. Also set in the admin settings under General as **JWT Expiration**; a value saved there replaces the env var. A change applies to sign-ins made after it. |

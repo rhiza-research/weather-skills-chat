@@ -120,7 +120,11 @@ class TestAuths(AbstractPostgresTest):
             id="2", name="Jane", email="jane@openwebui.com", role="user"
         )
         old_token = jwt.encode(
-            {"id": user.id, "iat": int(time.time()) - 60},
+            {
+                "id": user.id,
+                "iat": int(time.time()) - 60,
+                "exp": int(time.time()) + 600,
+            },
             SESSION_SECRET,
             algorithm=ALGORITHM,
         )
