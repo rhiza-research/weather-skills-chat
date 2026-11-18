@@ -11,7 +11,7 @@ services:
     volumes:
       - open-webui:/app/backend/data
     ports:
-      - ${OPEN_WEBUI_PORT-3000}:8080
+      - ${BIND_ADDRESS-0.0.0.0}:${OPEN_WEBUI_PORT-3000}:8080
     environment:
       # Bare names: passed only when set in .env or the shell, never as an empty string.
       - ENABLE_OPENAI_API
@@ -19,6 +19,12 @@ services:
       - OPENAI_API_KEY
       - WEBUI_SECRET_KEY
       - WEBUI_URL
+      - CORS_ALLOW_ORIGIN
+      - BOOTSTRAP_ADMIN_EMAIL
+      - BOOTSTRAP_ADMIN_PASSWORD
+      - BOOTSTRAP_ADMIN_NAME
+      - CATALOG_MODELS
+      - SKILL_PACKS
       - EMAIL_TOOL_SMTP_HOST
       - EMAIL_TOOL_SMTP_PORT
       - EMAIL_TOOL_SMTP_USERNAME
@@ -47,10 +53,10 @@ services:
     profiles:
       - testing
     image: caddy:2-alpine
-    container_name: weather-skills-h2
+    container_name: ${CADDY_CONTAINER_NAME-weather-skills-h2}
     ports:
-      - ${CADDY_HTTPS_PORT-3443}:443
-      - ${CADDY_HTTP_PORT-80}:80
+      - ${BIND_ADDRESS-0.0.0.0}:${CADDY_HTTPS_PORT-3443}:443
+      - ${BIND_ADDRESS-0.0.0.0}:${CADDY_HTTP_PORT-80}:80
     environment:
       CADDY_UPSTREAM: open-webui:8080
       CADDY_HTTPS_PORT: ${CADDY_HTTPS_PORT-3443}
@@ -72,7 +78,7 @@ services:
     profiles:
       - emulator
     image: ${SANDBOX_RUNNER_IMAGE:-ghcr.io/rhiza-research/weather-skills-sandbox-runner:src-8f4552f21a8b}
-    container_name: weather-skills-emulator
+    container_name: ${EMULATOR_CONTAINER_NAME-weather-skills-emulator}
     user: "0"
     working_dir: /opt/sandbox
     command:

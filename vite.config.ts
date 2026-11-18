@@ -47,7 +47,9 @@ export default defineConfig({
 		APP_VERSION: JSON.stringify(process.env.npm_package_version)
 	},
 	build: {
-		sourcemap: false
+		sourcemap: false,
+		// Only for the size table in the build log; it gzips every chunk.
+		reportCompressedSize: false
 	},
 	worker: {
 		format: 'es'
