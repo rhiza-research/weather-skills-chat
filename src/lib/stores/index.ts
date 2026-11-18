@@ -154,6 +154,7 @@ type Settings = {
 	splitLargeDeltas?: boolean;
 	chatDirection: 'LTR' | 'RTL' | 'auto';
 	ctrlEnterToSend?: boolean;
+	tourSeen?: boolean;
 };
 
 type AudioSettings = {
