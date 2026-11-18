@@ -31,7 +31,7 @@ Anyone who can read a chat can list and download its files. Only the chat's owne
 
 ## Copying, sharing, and deleting chats
 
-Cloning a chat, from the chat or from a share link, copies its files into the new chat. The new chat opens at once while its files are copied in. Until the copy is done, its file list shows **Artifact copy in progress...**, and sending a message and uploading files are blocked. Deleting a chat deletes its files.
+Cloning a chat, from the chat or from a share link, copies its files into the new chat. The new chat opens at once while its files are copied in. Until the copy is done, its file list shows **Artifact copy in progress...**, and sending a message and uploading files are blocked. When it is done, all the copied files show at once. Deleting a chat deletes its files.
 
 Files are copied with JuiceFS's copy-on-write clone when `ARTIFACTS_DIR` is on a JuiceFS mount, which the Helm chart sets when its JuiceFS volume (`sandbox.juicefs`) is on. A chat with tens of thousands of files, such as large zarr stores, takes up to about half a minute. Where that clone is not available or fails, a small chat is copied the ordinary way and a larger chat's copy fails. A copy that runs too long also fails. A chat whose copy failed shows **Artifact copy failed, please try again** at the top of its file list.
 

@@ -295,11 +295,14 @@
 		}
 		if (!chatAlive || get(chatId) !== id) return;
 		const wasCopying = get(artifactCopy)?.chatId === id && get(artifactCopy)?.state === 'copying';
+		if (state !== 'copying' && wasCopying) {
+			// Keep "copy in progress" up until the new list is in, so every file shows at once.
+			await refreshArtifacts(localStorage.token, id).catch(console.error);
+			if (!chatAlive || get(chatId) !== id) return;
+		}
 		artifactCopy.set(state === 'done' ? null : { chatId: id, state });
 		if (state === 'copying') {
 			artifactCopyTimer = setTimeout(() => watchArtifactCopy(id), 2000);
-		} else if (wasCopying) {
-			refreshArtifacts(localStorage.token, id).catch(console.error);
 		}
 	};
 	let stopControlsWatch: Unsubscriber = () => {};
