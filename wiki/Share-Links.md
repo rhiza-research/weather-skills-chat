@@ -4,7 +4,7 @@ A share link gives a read-only view of a chat as it was when the link was made: 
 
 ## Creating a link
 
-Only a chat's owner can share it. Choosing **Share** from the chat's menu opens a dialog with an expiry, in days, that defaults to 7 and can be set from 1 to 365. **Create share link** makes the link and copies it to the clipboard. The dialog stays open, and while the link is being made a greyed-out row with a spinner stands in for it.
+Only a chat's owner can share it. To share a chat someone else owns, clone it and share the copy. Choosing **Share** from the chat's menu opens a dialog with an expiry, in days, that defaults to 7 and can be set from 1 to 365. **Create share link** makes the link and copies it to the clipboard. The dialog stays open, and while the link is being made a greyed-out row with a spinner stands in for it.
 
 The dialog lists every link to the chat that has not expired, newest first, with when it was made and when it expires. Each row has a button that copies that link again.
 
