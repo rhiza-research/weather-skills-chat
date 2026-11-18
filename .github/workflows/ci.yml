@@ -13,6 +13,11 @@ permissions:
   checks: write
   pull-requests: write
 
+# onnxruntime-node (via @huggingface/transformers) downloads CUDA binaries on Linux x64.
+# Nothing here uses them, and their release download has gone 404.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   frontend-unit:
     name: Frontend unit tests
