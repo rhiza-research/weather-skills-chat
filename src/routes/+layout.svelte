@@ -583,6 +583,14 @@
 
 		initI18n(localStorage?.locale);
 
+		// The server sends a tab opened on a dead artifact link here.
+		const bootUrl = new URL(window.location.href);
+		if (bootUrl.searchParams.has('shared-missing')) {
+			toast.error($i18n.t('This shared item does not exist or is no longer available.'));
+			bootUrl.searchParams.delete('shared-missing');
+			history.replaceState(history.state, '', bootUrl);
+		}
+
 		const token = localStorage.token;
 		const encodedUrl = encodeURIComponent(
 			`${window.location.pathname}${window.location.search}`

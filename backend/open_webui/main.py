@@ -1116,6 +1116,9 @@ app.include_router(
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
 app.include_router(shares.router, prefix="/api/v1/shares", tags=["shares"])
+app.add_exception_handler(
+    StarletteHTTPException, artifacts.artifact_link_exception_handler
+)
 app.include_router(tool_runner.router, prefix="/api/v1/chats", tags=["tool-runner"])
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
 app.include_router(

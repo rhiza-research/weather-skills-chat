@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import re
 import zlib
 from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
@@ -20,7 +21,8 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
@@ -44,6 +46,23 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 router = APIRouter()
+
+# A copied artifact link opened in a tab, whether a chat's or a share link's.
+_ARTIFACT_LINK = re.compile(r"^/api/v1/(chats|shares)/[^/]+/artifacts/(content$|view/)")
+MISSING_ARTIFACT_REDIRECT = "/?shared-missing=1"
+
+
+async def artifact_link_exception_handler(request: Request, exc):
+    """Send a tab opened on a dead artifact link to the app, which says so and
+    goes home or to sign-in, instead of showing raw JSON. Chats answer a chat
+    the user cannot read with 401 NOT_FOUND, the same as a missing one."""
+    if (
+        request.headers.get("sec-fetch-dest") == "document"
+        and _ARTIFACT_LINK.match(request.url.path)
+        and (exc.status_code == 404 or exc.detail == ERROR_MESSAGES.NOT_FOUND)
+    ):
+        return RedirectResponse(MISSING_ARTIFACT_REDIRECT, status_code=303)
+    return await http_exception_handler(request, exc)
 
 
 @router.get("/{chat_id}/artifacts")

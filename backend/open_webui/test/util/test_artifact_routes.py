@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from open_webui.models.chats import ChatAccessRow
 from open_webui.routers import artifacts as artifacts_router
@@ -47,6 +48,9 @@ class ArtifactRoutesTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(artifacts_router.router, prefix="/api/v1/chats")
         app.dependency_overrides[get_verified_user] = lambda: MagicMock(id="u1")
+        app.add_exception_handler(
+            StarletteHTTPException, artifacts_router.artifact_link_exception_handler
+        )
         self.client = TestClient(app)
 
     def tearDown(self):
@@ -70,6 +74,24 @@ class ArtifactRoutesTest(unittest.TestCase):
         with patch("open_webui.utils.organizations.is_member", return_value=False):
             res = self.client.get(self.url("/content?path=notes.csv"))
         self.assertEqual(res.status_code, 401)
+
+    def test_a_dead_artifact_link_opened_in_a_tab_goes_to_the_app(self):
+        tab = {"sec-fetch-dest": "document"}
+        get = lambda path, headers: self.client.get(
+            self.url(path), headers=headers, follow_redirects=False
+        )
+        for path in ("/content?path=gone.png", "/view/plots/gone.html"):
+            res = get(path, tab)
+            self.assertEqual(res.status_code, 303, path)
+            self.assertEqual(res.headers["location"], artifacts_router.MISSING_ARTIFACT_REDIRECT)
+            # Fetches and iframes keep the plain error.
+            self.assertEqual(get(path, {"sec-fetch-dest": "iframe"}).status_code, 404)
+        # Other errors, and other routes, are left alone.
+        self.assertEqual(get("/view/notes.csv", tab).status_code, 415)
+        self.assertEqual(get("/archive?path=gone", tab).status_code, 404)
+        # A chat the user cannot read looks the same as a missing one.
+        self.chats.get_chat_access_row.return_value = None
+        self.assertEqual(get("/content?path=notes.csv", tab).status_code, 303)
 
     def test_handlers_that_await_nothing_are_plain_functions(self):
         for handler in (

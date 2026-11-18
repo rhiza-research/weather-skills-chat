@@ -14,7 +14,7 @@ The file list shows every file and folder in the chat. Some kinds of entries are
 - HTML pages, such as interactive Plotly figures, which open in the side panel and full screen, where the user can zoom and hover. They run in a sandbox: the page cannot read the user's login or act in the chat as them. A Plotly figure saved with `include_plotlyjs='cdn'` is a few kilobytes and loads plotly.js from Plotly's CDN in the user's browser. In a reply, a markdown link to an HTML file, such as `[SST](plots/sst.html)`, opens it full screen, and image syntax, such as `![SST](plots/sst.html)`, shows it in the message.
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
 
-Images and HTML pages in the file list can be opened, downloaded, or linked to. Copy link copies an address that opens the file in a browser tab for anyone signed in who can read the chat's files.
+Images and HTML pages in the file list can be opened, downloaded, or linked to. Copy link copies an address that opens the file in a browser tab for anyone signed in who can read the chat's files. Opening a copied link whose file, chat, or share link no longer exists, or that the signed-in person cannot read, shows a message saying the item does not exist and goes to the home page. A dead link copied from a share link does the same for someone not signed in, ending on the sign-in page.
 
 A long name is cut short in the list; hovering over it shows the full name. The name of the open file is shown in full above the list.
 
