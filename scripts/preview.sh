@@ -4,8 +4,6 @@
 # with Docker Compose; this script adds the staging data. See wiki/Development.md.
 #
 #   scripts/preview.sh up [NAME] [run-compose options]   e.g. --testing, --isolation=off
-#   scripts/preview.sh shot [NAME] [PAGE] [--as EMAIL] [--out FILE.png] [--size WxH]
-#                                                        sign in and save a screenshot of PAGE (default /)
 #   scripts/preview.sh down [NAME]                       remove the stack, its data and image
 #   scripts/preview.sh ls                                list running stacks
 #
@@ -19,7 +17,7 @@ main_checkout="$(git rev-parse --path-format=absolute --git-common-dir)/.."
 cmd="${1:-}"
 shift || true
 name="$(git rev-parse --abbrev-ref HEAD)"
-if [[ ${1:-} && $1 != -* && $1 != /* ]]; then
+if [[ ${1:-} && $1 != -* ]]; then
     name="$1"
     shift
 fi
@@ -40,7 +38,6 @@ sign_in_help() {
     cat <<EOF
 $1
 Accounts, all with the password $password: $accounts
-Screenshot, signed in:   scripts/preview.sh shot $name [PAGE] [--as EMAIL] [--out FILE.png]
 Sign in a browser tool:  open $1, then run in the page
   localStorage.removeItem('activeOrganizationId');localStorage.token=(await(await fetch('/api/v1/auths/signin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'$admin_email',password:'$password'})})).json()).token;location.href='/'
 Sign in by hand:         $1/auth?email=$admin_email with the password $password
@@ -55,28 +52,9 @@ case "$cmd" in
     down)
         exec ./run-compose.sh -q --drop --name="$name"
         ;;
-    shot)
-        url="$(stack_url)" || { echo "$stack is not running: scripts/preview.sh up $name" >&2; exit 1; }
-        page=/ email="$admin_email" size=1280x800
-        out="${TMPDIR:-/tmp}/$stack-$(date +%Y%m%d-%H%M%S).png"
-        while [[ $# -gt 0 ]]; do
-            case "$1" in
-                --as) email="$2"; shift ;;
-                --out) out="$2"; shift ;;
-                --size) size="$2"; shift ;;
-                /*) page="$1" ;;
-                *) sed -n 2,12p "$0"; exit 1 ;;
-            esac
-            shift
-        done
-        # Playwright from the browser tests; a worktree uses the main checkout's.
-        modules="$ROOT/node_modules"
-        [[ -d $modules/playwright ]] || modules="$main_checkout/node_modules"
-        NODE_PATH="$modules" exec node scripts/preview-seed/shot.cjs "$url" "$page" "$out" "$email" "$password" "$size"
-        ;;
     up) ;;
     *)
-        sed -n 2,12p "$0"
+        sed -n 2,10p "$0"
         exit 1
         ;;
 esac

@@ -103,7 +103,6 @@ scripts/preview.sh up
 | Command | Effect |
 |-|-|
 | `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
-| `scripts/preview.sh shot [NAME] [PAGE] [--as EMAIL] [--out FILE]` | Sign in as `EMAIL` (the admin by default), open `PAGE` (`/` by default), and save a screenshot, by default in the temporary folder. It prints the file's path. It uses Playwright from the browser tests, from the main checkout in a git worktree |
 | `scripts/preview.sh down [NAME]` | Remove the stack, its data, and its image |
 | `scripts/preview.sh ls` | List running stacks and their ports |
 
@@ -116,7 +115,7 @@ scripts/preview.sh up
 3. On a new stack, adds three accounts, all with the password `preview`: `admin@example.com`, the platform admin; `researcher@example.com`, a user; and `pending@example.com`, waiting for access. It also adds a workspace, Demo Org, with the admin as owner and the researcher as a member.
 4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files, into the local admin's chats. Tag a chat on staging to add it to new stacks.
 
-`up` ends by printing the address, the accounts, and how to sign in: the `shot` command, a line to run in an agent's browser tool that signs in through the API and reloads, and the sign-in page with the email filled in (`/auth?email=EMAIL`).
+`up` ends by printing the address, the accounts, and how to sign in: a line to run in an agent's browser tool that signs in through the API and reloads, and the sign-in page with the email filled in (`/auth?email=EMAIL`).
 
 A stack takes no tracing keys, email settings, or users from staging. When there is no `.env`, `up` makes one from `.env.example` with a new session key.
 
