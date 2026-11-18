@@ -9,7 +9,7 @@
 	import { ldapUserSignIn, getSessionUser, userSignIn, userSignUp } from '$lib/apis/auths';
 
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
-	import { WEBUI_NAME, config, user } from '$lib/stores';
+	import { WEBUI_NAME, activeOrganizationId, config, user } from '$lib/stores';
 	import { connectSocket } from '$lib/utils/socket';
 	import { revealApp } from '$lib/utils/splash';
 
@@ -198,8 +198,13 @@
 			.catch(() => {});
 
 		if (($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false) {
-			// With the local login bypass, ?as=EMAIL picks the account.
-			email = querystringValue('as') ?? '';
+			if ($config?.features.auth === false) {
+				// With the local login bypass, ?as=EMAIL picks the account. The organization saved by
+				// another account, or by an earlier stack on this port, may not exist for this one.
+				email = querystringValue('as') ?? '';
+				localStorage.removeItem('activeOrganizationId');
+				activeOrganizationId.set(null);
+			}
 			await signInHandler();
 		} else {
 			onboarding = $config?.onboarding ?? false;
