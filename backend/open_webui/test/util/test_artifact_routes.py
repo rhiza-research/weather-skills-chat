@@ -99,17 +99,27 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.chats.get_chat_access_row.return_value = None
         self.assertEqual(get("/content?path=notes.csv", tab).status_code, 303)
 
-    def test_a_signed_out_tab_keeps_the_plain_error(self):
-        def signed_out():
-            raise HTTPException(status_code=403, detail="Not authenticated")
+    def test_a_signed_out_tab_goes_to_sign_in_and_back(self):
+        for detail in ("Not authenticated", "Invalid token"):
 
-        self.app.dependency_overrides[get_verified_user] = signed_out
-        res = self.client.get(
-            self.url("/content?path=gone.png"),
-            headers={"sec-fetch-dest": "document"},
-            follow_redirects=False,
-        )
-        self.assertEqual(res.status_code, 403)
+            def signed_out():
+                raise HTTPException(status_code=401, detail=detail)
+
+            self.app.dependency_overrides[get_verified_user] = signed_out
+            get = lambda dest: self.client.get(
+                # Encoded the way a copied link is.
+                self.url("/content?path=plots%2Fmap.png"),
+                headers={"sec-fetch-dest": dest},
+                follow_redirects=False,
+            )
+            res = get("document")
+            self.assertEqual(res.status_code, 303, detail)
+            self.assertEqual(
+                res.headers["location"],
+                f"/auth?redirect=%2Fapi%2Fv1%2Fchats%2F{CHAT}%2Fartifacts%2Fcontent"
+                "%3Fpath%3Dplots%252Fmap.png&sign-in-required=1",
+            )
+            self.assertEqual(get("iframe").status_code, 401)
 
     def test_handlers_that_await_nothing_are_plain_functions(self):
         for handler in (

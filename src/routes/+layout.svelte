@@ -583,11 +583,15 @@
 
 		initI18n(localStorage?.locale);
 
-		// The server sends a tab opened on a dead artifact link here.
+		// The server sends a tab opened on an artifact link that failed here.
 		const bootUrl = new URL(window.location.href);
-		if (bootUrl.searchParams.has('shared-missing')) {
-			toast.error($i18n.t('This shared item does not exist or is no longer available.'));
-			bootUrl.searchParams.delete('shared-missing');
+		for (const [flag, message] of [
+			['shared-missing', $i18n.t('This shared item does not exist or is no longer available.')],
+			['sign-in-required', $i18n.t('Sign in to open this item.')]
+		]) {
+			if (!bootUrl.searchParams.has(flag)) continue;
+			toast.error(message);
+			bootUrl.searchParams.delete(flag);
 			history.replaceState(history.state, '', bootUrl);
 		}
 

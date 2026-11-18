@@ -7,6 +7,7 @@ import zlib
 from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 import brotli
 from fastapi import (
@@ -57,18 +58,23 @@ MISSING_ARTIFACT_REDIRECT = "/?shared-missing=1"
 
 
 async def artifact_link_exception_handler(request: Request, exc):
-    """Send a tab opened on a dead or malformed artifact link to the app, which
-    says so and goes home or to sign-in, instead of showing raw JSON. Only a
-    missing sign-in is left alone: chats answer a chat the user cannot read
+    """Send a tab opened on an artifact link that fails to the app instead of
+    showing raw JSON. A dead or malformed link goes to the app, which says so
+    and goes home or to sign-in. A missing or expired sign-in goes to sign-in,
+    which comes back to the link. Chats answer a chat the user cannot read
     with 401 NOT_FOUND, the same as a missing one."""
     status_code = getattr(exc, "status_code", 422)
-    signed_out = status_code in (401, 403) and exc.detail != ERROR_MESSAGES.NOT_FOUND
     if (
         request.headers.get("sec-fetch-dest") == "document"
         and _ARTIFACT_LINK.match(request.url.path)
         and 400 <= status_code < 500
-        and not signed_out
     ):
+        if status_code in (401, 403) and exc.detail != ERROR_MESSAGES.NOT_FOUND:
+            link = request.url.path + (
+                f"?{request.url.query}" if request.url.query else ""
+            )
+            query = urlencode({"redirect": link, "sign-in-required": 1})
+            return RedirectResponse(f"/auth?{query}", status_code=303)
         return RedirectResponse(MISSING_ARTIFACT_REDIRECT, status_code=303)
     if isinstance(exc, RequestValidationError):
         return await request_validation_exception_handler(request, exc)
