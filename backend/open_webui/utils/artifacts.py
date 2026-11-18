@@ -970,7 +970,7 @@ ARTIFACT_NOTE_PROVENANCE_FILES = 40
 
 
 def artifact_carryover_note(chat_id: str, source_title: str) -> str:
-    """Tell the model which files a chat started with, or "" when there are none.
+    """Tell the model which files a chat started with, or that it has none.
 
     Lists every entry; the first files also name the skills that made them.
     Blocks on JuiceFS.
@@ -983,7 +983,8 @@ def artifact_carryover_note(chat_id: str, source_title: str) -> str:
     ]
     files = [e for e in entries if e["kind"] != "directory"]
     if not files:
-        return ""
+        # Still a note: the new chat opens as a chat, not the welcome screen, only with one.
+        return f'This chat has been started from the chat "{source_title}". It has no files from that chat.'
     traced = {e["path"] for e in files[:ARTIFACT_NOTE_PROVENANCE_FILES]}
     lines = [
         f"This chat has been started with {len(files)} "

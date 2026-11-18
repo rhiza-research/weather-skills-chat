@@ -846,7 +846,7 @@ async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
         note = await asyncio.to_thread(artifact_carryover_note, source.id, source.title)
     except Exception:
         log.exception("Failed to list artifacts for the new chat's note")
-        note = ""
+        note = f'This chat has been started from the chat "{source.title}".'
     chat = await asyncio.to_thread(
         Chats.insert_new_chat,
         user.id,
@@ -859,7 +859,7 @@ async def new_chat_with_artifacts(id: str, user=Depends(get_verified_user)):
                 "messages": [],
                 "tags": [],
                 "timestamp": int(time.time() * 1000),
-                "chatNotes": [note] if note else [],
+                "chatNotes": [note],
             },
             organization_id=source.organization_id,
             visibility="private",

@@ -83,11 +83,14 @@ class ArtifactCarryoverNoteTest(unittest.TestCase):
         self.assertEqual(provenance.call_count, 1)
         self.assertNotIn("intermediate_results/`", note)
 
-    def test_sandbox_without_files_gives_no_note(self):
+    def test_sandbox_without_files_says_so(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", Path(tmp) / "artifacts"):
                 create_folder("c1", "empty")
-                self.assertEqual(artifact_carryover_note("c1", "Empty"), "")
+                self.assertEqual(
+                    artifact_carryover_note("c1", "Empty"),
+                    'This chat has been started from the chat "Empty". It has no files from that chat.',
+                )
 
 
 class CopySandboxTest(unittest.TestCase):
