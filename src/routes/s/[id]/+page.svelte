@@ -58,10 +58,12 @@
 
 	$: if ($page.params.id) {
 		(async () => {
-			if (await loadSharedChat()) {
+			// Any failure, from a missing link to a malformed chat, ends the same way.
+			if (await loadSharedChat().catch(() => null)) {
 				await tick();
 				loaded = true;
 			} else {
+				toast.error($i18n.t('This share link does not exist or has expired.'));
 				await goto(localStorage.token ? '/' : '/auth');
 			}
 		})();
@@ -99,12 +101,8 @@
 		);
 		sharedChatId.set($page.params.id);
 		await chatId.set($page.params.id);
-		chat = await getChatByShareId(localStorage.token, $chatId).catch(async (error) => {
-			// Expired and removed links look the same to the server.
-			toast.error($i18n.t('This share link has expired or been removed.'));
-			await goto(localStorage.token ? '/' : '/auth');
-			return null;
-		});
+		// Expired, removed, and made-up links look the same to the server.
+		chat = await getChatByShareId(localStorage.token, $chatId).catch(() => null);
 
 		if (chat) {
 			user = await getUserById(localStorage.token, chat.user_id).catch((error) => {

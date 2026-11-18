@@ -21,7 +21,11 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.exception_handlers import http_exception_handler
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
@@ -53,15 +57,21 @@ MISSING_ARTIFACT_REDIRECT = "/?shared-missing=1"
 
 
 async def artifact_link_exception_handler(request: Request, exc):
-    """Send a tab opened on a dead artifact link to the app, which says so and
-    goes home or to sign-in, instead of showing raw JSON. Chats answer a chat
-    the user cannot read with 401 NOT_FOUND, the same as a missing one."""
+    """Send a tab opened on a dead or malformed artifact link to the app, which
+    says so and goes home or to sign-in, instead of showing raw JSON. Only a
+    missing sign-in is left alone: chats answer a chat the user cannot read
+    with 401 NOT_FOUND, the same as a missing one."""
+    status_code = getattr(exc, "status_code", 422)
+    signed_out = status_code in (401, 403) and exc.detail != ERROR_MESSAGES.NOT_FOUND
     if (
         request.headers.get("sec-fetch-dest") == "document"
         and _ARTIFACT_LINK.match(request.url.path)
-        and (exc.status_code == 404 or exc.detail == ERROR_MESSAGES.NOT_FOUND)
+        and 400 <= status_code < 500
+        and not signed_out
     ):
         return RedirectResponse(MISSING_ARTIFACT_REDIRECT, status_code=303)
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
     return await http_exception_handler(request, exc)
 
 

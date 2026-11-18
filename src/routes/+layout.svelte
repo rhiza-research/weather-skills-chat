@@ -656,7 +656,7 @@
 			} else {
 				const path = $page.url.pathname;
 				// Share links are public; everything else needs a sign-in.
-				if (path !== '/auth' && !path.startsWith('/auth/') && !path.startsWith('/s/')) {
+				if (path !== '/auth' && !path.startsWith('/auth/') && !/^\/s(\/|$)/.test(path)) {
 					await goto(`/auth?redirect=${encodedUrl}`);
 				}
 			}

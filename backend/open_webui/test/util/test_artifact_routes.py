@@ -11,7 +11,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -48,9 +49,9 @@ class ArtifactRoutesTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(artifacts_router.router, prefix="/api/v1/chats")
         app.dependency_overrides[get_verified_user] = lambda: MagicMock(id="u1")
-        app.add_exception_handler(
-            StarletteHTTPException, artifacts_router.artifact_link_exception_handler
-        )
+        for exc in (StarletteHTTPException, RequestValidationError):
+            app.add_exception_handler(exc, artifacts_router.artifact_link_exception_handler)
+        self.app = app
         self.client = TestClient(app)
 
     def tearDown(self):
@@ -75,23 +76,40 @@ class ArtifactRoutesTest(unittest.TestCase):
             res = self.client.get(self.url("/content?path=notes.csv"))
         self.assertEqual(res.status_code, 401)
 
-    def test_a_dead_artifact_link_opened_in_a_tab_goes_to_the_app(self):
+    def test_a_dead_or_malformed_artifact_link_opened_in_a_tab_goes_to_the_app(self):
         tab = {"sec-fetch-dest": "document"}
         get = lambda path, headers: self.client.get(
             self.url(path), headers=headers, follow_redirects=False
         )
-        for path in ("/content?path=gone.png", "/view/plots/gone.html"):
+        for path, plain in (
+            ("/content?path=gone.png", 404),
+            ("/view/plots/gone.html", 404),
+            ("/content?path=../escape", 400),
+            ("/content", 422),
+            ("/view/notes.csv", 415),
+        ):
             res = get(path, tab)
             self.assertEqual(res.status_code, 303, path)
             self.assertEqual(res.headers["location"], artifacts_router.MISSING_ARTIFACT_REDIRECT)
             # Fetches and iframes keep the plain error.
-            self.assertEqual(get(path, {"sec-fetch-dest": "iframe"}).status_code, 404)
-        # Other errors, and other routes, are left alone.
-        self.assertEqual(get("/view/notes.csv", tab).status_code, 415)
+            self.assertEqual(get(path, {"sec-fetch-dest": "iframe"}).status_code, plain, path)
+        # Other routes are left alone.
         self.assertEqual(get("/archive?path=gone", tab).status_code, 404)
         # A chat the user cannot read looks the same as a missing one.
         self.chats.get_chat_access_row.return_value = None
         self.assertEqual(get("/content?path=notes.csv", tab).status_code, 303)
+
+    def test_a_signed_out_tab_keeps_the_plain_error(self):
+        def signed_out():
+            raise HTTPException(status_code=403, detail="Not authenticated")
+
+        self.app.dependency_overrides[get_verified_user] = signed_out
+        res = self.client.get(
+            self.url("/content?path=gone.png"),
+            headers={"sec-fetch-dest": "document"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res.status_code, 403)
 
     def test_handlers_that_await_nothing_are_plain_functions(self):
         for handler in (
