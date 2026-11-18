@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from open_webui.routers import artifacts as artifacts_router
 from open_webui.utils.artifacts import artifact_provenance, list_artifacts
-from open_webui.utils.auth import get_optional_verified_user, get_verified_user
+from open_webui.utils.auth import get_verified_user
 
 PAGE = b"<html><body><div id='plot'></div></body></html>"
 
@@ -35,7 +35,6 @@ class HtmlViewRouteTest(unittest.TestCase):
         app = FastAPI()
         app.include_router(artifacts_router.router, prefix="/api/v1/chats")
         app.dependency_overrides[get_verified_user] = lambda: MagicMock(id="u1")
-        app.dependency_overrides[get_optional_verified_user] = lambda: MagicMock(id="u1")
         self.client = TestClient(app)
 
     def tearDown(self):

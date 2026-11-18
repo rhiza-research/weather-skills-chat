@@ -255,19 +255,6 @@ def get_verified_user(user=Depends(get_current_user)):
     return user
 
 
-def get_optional_verified_user(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    auth_token: HTTPAuthorizationCredentials = Depends(bearer_security),
-):
-    """The verified user, or None for a signed-out visitor (or a bad token)."""
-    try:
-        user = get_current_user(request, background_tasks, auth_token)
-    except HTTPException:
-        return None
-    return user if user.role in {"user", "admin"} else None
-
-
 def get_admin_user(user=Depends(get_current_user)):
     if user.role != "admin":
         raise HTTPException(

@@ -78,6 +78,7 @@ from open_webui.routers import (
     invitations,
     automations,
     artifacts,
+    shares,
     tool_runner,
     secrets,
     preferences,
@@ -1114,6 +1115,7 @@ app.include_router(
     automations.router, prefix="/api/v1/automations", tags=["automations"]
 )
 app.include_router(artifacts.router, prefix="/api/v1/chats", tags=["artifacts"])
+app.include_router(shares.router, prefix="/api/v1/shares", tags=["shares"])
 app.include_router(tool_runner.router, prefix="/api/v1/chats", tags=["tool-runner"])
 app.include_router(secrets.router, prefix="/api/v1/secrets", tags=["secrets"])
 app.include_router(

@@ -27,11 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 
-from open_webui.utils.auth import (
-    get_admin_user,
-    get_optional_verified_user,
-    get_verified_user,
-)
+from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.organizations import (
     can_read_chat,
@@ -470,14 +466,16 @@ async def archive_all_chats(user=Depends(get_verified_user)):
 
 
 @router.get("/share/{share_id}", response_model=Optional[ChatResponse])
-async def get_shared_chat_by_id(
-    share_id: str, user=Depends(get_optional_verified_user)
-):
-    # Anyone with a live link can read it, signed in or not.
-    if user and user.role == "admin" and ENABLE_ADMIN_CHAT_ACCESS:
-        chat = Chats.get_chat_by_id(share_id)
-    else:
+async def get_shared_chat_by_id(share_id: str, user=Depends(get_verified_user)):
+    if user.role == "pending":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+
+    if user.role == "user" or (user.role == "admin" and not ENABLE_ADMIN_CHAT_ACCESS):
         chat = Chats.get_chat_by_share_id(share_id)
+    elif user.role == "admin" and ENABLE_ADMIN_CHAT_ACCESS:
+        chat = Chats.get_chat_by_id(share_id)
 
     if chat:
         return ChatResponse(**chat.model_dump())
