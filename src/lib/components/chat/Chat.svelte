@@ -2988,6 +2988,7 @@
 					bind:this={navbarElement}
 					chat={{
 						id: $chatId,
+						user_id: chat?.user_id,
 						chat: {
 							title: $chatTitle,
 							models: selectedModels,
