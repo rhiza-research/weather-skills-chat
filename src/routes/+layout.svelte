@@ -625,9 +625,16 @@
 				toast.error(`${error}`);
 				return null;
 			});
-			if (!sessionUser) {
+			// The sign-in page reads $config on mount (trusted-header sign-in).
+			const appConfig = await appConfigPromise;
+			if (!appConfig) {
+				await goto('/error');
+			} else if (!sessionUser) {
 				localStorage.removeItem('token');
-				await goto(`/auth?redirect=${encodedUrl}`);
+				const path = $page.url.pathname;
+				if (path !== '/auth' && !path.startsWith('/auth/')) {
+					await goto(`/auth?redirect=${encodedUrl}`);
+				}
 			} else {
 				await user.set(sessionUser);
 				socketPromise
@@ -638,9 +645,6 @@
 						console.error(error);
 					});
 			}
-			appConfigPromise.then((appConfig) => {
-				if (!appConfig) goto('/error');
-			});
 		} else {
 			const appConfig = await appConfigPromise;
 			if (!appConfig) {
