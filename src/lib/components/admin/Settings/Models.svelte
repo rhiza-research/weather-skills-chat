@@ -286,7 +286,7 @@
 						id="model-item-{model.id}"
 					>
 						<button
-							class=" flex flex-1 text-left space-x-3.5 cursor-pointer w-full"
+							class=" flex flex-1 text-left space-x-3 cursor-pointer w-full"
 							type="button"
 							on:click={() => {
 								selectedModelId = model.id;

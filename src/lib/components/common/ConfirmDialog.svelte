@@ -106,7 +106,7 @@
 				e.stopPropagation();
 			}}
 		>
-			<div class="px-[1.75rem] py-6 flex flex-col">
+			<div class="px-8 py-6 flex flex-col">
 				<div class=" text-lg font-semibold dark:text-gray-200 mb-2.5">
 					{#if title !== ''}
 						{title}

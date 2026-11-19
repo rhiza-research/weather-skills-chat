@@ -348,7 +348,7 @@
 	>
 		<slot>
 			{#if searchEnabled}
-				<div class="flex items-center gap-2.5 px-5 mt-3.5 mb-1.5">
+				<div class="flex items-center gap-2.5 px-5 mt-3 mb-1.5">
 					<Search className="size-4" strokeWidth="2.5" />
 
 					<input

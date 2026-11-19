@@ -134,7 +134,7 @@
 				<div class=" shrink-0">
 					<Tooltip content={$i18n.t('Save')}>
 						<button
-							class=" px-3.5 py-2 bg-black text-white dark:bg-white dark:text-black transition rounded-full"
+							class=" px-4 py-2 bg-black text-white dark:bg-white dark:text-black transition rounded-full"
 							type="submit"
 						>
 							{$i18n.t('Save')}

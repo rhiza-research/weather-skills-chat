@@ -44,7 +44,7 @@
 <div class="px-1.5 flex justify-center text-strong">
 	<DropdownMenu.Root bind:open closeFocus={false} typeahead={false}>
 		<DropdownMenu.Trigger
-			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-[7px] text-left hover:bg-black/5 dark:hover:bg-white/5 transition"
+			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5 transition"
 			aria-label={$i18n.t('Switch organization')}
 		>
 			<div class="self-center shrink-0">

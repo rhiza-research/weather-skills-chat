@@ -114,7 +114,7 @@
 			</div>
 		</nav>
 
-		<div class=" pb-1 px-[16px] flex-1 min-w-0 max-h-full overflow-y-auto">
+		<div class=" pb-1 px-4 flex-1 min-w-0 max-h-full overflow-y-auto">
 			<slot />
 		</div>
 	</div>

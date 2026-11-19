@@ -313,7 +313,7 @@
 						disabled={busy}
 					/>
 					<button
-						class="px-3.5 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+						class="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
 						disabled={busy}
 						on:click={installHandler}
 					>
@@ -352,7 +352,7 @@
 								: 'opacity-60'}"
 						>
 							<summary
-								class="flex flex-wrap items-start justify-between gap-2 p-3.5 cursor-pointer list-none"
+								class="flex flex-wrap items-start justify-between gap-2 p-4 cursor-pointer list-none"
 							>
 								<div class="flex min-w-0 flex-1 items-start gap-2">
 									<span class="skill-pack-chevron mt-0.5 shrink-0 text-muted">
@@ -397,7 +397,7 @@
 									{/if}
 								</div>
 							</summary>
-							<div class="px-3.5 pb-3.5 border-t border-line">
+							<div class="px-4 pb-4 border-t border-line">
 								{#if (pack.skills || []).length}
 									<ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
 										{#each pack.skills as skill (skill.tool_id || skill.name)}
@@ -478,7 +478,7 @@
 							: ''}"
 					>
 						<summary
-							class="flex flex-wrap items-start justify-between gap-2 p-3.5 cursor-pointer list-none"
+							class="flex flex-wrap items-start justify-between gap-2 p-4 cursor-pointer list-none"
 						>
 							<div class="flex min-w-0 flex-1 items-start gap-2">
 								<span class="skill-pack-chevron mt-0.5 shrink-0 text-muted">
@@ -582,7 +582,7 @@
 							</div>
 						</summary>
 
-						<div class="px-3.5 pb-3.5 border-t border-line">
+						<div class="px-4 pb-4 border-t border-line">
 							{#if (pack.skills || []).length}
 								<ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
 									{#each pack.skills as skill (skill.tool_id || skill.name)}

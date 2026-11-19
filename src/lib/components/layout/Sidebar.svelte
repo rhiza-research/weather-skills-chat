@@ -599,7 +599,7 @@
 {#if $showSidebar}
 	<div
 		class=" {$isApp
-			? ' ml-[4.5rem] md:ml-0'
+			? ' ml-18 md:ml-0'
 			: ''} fixed md:hidden z-40 top-0 right-0 left-0 bottom-0 bg-black/60 w-full min-h-screen h-screen flex justify-center overflow-hidden overscroll-contain"
 		on:mousedown={() => {
 			showSidebar.set(!$showSidebar);
@@ -613,7 +613,7 @@
 	class="h-screen max-h-[100dvh] min-h-screen select-none {$showSidebar
 		? 'md:relative w-[260px] max-w-[260px]'
 		: '-translate-x-[260px] w-[0px]'} {$isApp
-		? `ml-[4.5rem] md:ml-0 `
+		? `ml-18 md:ml-0 `
 		: 'transition-width duration-200 ease-in-out'}  shrink-0 bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-200 text-sm fixed z-50 top-0 left-0 overflow-x-hidden
         "
 	data-state={$showSidebar}
@@ -625,7 +625,7 @@
 	>
 		<div class="px-1.5 flex justify-between space-x-1 text-body">
 			<button
-				class=" cursor-pointer p-[7px] flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class=" cursor-pointer p-2 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					showSidebar.set(!$showSidebar);
 				}}
@@ -701,7 +701,7 @@
 		<!-- {#if $user?.role === 'admin'}
 			<div class="px-1.5 flex justify-center text-strong">
 				<a
-					class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="nav-row grow"
 					href="/home"
 					on:click={() => {
 						selectedChatId = null;
@@ -726,7 +726,7 @@
 
 		<div class="px-1.5 flex justify-center text-strong">
 			<a
-				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="nav-row grow"
 				href="/workspace"
 				on:click={() => {
 					selectedChatId = null;
@@ -763,7 +763,7 @@
 
 		<div class="px-1.5 flex justify-center text-strong">
 			<a
-				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="nav-row grow"
 				href="/scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
@@ -893,7 +893,7 @@
 				{/if}
 
 				<div
-					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-line"
+					class="ml-3 pl-1 mt-px flex flex-col flex-1 min-h-0 border-s border-line"
 				>
 				{#if !search && privatePinned.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
@@ -1112,7 +1112,7 @@
 					}}
 				>
 					<div
-						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-line"
+						class="ml-3 pl-1 mt-px flex flex-col flex-1 min-h-0 border-s border-line"
 					>
 						{#if !search && teamPinned.length > 0}
 							<div class="flex flex-col space-y-1 rounded-xl">

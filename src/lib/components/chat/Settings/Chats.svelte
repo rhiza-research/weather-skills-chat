@@ -111,7 +111,7 @@
 				hidden
 			/>
 			<button
-				class=" flex rounded-xl py-2 px-3.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					chatImportInputElement.click();
 				}}
@@ -133,7 +133,7 @@
 				<div class=" self-center text-sm font-medium">{$i18n.t('Import Chats')}</div>
 			</button>
 			<button
-				class=" flex rounded-xl py-2 px-3.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					exportChats();
 				}}
@@ -160,7 +160,7 @@
 
 		<div class="flex flex-col">
 			<button
-				class=" flex rounded-xl py-2 px-3.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					showArchivedChatsModal = true;
 				}}
@@ -186,7 +186,7 @@
 			</button>
 
 			{#if showArchiveConfirm}
-				<div class="flex justify-between rounded-md items-center py-2 px-3.5 w-full transition">
+				<div class="flex justify-between rounded-md items-center py-2 px-4 w-full transition">
 					<div class="flex items-center space-x-3">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -246,7 +246,7 @@
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-xl py-2 px-3.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={() => {
 						showArchiveConfirm = true;
 					}}
@@ -273,7 +273,7 @@
 			{/if}
 
 			{#if showDeleteConfirm}
-				<div class="flex justify-between rounded-md items-center py-2 px-3.5 w-full transition">
+				<div class="flex justify-between rounded-md items-center py-2 px-4 w-full transition">
 					<div class="flex items-center space-x-3">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -333,7 +333,7 @@
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-xl py-2 px-3.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={() => {
 						showDeleteConfirm = true;
 					}}

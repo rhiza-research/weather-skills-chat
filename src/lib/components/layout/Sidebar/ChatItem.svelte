@@ -238,7 +238,7 @@
 >
 	{#if confirmEdit}
 		<div
-			class=" w-full flex justify-between rounded-lg px-[11px] py-[6px] {id === $chatId ||
+			class=" w-full flex justify-between rounded-xl px-3 py-1.5 {id === $chatId ||
 			confirmEdit
 				? 'bg-gray-200 dark:bg-gray-900'
 				: selected
@@ -255,7 +255,7 @@
 		</div>
 	{:else}
 		<a
-			class=" w-full flex justify-between rounded-lg px-[11px] py-[6px] {id === $chatId ||
+			class=" w-full flex justify-between rounded-xl px-3 py-1.5 {id === $chatId ||
 			confirmEdit
 				? 'bg-gray-200 dark:bg-gray-900'
 				: selected
@@ -284,7 +284,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="size-3 shrink-0 mt-[3px] text-subtle"
+						class="size-3 shrink-0 mt-1 text-subtle"
 						aria-label={$i18n.t("You can't edit this chat")}
 					>
 						<title>{$i18n.t("You can't edit this chat")}</title>

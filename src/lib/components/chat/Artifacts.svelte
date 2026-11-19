@@ -482,7 +482,7 @@
 				: 'h-1/2'} border-b border-line"
 		>
 			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-xs leading-4 py-[3px] text-body break-words min-w-0">
+				<div class="text-xs leading-4 py-1 text-body break-words min-w-0">
 					{provenancePath ? `${$i18n.t('Provenance')}: ${provenancePath}` : previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">

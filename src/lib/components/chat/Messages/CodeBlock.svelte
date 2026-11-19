@@ -503,7 +503,7 @@
 						? ''
 						: 'rounded-b-lg'} overflow-hidden"
 			>
-				<div class=" pt-7 bg-gray-50 dark:bg-gray-850"></div>
+				<div class=" pt-8 bg-gray-50 dark:bg-gray-850"></div>
 
 				{#if !collapsed}
 					{#if CodeEditorComponent}

@@ -3089,7 +3089,7 @@
 							</div>
 						</div>
 
-						<div class=" pb-[1rem]">
+						<div class=" pb-4">
 							{#if !chatWritable}
 								<div class="mx-auto w-full max-w-[58rem] px-2.5 mb-2">
 									<div

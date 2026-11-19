@@ -135,13 +135,13 @@
 		</div>
 
 		<div
-			class="ml-3 pl-1 mt-[1px] flex flex-col max-h-48 overflow-y-auto border-s border-line"
+			class="ml-3 pl-1 mt-px flex flex-col max-h-48 overflow-y-auto border-s border-line"
 		>
 			{#each pinned as task (task.id)}
 				{@const dot = taskDot(task, now)}
 				{@const current = task.last_run?.chat_id && task.last_run.chat_id === $chatId}
 				<div
-					class="group flex items-center gap-1 rounded-lg px-2 py-[5px] text-sm {current
+					class="group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm {current
 						? 'bg-gray-100 dark:bg-gray-900'
 						: 'hover:bg-gray-100 dark:hover:bg-gray-900'}"
 				>

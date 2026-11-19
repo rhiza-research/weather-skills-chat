@@ -11,7 +11,7 @@
 {#each tags as tag}
 	<Tooltip content={tag.name}>
 		<div
-			class="relative group/tags px-1.5 py-[0.2px] gap-0.5 flex justify-between h-fit max-h-fit w-fit items-center rounded-full bg-gray-500/20 text-body transition cursor-pointer"
+			class="relative group/tags px-1.5 py-px gap-0.5 flex justify-between h-fit max-h-fit w-fit items-center rounded-full bg-gray-500/20 text-body transition cursor-pointer"
 		>
 			<div class=" field-label self-center line-clamp-1 w-fit">
 				{tag.name}

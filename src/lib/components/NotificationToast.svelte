@@ -39,7 +39,7 @@
 
 	<button
 		type="button"
-		class="flex gap-2.5 text-left w-full px-3.5 py-3.5 pr-7"
+		class="flex gap-2.5 text-left w-full px-4 py-4 pr-8"
 		on:click={() => {
 			onClick();
 			dispatch('closeToast');

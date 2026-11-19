@@ -130,7 +130,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	<div class="mt-0.5 space-y-3 overflow-y-scroll scrollbar-hidden h-full">
 		{#if adminConfig !== null}
 			<div class="">
-				<div class="mb-3.5">
+				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
 					<hr class=" border-line my-2" />
