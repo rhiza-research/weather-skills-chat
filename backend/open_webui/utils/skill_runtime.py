@@ -154,9 +154,12 @@ def unread_env_names(skill_path: Path, names: list[str]) -> tuple[list[str], lis
     if not skill_md.is_file():
         return [], []
     meta, _ = _parse_skill_md(skill_md)
-    required = str((meta.get("metadata") or {}).get("required-env") or "").split()
-    text = skill_md.read_text()
-    return required, [n for n in names if required and n not in text]
+    metadata = meta.get("metadata")
+    if not isinstance(metadata, dict):
+        return [], []
+    required = str(metadata.get("required-env") or "").split()
+    mentioned = set(re.findall(r"\w+", skill_md.read_text(encoding="utf-8")))
+    return required, [n for n in names if required and n not in mentioned]
 
 
 def resolve_env_secrets_for_user(

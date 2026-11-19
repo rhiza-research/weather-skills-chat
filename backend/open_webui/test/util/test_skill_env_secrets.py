@@ -95,11 +95,13 @@ class UnreadEnvNamesTest(unittest.TestCase):
             'compatibility: "Optional OTHER."\nmetadata:\n  required-env: "A B"\n'
         )
         self.assertEqual(
-            unread_env_names(skill, ["A", "OTHER", "WRONG"]), (["A", "B"], ["WRONG"])
+            unread_env_names(skill, ["A", "OTHER", "OTH", "WRONG"]),
+            (["A", "B"], ["OTH", "WRONG"]),
         )
-
-    def test_skill_without_required_env_is_unrestricted(self):
-        self.assertEqual(unread_env_names(self.skill(""), ["WRONG"]), ([], []))
+        for unrestricted in ("", 'metadata: "x"\n'):
+            self.assertEqual(
+                unread_env_names(self.skill(unrestricted), ["WRONG"]), ([], [])
+            )
 
     def test_run_rejects_a_secret_the_skill_does_not_read(self):
         skill = self.skill('metadata:\n  required-env: "RIGHT"\n')
