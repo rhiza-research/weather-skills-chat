@@ -225,6 +225,7 @@
 			}
 		}
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -239,11 +240,7 @@
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('Image Settings')}</div>
 
 				<div>
-					<div class=" py-1 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Image Generation (Experimental)')}
-						</div>
-
+					<SettingRow label={$i18n.t('Image Generation (Experimental)')}>
 						<div class="px-1">
 							<Switch
 								bind:state={config.enabled}
@@ -276,20 +273,18 @@
 								}}
 							/>
 						</div>
-					</div>
+					</SettingRow>
 				</div>
 
 				{#if config.enabled}
-					<div class=" py-1 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Image Prompt Generation')}</div>
+					<SettingRow label={$i18n.t('Image Prompt Generation')}>
 						<div class="px-1">
 							<Switch bind:state={config.prompt_generation} />
 						</div>
-					</div>
+					</SettingRow>
 				{/if}
 
-				<div class=" py-1 flex w-full justify-between">
-					<div class=" self-center field-label">{$i18n.t('Image Generation Engine')}</div>
+				<SettingRow label={$i18n.t('Image Generation Engine')}>
 					<div class="flex items-center relative">
 						<select
 							class="field-select"
@@ -305,7 +300,7 @@
 							<option value="gemini">{$i18n.t('Gemini')}</option>
 						</select>
 					</div>
-				</div>
+				</SettingRow>
 			</div>
 			<hr class=" border-line" />
 

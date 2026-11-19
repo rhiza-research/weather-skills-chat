@@ -28,6 +28,7 @@
 			config = res;
 		}
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -46,18 +47,13 @@
 					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5">
-						<div class=" flex w-full justify-between">
-							<div class=" self-center field-label">
-								{$i18n.t('Enable Code Execution')}
-							</div>
-
+						<SettingRow label={$i18n.t('Enable Code Execution')}>
 							<Switch bind:state={config.ENABLE_CODE_EXECUTION} />
-						</div>
+						</SettingRow>
 					</div>
 
 					<div class="mb-2.5">
-						<div class="flex w-full justify-between">
-							<div class=" self-center field-label">{$i18n.t('Code Execution Engine')}</div>
+						<SettingRow label={$i18n.t('Code Execution Engine')}>
 							<div class="flex items-center relative">
 								<select
 									class="field-select"
@@ -71,7 +67,7 @@
 									{/each}
 								</select>
 							</div>
-						</div>
+						</SettingRow>
 
 						{#if config.CODE_EXECUTION_ENGINE === 'jupyter'}
 							<div class="text-muted text-xs">
@@ -169,21 +165,14 @@
 					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5">
-						<div class=" flex w-full justify-between">
-							<div class=" self-center field-label">
-								{$i18n.t('Enable Code Interpreter')}
-							</div>
-
+						<SettingRow label={$i18n.t('Enable Code Interpreter')}>
 							<Switch bind:state={config.ENABLE_CODE_INTERPRETER} />
-						</div>
+						</SettingRow>
 					</div>
 
 					{#if config.ENABLE_CODE_INTERPRETER}
 						<div class="mb-2.5">
-							<div class="  flex w-full justify-between">
-								<div class=" self-center field-label">
-									{$i18n.t('Code Interpreter Engine')}
-								</div>
+							<SettingRow label={$i18n.t('Code Interpreter Engine')}>
 								<div class="flex items-center relative">
 									<select
 										class="field-select"
@@ -197,7 +186,7 @@
 										{/each}
 									</select>
 								</div>
-							</div>
+							</SettingRow>
 
 							{#if config.CODE_INTERPRETER_ENGINE === 'jupyter'}
 								<div class="text-muted text-xs">

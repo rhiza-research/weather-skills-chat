@@ -67,6 +67,7 @@
 	const updateBanners = async () => {
 		_banners.set(await setBanners(localStorage.token, banners));
 	};
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 {#if taskConfig}
@@ -141,13 +142,9 @@
 					</div>
 				</div>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center field-label">
-						{$i18n.t('Title Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Title Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_TITLE_GENERATION} />
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_TITLE_GENERATION}
 					<div class="mb-2.5">
@@ -167,13 +164,9 @@
 					</div>
 				{/if}
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center field-label">
-						{$i18n.t('Tags Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Tags Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_TAGS_GENERATION} />
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_TAGS_GENERATION}
 					<div class="mb-2.5">
@@ -193,21 +186,13 @@
 					</div>
 				{/if}
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center field-label">
-						{$i18n.t('Retrieval Query Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Retrieval Query Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_RETRIEVAL_QUERY_GENERATION} />
-				</div>
+				</SettingRow>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center field-label">
-						{$i18n.t('Web Search Query Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Web Search Query Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_SEARCH_QUERY_GENERATION} />
-				</div>
+				</SettingRow>
 
 				<div class="mb-2.5">
 					<div class=" mb-1 field-label">{$i18n.t('Query Generation Prompt')}</div>
@@ -225,15 +210,11 @@
 					</Tooltip>
 				</div>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center field-label">
-						{$i18n.t('Autocomplete Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Autocomplete Generation')}>
 					<Tooltip content={$i18n.t('Enable autocomplete generation for chat messages')}>
 						<Switch bind:state={taskConfig.ENABLE_AUTOCOMPLETE_GENERATION} />
 					</Tooltip>
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_AUTOCOMPLETE_GENERATION}
 					<div class="mb-2.5">

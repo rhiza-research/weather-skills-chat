@@ -78,6 +78,7 @@
 			webConfig.YOUTUBE_LOADER_LANGUAGE = webConfig.YOUTUBE_LOADER_LANGUAGE.join(',');
 		}
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -95,14 +96,11 @@
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Web Search')}
-						</div>
+					<SettingRow label={$i18n.t('Web Search')}>
 						<div class="flex items-center relative">
 							<Switch bind:state={webConfig.ENABLE_WEB_SEARCH} />
 						</div>
-					</div>
+					</SettingRow>
 
 					<div class="mb-2.5">
 						<div class=" mb-1 field-label">
@@ -123,10 +121,7 @@
 						</Tooltip>
 					</div>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Web Search Engine')}
-						</div>
+					<SettingRow label={$i18n.t('Web Search Engine')}>
 						<div class="flex items-center relative">
 							<select
 								class="field-select"
@@ -140,7 +135,7 @@
 								{/each}
 							</select>
 						</div>
-					</div>
+					</SettingRow>
 
 					{#if webConfig.WEB_SEARCH_ENGINE !== ''}
 						{#if webConfig.WEB_SEARCH_ENGINE === 'searxng'}
@@ -521,10 +516,7 @@
 						</div>
 					</div>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Trust Proxy Environment')}
-						</div>
+					<SettingRow label={$i18n.t('Trust Proxy Environment')}>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={webConfig.WEB_SEARCH_TRUST_ENV
@@ -536,7 +528,7 @@
 								<Switch bind:state={webConfig.WEB_SEARCH_TRUST_ENV} />
 							</Tooltip>
 						</div>
-					</div>
+					</SettingRow>
 				</div>
 
 				<div class="mb-3">
@@ -544,10 +536,7 @@
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Web Loader Engine')}
-						</div>
+					<SettingRow label={$i18n.t('Web Loader Engine')}>
 						<div class="flex items-center relative">
 							<select
 								class="field-select"
@@ -560,17 +549,14 @@
 								{/each}
 							</select>
 						</div>
-					</div>
+					</SettingRow>
 
 					{#if webConfig.WEB_LOADER_ENGINE === '' || webConfig.WEB_LOADER_ENGINE === 'safe_web'}
-						<div class="  mb-2.5 flex w-full justify-between">
-							<div class=" self-center field-label">
-								{$i18n.t('Verify SSL Certificate')}
-							</div>
+						<SettingRow label={$i18n.t('Verify SSL Certificate')}>
 							<div class="flex items-center relative">
 								<Switch bind:state={webConfig.ENABLE_WEB_LOADER_SSL_VERIFICATION} />
 							</div>
-						</div>
+						</SettingRow>
 					{:else if webConfig.WEB_LOADER_ENGINE === 'playwright'}
 						<div class="mb-2.5 flex w-full flex-col">
 							<div>
@@ -674,10 +660,7 @@
 						</div>
 					{/if}
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Youtube Language')}
-						</div>
+					<SettingRow label={$i18n.t('Youtube Language')}>
 						<div class="flex items-center relative">
 							<input
 								class="field-bare flex-1 text-sm"
@@ -687,7 +670,7 @@
 								autocomplete="off"
 							/>
 						</div>
-					</div>
+					</SettingRow>
 
 					<div class="  mb-2.5 flex flex-col w-full justify-between">
 						<div class=" mb-1 field-label">

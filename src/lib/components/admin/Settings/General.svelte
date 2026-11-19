@@ -119,6 +119,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 		const ldapConfig = await getLdapConfig(localStorage.token);
 		ENABLE_LDAP = ldapConfig.ENABLE_LDAP;
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -208,8 +209,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Default User Role')}</div>
+					<SettingRow label={$i18n.t('Default User Role')}>
 						<div class="flex items-center relative">
 							<select
 								class="field-select"
@@ -220,37 +220,21 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								<option value="user">{$i18n.t('user')}</option>
 							</select>
 						</div>
-					</div>
+					</SettingRow>
 
-					<div class=" mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center field-label">{$i18n.t('Enable New Sign Ups')}</div>
-
+					<SettingRow label={$i18n.t('Enable New Sign Ups')}>
 						<Switch bind:state={adminConfig.ENABLE_SIGNUP} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs pr-2">
-							<div class="font-medium">{$i18n.t('Enable OAuth Sign Ups')}</div>
-							<div class="text-xs text-muted">
-								{$i18n.t('Allow new accounts to be created on first OAuth login.')}
-							</div>
-						</div>
-
+					<SettingRow label={$i18n.t('Enable OAuth Sign Ups')} description={$i18n.t('Allow new accounts to be created on first OAuth login.')}>
 						<Switch bind:state={adminConfig.ENABLE_OAUTH_SIGNUP} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs pr-2">
-							<div class="font-medium">{$i18n.t('Merge Accounts by Email')}</div>
-							<div class="text-xs text-muted">
-								{$i18n.t('Link OAuth logins to existing users with the same email.')}
-							</div>
-						</div>
-
+					<SettingRow label={$i18n.t('Merge Accounts by Email')} description={$i18n.t('Link OAuth logins to existing users with the same email.')}>
 						<Switch bind:state={adminConfig.OAUTH_MERGE_ACCOUNTS_BY_EMAIL} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full flex-col pr-2">
+					<div class="flex w-full flex-col py-1.5">
 						<div class="field-label">
 							{$i18n.t('Allowed OAuth Email Domains')}
 						</div>
@@ -269,31 +253,21 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						</div>
 					</div>
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center field-label">
-							{$i18n.t('Show Admin Details in Account Pending Overlay')}
-						</div>
-
+					<SettingRow label={$i18n.t('Show Admin Details in Account Pending Overlay')}>
 						<Switch bind:state={adminConfig.SHOW_ADMIN_DETAILS} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center field-label">{$i18n.t('Enable API Key')}</div>
-
+					<SettingRow label={$i18n.t('Enable API Key')}>
 						<Switch bind:state={adminConfig.ENABLE_API_KEY} />
-					</div>
+					</SettingRow>
 
 					{#if adminConfig?.ENABLE_API_KEY}
-						<div class="mb-2.5 flex w-full justify-between pr-2">
-							<div class=" self-center field-label">
-								{$i18n.t('API Key Endpoint Restrictions')}
-							</div>
-
+						<SettingRow label={$i18n.t('API Key Endpoint Restrictions')}>
 							<Switch bind:state={adminConfig.ENABLE_API_KEY_ENDPOINT_RESTRICTIONS} />
-						</div>
+						</SettingRow>
 
 						{#if adminConfig?.ENABLE_API_KEY_ENDPOINT_RESTRICTIONS}
-							<div class=" flex w-full flex-col pr-2">
+							<div class="flex w-full flex-col py-1.5">
 								<div class=" field-label">
 									{$i18n.t('Allowed Endpoints')}
 								</div>
@@ -625,19 +599,13 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 					<hr class=" border-line my-2" />
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center field-label">
-							{$i18n.t('Enable Community Sharing')}
-						</div>
-
+					<SettingRow label={$i18n.t('Enable Community Sharing')}>
 						<Switch bind:state={adminConfig.ENABLE_COMMUNITY_SHARING} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center field-label">{$i18n.t('Enable Message Rating')}</div>
-
+					<SettingRow label={$i18n.t('Enable Message Rating')}>
 						<Switch bind:state={adminConfig.ENABLE_MESSAGE_RATING} />
-					</div>
+					</SettingRow>
 
 					<div class="mb-2.5 w-full justify-between">
 						<div class="mb-1 field-label">{$i18n.t('Rendering Prompt')}</div>

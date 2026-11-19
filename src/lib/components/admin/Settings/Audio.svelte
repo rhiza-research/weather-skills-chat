@@ -164,6 +164,7 @@
 		await getVoices();
 		await getModels();
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -178,8 +179,7 @@
 			<div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('STT Settings')}</div>
 
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center field-label">{$i18n.t('Speech-to-Text Engine')}</div>
+				<SettingRow label={$i18n.t('Speech-to-Text Engine')}>
 					<div class="flex items-center relative">
 						<select
 							class="field-select"
@@ -193,7 +193,7 @@
 							<option value="azure">Azure AI Speech</option>
 						</select>
 					</div>
-				</div>
+				</SettingRow>
 
 				{#if STT_ENGINE === 'openai'}
 					<div>
@@ -380,8 +380,7 @@
 			<div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
 
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center field-label">{$i18n.t('Text-to-Speech Engine')}</div>
+				<SettingRow label={$i18n.t('Text-to-Speech Engine')}>
 					<div class="flex items-center relative">
 						<select
 							class="field-select"
@@ -408,7 +407,7 @@
 							<option value="azure">{$i18n.t('Azure AI Speech')}</option>
 						</select>
 					</div>
-				</div>
+				</SettingRow>
 
 				{#if TTS_ENGINE === 'openai'}
 					<div>
@@ -646,8 +645,7 @@
 
 				<hr class="border-line my-2" />
 
-				<div class="pt-0.5 flex w-full justify-between">
-					<div class="self-center field-label">{$i18n.t('Response splitting')}</div>
+				<SettingRow label={$i18n.t('Response splitting')}>
 					<div class="flex items-center relative">
 						<select
 							class="field-select"
@@ -661,7 +659,7 @@
 							{/each}
 						</select>
 					</div>
-				</div>
+				</SettingRow>
 				<div class="mt-2 mb-1 text-xs text-subtle">
 					{$i18n.t(
 						"Control how message text is split for TTS requests. 'Punctuation' splits into sentences, 'paragraphs' splits into paragraphs, and 'none' keeps the message as a single string."

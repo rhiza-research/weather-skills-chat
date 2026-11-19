@@ -220,6 +220,7 @@
 
 		RAGConfig = await getRAGConfig(localStorage.token);
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <ResetUploadDirConfirmDialog
@@ -279,10 +280,7 @@
 					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
-						<div class="flex w-full justify-between">
-							<div class="self-center field-label">
-								{$i18n.t('Content Extraction Engine')}
-							</div>
+						<SettingRow label={$i18n.t('Content Extraction Engine')}>
 							<div class="">
 								<select
 									class="field-select"
@@ -295,7 +293,7 @@
 									<option value="mistral_ocr">{$i18n.t('Mistral OCR')}</option>
 								</select>
 							</div>
-						</div>
+						</SettingRow>
 
 						{#if RAGConfig.CONTENT_EXTRACTION_ENGINE === ''}
 							<div class="flex w-full mt-1">
@@ -370,8 +368,7 @@
 					</div>
 
 					{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
-						<div class="  mb-2.5 flex w-full justify-between">
-							<div class=" self-center field-label">{$i18n.t('Text Splitter')}</div>
+						<SettingRow label={$i18n.t('Text Splitter')}>
 							<div class="flex items-center relative">
 								<select
 									class="field-select"
@@ -381,7 +378,7 @@
 									<option value="token">{$i18n.t('Token')} ({$i18n.t('Tiktoken')})</option>
 								</select>
 							</div>
-						</div>
+						</SettingRow>
 
 						<div class="  mb-2.5 flex w-full justify-between">
 							<div class=" flex gap-1.5 w-full">
@@ -429,10 +426,7 @@
 						<hr class=" border-line my-2" />
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
-							<div class="flex w-full justify-between">
-								<div class=" self-center field-label">
-									{$i18n.t('Embedding Model Engine')}
-								</div>
+							<SettingRow label={$i18n.t('Embedding Model Engine')}>
 								<div class="flex items-center relative">
 									<select
 										class="field-select"
@@ -453,7 +447,7 @@
 										<option value="openai">{$i18n.t('OpenAI')}</option>
 									</select>
 								</div>
-							</div>
+							</SettingRow>
 
 							{#if embeddingEngine === 'openai'}
 								<div class="my-0.5 flex gap-2 pr-2">
@@ -578,11 +572,7 @@
 						</div>
 
 						{#if embeddingEngine === 'ollama' || embeddingEngine === 'openai'}
-							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center field-label">
-									{$i18n.t('Embedding Batch Size')}
-								</div>
-
+							<SettingRow label={$i18n.t('Embedding Batch Size')}>
 								<div class="">
 									<input
 										bind:value={embeddingBatchSize}
@@ -593,7 +583,7 @@
 										step="1"
 									/>
 								</div>
-							</div>
+							</SettingRow>
 						{/if}
 					</div>
 
@@ -602,8 +592,7 @@
 
 						<hr class=" border-line my-2" />
 
-						<div class="  mb-2.5 flex w-full justify-between">
-							<div class=" self-center field-label">{$i18n.t('Full Context Mode')}</div>
+						<SettingRow label={$i18n.t('Full Context Mode')}>
 							<div class="flex items-center relative">
 								<Tooltip
 									content={RAGConfig.RAG_FULL_CONTEXT
@@ -617,11 +606,10 @@
 									<Switch bind:state={RAGConfig.RAG_FULL_CONTEXT} />
 								</Tooltip>
 							</div>
-						</div>
+						</SettingRow>
 
 						{#if !RAGConfig.RAG_FULL_CONTEXT}
-							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center field-label">{$i18n.t('Hybrid Search')}</div>
+							<SettingRow label={$i18n.t('Hybrid Search')}>
 								<div class="flex items-center relative">
 									<Switch
 										bind:state={RAGConfig.ENABLE_RAG_HYBRID_SEARCH}
@@ -630,7 +618,7 @@
 										}}
 									/>
 								</div>
-							</div>
+							</SettingRow>
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="  mb-2.5 flex flex-col w-full">
@@ -705,8 +693,7 @@
 								</div>
 							{/if}
 
-							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center field-label">{$i18n.t('Top K')}</div>
+							<SettingRow label={$i18n.t('Top K')}>
 								<div class="flex items-center relative">
 									<input
 										class="field-bare flex-1 text-sm"
@@ -717,11 +704,10 @@
 										min="0"
 									/>
 								</div>
-							</div>
+							</SettingRow>
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
-								<div class="mb-2.5 flex w-full justify-between">
-									<div class="self-center field-label">{$i18n.t('Top K Reranker')}</div>
+								<SettingRow label={$i18n.t('Top K Reranker')}>
 									<div class="flex items-center relative">
 										<input
 											class="field-bare flex-1 text-sm"
@@ -732,15 +718,12 @@
 											min="0"
 										/>
 									</div>
-								</div>
+								</SettingRow>
 							{/if}
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="  mb-2.5 flex flex-col w-full justify-between">
-									<div class=" flex w-full justify-between">
-										<div class=" self-center field-label">
-											{$i18n.t('Relevance Threshold')}
-										</div>
+									<SettingRow label={$i18n.t('Relevance Threshold')}>
 										<div class="flex items-center relative">
 											<input
 												class="field-bare flex-1 text-sm"
@@ -755,7 +738,7 @@
 												)}
 											/>
 										</div>
-									</div>
+									</SettingRow>
 									<div class="mt-1 text-xs text-subtle">
 										{$i18n.t(
 											'Note: If you set a minimum score, the search will only return documents with a score greater than or equal to the minimum score.'
@@ -792,8 +775,7 @@
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Max Upload Size')}</div>
+					<SettingRow label={$i18n.t('Max Upload Size')}>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={$i18n.t(
@@ -811,10 +793,9 @@
 								/>
 							</Tooltip>
 						</div>
-					</div>
+					</SettingRow>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Max Upload Count')}</div>
+					<SettingRow label={$i18n.t('Max Upload Count')}>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={$i18n.t(
@@ -832,7 +813,7 @@
 								/>
 							</Tooltip>
 						</div>
-					</div>
+					</SettingRow>
 				</div>
 
 				<div class="mb-3">
@@ -840,19 +821,17 @@
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Google Drive')}</div>
+					<SettingRow label={$i18n.t('Google Drive')}>
 						<div class="flex items-center relative">
 							<Switch bind:state={RAGConfig.ENABLE_GOOGLE_DRIVE_INTEGRATION} />
 						</div>
-					</div>
+					</SettingRow>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('OneDrive')}</div>
+					<SettingRow label={$i18n.t('OneDrive')}>
 						<div class="flex items-center relative">
 							<Switch bind:state={RAGConfig.ENABLE_ONEDRIVE_INTEGRATION} />
 						</div>
-					</div>
+					</SettingRow>
 				</div>
 
 				<div class="mb-3">
@@ -860,8 +839,7 @@
 
 					<hr class=" border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">{$i18n.t('Reset Upload Directory')}</div>
+					<SettingRow label={$i18n.t('Reset Upload Directory')}>
 						<div class="flex items-center relative">
 							<button
 								class="text-xs"
@@ -872,12 +850,9 @@
 								{$i18n.t('Reset')}
 							</button>
 						</div>
-					</div>
+					</SettingRow>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Reset Vector Storage/Knowledge')}
-						</div>
+					<SettingRow label={$i18n.t('Reset Vector Storage/Knowledge')}>
 						<div class="flex items-center relative">
 							<button
 								class="text-xs"
@@ -888,11 +863,8 @@
 								{$i18n.t('Reset')}
 							</button>
 						</div>
-					</div>
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center field-label">
-							{$i18n.t('Reindex Knowledge Base Vectors')}
-						</div>
+					</SettingRow>
+					<SettingRow label={$i18n.t('Reindex Knowledge Base Vectors')}>
 						<div class="flex items-center relative">
 							<button
 								class="text-xs"
@@ -903,7 +875,7 @@
 								{$i18n.t('Reindex')}
 							</button>
 						</div>
-					</div>
+					</SettingRow>
 				</div>
 			</div>
 		</div>
