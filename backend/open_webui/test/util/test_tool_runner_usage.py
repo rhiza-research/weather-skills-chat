@@ -31,6 +31,7 @@ TOOLS = {
             "parameters": {"type": "object", "properties": {}},
         },
         "callable": run_x,
+        "version": "1.2.0",
     }
 }
 USER = SimpleNamespace(id="user-1", email="user@example.com", name="User", role="user")
@@ -55,7 +56,7 @@ def _call_params(call: dict) -> dict:
     return dict(call.get("parameters") or {})
 
 
-def _patch_common(stack: ExitStack) -> MagicMock:
+def _patch_common(stack: ExitStack) -> tuple[MagicMock, MagicMock]:
     stack.enter_context(
         patch(
             "open_webui.utils.secrets.scrub_tool_call_in_place",
@@ -77,10 +78,10 @@ def _patch_common(stack: ExitStack) -> MagicMock:
             side_effect=lambda value, secrets: value,
         )
     )
-    stack.enter_context(
+    start_obs = stack.enter_context(
         patch.object(mw, "start_tool_observation", return_value=SPAN)
     )
-    return stack.enter_context(patch.object(mw, "end_tool_observation"))
+    return start_obs, stack.enter_context(patch.object(mw, "end_tool_observation"))
 
 
 class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
@@ -122,7 +123,7 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
         }
 
         with ExitStack() as stack:
-            end_obs = _patch_common(stack)
+            start_obs, end_obs = _patch_common(stack)
             stack.enter_context(
                 patch.object(mw, "get_event_emitter", return_value=AsyncMock())
             )
@@ -190,6 +191,7 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(content["stdout"], "skill finished")
         self.assertEqual(content[TOOL_RESOURCE_USAGE_KEY], USAGE)
 
+        self.assertEqual(start_obs.call_args.kwargs["version"], "1.2.0")
         end_obs.assert_called_once()
         self.assertIs(end_obs.call_args.args[0], SPAN)
         self.assertEqual(
@@ -212,7 +214,7 @@ class NonNativeToolHandlerTest(unittest.IsolatedAsyncioTestCase):
         }
 
         with ExitStack() as stack:
-            end_obs = _patch_common(stack)
+            start_obs, end_obs = _patch_common(stack)
             stack.enter_context(patch.object(mw, "get_task_model_id", return_value="m"))
             stack.enter_context(
                 patch.object(
@@ -232,6 +234,7 @@ class NonNativeToolHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent["stdout"], "skill finished")
         self.assertEqual(sent[TOOL_RESOURCE_USAGE_KEY], USAGE)
 
+        self.assertEqual(start_obs.call_args.kwargs["version"], "1.2.0")
         end_obs.assert_called_once()
         self.assertIs(end_obs.call_args.args[0], SPAN)
         self.assertEqual(

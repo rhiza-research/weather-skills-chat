@@ -23,6 +23,7 @@ from open_webui.env import (
     LANGFUSE_PUBLIC_KEY,
     LANGFUSE_SECRET_KEY,
     LANGFUSE_TRACING_ENVIRONMENT,
+    WEBUI_IMAGE_TAG,
 )
 from open_webui.utils.skill_k8s_sandbox import TOOL_RESOURCE_USAGE_KEY
 
@@ -79,6 +80,8 @@ def get_client():
                 public_key=LANGFUSE_PUBLIC_KEY,
                 secret_key=LANGFUSE_SECRET_KEY,
                 base_url=LANGFUSE_HOST,
+                # The deployed image tag is the release on every span this client creates.
+                release=WEBUI_IMAGE_TAG or None,
                 # Required for Langfuse Cloud v4 realtime processing of OTLP spans.
                 # Without this, the UI can lag by minutes even after flush().
                 additional_headers={"x-langfuse-ingestion-version": "4"},
@@ -455,6 +458,7 @@ def _openrouter_trace_fields(
         "trace_id": trace_id if trace_id and parent_span_id else None,
         "parent_span_id": parent_span_id if trace_id and parent_span_id else None,
         "environment": LANGFUSE_TRACING_ENVIRONMENT,
+        "release": WEBUI_IMAGE_TAG or None,
         "generation_name": "llm",
         "chat_id": source.get("chat_id"),
         "message_id": source.get("message_id"),
@@ -639,16 +643,23 @@ def end_generation(*, output: Any = None, usage: Any = None, error: Any = None) 
     _safe_call(generation.end)
 
 
-def start_tool_observation(name: str, params: Any) -> Any:
+def start_tool_observation(
+    name: str, params: Any, version: Optional[str] = None
+) -> Any:
+    """`version` is the tool's declared version (a skill's SKILL.md version); tools without one leave it unset."""
     trace = current_trace()
     if not trace:
         return None
+    kwargs: dict[str, Any] = {}
+    if version:
+        kwargs["version"] = str(version)
     return _safe_call(
         trace.start_observation,
         name=f"tool:{name or 'unknown'}",
         as_type="tool",
         input=truncate_payload(params),
         metadata={"tool": name},
+        **kwargs,
     )
 
 
