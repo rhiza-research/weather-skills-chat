@@ -41,7 +41,7 @@
 </script>
 
 {#if running}
-	<div class="mt-3 w-fit font-medium flex items-center gap-2 shimmer text-muted" role="status">
+	<div class="mt-3 w-fit font-medium flex items-center gap-2 shimmer muted" role="status">
 		<Spinner className="size-4" />
 		<div class="text-base line-clamp-1">
 			{current.step ? $i18n.t(labels[current.step]) : $i18n.t('Compacting conversation')}
@@ -52,7 +52,7 @@
 	<div class="mt-3">
 		<button
 			type="button"
-			class="flex w-full items-center gap-2 text-xs text-muted hover:text-gray-700 dark:hover:text-gray-200 transition"
+			class="flex w-full items-center gap-2 text-xs muted hover:text-gray-700 dark:hover:text-gray-200 transition"
 			aria-expanded={open}
 			on:click={() => (open = !open)}
 		>
@@ -67,7 +67,7 @@
 		</button>
 		{#if open}
 			<div
-				class="mt-2 rounded-xl bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm text-body whitespace-pre-wrap"
+				class="mt-2 rounded-xl bg-surface px-3 py-2 text-sm body whitespace-pre-wrap"
 			>
 				{compaction.summary}
 			</div>

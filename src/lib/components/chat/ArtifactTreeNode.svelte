@@ -126,7 +126,7 @@
 
 {#if navigable}
 	<div class="flex flex-col">
-		<div class="flex items-center gap-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5">
+		<div class="flex items-center gap-2 rounded-xl hover:bg-tint">
 			<button
 				type="button"
 				class="flex items-center gap-1 flex-1 min-w-0 text-left text-xs px-1 py-1"
@@ -226,8 +226,8 @@
 {:else if file}
 	<div
 		class="flex flex-col gap-0.5 rounded-md {selected
-			? 'bg-black/5 dark:bg-white/5'
-			: 'hover:bg-black/5 dark:hover:bg-white/5'}"
+			? 'bg-tint'
+			: 'hover:bg-tint'}"
 	>
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1" style={pad}>
 			{#if file.kind === 'image' || file.kind === 'html'}

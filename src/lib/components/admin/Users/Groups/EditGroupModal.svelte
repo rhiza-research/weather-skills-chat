@@ -112,7 +112,7 @@
 <Modal size="md" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 mb-1.5">
-			<h2 class="modal-title">
+			<h2 class="text-lg font-medium self-center">
 				{#if custom}
 					{#if edit}
 						{$i18n.t('Edit User Group')}
@@ -153,7 +153,7 @@
 									class="px-0.5 py-1 max-w-fit w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
 									'general'
 										? ''
-										: ' tab-idle'}"
+										: ' text-muted hover:text-strong'}"
 									on:click={() => {
 										selectedTab = 'general';
 									}}
@@ -171,7 +171,7 @@
 									class="px-0.5 py-1 max-w-fit w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
 									'permissions'
 										? ''
-										: ' tab-idle'}"
+										: ' text-muted hover:text-strong'}"
 									on:click={() => {
 										selectedTab = 'permissions';
 									}}
@@ -189,7 +189,7 @@
 									class="px-0.5 py-1 max-w-fit w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
 									'users'
 										? ''
-										: ' tab-idle'}"
+										: ' text-muted hover:text-strong'}"
 									on:click={() => {
 										selectedTab = 'users';
 									}}
@@ -224,7 +224,7 @@
 								class="px-0.5 pb-1.5 min-w-fit flex text-right transition border-b-2 {selectedTab ===
 								'display'
 									? ' dark:border-white'
-									: 'border-transparent tab-idle'}"
+									: 'border-transparent text-muted hover:text-strong'}"
 								on:click={() => {
 									selectedTab = 'display';
 								}}
@@ -239,7 +239,7 @@
 								class="px-0.5 pb-1.5 min-w-fit flex text-right transition border-b-2 {selectedTab ===
 								'permissions'
 									? '  dark:border-white'
-									: 'border-transparent tab-idle'}"
+									: 'border-transparent text-muted hover:text-strong'}"
 								on:click={() => {
 									selectedTab = 'permissions';
 								}}
@@ -254,7 +254,7 @@
 								class="px-0.5 pb-1.5 min-w-fit flex text-right transition border-b-2 {selectedTab ===
 								'users'
 									? ' dark:border-white'
-									: ' border-transparent tab-idle'}"
+									: ' border-transparent text-muted hover:text-strong'}"
 								on:click={() => {
 									selectedTab = 'users';
 								}}
@@ -268,7 +268,7 @@
 					<div class="flex justify-between pt-3 text-sm font-medium gap-1.5">
 						{#if edit}
 							<button
-								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 								type="button"
 								on:click={() => {
 									showDeleteConfirmDialog = true;
@@ -281,7 +281,7 @@
 						{/if}
 
 						<button
-							class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+							class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 								? ' cursor-not-allowed'
 								: ''}"
 							type="submit"

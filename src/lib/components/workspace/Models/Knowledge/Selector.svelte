@@ -87,7 +87,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-80 rounded-lg px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-80 rounded-lg px-1 py-1.5 border border-line z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={8}
 			side="bottom"
 			align="start"
@@ -106,7 +106,7 @@
 				</div>
 			</div>
 
-			<hr class="divider my-1.5" />
+			<hr class="border-line my-1.5" />
 
 			<div class="max-h-48 overflow-y-scroll">
 				{#if filteredItems.length === 0}
@@ -116,7 +116,7 @@
 				{:else}
 					{#each filteredItems as item}
 						<DropdownMenu.Item
-							class="flex gap-2.5 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="flex gap-2.5 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-tint rounded-xl"
 							on:click={() => {
 								dispatch('select', item);
 							}}

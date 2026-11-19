@@ -397,7 +397,7 @@
 		<div class="w-full group">
 			<button
 				id="folder-{folderId}-button"
-				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-muted font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-muted font-medium hover:bg-tint transition"
 			>
 				<div class="text-muted">
 					{#if open}

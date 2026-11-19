@@ -21,7 +21,7 @@
 <Tooltip content={tooltip} placement="top-start" className="inline-tooltip">
 	<div bind:this={row} class="flex w-full justify-between py-1.5">
 		<div class="self-center">
-			<div {id} class="field-label">{label}</div>
+			<div {id} class="text-xs font-medium">{label}</div>
 			{#if description}<div class="text-xs text-muted">{description}</div>{/if}
 		</div>
 		<slot />

@@ -181,7 +181,7 @@
 							<textarea
 								id="message-edit-{message.id}"
 								bind:this={messageEditTextAreaElement}
-								class="field-bare resize-none"
+								class="w-full bg-transparent outline-hidden resize-none"
 								bind:value={editedContent}
 								on:input={(e) => {
 									e.target.style.height = '';
@@ -218,7 +218,7 @@
 							<div class="flex space-x-1.5">
 								<button
 									id="close-edit-message-button"
-									class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-strong transition rounded-3xl"
+									class="px-4 py-2 bg-page hover:bg-gray-100 text-strong transition rounded-3xl"
 									on:click={() => {
 										cancelEditMessage();
 									}}
@@ -228,7 +228,7 @@
 
 								<button
 									id="confirm-edit-message-button"
-									class=" px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
+									class="px-4 py-2 bg-inverse hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
 									on:click={() => {
 										editMessageConfirmHandler();
 									}}
@@ -243,7 +243,7 @@
 						<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-1' : 'w-full'}">
 							<div
 								class="rounded-3xl {($settings?.chatBubble ?? true)
-									? `max-w-[90%] px-5 py-2  bg-gray-50 dark:bg-gray-850 ${
+									? `max-w-[90%] px-5 py-2  bg-surface ${
 											message.files ? 'rounded-tr-lg' : ''
 										}`
 									: ' w-full'}"
@@ -263,7 +263,7 @@
 								{#if siblings.length > 1}
 									<div class="flex self-center" dir="ltr">
 										<button
-											class="btn-ghost btn-ghost-xs"
+											class="btn-ghost p-1"
 											on:click={() => {
 												showPreviousMessage(message);
 											}}
@@ -319,7 +319,7 @@
 										{/if}
 
 										<button
-											class="btn-ghost btn-ghost-xs"
+											class="btn-ghost p-1"
 											on:click={() => {
 												showNextMessage(message);
 											}}
@@ -332,7 +332,7 @@
 							{#if !readOnly}
 								<Tooltip content={$i18n.t('Edit')} placement="bottom">
 									<button
-										class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl dark:hover:text-white hover:text-black transition edit-user-message-button"
+										class="invisible group-hover:visible p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition edit-user-message-button"
 										on:click={() => {
 											editMessageHandler();
 										}}
@@ -344,7 +344,7 @@
 
 							<Tooltip content={$i18n.t('Copy')} placement="bottom">
 								<button
-									class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl dark:hover:text-white hover:text-black transition"
+									class="invisible group-hover:visible p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition"
 									on:click={() => {
 										copyToClipboard(visibleUserContent(message.content));
 									}}
@@ -371,7 +371,7 @@
 								{#if siblings.length > 1}
 									<div class="flex self-center" dir="ltr">
 										<button
-											class="btn-ghost btn-ghost-xs"
+											class="btn-ghost p-1"
 											on:click={() => {
 												showPreviousMessage(message);
 											}}
@@ -427,7 +427,7 @@
 										{/if}
 
 										<button
-											class="btn-ghost btn-ghost-xs"
+											class="btn-ghost p-1"
 											on:click={() => {
 												showNextMessage(message);
 											}}

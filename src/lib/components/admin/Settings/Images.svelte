@@ -303,7 +303,7 @@
 					</div>
 				</SettingRow>
 			</div>
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 
 			<div class="flex flex-col gap-2">
 				{#if (config?.engine ?? 'automatic1111') === 'automatic1111'}
@@ -318,7 +318,7 @@
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
+								class="px-2.5 bg-surface hover:bg-gray-100 text-strong dark:hover:bg-gray-800 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -443,7 +443,7 @@
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
+								class="px-2.5 bg-surface hover:bg-gray-100 text-strong dark:hover:bg-gray-800 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -508,7 +508,7 @@
 								/>
 
 								<button
-									class="w-full text-sm font-medium py-2 bg-transparent hover:bg-black/5 border border-dashed dark:border-gray-850 dark:hover:bg-white/5 text-center rounded-xl"
+									class="w-full text-sm font-medium py-2 bg-transparent hover:bg-tint border border-dashed dark:border-gray-850 text-center rounded-xl"
 									type="button"
 									on:click={() => {
 										document.getElementById('upload-comfyui-workflow-input')?.click();
@@ -576,7 +576,7 @@
 
 						<div class="flex gap-2 mb-1">
 							<input
-								class="field-bare flex-1 text-sm"
+								class="w-full bg-transparent outline-hidden flex-1 text-sm"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={config.openai.OPENAI_API_BASE_URL}
 								required
@@ -610,7 +610,7 @@
 			</div>
 
 			{#if config?.enabled}
-				<hr class="divider" />
+				<hr class="border-line my-2" />
 
 				<div>
 					<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Default Model')}</div>
@@ -676,7 +676,7 @@
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+			class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 				? ' cursor-not-allowed'
 				: ''}"
 			type="submit"

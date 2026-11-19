@@ -64,7 +64,7 @@
 								$page.url.pathname
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/organization">{$i18n.t('Organization membership')}</a
 						>
 						<a
@@ -72,7 +72,7 @@
 								'/organization/settings'
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/organization/settings">{$i18n.t('Organization settings')}</a
 						>
 					</div>

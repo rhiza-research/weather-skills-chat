@@ -159,7 +159,7 @@
 			</button>
 		</div>
 
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		<div class="flex flex-col">
 			<button

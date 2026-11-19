@@ -748,7 +748,7 @@
 					>
 				{:else}
 					<div
-						class=" {rmsLevel * 100 > 4
+						class="{rmsLevel * 100 > 4
 							? ' size-[4.5rem]'
 							: rmsLevel * 100 > 2
 								? ' size-16'
@@ -757,7 +757,7 @@
 									: 'size-12'}  transition-all rounded-full {(model?.info?.meta
 							?.profile_image_url ?? '/static/favicon.png') !== '/static/favicon.png'
 							? ' bg-cover bg-center bg-no-repeat'
-							: 'bg-black dark:bg-white'}  bg-black dark:bg-white"
+							: 'bg-inverse'}  bg-inverse"
 						style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
 						'/static/favicon.png'
 							? `background-image: url('${model?.info?.meta?.profile_image_url}');`
@@ -839,7 +839,7 @@
 										: 'size-40'}  transition-all rounded-full {(model?.info?.meta
 								?.profile_image_url ?? '/static/favicon.png') !== '/static/favicon.png'
 								? ' bg-cover bg-center bg-no-repeat'
-								: 'bg-black dark:bg-white'} "
+								: 'bg-inverse'} "
 							style={(model?.info?.meta?.profile_image_url ?? '/static/favicon.png') !==
 							'/static/favicon.png'
 								? `background-image: url('${model?.info?.meta?.profile_image_url}');`

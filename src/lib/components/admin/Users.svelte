@@ -82,7 +82,7 @@
 		<div class="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
 			<UserList {users} />
 
-			<hr class="mb-2 mt-3 divider" />
+			<hr class="border-line my-2 mb-2 mt-3" />
 
 			<GroupModal
 				bind:show={showDefaultPermissionsModal}

@@ -44,7 +44,7 @@
 <div class="px-1.5 flex justify-center text-strong">
 	<DropdownMenu.Root bind:open closeFocus={false} typeahead={false}>
 		<DropdownMenu.Trigger
-			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5 transition"
+			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-2 text-left hover:bg-tint transition"
 			aria-label={$i18n.t('Switch organization')}
 		>
 			<div class="self-center shrink-0">
@@ -94,7 +94,7 @@
 		</DropdownMenu.Trigger>
 
 		<DropdownMenu.Content
-			class="w-60 max-h-72 overflow-y-auto rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-60 max-h-72 overflow-y-auto rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={4}
 			side="bottom"
 			align="start"
@@ -102,7 +102,7 @@
 		>
 			{#each $organizations ?? [] as org (org.id)}
 				<DropdownMenu.Item
-					class="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 {org.id ===
+					class="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm cursor-pointer hover:bg-tint {org.id ===
 					$activeOrganizationId
 						? 'font-medium'
 						: 'text-gray-600 dark:text-gray-300'}"

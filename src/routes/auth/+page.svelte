@@ -242,7 +242,7 @@
 		</div>
 
 		<div
-			class="fixed bg-transparent min-h-screen w-full flex justify-center font-primary z-50 text-black dark:text-white"
+			class="fixed bg-transparent min-h-screen w-full flex justify-center font-primary z-50 text-strong"
 		>
 			<div class="w-full sm:max-w-md px-10 min-h-screen flex flex-col text-center">
 				{#if ($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false}
@@ -299,7 +299,7 @@
 								</div>
 
 								{#if $config?.onboarding ?? false}
-									<div class="mt-1 field-label text-muted">
+									<div class="mt-1 text-xs font-medium text-muted">
 										ⓘ {$WEBUI_NAME}
 										{$i18n.t(
 											'does not make any external connections, and your data stays securely on your locally hosted server.'
@@ -316,7 +316,7 @@
 											<input
 												bind:value={name}
 												type="text"
-												class="field-bare my-0.5 text-sm"
+												class="w-full bg-transparent outline-hidden my-0.5 text-sm"
 												autocomplete="name"
 												placeholder={$i18n.t('Enter Your Full Name')}
 												required
@@ -330,7 +330,7 @@
 											<input
 												bind:value={ldapUsername}
 												type="text"
-												class="field-bare my-0.5 text-sm"
+												class="w-full bg-transparent outline-hidden my-0.5 text-sm"
 												autocomplete="username"
 												name="username"
 												placeholder={$i18n.t('Enter Your Username')}
@@ -343,7 +343,7 @@
 											<input
 												bind:value={email}
 												type="email"
-												class="field-bare my-0.5 text-sm"
+												class="w-full bg-transparent outline-hidden my-0.5 text-sm"
 												autocomplete="email"
 												name="email"
 												placeholder={$i18n.t('Enter Your Email')}
@@ -359,7 +359,7 @@
 											</div>
 											<textarea
 												bind:value={description}
-												class="field-bare my-0.5 text-sm resize-none"
+												class="w-full bg-transparent outline-hidden my-0.5 text-sm resize-none"
 												rows="3"
 												placeholder={$i18n.t(
 													'Tell us who you are and why you would like access'
@@ -375,7 +375,7 @@
 										<input
 											bind:value={password}
 											type="password"
-											class="field-bare my-0.5 text-sm"
+											class="w-full bg-transparent outline-hidden my-0.5 text-sm"
 											placeholder={$i18n.t('Enter Your Password')}
 											autocomplete="current-password"
 											name="current-password"
@@ -433,7 +433,7 @@
 
 						{#if mode !== 'signup' && Object.keys($config?.oauth?.providers ?? {}).length > 0}
 							<div class="inline-flex items-center justify-center w-full">
-								<hr class="divider w-32 my-4" />
+								<hr class="border-line w-32 my-4" />
 								{#if $config?.features.enable_login_form || $config?.features.enable_ldap}
 									<span
 										class="px-3 text-sm font-medium text-gray-900 dark:text-white bg-transparent"
@@ -441,7 +441,7 @@
 									>
 								{/if}
 
-								<hr class="divider w-32 my-4" />
+								<hr class="border-line w-32 my-4" />
 							</div>
 							<div class="flex flex-col space-y-2">
 								{#if $config?.oauth?.providers?.google}

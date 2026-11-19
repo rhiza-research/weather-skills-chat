@@ -107,11 +107,11 @@
 {#if citations.length > 0}
 	<div class=" py-0.5 -mx-0.5 w-full flex gap-1 items-center flex-wrap">
 		{#if citations.length <= 3}
-			<div class="flex field-label flex-wrap">
+			<div class="flex text-xs font-medium flex-wrap">
 				{#each citations as citation, idx}
 					<button
 						id={`source-${id}-${idx + 1}`}
-						class="no-toggle outline-hidden flex dark:text-gray-300 p-1 bg-white dark:bg-gray-900 rounded-xl max-w-96"
+						class="no-toggle outline-hidden flex dark:text-gray-300 p-1 bg-page rounded-xl max-w-96"
 						on:click={() => {
 							showCitationModal = true;
 							selectedCitation = citation;
@@ -147,7 +147,7 @@
 							>{$i18n.t('References from')}</span
 						>
 						<div class="flex items-center overflow-auto scrollbar-none w-full max-w-full flex-1">
-							<div class="flex field-label items-center">
+							<div class="flex text-xs font-medium items-center">
 								{#each citations.slice(0, 2) as citation, idx}
 									<button
 										class="no-toggle outline-hidden flex dark:text-gray-300 p-1 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition rounded-xl max-w-96"
@@ -186,7 +186,7 @@
 					</div>
 				</div>
 				<div slot="content">
-					<div class="flex field-label flex-wrap">
+					<div class="flex text-xs font-medium flex-wrap">
 						{#each citations as citation, idx}
 							<button
 								id={`source-${id}-${idx + 1}`}

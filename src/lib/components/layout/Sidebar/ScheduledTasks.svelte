@@ -102,7 +102,7 @@
 			<Dropdown bind:show={showSort}>
 				<Tooltip content={$i18n.t('Sort')}>
 					<button
-						class="p-0.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+						class="p-0.5 rounded-xl hover:bg-tint"
 						aria-label={$i18n.t('Sort scheduled tasks')}
 					>
 						<BarsArrowUp className="size-3.5" strokeWidth="2" />
@@ -110,7 +110,7 @@
 				</Tooltip>
 				<div slot="content">
 					<DropdownMenu.Content
-						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 						sideOffset={-2}
 						side="bottom"
 						align="end"
@@ -118,7 +118,7 @@
 					>
 						{#each sortOptions as option (option.value)}
 							<DropdownMenu.Item
-								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-tint rounded-xl"
 								on:click={() => {
 									sortBy = option.value;
 									saveSetting('scheduledTaskSort', sortBy);

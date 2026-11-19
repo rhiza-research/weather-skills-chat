@@ -60,7 +60,7 @@
 
 		<div slot="content">
 			<DropdownMenu.Content
-				class="rounded-xl px-3 py-2 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg text-sm"
+				class="rounded-xl px-3 py-2 border border-line z-50 bg-panel dark:text-white shadow-lg text-sm"
 				sideOffset={10}
 				side="bottom"
 				align="end"
@@ -84,7 +84,7 @@
 				{#if onCompact}
 					<button
 						type="button"
-						class="mt-2 w-full px-2.5 py-1.5 text-sm font-medium rounded-full border border-line-strong text-body shadow-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:bg-transparent"
+						class="mt-2 w-full px-2.5 py-1.5 text-sm font-medium rounded-full border border-line-strong text-body shadow-lg hover:bg-tint transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:bg-transparent"
 						disabled={!canCompact}
 						on:click={() => onCompact?.()}
 					>

@@ -69,7 +69,7 @@
 								$page.url.pathname
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin">{$i18n.t('Users and Organizations')}</a
 						>
 
@@ -78,35 +78,35 @@
 								'/admin/membership'
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin/membership">{$i18n.t('Platform organization membership')}</a
 						>
 
 						<a
 							class="tab {$page.url.pathname.includes('/admin/settings')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin/settings">{$i18n.t('Admin settings')}</a
 						>
 
 						<a
 							class="tab {$page.url.pathname.includes('/admin/models')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin/models">{$i18n.t('Model catalog')}</a
 						>
 
 						<a
 							class="tab {$page.url.pathname.includes('/admin/skills')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin/skills">{$i18n.t('Skill catalog')}</a
 						>
 
 						<a
 							class="tab {$page.url.pathname.includes('/admin/knowledge')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/admin/knowledge">{$i18n.t('Knowledge catalog')}</a
 						>
 					</div>

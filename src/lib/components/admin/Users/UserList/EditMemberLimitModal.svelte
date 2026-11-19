@@ -66,7 +66,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<h2 class="modal-title">{$i18n.t('Edit monthly usage limit')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Edit monthly usage limit')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -77,7 +77,7 @@
 				<XMarkSolid className="size-5" />
 			</button>
 		</div>
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		<div class="flex flex-col w-full p-5 dark:text-gray-200">
 			<form
@@ -105,7 +105,7 @@
 								<span class="text-sm text-muted">$</span>
 							{/if}
 							<input
-								class="field-bare text-sm"
+								class="w-full bg-transparent outline-hidden text-sm"
 								type="number"
 								min="0"
 								step="0.01"
@@ -130,7 +130,7 @@
 
 				<div class="flex justify-end pt-4">
 					<button
-						class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+						class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
 						type="submit"
 						disabled={loading}
 					>

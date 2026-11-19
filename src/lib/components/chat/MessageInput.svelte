@@ -410,7 +410,7 @@
 									scrollToBottom();
 								}}
 							>
-								<span class="field-label whitespace-nowrap"
+								<span class="text-xs font-medium whitespace-nowrap"
 									>{newMessagesBelow ? $i18n.t('New messages') : $i18n.t('Jump to latest')}</span
 								>
 								<svg
@@ -489,7 +489,7 @@
 			</div>
 		</div>
 
-		<div class="{transparentBackground ? 'bg-transparent' : 'bg-white dark:bg-gray-900'} ">
+		<div class="{transparentBackground ? 'bg-transparent' : 'bg-page'} ">
 			<div
 				class="{($settings?.widescreenMode ?? null)
 					? 'max-w-full'
@@ -517,9 +517,9 @@
 					{#if queuedSends.length > 0}
 						<div
 							id="queued-sends"
-							class="mx-1 mb-1.5 rounded-2xl border border-line bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+							class="mx-1 mb-1.5 rounded-2xl border border-line bg-surface px-3 py-2 text-sm"
 						>
-							<div class="field-label text-muted">
+							<div class="text-xs font-medium text-muted">
 								{$i18n.t('Queued — sends one at a time as each reply is done')}
 							</div>
 							{#each queuedSends as queued, idx}
@@ -532,7 +532,7 @@
 									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full px-2 py-0.5 field-label text-body hover:bg-black/5 hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
+											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-body hover:bg-tint hover:text-gray-800 dark:hover:text-gray-100 transition"
 											on:click={() => onSendQueuedNow(idx)}
 										>
 											{$i18n.t('Send now')}
@@ -541,7 +541,7 @@
 									<Tooltip content={$i18n.t('Delete queued send')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full p-1 text-muted hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200 transition"
+											class="shrink-0 rounded-full p-1 text-muted hover:bg-tint hover:text-gray-700 dark:hover:text-gray-200 transition"
 											aria-label={$i18n.t('Delete queued send')}
 											on:click={() => onDeleteQueuedSend(idx)}
 										>
@@ -1120,7 +1120,7 @@
 											}}
 										>
 											<button
-												class="bg-transparent hover:bg-black/5 text-gray-800 dark:text-white dark:hover:bg-white/5 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
+												class="bg-transparent hover:bg-tint text-gray-800 dark:text-white transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
 												type="button"
 												aria-label={$i18n.t('More')}
 											>
@@ -1185,7 +1185,7 @@
 															type="button"
 															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {imageGenerationEnabled
 																? 'bg-gray-50 dark:bg-gray-400/10 border-line text-gray-600 dark:text-gray-400'
-																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300  hover:bg-gray-100 dark:hover:bg-gray-800 '}"
+																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
 															<Photo className="size-5" strokeWidth="1.75" />
 															<span
@@ -1309,7 +1309,7 @@
 													<Tooltip content={$i18n.t('Queue send')}>
 														<button
 															id="queue-send-button"
-															class="bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full p-1.5"
+															class="bg-inverse text-on-inverse hover:bg-gray-900 dark:hover:bg-gray-100 transition rounded-full p-1.5"
 															type="submit"
 															aria-label={$i18n.t('Queue send')}
 														>
@@ -1353,8 +1353,8 @@
 													<button
 														id="send-message-button"
 														class="{!(prompt === '' && files.length === 0) && !sendBlocked
-															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
-															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
+															? 'bg-inverse text-on-inverse hover:bg-gray-900 dark:hover:bg-gray-100'
+															: 'text-on-inverse bg-gray-200 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
 														type="submit"
 														disabled={(prompt === '' && files.length === 0) || sendBlocked}
 													>

@@ -3109,7 +3109,7 @@
 											{$i18n.t('Clone to continue.')}
 										</div>
 										<button
-											class="shrink-0 flex items-center gap-1 rounded-md bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 text-xs disabled:opacity-70"
+											class="shrink-0 flex items-center gap-1 rounded-md bg-inverse text-on-inverse px-2 py-0.5 text-xs disabled:opacity-70"
 											disabled={cloning}
 											aria-busy={cloning}
 											on:click={async () => {

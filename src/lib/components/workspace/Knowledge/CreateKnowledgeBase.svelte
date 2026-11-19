@@ -129,7 +129,7 @@
 				<button
 					class=" text-sm px-4 py-2 transition rounded-xl {loading
 						? ' cursor-not-allowed bg-gray-100 dark:bg-gray-800'
-						: ' bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800'} flex"
+						: ' bg-surface hover:bg-gray-100 dark:hover:bg-gray-800'} flex"
 					type="submit"
 					disabled={loading}
 				>

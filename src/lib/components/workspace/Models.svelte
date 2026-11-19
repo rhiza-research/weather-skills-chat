@@ -278,7 +278,7 @@
 		<div class="flex justify-between items-center">
 			<div class="flex items-center md:self-center text-xl font-medium px-0.5">
 				{$i18n.t('Models')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 				<span class="text-lg font-medium text-body"
 					>{filteredModels.length}</span
 				>
@@ -291,7 +291,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="field-bare text-sm py-1 rounded-r-xl"
+					class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
 					bind:value={searchValue}
 					placeholder={$i18n.t('Search Models')}
 				/>
@@ -316,7 +316,7 @@
 				{@const usable = isCatalogEnabled(model)}
 				<div
 					class=" flex flex-col w-full px-3 py-2 rounded-xl transition {usable
-						? 'cursor-pointer dark:hover:bg-white/5 hover:bg-black/5'
+						? 'cursor-pointer hover:bg-tint'
 						: 'cursor-default'}"
 					id="model-item-{model.id}"
 				>
@@ -376,7 +376,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="btn-ghost btn-ghost-sm"
+										class="btn-ghost p-1.5"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -423,7 +423,7 @@
 		{#each sectionModels as model}
 			{@const manage = canManage(model)}
 			<div
-				class=" flex flex-col cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-xl transition"
+				class=" flex flex-col cursor-pointer w-full px-3 py-2 hover:bg-tint rounded-xl transition"
 				id="model-item-{model.id}"
 			>
 				<div class="flex gap-4 mt-0.5 mb-0.5">
@@ -534,7 +534,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="btn-ghost btn-ghost-sm"
+										class="btn-ghost p-1.5"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />

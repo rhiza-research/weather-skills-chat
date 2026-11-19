@@ -15,31 +15,28 @@ const contrast = (a: string, b: string) => {
 	return (hi + 0.05) / (lo + 0.05);
 };
 
-const gray = Object.fromEntries(
-	[
-		...readFileSync('tailwind.config.js', 'utf8').matchAll(
-			/(\d{2,3}): 'var\(--color-gray-\d+, (#[0-9a-f]{3,6})\)'/gi
-		)
-	].map((m) => [m[1], m[2]])
-);
+const tw = readFileSync('src/tailwind.css', 'utf8');
 const css = readFileSync('src/app.css', 'utf8');
-const role = (name: string) => {
-	const apply = css.match(new RegExp(`\\.${name}\\s*\\{\\s*@apply ([^;]+);`))?.[1] ?? '';
-	const light = apply.match(/(?<![:\w-])text-gray-(\d+)/)?.[1];
-	const dark = apply.match(/(?<![\w-])dark:text-gray-(\d+)/)?.[1];
-	return { light: gray[light as string], dark: gray[dark as string] };
+const gray = Object.fromEntries(
+	[...tw.matchAll(/--color-gray-(\d+): (#[0-9a-f]{3,6});/gi)].map((m) => [m[1], m[2]])
+);
+const block = (sel: string) => tw.match(new RegExp(`\\n\\t${sel} \\{([^}]*)\\}`))![1];
+const token = (sel: string, name: string) => {
+	const v = block(sel).match(new RegExp(`--${name}: var\\(--color-gray-(\\d+)\\)`))?.[1];
+	return gray[v as string];
 };
+const role = (name: string) => ({ light: token(':root', name), dark: token('\\.dark', name) });
 
 // Surfaces text sits on: page, filled fields, tonal buttons.
-const LIGHT = ['#ffffff', gray['50']];
-const DARK = [gray['900'], gray['850']];
+const LIGHT = ['#ffffff', token(':root', 'surface')]; // page, panel and surface
+const DARK = [gray['900'], token('\\.dark', 'surface')];
 
 describe('colour contrast (WCAG 2.1 AA)', () => {
-	it('reads the palette from tailwind.config.js', () => {
+	it('reads the palette from tailwind.css', () => {
 		expect(Object.keys(gray)).toContain('600');
 	});
 
-	for (const name of ['text-strong', 'text-body', 'text-muted', 'tab-idle']) {
+	for (const name of ['strong', 'body', 'muted']) {
 		it(`${name} text is at least 4.5:1 in light and dark`, () => {
 			const { light, dark } = role(name);
 			expect(light, `${name} light colour`).toBeTruthy();

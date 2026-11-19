@@ -130,7 +130,7 @@
 		<div class="flex justify-between items-center">
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Preferences')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
@@ -146,7 +146,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="field-bare text-sm py-1 rounded-r-xl"
+					class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Preferences')}
 				/>
@@ -157,7 +157,7 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
+			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-surface border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
@@ -185,7 +185,7 @@
 					<div></div>
 				{/if}
 				<button
-					class="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+					class="px-4 py-2 text-sm rounded-lg bg-inverse text-on-inverse"
 					type="submit"
 				>
 					{$i18n.t('Save')}
@@ -234,13 +234,13 @@
 						></textarea>
 						<div class="flex gap-2">
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+								class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse"
 								on:click={() => saveEdit(preference)}
 							>
 								{$i18n.t('Save')}
 							</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 								on:click={() => (editing = null)}
 							>
 								{$i18n.t('Cancel')}
@@ -254,7 +254,7 @@
 					{#if preference.can_manage}
 						<div class="mt-2 flex gap-1">
 							<button
-								class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 								on:click={() => {
 									editing = preference.id;
 									editTitle = preference.title;

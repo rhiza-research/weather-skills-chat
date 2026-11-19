@@ -83,9 +83,9 @@
 	>
 		<div class="  overflow-y-scroll scrollbar-hidden h-full pr-1.5">
 			<div class="mb-3">
-				<h3 class="section-title mb-2.5">{$i18n.t('Tasks')}</h3>
+				<h3 class="text-base font-medium mb-2.5">{$i18n.t('Tasks')}</h3>
 
-				<hr class="divider" />
+				<hr class="border-line my-2" />
 
 				<div class=" mb-1 font-medium flex items-center">
 					<div class=" text-xs mr-1">{$i18n.t('Set Task Model')}</div>
@@ -138,7 +138,7 @@
 
 				{#if taskConfig.ENABLE_TITLE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 field-label">{$i18n.t('Title Generation Prompt')}</div>
+						<div class=" mb-1 text-xs font-medium">{$i18n.t('Title Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -160,7 +160,7 @@
 
 				{#if taskConfig.ENABLE_TAGS_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 field-label">{$i18n.t('Tags Generation Prompt')}</div>
+						<div class=" mb-1 text-xs font-medium">{$i18n.t('Tags Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -185,7 +185,7 @@
 				</SettingRow>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 field-label">{$i18n.t('Query Generation Prompt')}</div>
+					<div class=" mb-1 text-xs font-medium">{$i18n.t('Query Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -208,7 +208,7 @@
 
 				{#if taskConfig.ENABLE_AUTOCOMPLETE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 field-label">
+						<div class=" mb-1 text-xs font-medium">
 							{$i18n.t('Autocomplete Generation Input Max Length')}
 						</div>
 
@@ -217,7 +217,7 @@
 							placement="top-start"
 						>
 							<input
-								class="field-bare"
+								class="w-full bg-transparent outline-hidden"
 								bind:value={taskConfig.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH}
 								placeholder={$i18n.t('-1 for no limit, or a positive integer for a specific limit')}
 							/>
@@ -226,7 +226,7 @@
 				{/if}
 
 				<div class="mb-2.5">
-					<div class=" mb-1 field-label">{$i18n.t('Image Prompt Generation Prompt')}</div>
+					<div class=" mb-1 text-xs font-medium">{$i18n.t('Image Prompt Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -242,7 +242,7 @@
 				</div>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 field-label">{$i18n.t('Tools Function Calling Prompt')}</div>
+					<div class=" mb-1 text-xs font-medium">{$i18n.t('Tools Function Calling Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -259,9 +259,9 @@
 			</div>
 
 			<div class="mb-3">
-				<h3 class="section-title mb-2.5">{$i18n.t('UI')}</h3>
+				<h3 class="text-base font-medium mb-2.5">{$i18n.t('UI')}</h3>
 
-				<hr class="divider" />
+				<hr class="border-line my-2" />
 
 				<div class="  {banners.length > 0 ? ' mb-3' : ''}">
 					<div class="mb-2.5 flex w-full justify-between">
@@ -311,7 +311,7 @@
 
 										<div slot="content">
 											<DropdownMenu.Content
-												class="rounded-lg p-1 z-50 bg-white dark:bg-gray-850 shadow-lg flex flex-col gap-1"
+												class="rounded-lg p-1 z-50 bg-panel shadow-lg flex flex-col gap-1"
 												sideOffset={4}
 												align="start"
 											>

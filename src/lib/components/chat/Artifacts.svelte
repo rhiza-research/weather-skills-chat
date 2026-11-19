@@ -475,7 +475,7 @@
 	title={modalAlt}
 />
 
-<div class="w-full h-full max-h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0 overflow-hidden">
+<div class="w-full h-full max-h-full relative flex flex-col bg-surface min-h-0 overflow-hidden">
 	{#if hasPreview}
 		<div
 			class="flex flex-col min-h-0 shrink-0 {contents.length > 0
@@ -490,7 +490,7 @@
 					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
 							type="button"
-							class="p-1 rounded-xl text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							class="p-1 rounded-xl muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-tint"
 							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
 							aria-label={$i18n.t('Expand image')}
 						>
@@ -499,7 +499,7 @@
 					</Tooltip>
 					<button
 						type="button"
-						class="p-1 rounded-xl text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+						class="p-1 rounded-xl muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-tint"
 						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
 						aria-label={$i18n.t('Close preview')}
 					>
@@ -548,7 +548,7 @@
 					on:click={expandPreview}
 				>
 					<img
-						class="max-w-full max-h-full object-contain rounded border border-line bg-white dark:bg-gray-900"
+						class="max-w-full max-h-full object-contain rounded border border-line bg-page"
 						src={previewUrl}
 						alt={previewTitle || 'preview'}
 					/>
@@ -642,7 +642,7 @@
 			>
 				<button
 					type="button"
-					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
+					class="self-center pointer-events-auto p-1 rounded-full bg-panel"
 					on:click={() => {
 						showArtifacts.set(false);
 					}}
@@ -655,7 +655,7 @@
 						<div class="flex items-center gap-0.5 self-center min-w-fit" dir="ltr">
 							<button
 								type="button"
-								class="btn-ghost btn-ghost-xs disabled:cursor-not-allowed"
+								class="btn-ghost p-1 disabled:cursor-not-allowed"
 								on:click={() => navigateContent('prev')}
 								disabled={contents.length <= 1}
 							>
@@ -684,7 +684,7 @@
 
 							<button
 								type="button"
-								class="btn-ghost btn-ghost-xs disabled:cursor-not-allowed"
+								class="btn-ghost p-1 disabled:cursor-not-allowed"
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
 							>
@@ -696,7 +696,7 @@
 					<div class="flex items-center gap-1">
 						<button
 							type="button"
-							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
+							class="copy-code-button bg-none border-none text-xs bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 							on:click={() => {
 								copyToClipboard(contents[selectedContentIdx].content);
 								copied = true;
@@ -710,7 +710,7 @@
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
 									type="button"
-									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl p-0.5"
+									class="bg-none border-none text-xs bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl p-0.5"
 									on:click={showFullScreen}
 								>
 									<ArrowsPointingOut className="size-3.5" />
@@ -722,7 +722,7 @@
 
 				<button
 					type="button"
-					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
+					class="self-center pointer-events-auto p-1 rounded-full bg-panel"
 					on:click={closePanel}
 				>
 					<XMark className="size-3.5 text-gray-900 dark:text-white" />

@@ -434,16 +434,16 @@
 				<pre class="mermaid">{code}</pre>
 			{/if}
 		{:else}
-			<div class="text-text-300 absolute pl-4 py-1.5 field-label dark:text-white">
+			<div class="text-text-300 absolute pl-4 py-1.5 text-xs font-medium dark:text-white">
 				{lang}
 			</div>
 
 			<div
-				class="sticky {stickyButtonsClassName} mb-1 py-1 pr-2.5 flex items-center justify-end z-10 text-xs text-black dark:text-white"
+				class="sticky {stickyButtonsClassName} mb-1 py-1 pr-2.5 flex items-center justify-end z-10 text-xs text-strong"
 			>
 				<div class="flex items-center gap-0.5 translate-y-[1px]">
 					<button
-						class="flex gap-1 items-center bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
+						class="flex gap-1 items-center bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 						on:click={collapseCodeBlock}
 					>
 						<div>
@@ -462,7 +462,7 @@
 							</div>
 						{:else if run}
 							<button
-								class="flex gap-1 items-center run-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
+								class="flex gap-1 items-center run-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 								on:click={async () => {
 									code = _code;
 									await tick();
@@ -482,7 +482,7 @@
 
 					{#if save}
 						<button
-							class="save-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
+							class="save-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 							on:click={saveCode}
 						>
 							{saved ? $i18n.t('Saved') : $i18n.t('Save')}
@@ -490,7 +490,7 @@
 					{/if}
 
 					<button
-						class="copy-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
+						class="copy-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 						on:click={copyCode}>{copied ? $i18n.t('Copied') : $i18n.t('Copy')}</button
 					>
 				</div>
@@ -503,7 +503,7 @@
 						? ''
 						: 'rounded-b-lg'} overflow-hidden"
 			>
-				<div class=" pt-8 bg-gray-50 dark:bg-gray-850"></div>
+				<div class=" pt-8 bg-surface"></div>
 
 				{#if !collapsed}
 					{#if CodeEditorComponent}

@@ -445,7 +445,7 @@
 							<div class="absolute bottom-0 right-0 z-10">
 								<div class="m-1.5">
 									<div
-										class="shadow-xl p-1 rounded-full border-2 border-white bg-gray-800 text-white group-hover:bg-gray-600 transition dark:border-black dark:bg-white dark:group-hover:bg-gray-200 dark:text-black"
+										class="shadow-xl p-1 rounded-full border-2 border-white bg-gray-800 text-on-inverse group-hover:bg-gray-600 transition dark:border-black dark:bg-white dark:group-hover:bg-gray-200"
 									>
 										<PhotoMini className="size-5" />
 									</div>
@@ -476,7 +476,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="field-bare text-3xl font-semibold"
+									class="w-full bg-transparent outline-hidden text-3xl font-semibold"
 									placeholder={$i18n.t('Model Name')}
 									bind:value={name}
 									required
@@ -487,7 +487,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="field-bare text-xs text-muted"
+									class="w-full bg-transparent outline-hidden text-xs text-muted"
 									placeholder={$i18n.t('Model ID')}
 									bind:value={id}
 									disabled={edit}
@@ -613,7 +613,7 @@
 						</div>
 					{/if}
 
-					<hr class="divider my-1.5" />
+					<hr class="border-line my-1.5" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between">
@@ -667,7 +667,7 @@
 						</div>
 					</div>
 
-					<hr class="divider my-1" />
+					<hr class="border-line my-1" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between items-center">
@@ -746,7 +746,7 @@
 						{/if}
 					</div>
 
-					<hr class="divider my-1.5" />
+					<hr class="border-line my-1.5" />
 
 					<div class="my-2">
 						<Knowledge
@@ -787,7 +787,7 @@
 						{#if showPreview}
 							<div>
 								<textarea
-									class="field-bare text-sm resize-none"
+									class="w-full bg-transparent outline-hidden text-sm resize-none"
 									rows="10"
 									value={JSON.stringify(info, null, 2)}
 									disabled
@@ -800,8 +800,8 @@
 					<div class="my-2 flex justify-end pb-20">
 						<button
 							class=" text-sm px-3 py-2 transition rounded-xl {loading
-								? ' cursor-not-allowed bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'
-								: 'bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'} flex w-full justify-center"
+								? ' cursor-not-allowed bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100'
+								: 'bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100'} flex w-full justify-center"
 							type="submit"
 							disabled={loading}
 						>

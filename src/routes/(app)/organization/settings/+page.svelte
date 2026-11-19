@@ -107,7 +107,7 @@
 
 <div class="max-w-xl flex flex-col gap-4 text-sm">
 	<div class="flex flex-col gap-1">
-		<div class="field-label text-muted">{$i18n.t('Name')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Name')}</div>
 		<input
 			class="field"
 			bind:value={name}
@@ -115,13 +115,13 @@
 	</div>
 
 	<div class="flex flex-col gap-2">
-		<div class="field-label text-muted">{$i18n.t('Logo')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Logo')}</div>
 		<div class="flex items-center gap-4">
 			{#if logo}
-				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-gray-100 dark:bg-gray-850" />
+				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-surface" />
 			{:else}
 				<div
-					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-muted"
+					class="size-16 rounded-full bg-surface flex items-center justify-center text-xs text-muted"
 				>
 					{$i18n.t('None')}
 				</div>
@@ -129,7 +129,7 @@
 			<div class="flex flex-col gap-2">
 				<input bind:this={fileInput} type="file" accept="image/*" hidden on:change={onLogo} />
 				<button
-					class="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition font-medium"
+					class="px-3 py-1.5 rounded-xl bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium"
 					type="button"
 					on:click={() => fileInput.click()}
 				>

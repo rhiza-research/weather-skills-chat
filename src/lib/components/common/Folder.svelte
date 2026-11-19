@@ -129,7 +129,7 @@
 		>
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<div
-				class="w-full group rounded-md relative flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/5 transition {emphasis ===
+				class="w-full group rounded-md relative flex items-center justify-between hover:bg-tint transition {emphasis ===
 				'strong'
 					? 'text-gray-800 dark:text-gray-100'
 					: emphasis === 'medium'
@@ -141,7 +141,7 @@
 						? 'text-sm font-semibold'
 						: emphasis === 'medium'
 							? 'text-xs font-semibold uppercase tracking-wide'
-							: 'field-label'}"
+							: 'text-xs font-medium'}"
 				>
 					<div
 						class={emphasis === 'strong'

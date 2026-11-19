@@ -16,7 +16,7 @@
 
 		<div class="flex-1">
 			<input
-				class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+				class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 				type="text"
 				bind:value={name}
 				placeholder={$i18n.t('Group Name')}
@@ -36,7 +36,7 @@
 				<div class="text-muted">#</div>
 
 				<input
-					class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+					class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 					type="text"
 					bind:value={color}
 					placeholder={$i18n.t('Hex Color')}

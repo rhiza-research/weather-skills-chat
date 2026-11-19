@@ -121,7 +121,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<h2 class="modal-title">
+			<h2 class="text-lg font-medium self-center">
 				{$i18n.t('Settings')}
 			</h2>
 			<button
@@ -190,7 +190,7 @@
 							</div>
 						</div>
 
-						<hr class="divider my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div>
 							<div class="flex flex-col w-full">
@@ -214,7 +214,7 @@
 									</select>
 								</div>
 
-								<!-- <hr class="divider my-2.5 w-full" /> -->
+								<!-- <hr class="border-line my-2.5 w-full" /> -->
 
 								{#if defaultModelIds.length > 0}
 									<div class="flex flex-col">
@@ -249,7 +249,7 @@
 						<div class="flex justify-between pt-3 text-sm font-medium gap-1.5">
 							<Tooltip content={$i18n.t('This will delete all models including custom models')}>
 								<button
-									class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-950 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+									class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-950 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 									type="button"
 									on:click={() => {
 										showResetModal = true;
@@ -261,7 +261,7 @@
 							</Tooltip>
 
 							<button
-								class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+								class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 									? ' cursor-not-allowed'
 									: ''}"
 								type="submit"

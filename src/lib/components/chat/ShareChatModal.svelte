@@ -95,7 +95,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<h2 class="modal-title">{$i18n.t('Share chat')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Share chat')}</h2>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}
@@ -106,7 +106,7 @@
 				<XMarkSolid className="size-5" />
 			</button>
 		</div>
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		{#if rows.length}
 			<div class="px-5 pt-4 dark:text-gray-200">
@@ -138,7 +138,7 @@
 								<div class="flex">
 									<button
 										type="button"
-										class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+										class="p-1.5 rounded-xl hover:bg-tint transition"
 										aria-label={$i18n.t('Copy link')}
 										title={$i18n.t('Copy link')}
 										on:click={() => copyLink(link.id)}
@@ -147,7 +147,7 @@
 									</button>
 									<button
 										type="button"
-										class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+										class="p-1.5 rounded-xl hover:bg-tint transition"
 										aria-label={$i18n.t('Delete link')}
 										title={$i18n.t('Delete link')}
 										on:click={() => {
@@ -197,7 +197,7 @@
 
 			<div class="flex justify-end pt-4">
 				<button
-					class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+					class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
 					type="submit"
 					disabled={!!pending || !valid}
 				>

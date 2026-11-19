@@ -306,7 +306,7 @@
 		     chat's artifacts pane cannot paint before sign-in. -->
 	{:else}
 	<div
-		class="text-strong bg-white dark:bg-gray-900 h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
+		class="text-strong bg-page h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
 	>
 		{#if $user && !['user', 'admin'].includes($user.role)}
 			{#if AccountPending}

@@ -61,14 +61,14 @@
 								'/workspace/models'
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/models">{$i18n.t('Models')}</a
 						>
 
 						<a
 							class="tab {$page.url.pathname.includes('/workspace/skills')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/skills"
 						>
 							{$i18n.t('Skills')}
@@ -77,7 +77,7 @@
 						<a
 							class="tab {$page.url.pathname.includes('/workspace/secrets')
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/secrets"
 						>
 							{$i18n.t('Secrets')}
@@ -88,7 +88,7 @@
 								'/workspace/preferences'
 							)
 								? ''
-								: 'tab-idle'}"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/preferences"
 						>
 							{$i18n.t('Preferences')}

@@ -653,7 +653,7 @@
 						<div class="w-full">
 							<input
 								type="text"
-								class="field-bare text-left font-semibold text-2xl font-primary"
+								class="w-full bg-transparent outline-hidden text-left font-semibold text-2xl font-primary"
 								bind:value={knowledge.name}
 								placeholder={$i18n.t('Knowledge Name')}
 								disabled={!canWrite}
@@ -679,7 +679,7 @@
 					<div class="flex w-full px-1">
 						<input
 							type="text"
-							class="field-bare text-left text-xs text-muted"
+							class="w-full bg-transparent outline-hidden text-left text-xs text-muted"
 							bind:value={knowledge.description}
 							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}
@@ -701,7 +701,7 @@
 								{#if !showSidepanel}
 									<div class="-translate-x-2">
 										<button
-											class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
+											class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-tint"
 											on:click={() => {
 												pane.expand();
 											}}
@@ -723,7 +723,7 @@
 
 								<div>
 									<button
-										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-tint rounded-xl"
 										on:click={() => {
 											updateFileContentHandler();
 										}}
@@ -767,7 +767,7 @@
 							<div class="shrink-0 mt-1 mb-2 flex items-center">
 								<div class="mr-2">
 									<button
-										class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
+										class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-tint"
 										on:click={() => {
 											selectedFileId = null;
 										}}
@@ -781,7 +781,7 @@
 
 								<div>
 									<button
-										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-tint rounded-xl"
 										on:click={() => {
 											updateFileContentHandler();
 										}}

@@ -51,7 +51,7 @@
 		class="px-2 mb-2 text-left w-full absolute bottom-0 left-0 right-0 z-10"
 	>
 		<div class="flex w-full rounded-xl border border-line overflow-hidden">
-			<div class="max-h-60 flex flex-col w-full rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100">
+			<div class="max-h-60 flex flex-col w-full rounded-xl bg-page dark:text-gray-100">
 				{#each filtered as secret, idx}
 					<button
 						id="secret-item-{idx}"

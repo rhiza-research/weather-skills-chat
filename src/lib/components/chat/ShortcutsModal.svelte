@@ -11,7 +11,7 @@
 <Modal bind:show>
 	<div class="text-strong">
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4">
-			<h2 class="modal-title">{$i18n.t('Keyboard shortcuts')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Keyboard shortcuts')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -31,19 +31,19 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								O
 							</div>
@@ -55,13 +55,13 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Esc
 							</div>
@@ -73,19 +73,19 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								;
 							</div>
@@ -97,19 +97,19 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								C
 							</div>
@@ -121,19 +121,19 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Enter
 							</div>
@@ -147,12 +147,12 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								.
 							</div>
@@ -164,19 +164,19 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								S
 							</div>
@@ -188,18 +188,18 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Shift
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								⌫/Delete
 							</div>
@@ -211,13 +211,13 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								Ctrl/⌘
 							</div>
 
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								/
 							</div>
@@ -228,7 +228,7 @@
 		</div>
 
 		<div class=" flex justify-between dark:text-gray-300 px-5">
-			<h2 class="modal-title">{$i18n.t('Input commands')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Input commands')}</h2>
 		</div>
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">
@@ -241,7 +241,7 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								#
 							</div>
@@ -255,7 +255,7 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								/
 							</div>
@@ -269,7 +269,7 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								@
 							</div>
@@ -283,7 +283,7 @@
 
 						<div class="flex space-x-1 text-xs">
 							<div
-								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-black/10 capitalize text-body dark:border-white/10"
+								class="h-fit py-1 px-2 flex items-center justify-center rounded-sm border border-line capitalize text-body"
 							>
 								TAB
 							</div>

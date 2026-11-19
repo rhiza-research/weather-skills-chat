@@ -23,14 +23,14 @@
 		{/if}
 	</div>
 	<div
-		class="text-sm border border-gray-300/30 dark:border-gray-700/50 rounded-xl mb-1.5"
+		class="text-sm border border-line rounded-xl mb-1.5"
 		slot="content"
 	>
 		{#if status?.query}
 			<a
 				href="https://www.google.com/search?q={status.query}"
 				target="_blank"
-				class="flex w-full items-center p-3 px-4 border-b border-gray-300/30 dark:border-gray-700/50 group/item justify-between font-normal text-gray-800 dark:text-gray-300 no-underline"
+				class="flex w-full items-center p-3 px-4 border-b border-line group/item justify-between font-normal text-gray-800 dark:text-gray-300 no-underline"
 			>
 				<div class="flex gap-2 items-center">
 					<MagnifyingGlass />
@@ -41,7 +41,7 @@
 				</div>
 
 				<div
-					class=" ml-1 text-white dark:text-gray-900 group-hover/item:text-gray-600 dark:group-hover/item:text-white transition"
+					class="ml-1 text-on-inverse group-hover/item:text-gray-600 dark:group-hover/item:text-white transition"
 				>
 					<!--  -->
 					<ArrowUpRightSolid className="size-4" />
@@ -55,14 +55,14 @@
 				target="_blank"
 				class="flex w-full items-center p-3 px-4 {urlIdx === status.urls.length - 1
 					? ''
-					: 'border-b border-gray-300/30 dark:border-gray-700/50'} group/item justify-between font-normal text-gray-800 dark:text-gray-300"
+					: 'border-b border-line'} group/item justify-between font-normal text-gray-800 dark:text-gray-300"
 			>
 				<div class=" line-clamp-1">
 					{url}
 				</div>
 
 				<div
-					class=" ml-1 text-white dark:text-gray-900 group-hover/item:text-gray-600 dark:group-hover/item:text-white transition"
+					class="ml-1 text-on-inverse group-hover/item:text-gray-600 dark:group-hover/item:text-white transition"
 				>
 					<!--  -->
 					<ArrowUpRightSolid className="size-4" />

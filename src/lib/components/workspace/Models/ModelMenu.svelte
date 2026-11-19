@@ -44,7 +44,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[160px] rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[160px] rounded-xl px-1 py-1.5 border border-line z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
@@ -72,7 +72,7 @@
 				<div class="flex items-center">{$i18n.t('Export')}</div>
 			</DropdownMenu.Item>
 
-			<hr class="divider my-1" />
+			<hr class="border-line my-1" />
 
 			<DropdownMenu.Item
 				class="menu-item"

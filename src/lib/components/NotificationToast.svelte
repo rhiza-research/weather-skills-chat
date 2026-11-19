@@ -26,7 +26,7 @@
 </script>
 
 <div
-	class="relative flex min-w-[var(--width)] w-full dark:bg-gray-850 dark:text-white bg-white text-black border border-line rounded-xl"
+	class="relative flex min-w-[var(--width)] w-full bg-panel text-strong border border-line rounded-xl"
 >
 	<button
 		type="button"

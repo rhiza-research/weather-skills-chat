@@ -82,7 +82,7 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-			<h2 class="modal-title">{$i18n.t('Archived Chats')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Archived Chats')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -118,7 +118,7 @@
 					/>
 				</div>
 			</div>
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
 				{#if chats.length > 0}
 					<div class="w-full">
@@ -205,7 +205,7 @@
 
 						<div class="flex flex-wrap text-sm font-medium gap-1.5 mt-2 m-1 justify-end w-full">
 							<button
-								class=" px-4 py-1.5 font-medium hover:bg-black/5 dark:hover:bg-white/5 outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
+								class=" px-4 py-1.5 font-medium hover:bg-tint outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
 								on:click={() => {
 									showUnarchiveAllConfirmDialog = true;
 								}}
@@ -214,7 +214,7 @@
 							</button>
 
 							<button
-								class="px-4 py-1.5 font-medium hover:bg-black/5 dark:hover:bg-white/5 outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
+								class="px-4 py-1.5 font-medium hover:bg-tint outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
 								on:click={() => {
 									exportChatsHandler();
 								}}

@@ -59,9 +59,9 @@
 		{#if servers !== null}
 			<div class="">
 				<div class="mb-3">
-					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
+					<h3 class="text-base font-medium mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<!-- {$i18n.t(`Failed to connect to {{URL}} OpenAPI tool server`, {
@@ -106,7 +106,7 @@
 					</div>
 
 					<!-- <div class="mb-2.5 flex w-full justify-between">
-						<div class=" field-label">{$i18n.t('Arena Models')}</div>
+						<div class=" text-xs font-medium">{$i18n.t('Arena Models')}</div>
 
 						<Tooltip content={$i18n.t(`Message rating should be enabled to use this feature`)}>
 							<Switch bind:state={evaluationConfig.ENABLE_EVALUATION_ARENA_MODELS} />

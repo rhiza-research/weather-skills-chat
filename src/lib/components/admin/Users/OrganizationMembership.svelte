@@ -228,7 +228,7 @@
 <div class="mt-0.5 mb-2 gap-1 flex flex-col md:flex-row justify-between">
 	<div class="flex md:self-center text-lg font-medium px-0.5">
 		{title || $i18n.t('Organization membership')}
-		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 		<span class="text-lg font-medium text-body">
 			{org?.name ?? current?.name ?? $i18n.t('Personal')}
 		</span>
@@ -241,7 +241,7 @@
 			bind:value={search}
 		/>
 		<button
-			class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+			class="px-3 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-sm flex items-center gap-1.5"
 			type="button"
 			on:click={openInvite}
 		>
@@ -286,7 +286,7 @@
 	<Modal bind:show={showInvite} size="sm">
 		<div>
 			<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-				<h2 class="modal-title">{$i18n.t('Invite a user')}</h2>
+				<h2 class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</h2>
 				<button
 					class="self-center"
 					type="button"
@@ -297,7 +297,7 @@
 					<XMarkSolid className="size-5" />
 				</button>
 			</div>
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 				<input
 					class="field"
@@ -355,7 +355,7 @@
 				{/if}
 				<div class="flex justify-end">
 					<button
-						class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+						class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
 						type="submit"
 						disabled={inviting}
 					>
@@ -409,14 +409,14 @@
 		</div>
 		<div></div>
 	</div>
-	<hr class="mt-1.5 divider" />
+	<hr class="border-line my-2 mt-1.5" />
 
 	{#each tableRows as row (row.id)}
 		<div class="member-table-row grid items-center gap-x-3 px-1 py-2 text-sm">
 			{#if row.kind === 'invite'}
 			<div class="flex items-center gap-2.5 min-w-0">
 				<div
-					class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-muted"
+					class="rounded-full size-6 shrink-0 bg-surface flex items-center justify-center text-xs text-muted"
 				>
 					+
 				</div>
@@ -441,7 +441,7 @@
 			<div class="text-muted">—</div>
 			<div class="flex justify-end items-center gap-1 flex-wrap">
 				<button
-					class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"
+					class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse whitespace-nowrap"
 					type="button"
 					on:click={() => resendInvite(row.invite.id)}
 				>

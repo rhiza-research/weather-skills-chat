@@ -165,7 +165,7 @@
 					</div>
 
 					{#if documentIdx !== mergedDocuments.length - 1}
-						<hr class="divider my-3" />
+						<hr class="border-line my-3" />
 					{/if}
 				{/each}
 			</div>

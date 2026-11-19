@@ -143,7 +143,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<h2 class="modal-title">
+			<h2 class="text-lg font-medium self-center">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
@@ -179,7 +179,7 @@
 
 								<div class="flex flex-1 items-center">
 									<input
-										class="field-bare flex-1 text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="w-full bg-transparent outline-hidden flex-1 text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -192,7 +192,7 @@
 										className="shrink-0 flex items-center mr-1"
 									>
 										<button
-											class="btn-ghost btn-ghost-xs"
+											class="btn-ghost p-1"
 											on:click={() => {
 												verifyHandler();
 											}}
@@ -210,7 +210,7 @@
 								<div class="flex-1 flex items-center">
 									<div class="text-sm">/</div>
 									<input
-										class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={path}
 										placeholder={$i18n.t('openapi.json Path')}
@@ -261,7 +261,7 @@
 						</div>
 
 						{#if !direct}
-							<hr class="divider my-2.5 w-full" />
+							<hr class="border-line my-2.5 w-full" />
 
 							<div class="my-2 -mx-2">
 								<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg">
@@ -274,7 +274,7 @@
 					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
 						{#if edit}
 							<button
-								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 								type="button"
 								on:click={() => {
 									onDelete();
@@ -286,7 +286,7 @@
 						{/if}
 
 						<button
-							class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+							class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 								? ' cursor-not-allowed'
 								: ''}"
 							type="submit"

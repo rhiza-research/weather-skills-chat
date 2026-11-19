@@ -29,7 +29,7 @@
 	<div class="flex items-center gap-1 {label ? 'px-3 py-1.5' : 'px-0.5'}">
 		<input
 			bind:value={tagName}
-			class="field-bare text-sm w-[6.5rem]"
+			class="w-full bg-transparent outline-hidden text-sm w-[6.5rem]"
 			placeholder={$i18n.t('Add a tag')}
 			list="tagOptions"
 			on:keydown={(event) => {
@@ -44,7 +44,7 @@
 		</datalist>
 
 		<button
-			class="btn-ghost btn-ghost-xs"
+			class="btn-ghost p-1"
 			type="button"
 			aria-label={$i18n.t('Save Tag')}
 			on:click={addTagHandler}
@@ -52,7 +52,7 @@
 			<Check className="size-4" />
 		</button>
 		<button
-			class="btn-ghost btn-ghost-xs"
+			class="btn-ghost p-1"
 			type="button"
 			aria-label={$i18n.t('Cancel')}
 			on:click={() => (showTagInput = false)}
@@ -67,7 +67,7 @@
 	</button>
 {:else}
 	<button
-		class="self-center p-0.5 flex rounded-full border border-dashed border-line-strong hover:bg-black/5 dark:hover:bg-white/5 transition"
+		class="self-center p-0.5 flex rounded-full border border-dashed border-line-strong hover:bg-tint transition"
 		type="button"
 		aria-label={$i18n.t('Add Tag')}
 		on:click={() => (showTagInput = true)}

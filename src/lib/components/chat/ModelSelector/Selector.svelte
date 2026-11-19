@@ -340,9 +340,9 @@
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content
-		class=" z-40 {$mobile
+		class="z-40 {$mobile
 			? `w-full`
-			: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-xl  bg-white dark:bg-gray-850 dark:text-white shadow-lg  outline-hidden"
+			: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-xl bg-panel dark:text-white shadow-lg outline-hidden"
 		transition={flyAndScale}
 		side={$mobile ? 'bottom' : 'bottom-start'}
 		sideOffset={3}
@@ -355,7 +355,7 @@
 					<input
 						id="model-search-input"
 						bind:value={searchValue}
-						class="field-bare text-sm"
+						class="w-full bg-transparent outline-hidden text-sm"
 						placeholder={searchPlaceholder}
 						autocomplete="off"
 						on:keydown={(e) => {
@@ -382,7 +382,7 @@
 			<div class="px-3 max-h-64 overflow-y-auto scrollbar-hidden group relative">
 				{#if tags && items.filter((item) => !(item.model?.info?.meta?.hidden ?? false)).length > 0}
 					<div
-						class=" flex w-full sticky top-0 z-10 bg-white dark:bg-gray-850 overflow-x-auto scrollbar-none"
+						class="flex w-full sticky top-0 z-10 bg-panel overflow-x-auto scrollbar-none"
 						on:wheel={(e) => {
 							if (e.deltaY !== 0) {
 								e.preventDefault();
@@ -399,7 +399,7 @@
 									class="tab outline-none {selectedTag === '' &&
 									selectedConnectionType === ''
 										? ''
-										: 'tab-idle'} capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = '';
@@ -413,7 +413,7 @@
 								<button
 									class="tab outline-none {selectedConnectionType === 'ollama'
 										? ''
-										: 'tab-idle'} capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'ollama';
@@ -424,7 +424,7 @@
 								<button
 									class="tab outline-none {selectedConnectionType === 'openai'
 										? ''
-										: 'tab-idle'} capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'openai';
@@ -438,7 +438,7 @@
 								<button
 									class="tab outline-none {selectedConnectionType === 'direct'
 										? ''
-										: 'tab-idle'} capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'direct';
@@ -452,7 +452,7 @@
 								<button
 									class="tab outline-none {selectedTag === tag
 										? ''
-										: 'tab-idle'} capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = tag;
@@ -527,7 +527,7 @@
 																className="self-end"
 															>
 																<span
-																	class="field-label text-body line-clamp-1"
+																	class="text-xs font-medium text-body line-clamp-1"
 																	>{item.model.ollama?.details?.parameter_size ?? ''}</span
 																>
 															</Tooltip>
@@ -637,7 +637,7 @@
 						placement="top-start"
 					>
 						<button
-							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
+							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-tint rounded-xl cursor-pointer data-highlighted:bg-muted"
 							on:click={() => {
 								pullModelHandler();
 							}}
@@ -736,7 +736,7 @@
 			{#if showTemporaryChatControl}
 				<div class="flex items-center mx-2 mb-2">
 					<button
-						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
+						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-tint rounded-xl cursor-pointer data-highlighted:bg-muted"
 						on:click={async () => {
 							temporaryChatEnabled.set(!$temporaryChatEnabled);
 							await goto('/');

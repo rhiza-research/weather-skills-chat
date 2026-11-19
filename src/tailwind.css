@@ -2,6 +2,69 @@
 
 @config '../tailwind.config.js';
 
+@theme {
+	--color-gray-50: #f9f9f9;
+	--color-gray-100: #ececec;
+	--color-gray-200: #e3e3e3;
+	--color-gray-300: #cdcdcd;
+	--color-gray-400: #b4b4b4;
+	--color-gray-500: #9b9b9b;
+	--color-gray-600: #676767;
+	--color-gray-700: #4e4e4e;
+	--color-gray-800: #333;
+	--color-gray-850: #262626;
+	--color-gray-900: #171717;
+	--color-gray-950: #0d0d0d;
+
+	--spacing-safe-bottom: env(safe-area-inset-bottom);
+}
+
+/* Semantic colours. Each is a normal Tailwind colour (text-muted, border-line, hover:bg-tint, ...)
+   whose value switches with the theme, so markup needs no dark: pair. */
+@theme inline {
+	--color-strong: var(--strong);
+	--color-body: var(--body);
+	--color-muted: var(--muted);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-surface: var(--surface);
+	--color-tint: var(--tint);
+	--color-panel: var(--panel);
+	--color-page: var(--page);
+	--color-inverse: var(--inverse);
+	--color-on-inverse: var(--on-inverse);
+}
+
+@layer base {
+	:root {
+		--strong: var(--color-gray-800);
+		--body: var(--color-gray-700);
+		--muted: var(--color-gray-600);
+		--line: var(--color-gray-100);
+		--line-strong: var(--color-gray-200);
+		--surface: var(--color-gray-50);
+		--tint: rgb(0 0 0 / 0.05);
+		--panel: white;
+		--page: white;
+		--inverse: var(--color-gray-900);
+		--on-inverse: white;
+	}
+
+	.dark {
+		--strong: var(--color-gray-100);
+		--body: var(--color-gray-300);
+		--muted: var(--color-gray-400);
+		--line: var(--color-gray-850);
+		--line-strong: var(--color-gray-700);
+		--surface: var(--color-gray-850);
+		--tint: rgb(255 255 255 / 0.05);
+		--panel: var(--color-gray-850);
+		--page: var(--color-gray-900);
+		--inverse: white;
+		--on-inverse: var(--color-gray-900);
+	}
+}
+
 /*
   The default border color has changed to `currentColor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still

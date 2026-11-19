@@ -111,7 +111,7 @@
 		>
 			<div class="flex w-full rounded-xl border border-line">
 				<div
-					class="max-h-60 flex flex-col w-full rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100"
+					class="max-h-60 flex flex-col w-full rounded-xl bg-page dark:text-gray-100"
 				>
 					<Spinner />
 				</div>

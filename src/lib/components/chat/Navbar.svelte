@@ -96,7 +96,7 @@
 				>
 					<button
 						id="sidebar-toggle-button"
-						class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+						class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-tint transition"
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}
@@ -142,7 +142,7 @@
 							}}
 						>
 							<button
-								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-tint transition"
 								id="chat-context-menu-button"
 								aria-label={$i18n.t('Chat Menu')}
 							>
@@ -157,7 +157,7 @@
 						<button
 							class="btn-ghost {artifactsPanelOpen
 							? ''
-							: 'border border-line-strong bg-white px-2.5 py-1.5 font-medium text-strong shadow-lg hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750'}"
+							: 'border border-line-strong bg-panel px-2.5 py-1.5 font-medium text-strong shadow-lg hover:bg-tint'}"
 							on:click={toggleArtifactsPanel}
 							aria-label={$i18n.t('Artifacts')}
 							aria-pressed={artifactsPanelOpen}
@@ -175,7 +175,7 @@
 							id="new-chat-button"
 							class=" flex {$showSidebar
 								? 'md:hidden'
-								: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition"
+								: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-tint transition"
 							on:click={() => {
 								initNewChat();
 							}}
@@ -198,7 +198,7 @@
 							}}
 						>
 							<button
-								class="select-none flex rounded-xl p-1.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+								class="select-none flex rounded-xl p-1.5 w-full hover:bg-tint transition"
 								aria-label={$i18n.t('User Menu')}
 							>
 								<div class=" self-center">

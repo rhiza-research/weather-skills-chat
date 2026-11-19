@@ -147,7 +147,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<h2 class="modal-title">
+			<h2 class="text-lg font-medium self-center">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
@@ -181,7 +181,7 @@
 
 								<div class="flex-1">
 									<input
-										class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -193,7 +193,7 @@
 
 							<Tooltip content={$i18n.t('Verify Connection')} className="self-end -mb-1">
 								<button
-									class="btn-ghost btn-ghost-xs"
+									class="btn-ghost p-1"
 									on:click={() => {
 										verifyHandler();
 									}}
@@ -234,7 +234,7 @@
 										)}
 									>
 										<input
-											class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+											class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 											type="text"
 											bind:value={prefixId}
 											placeholder={$i18n.t('Prefix ID')}
@@ -257,7 +257,7 @@
 											)}
 										>
 											<input
-												class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+												class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 												type="text"
 												bind:value={name}
 												placeholder={$i18n.t('e.g. openrouter')}
@@ -301,7 +301,7 @@
 
 									<div class="flex-1">
 										<select
-											class="field-bare text-sm"
+											class="w-full bg-transparent outline-hidden text-sm"
 											bind:value={modelCallTracing}
 										>
 											<!-- A new provider style is also added to _PROVIDER_TRACE_FIELD_BUILDERS in backend/open_webui/utils/langfuse_tracing.py. -->
@@ -319,7 +319,7 @@
 							</div>
 						{/if}
 
-						<hr class="divider my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div class="flex flex-col w-full">
 							<div class="mb-1 flex justify-between">
@@ -361,7 +361,7 @@
 							{/if}
 						</div>
 
-						<hr class="divider my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div class="flex items-center">
 							<input
@@ -388,7 +388,7 @@
 					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
 						{#if edit}
 							<button
-								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 								type="button"
 								on:click={() => {
 									onDelete();
@@ -400,7 +400,7 @@
 						{/if}
 
 						<button
-							class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+							class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 								? ' cursor-not-allowed'
 								: ''}"
 							type="submit"

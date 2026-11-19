@@ -228,10 +228,10 @@
 	{#if responseContent === null}
 		{#if !floatingInput}
 			<div
-				class="flex flex-row gap-0.5 shrink-0 p-1 bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-lg shadow-lg"
+				class="flex flex-row gap-0.5 shrink-0 p-1 bg-panel dark:text-gray-100 text-medium rounded-lg shadow-lg"
 			>
 				<button
-					class="px-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl flex items-center gap-1 min-w-fit"
+					class="px-1 hover:bg-tint rounded-xl flex items-center gap-1 min-w-fit"
 					on:click={async () => {
 						selectedText = window.getSelection().toString();
 						floatingInput = true;
@@ -250,7 +250,7 @@
 					<div class="shrink-0">{$i18n.t('Ask')}</div>
 				</button>
 				<button
-					class="px-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl flex items-center gap-1 min-w-fit"
+					class="px-1 hover:bg-tint rounded-xl flex items-center gap-1 min-w-fit"
 					on:click={() => {
 						selectedText = window.getSelection().toString();
 						explainHandler();
@@ -268,7 +268,7 @@
 				<input
 					type="text"
 					id="floating-message-input"
-					class="field-bare ml-5 flex-1 text-sm"
+					class="w-full bg-transparent outline-hidden ml-5 flex-1 text-sm"
 					placeholder={$i18n.t('Ask a question')}
 					bind:value={floatingInputValue}
 					on:keydown={(e) => {
@@ -281,8 +281,8 @@
 				<div class="ml-1 mr-2">
 					<button
 						class="{floatingInputValue !== ''
-							? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
-							: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 m-0.5 self-center"
+							? 'bg-inverse text-on-inverse hover:bg-gray-900 dark:hover:bg-gray-100'
+							: 'text-on-inverse bg-gray-200 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 m-0.5 self-center"
 						on:click={() => {
 							askHandler();
 						}}
@@ -293,7 +293,7 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="bg-white dark:bg-gray-850 dark:text-gray-100 rounded-xl shadow-lg w-80 max-w-full">
+		<div class="bg-panel dark:text-gray-100 rounded-xl shadow-lg w-80 max-w-full">
 			<div
 				class="bg-gray-50/50 dark:bg-gray-800 dark:text-gray-100 text-medium rounded-xl px-4 py-3 w-full"
 			>
@@ -303,7 +303,7 @@
 			</div>
 
 			<div
-				class="bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-xl px-4 py-3 w-full"
+				class="bg-panel dark:text-gray-100 text-medium rounded-xl px-4 py-3 w-full"
 			>
 				<div class=" max-h-80 overflow-y-auto w-full markdown-prose-xs" id="response-container">
 					<Markdown id={`${id}-float-response`} content={responseContent} />

@@ -42,9 +42,9 @@
 		{#if config}
 			<div>
 				<div class="mb-3">
-					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
+					<h3 class="text-base font-medium mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div class="mb-2.5">
 						<SettingRow label={$i18n.t('Enable Code Execution')}>
@@ -80,14 +80,14 @@
 
 					{#if config.CODE_EXECUTION_ENGINE === 'jupyter'}
 						<div class="mb-2.5 flex flex-col gap-1.5 w-full">
-							<div class="field-label">
+							<div class="text-xs font-medium">
 								{$i18n.t('Jupyter URL')}
 							</div>
 
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
-										class="field-bare text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="w-full bg-transparent outline-hidden text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										placeholder={$i18n.t('Enter Jupyter URL')}
 										bind:value={config.CODE_EXECUTION_JUPYTER_URL}
@@ -99,7 +99,7 @@
 
 						<div class="mb-2.5 flex flex-col gap-1.5 w-full">
 							<div class=" flex gap-2 w-full items-center justify-between">
-								<div class="field-label">
+								<div class="text-xs font-medium">
 									{$i18n.t('Jupyter Auth')}
 								</div>
 
@@ -140,7 +140,7 @@
 						</div>
 
 						<div class="flex gap-2 w-full items-center justify-between">
-							<div class="field-label">
+							<div class="text-xs font-medium">
 								{$i18n.t('Code Execution Timeout')}
 							</div>
 
@@ -160,9 +160,9 @@
 				</div>
 
 				<div class="mb-3">
-					<h3 class="section-title mb-2.5">{$i18n.t('Code Interpreter')}</h3>
+					<h3 class="text-base font-medium mb-2.5">{$i18n.t('Code Interpreter')}</h3>
 
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div class="mb-2.5">
 						<SettingRow label={$i18n.t('Enable Code Interpreter')}>
@@ -199,14 +199,14 @@
 
 						{#if config.CODE_INTERPRETER_ENGINE === 'jupyter'}
 							<div class="mb-2.5 flex flex-col gap-1.5 w-full">
-								<div class="field-label">
+								<div class="text-xs font-medium">
 									{$i18n.t('Jupyter URL')}
 								</div>
 
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="field-bare text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
+											class="w-full bg-transparent outline-hidden text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
 											type="text"
 											placeholder={$i18n.t('Enter Jupyter URL')}
 											bind:value={config.CODE_INTERPRETER_JUPYTER_URL}
@@ -218,7 +218,7 @@
 
 							<div class="mb-2.5 flex flex-col gap-1.5 w-full">
 								<div class="flex gap-2 w-full items-center justify-between">
-									<div class="field-label">
+									<div class="text-xs font-medium">
 										{$i18n.t('Jupyter Auth')}
 									</div>
 
@@ -259,7 +259,7 @@
 							</div>
 
 							<div class="flex gap-2 w-full items-center justify-between">
-								<div class="field-label">
+								<div class="text-xs font-medium">
 									{$i18n.t('Code Execution Timeout')}
 								</div>
 
@@ -277,11 +277,11 @@
 							</div>
 						{/if}
 
-						<hr class="divider" />
+						<hr class="border-line my-2" />
 
 						<div>
 							<div class="py-0.5 w-full">
-								<div class=" mb-2.5 field-label">
+								<div class=" mb-2.5 text-xs font-medium">
 									{$i18n.t('Code Interpreter Prompt Template')}
 								</div>
 

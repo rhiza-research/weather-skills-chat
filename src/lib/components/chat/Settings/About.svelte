@@ -35,10 +35,10 @@
 		</div>
 
 		{#if ollamaVersion}
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 
 			<div>
-				<div class="setting-title">{$i18n.t('Ollama Version')}</div>
+				<div class="my-1.5 text-sm font-medium">{$i18n.t('Ollama Version')}</div>
 				<div class="flex w-full">
 					<div class="flex-1 text-xs text-body">
 						{ollamaVersion ?? 'N/A'}
@@ -47,7 +47,7 @@
 			</div>
 		{/if}
 
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		<div>
 			<pre

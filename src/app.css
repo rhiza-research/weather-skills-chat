@@ -105,81 +105,51 @@ textarea::placeholder {
 	@apply text-xs prose dark:prose-invert prose-blockquote:border-s-gray-100 prose-blockquote:dark:border-gray-800 prose-blockquote:border-s-2 prose-blockquote:not-italic prose-blockquote:font-normal  prose-headings:font-semibold prose-hr:my-0  prose-hr:border-gray-100 prose-hr:dark:border-gray-800 prose-p:my-0 prose-img:my-1 prose-headings:my-1 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-ul:-my-0 prose-ol:-my-0 prose-li:-my-0 whitespace-pre-line;
 }
 
+/* Components: only patterns with several parts or states. Everything else is plain Tailwind,
+   using the semantic colours from tailwind.css. */
 @layer components {
-	.field {
-		@apply w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-300 outline-hidden;
-	}
-
-	.setting-group {
-		@apply mt-4 mb-1 pt-4 border-t border-gray-100 dark:border-gray-850 text-sm font-medium first:mt-0 first:pt-0 first:border-t-0;
-	}
-
-	.setting-title {
-		@apply my-1.5 text-sm font-medium;
-	}
-
 	.btn-primary {
-		@apply px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full;
+		@apply rounded-full bg-black px-4 py-1.5 text-sm font-medium text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100;
 	}
 
 	.btn-secondary {
-		@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
+		@apply flex items-center gap-1.5 rounded-xl bg-gray-100 px-3 py-1.5 text-xs transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700;
 	}
 
 	.btn-ghost {
-		@apply flex items-center gap-1.5 px-2 py-2 text-sm rounded-xl text-gray-600 hover:text-black hover:bg-black/5 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/5 transition;
-	}
-
-	.btn-ghost-sm {
-		@apply p-1.5;
-	}
-
-	.btn-ghost-xs {
-		@apply p-1;
-	}
-
-	.menu-item {
-		@apply flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg;
-	}
-
-	.divider {
-		@apply my-2 border-gray-100 dark:border-gray-850;
-	}
-
-	.border-line {
-		@apply border-gray-100 dark:border-gray-850;
-	}
-
-	.border-line-strong {
-		@apply border-gray-200 dark:border-gray-700;
-	}
-
-	.page-title {
-		@apply text-xl font-medium dark:text-white;
-	}
-
-	.section-title {
-		@apply text-base font-medium;
-	}
-
-	.modal-title {
-		@apply text-lg font-medium self-center;
-	}
-
-	.text-strong {
-		@apply text-gray-800 dark:text-gray-100;
-	}
-
-	.text-body {
-		@apply text-gray-700 dark:text-gray-300;
-	}
-
-	.text-muted {
-		@apply text-gray-600 dark:text-gray-400;
+		@apply flex items-center gap-1.5 rounded-xl p-2 text-sm text-body transition hover:bg-tint hover:text-strong;
 	}
 
 	.btn-tonal {
-		@apply w-full rounded-full py-2.5 text-sm font-medium bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition;
+		@apply w-full rounded-full bg-tint py-2.5 text-sm font-medium text-body transition hover:bg-black/10 dark:hover:bg-white/10;
+	}
+
+	.menu-item {
+		@apply flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-tint;
+	}
+
+	.nav-row {
+		@apply flex items-center gap-3 rounded-xl p-2 transition hover:bg-tint;
+	}
+
+	.tab {
+		@apply min-w-fit rounded-full p-1.5 transition;
+	}
+
+	.field {
+		@apply w-full rounded-lg bg-surface px-3 py-2 text-sm outline-hidden dark:text-gray-300;
+	}
+
+	.field-outline {
+		@apply w-full rounded-lg border border-line-strong bg-transparent px-3 py-2 text-sm outline-hidden;
+	}
+
+	.field-select {
+		@apply w-40 cursor-pointer rounded-lg bg-gray-100 py-1 pr-8 pl-2 text-left text-xs outline-hidden transition hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700;
+	}
+
+	.setting-group {
+		@apply mt-4 mb-1 border-t border-line pt-4 text-sm font-medium first:mt-0 first:border-t-0 first:pt-0;
 	}
 
 	.page-nav {
@@ -187,35 +157,7 @@ textarea::placeholder {
 	}
 
 	.page-body {
-		@apply flex-1 min-w-0 max-h-full overflow-y-auto px-4 pt-4 pb-2;
-	}
-
-	.nav-row {
-		@apply flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition;
-	}
-
-	.tab {
-		@apply min-w-fit rounded-full p-1.5 transition;
-	}
-
-	.tab-idle {
-		@apply text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white;
-	}
-
-	.field-label {
-		@apply text-xs font-medium;
-	}
-
-	.field-outline {
-		@apply w-full rounded-lg px-3 py-2 text-sm bg-transparent border border-gray-200 dark:border-gray-700 outline-hidden;
-	}
-
-	.field-bare {
-		@apply w-full bg-transparent outline-hidden;
-	}
-
-	.field-select {
-		@apply cursor-pointer w-40 rounded-lg py-1 pl-2 pr-8 text-xs text-left bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 outline-hidden transition;
+		@apply max-h-full min-w-0 flex-1 overflow-y-auto px-4 pt-4 pb-2;
 	}
 }
 

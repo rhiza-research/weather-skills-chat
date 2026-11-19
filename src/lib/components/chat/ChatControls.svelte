@@ -193,13 +193,13 @@
 					: {
 							width: 'min(400px, 85vw)',
 							className:
-								'bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800'
+								'bg-surface border-l border-gray-100 dark:border-gray-800'
 						}}
 				on:close={closePanel}
 			>
 				<div
 					class=" {$showCallOverlay || $showOverview || $showArtifacts
-						? ' h-screen  w-full'
+						? ' h-screen w-full'
 						: 'px-6 py-4'} h-full"
 				>
 					{#if $showCallOverlay}
@@ -285,14 +285,14 @@
 				showArtifacts.set(false);
 			}}
 			collapsible={true}
-			class="z-10 h-full min-h-0 bg-gray-50 dark:bg-gray-850 border-l border-line"
+			class="z-10 h-full min-h-0 bg-surface border-l border-line"
 		>
 			{#if $showControls && panelOpen}
 				<div class="flex h-full max-h-full min-h-0 w-full overflow-hidden">
 					<div
 						class="w-full h-full min-h-0 {($showOverview || $showArtifacts) && !$showCallOverlay
 							? 'overflow-hidden'
-							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850 border border-line overflow-y-auto scrollbar-hidden'} z-40 pointer-events-auto"
+							: 'px-4 py-4 bg-panel dark:shadow-lg border border-line overflow-y-auto scrollbar-hidden'} z-40 pointer-events-auto"
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">

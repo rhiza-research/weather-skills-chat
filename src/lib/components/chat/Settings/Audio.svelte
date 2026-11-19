@@ -234,12 +234,12 @@
 			</SettingRow>
 		</div>
 
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		{#if TTSEngine === 'browser-kokoro'}
 			{#if TTSModel}
 				<div>
-					<div class="setting-title">{$i18n.t('Set Voice')}</div>
+					<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 					<div class="flex w-full">
 						<div class="flex-1">
 							<input
@@ -277,7 +277,7 @@
 			{/if}
 		{:else if $config.audio.tts.engine === ''}
 			<div>
-				<div class="setting-title">{$i18n.t('Set Voice')}</div>
+				<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 				<div class="flex w-full">
 					<div class="flex-1">
 						<select class="field" aria-label={$i18n.t('Set Voice')} bind:value={voice}>
@@ -304,7 +304,7 @@
 			</div>
 		{:else if $config.audio.tts.engine !== ''}
 			<div>
-				<div class="setting-title">{$i18n.t('Set Voice')}</div>
+				<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 				<div class="flex w-full">
 					<div class="flex-1">
 						<input

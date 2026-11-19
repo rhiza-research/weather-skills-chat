@@ -228,7 +228,7 @@
 	<div class="relative" bind:this={root}>
 		<button
 			type="button"
-			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-xl hover:bg-tint"
 			on:click={toggle}
 			title={statusLabel}
 			aria-expanded={open}
@@ -249,7 +249,7 @@
 			{/if}
 			<div class="flex flex-col leading-tight min-w-0 text-left">
 				<span
-					class="field-label whitespace-nowrap {state === 'degraded'
+					class="text-xs font-medium whitespace-nowrap {state === 'degraded'
 						? 'text-red-600 dark:text-red-400'
 						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
@@ -262,7 +262,7 @@
 		</button>
 		{#if open}
 			<div
-				class="absolute right-0 top-full mt-1 z-40 w-72 rounded-lg border border-line-strong bg-white dark:bg-gray-900 p-2.5 text-xs shadow-lg"
+				class="absolute right-0 top-full mt-1 z-40 w-72 rounded-lg border border-line-strong bg-page p-2.5 text-xs shadow-lg"
 			>
 				{#if state === 'ready'}
 					<div class="mb-1 text-muted">

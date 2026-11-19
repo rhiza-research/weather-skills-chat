@@ -182,13 +182,13 @@
 	>
 		<div class="flex w-full rounded-xl border border-line">
 			<div
-				class="max-h-60 flex flex-col w-full rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100"
+				class="max-h-60 flex flex-col w-full rounded-xl bg-page dark:text-gray-100"
 			>
 				<div class="m-1 overflow-y-auto p-1 space-y-0.5 scrollbar-hidden">
 					{#each filteredPrompts as prompt, promptIdx}
 						<button
 							class=" px-3 py-1.5 rounded-xl w-full text-left {promptIdx === selectedPromptIdx
-								? '  bg-gray-50 dark:bg-gray-850 selected-command-option-button'
+								? '  bg-surface selected-command-option-button'
 								: ''}"
 							type="button"
 							on:click={() => {
@@ -211,7 +211,7 @@
 				</div>
 
 				<div
-					class="px-2 pt-0.5 pb-1 text-xs text-strong bg-white dark:bg-gray-900 rounded-b-xl flex items-center space-x-1"
+					class="px-2 pt-0.5 pb-1 text-xs text-strong bg-page rounded-b-xl flex items-center space-x-1"
 				>
 					<div>
 						<Info className="size-3" />

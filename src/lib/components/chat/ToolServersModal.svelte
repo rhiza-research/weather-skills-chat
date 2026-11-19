@@ -100,7 +100,7 @@
 <Modal bind:show size="md">
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-0.5">
-			<h2 class="modal-title">{$i18n.t('Available Tools and Skills')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Available Tools and Skills')}</h2>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}
@@ -124,12 +124,12 @@
 
 		{#if builtinOptions.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-				<h3 class="section-title self-center">{$i18n.t('Built-in Tools')}</h3>
+				<h3 class="text-base font-medium self-center">{$i18n.t('Built-in Tools')}</h3>
 			</div>
 			<div class="px-3 pb-2 w-full flex flex-col">
 				{#each builtinOptions as option (option.key)}
 					<div
-						class="px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"
+						class="px-2 py-1.5 rounded-xl hover:bg-tint transition flex items-center gap-2"
 					>
 						<div class="flex-1 min-w-0">
 							<div class="text-sm font-medium text-strong">
@@ -151,7 +151,7 @@
 		{#if visibleTools.length > 0}
 			{#if builtinOptions.length > 0 || $toolServers.length > 0}
 				<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-					<h3 class="section-title self-center">{$i18n.t('Weather Skills')}</h3>
+					<h3 class="text-base font-medium self-center">{$i18n.t('Weather Skills')}</h3>
 				</div>
 			{/if}
 
@@ -160,7 +160,7 @@
 					{@const version = toolSkillVersion(tool)}
 					{@const repoRef = toolSkillRepoRef(tool)}
 					{@const description = tool?.meta?.description}
-					<div class="px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition">
+					<div class="px-2 py-1.5 rounded-xl hover:bg-tint transition">
 						<div class="flex items-center gap-2">
 							<button
 								type="button"
@@ -238,7 +238,7 @@
 
 		{#if $toolServers.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-0.5">
-				<h3 class="section-title self-center">{$i18n.t('Tool Servers')}</h3>
+				<h3 class="text-base font-medium self-center">{$i18n.t('Tool Servers')}</h3>
 			</div>
 
 			<div class="px-5 pb-5 w-full flex flex-col justify-center">

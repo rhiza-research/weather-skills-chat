@@ -129,7 +129,7 @@
 		<div class="flex justify-between items-center">
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Knowledge')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 				<span class="text-lg font-medium text-body"
 					>{filteredItems.length}</span
 				>
@@ -142,7 +142,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="field-bare text-sm py-1 rounded-r-xl"
+					class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Knowledge')}
 				/>
@@ -151,7 +151,7 @@
 			{#if canCreate}
 				<div>
 					<button
-						class=" px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+						class=" px-2 py-2 rounded-xl hover:bg-tint dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 						aria-label={$i18n.t('Create Knowledge')}
 						on:click={() => {
 							goto(`${basePath}/knowledge/create`);
@@ -174,7 +174,7 @@
 		<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 			{#each publicItems as item}
 				<button
-					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl {isCatalogEnabled(
+					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl {isCatalogEnabled(
 						item
 					)
 						? 'cursor-pointer'
@@ -251,7 +251,7 @@
 	<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 		{#each sectionItems as item}
 			<button
-				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl"
+				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl"
 				on:click={() => {
 					if (item?.meta?.document) {
 						toast.error(

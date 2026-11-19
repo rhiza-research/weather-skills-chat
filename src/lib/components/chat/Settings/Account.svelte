@@ -181,7 +181,7 @@
 				</div>
 
 				<div class="flex-1 flex flex-col self-center gap-0.5">
-					<div class="setting-title">{$i18n.t('Profile Image')}</div>
+					<div class="my-1.5 text-sm font-medium">{$i18n.t('Profile Image')}</div>
 
 					<div class="flex flex-wrap gap-1.5">
 						<button
@@ -223,7 +223,7 @@
 
 			<div class="pt-0.5">
 				<div class="flex flex-col w-full">
-					<div class=" mb-1 field-label">{$i18n.t('Name')}</div>
+					<div class=" mb-1 text-xs font-medium">{$i18n.t('Name')}</div>
 
 					<div class="flex-1">
 						<input
@@ -243,10 +243,10 @@
 			<UpdatePassword />
 		</div>
 
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		<div class="flex justify-between items-center text-sm">
-			<div class="setting-title">{$i18n.t('API keys')}</div>
+			<div class="my-1.5 text-sm font-medium">{$i18n.t('API keys')}</div>
 			<button
 				class="btn-secondary"
 				type="button"
@@ -260,7 +260,7 @@
 			<div class="flex flex-col gap-4">
 				<div class="justify-between w-full">
 					<div class="flex justify-between w-full">
-						<div class="self-center field-label">{$i18n.t('JWT Token')}</div>
+						<div class="self-center text-xs font-medium">{$i18n.t('JWT Token')}</div>
 					</div>
 
 					<div class="flex mt-2">
@@ -287,7 +287,7 @@
 				{#if $config?.features?.enable_api_key ?? true}
 					<div class="justify-between w-full">
 						<div class="flex justify-between w-full">
-							<div class="self-center field-label">{$i18n.t('API Key')}</div>
+							<div class="self-center text-xs font-medium">{$i18n.t('API Key')}</div>
 						</div>
 						<div class="flex mt-2">
 							{#if APIKey}

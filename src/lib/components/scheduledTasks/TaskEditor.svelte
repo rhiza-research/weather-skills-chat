@@ -216,7 +216,7 @@
 
 <form class="flex flex-col gap-4" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">
-		<span class="field-label text-muted">{$i18n.t('Name')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Name')}</span>
 		<input
 			class="field"
 			bind:value={form.name}
@@ -226,7 +226,7 @@
 	</label>
 
 	<label class="flex flex-col gap-1">
-		<span class="field-label text-muted">{$i18n.t('Prompt')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Prompt')}</span>
 		<textarea
 			class="field"
 			rows="10"
@@ -238,7 +238,7 @@
 	</label>
 
 	<div class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="field-label text-muted">{$i18n.t('Schedule')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Schedule')}</span>
 		{#if editingSchedule}
 			<input
 				class="field"
@@ -248,7 +248,7 @@
 				disabled={!canManage}
 			/>
 		{:else}
-			<div class="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm">
+			<div class="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-sm">
 				<span class="flex-1">{describeSchedule(form.cron)}</span>
 				{#if canManage}
 					<button
@@ -289,7 +289,7 @@
 	</div>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="field-label text-muted">{$i18n.t('Model')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Model')}</span>
 		<select
 			class="field"
 			bind:value={form.model}
@@ -303,7 +303,7 @@
 	</label>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="field-label text-muted">{$i18n.t('Time limit (minutes)')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Time limit (minutes)')}</span>
 		<input
 			class="field"
 			type="number"
@@ -321,7 +321,7 @@
 
 	{#if runnerSizes.length > 1}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="field-label text-muted">{$i18n.t('Tool runner size')}</span>
+			<span class="text-xs font-medium text-muted">{$i18n.t('Tool runner size')}</span>
 			<select
 				class="field"
 				bind:value={form.runner_type}
@@ -342,11 +342,11 @@
 	{/if}
 
 	<div class="flex flex-col gap-1">
-		<span class="field-label text-muted">{$i18n.t('Tools')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Tools')}</span>
 		<div class="flex flex-col items-start gap-1.5">
 			<button
 				type="button"
-				class="flex items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-1.5 text-sm text-body hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-50"
+				class="flex items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-1.5 text-sm text-body hover:bg-tint transition disabled:opacity-50"
 				disabled={!canManage || !toolsReady}
 				on:click={() => (showTools = true)}
 			>
@@ -384,7 +384,7 @@
 
 	{#if !isPersonal}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="field-label text-muted">{$i18n.t('Sharing')}</span>
+			<span class="text-xs font-medium text-muted">{$i18n.t('Sharing')}</span>
 			<select
 				class="field"
 				bind:value={form.visibility}
@@ -399,7 +399,7 @@
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 		{#if canManage}
 			<button
-				class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5 text-sm disabled:opacity-50"
+				class="rounded-lg bg-inverse text-on-inverse px-3 py-1.5 text-sm disabled:opacity-50"
 				type="submit"
 				disabled={saving}
 			>

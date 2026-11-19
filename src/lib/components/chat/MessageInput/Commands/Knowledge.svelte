@@ -150,14 +150,14 @@
 	>
 		<div class="flex w-full rounded-xl border border-line">
 			<div
-				class="max-h-60 flex flex-col w-full rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100"
+				class="max-h-60 flex flex-col w-full rounded-xl bg-page dark:text-gray-100"
 			>
 				<div class="m-1 overflow-y-auto p-1 rounded-r-xl space-y-0.5 scrollbar-hidden">
 					{#each filteredItems as item, idx}
 						<button
 							class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center {idx ===
 							selectedIdx
-								? ' bg-gray-50 dark:bg-gray-850 dark:text-gray-100 selected-command-option-button'
+								? ' bg-surface dark:text-gray-100 selected-command-option-button'
 								: ''}"
 							type="button"
 							on:click={() => {
@@ -211,7 +211,7 @@
 								{#if !item.legacy && (item?.files ?? []).length > 0}
 									{#each item?.files ?? [] as file, fileIdx}
 										<button
-											class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-gray-100 selected-command-option-button"
+											class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center hover:bg-tint dark:hover:text-gray-100 selected-command-option-button"
 											type="button"
 											on:click={() => {
 												console.log(file);

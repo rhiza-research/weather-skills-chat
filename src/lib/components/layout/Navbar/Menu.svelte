@@ -187,7 +187,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[280px] rounded-xl px-1 py-1.5  z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[280px] rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={8}
 			side="bottom"
 			align="end"
@@ -279,7 +279,7 @@
 					<div class="flex items-center">{$i18n.t('Download')}</div>
 				</DropdownMenu.SubTrigger>
 				<DropdownMenu.SubContent
-					class="w-full rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+					class="w-full rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 					transition={flyAndScale}
 					sideOffset={8}
 				>
@@ -329,7 +329,7 @@
 			</DropdownMenu.Item>
 
 			{#if !$temporaryChatEnabled}
-				<hr class="divider my-0.5" />
+				<hr class="border-line my-0.5" />
 
 				<div class="flex">
 					<Tags chatId={chat.id} />

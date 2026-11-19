@@ -626,7 +626,7 @@
 	>
 		<div class="px-1.5 flex justify-between space-x-1 text-body">
 			<button
-				class=" cursor-pointer p-2 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class=" cursor-pointer p-2 flex rounded-xl hover:bg-tint transition"
 				on:click={() => {
 					showSidebar.set(!$showSidebar);
 				}}
@@ -638,7 +638,7 @@
 
 			<a
 				id="sidebar-new-chat-button"
-				class="flex justify-between items-center flex-1 rounded-xl px-2 py-1 h-full text-right hover:bg-black/5 dark:hover:bg-white/5 transition no-drag-region"
+				class="flex justify-between items-center flex-1 rounded-xl px-2 py-1 h-full text-right hover:bg-tint transition no-drag-region"
 				href="/"
 				draggable="false"
 				on:click={async (event) => {
@@ -788,7 +788,7 @@
 		<OrganizationRow on:switch-org={(e) => onSwitchOrganization(e.detail)} />
 
 		<!-- Separates the settings rows above from search and the chats and tasks below. -->
-		<hr class="mx-5 my-2.5 divider" />
+		<hr class="border-line mx-5 my-2.5" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
@@ -1256,7 +1256,7 @@
 					>
 						<button
 							id="sidebar-user-menu-button"
-							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-tint transition"
 						>
 							<div class=" self-center mr-3">
 								<img

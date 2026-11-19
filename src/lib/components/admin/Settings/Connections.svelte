@@ -211,7 +211,7 @@
 					</div>
 
 					{#if ENABLE_OPENAI_API}
-						<hr class="divider" />
+						<hr class="border-line my-2" />
 
 						<div class="">
 							<div class="flex justify-between items-center">
@@ -261,7 +261,7 @@
 				</div>
 			</div>
 
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 
 			<div class="pr-1.5 my-2">
 				<div class="flex justify-between items-center text-sm mb-2">
@@ -278,7 +278,7 @@
 				</div>
 
 				{#if ENABLE_OLLAMA_API}
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div class="">
 						<div class="flex justify-between items-center">

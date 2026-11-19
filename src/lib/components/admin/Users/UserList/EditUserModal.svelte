@@ -83,7 +83,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<h2 class="modal-title">{$i18n.t('Edit User')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Edit User')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -94,7 +94,7 @@
 				<XMarkSolid className="size-5" />
 			</button>
 		</div>
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
@@ -123,7 +123,7 @@
 						</div>
 					</div>
 
-					<hr class="divider my-3 w-full" />
+					<hr class="border-line my-3 w-full" />
 
 					<div class=" flex flex-col space-y-1.5">
 						<div class="flex flex-col w-full">

@@ -141,7 +141,7 @@
 			>
 				<Search className="size-3.5 shrink-0 text-gray-500" />
 				<input
-					class="field-bare min-w-0 text-sm"
+					class="w-full bg-transparent outline-hidden min-w-0 text-sm"
 					type="search"
 					bind:value={query}
 					placeholder={$i18n.t('Search scheduled tasks')}
@@ -151,7 +151,7 @@
 			<Dropdown bind:show={showSort}>
 				<Tooltip content={$i18n.t('Sort')}>
 					<button
-						class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+						class="p-1.5 rounded-xl hover:bg-tint transition"
 						aria-label={$i18n.t('Sort scheduled tasks')}
 					>
 						<BarsArrowUp className="size-5" strokeWidth="2" />
@@ -159,7 +159,7 @@
 				</Tooltip>
 				<div slot="content">
 					<DropdownMenu.Content
-						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 						sideOffset={4}
 						side="bottom"
 						align="end"
@@ -167,7 +167,7 @@
 					>
 						{#each sortOptions as option (option.value)}
 							<DropdownMenu.Item
-								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-tint rounded-xl"
 								on:click={() => setSort(option.value)}
 							>
 								{option.label}
@@ -180,7 +180,7 @@
 				</div>
 			</Dropdown>
 			<a
-				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-line-strong text-strong hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-sm"
+				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-line-strong text-strong hover:bg-tint transition font-medium text-sm"
 				href="/scheduled-tasks/new"
 			>
 				{$i18n.t('New scheduled task')}
@@ -202,7 +202,7 @@
 		{#each sections as section}
 			{#if section.items.length > 0}
 				<section class="flex flex-col gap-2">
-					<div class="field-label text-muted uppercase tracking-wide">
+					<div class="text-xs font-medium text-muted uppercase tracking-wide">
 						{section.title}
 					</div>
 					{#each section.items as task (task.id)}

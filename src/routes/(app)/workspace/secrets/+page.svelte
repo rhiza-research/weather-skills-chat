@@ -142,7 +142,7 @@
 		<div class="flex justify-between items-center">
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Secrets')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
@@ -153,7 +153,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="field-bare text-sm py-1 rounded-r-xl"
+					class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Secrets')}
 				/>
@@ -164,7 +164,7 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
+			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-surface border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
@@ -194,7 +194,7 @@
 				</select>
 			{/if}
 			<button
-				class="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+				class="px-4 py-2 text-sm rounded-lg bg-inverse text-on-inverse"
 				type="submit"
 			>
 				{$i18n.t('Save')}
@@ -205,7 +205,7 @@
 	<div class="my-2 mb-5 gap-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
 		{#each items as secret (secret.id)}
 			<div
-				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl"
+				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl"
 			>
 				<div class="w-full">
 					<div class="flex items-center justify-between -mt-1">
@@ -218,7 +218,7 @@
 						{#if secret.visibility !== 'organization' || secret.can_manage}
 							<div class="flex self-center gap-0.5 -mr-1 translate-y-1">
 								<button
-									class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+									class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 									on:click={() => {
 										replacing = replacing === secret.id ? null : secret.id;
 										replaceValue = '';

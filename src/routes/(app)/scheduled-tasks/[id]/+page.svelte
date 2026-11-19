@@ -197,10 +197,10 @@
 
 			{#if task}
 				<section class="flex flex-col gap-1">
-					<div class="field-label text-muted">{$i18n.t('Runs')}</div>
+					<div class="text-xs font-medium text-muted">{$i18n.t('Runs')}</div>
 					{#each runs as run (run.id)}
 						<button
-							class="text-left text-sm px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex justify-between gap-3 disabled:cursor-default"
+							class="text-left text-sm px-2 py-1.5 rounded-xl hover:bg-tint flex justify-between gap-3 disabled:cursor-default"
 							disabled={!run.chat_id}
 							on:click={() => goto(`/c/${run.chat_id}`)}
 						>

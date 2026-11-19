@@ -14,13 +14,13 @@
 	<img
 		{src}
 		alt=""
-		class="{className} shrink-0 object-cover bg-gray-100 dark:bg-gray-850"
+		class="{className} shrink-0 object-cover bg-surface"
 		loading="lazy"
 		on:error={() => (failed = true)}
 	/>
 {:else}
 	<div
-		class="{className} shrink-0 flex items-center justify-center bg-gray-100 dark:bg-gray-850 text-muted dark:text-gray-400 font-medium uppercase select-none"
+		class="{className} shrink-0 flex items-center justify-center bg-surface text-muted dark:text-gray-400 font-medium uppercase select-none"
 		aria-hidden="true"
 	>
 		{(task?.name ?? '?').trim().charAt(0) || '?'}

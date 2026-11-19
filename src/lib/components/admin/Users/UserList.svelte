@@ -461,7 +461,7 @@
 		<div class="flex-shrink-0">
 			{$i18n.t('Users & Organizations')}
 		</div>
-		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
+		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 		<span class="text-lg font-medium text-body">{rows.length}</span>
 	</div>
 
@@ -480,7 +480,7 @@
 
 			<div>
 				<button
-					class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+					class="px-3 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-sm flex items-center gap-1.5"
 					type="button"
 					on:click={() => {
 						inviteEmail = '';
@@ -501,7 +501,7 @@
 <Modal bind:show={showInvite} size="sm">
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<h2 class="modal-title">{$i18n.t('Invite a user')}</h2>
+			<h2 class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</h2>
 			<button
 				class="self-center"
 				type="button"
@@ -512,7 +512,7 @@
 				<XMarkSolid className="size-5" />
 			</button>
 		</div>
-		<hr class="divider" />
+		<hr class="border-line my-2" />
 		<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 			<input
 				class="field"
@@ -552,7 +552,7 @@
 			</label>
 			<div class="flex justify-end">
 				<button
-					class="px-4 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+					class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
 					type="submit"
 					disabled={inviting}
 				>
@@ -591,20 +591,20 @@
 			<div class="text-center leading-tight">{$i18n.t('Allow large runners')}</div>
 			<div></div>
 		</div>
-		<hr class="mt-0.5 divider" />
+		<hr class="border-line my-2 mt-0.5" />
 
 		{#each paged as row, idx (row.id)}
 		<div
 			class="rounded-lg py-2 {idx % 2 === 0
-				? 'bg-gray-50 dark:bg-gray-850/80'
-				: 'bg-white dark:bg-gray-900'}"
+				? 'bg-surface/80'
+				: 'bg-page'}"
 		>
 			<div class="org-table-row grid items-center gap-x-3 px-2">
 				{#if row.kind === 'invite'}
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="shrink-0 w-4"></span>
 						<div
-							class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+							class="rounded-full size-6 shrink-0 bg-surface flex items-center justify-center"
 						>
 							<UserCircleSolid className="size-4" />
 						</div>
@@ -630,7 +630,7 @@
 							/>
 						{:else}
 							<div
-								class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+								class="rounded-full size-6 shrink-0 bg-surface flex items-center justify-center"
 							>
 								<UserCircleSolid className="size-4" />
 							</div>
@@ -672,7 +672,7 @@
 							/>
 						{:else}
 							<div
-								class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+								class="rounded-full size-6 shrink-0 bg-surface flex items-center justify-center"
 							>
 								<UserCircleSolid className="size-4" />
 							</div>
@@ -789,7 +789,7 @@
 				<div class="flex justify-end items-center gap-1 shrink-0 flex-wrap">
 					{#if row.kind === 'invite'}
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"
+							class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse whitespace-nowrap"
 							type="button"
 							on:click={() => resendInvite(row.invite.id)}
 						>
@@ -804,7 +804,7 @@
 						</button>
 					{:else if row.kind === 'workspace' && row.active === false}
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50 whitespace-nowrap"
+							class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse disabled:opacity-50 whitespace-nowrap"
 							disabled={activating === row.id}
 							on:click={() => activate(row.id)}
 						>
@@ -815,7 +815,7 @@
 					{#if row.person}
 						{#if row.person.role === 'pending'}
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+								class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse"
 								on:click={() => updateRoleHandler(row.person.id, 'user')}
 							>
 								{$i18n.t('Activate')}
@@ -889,10 +889,10 @@
 			</div>
 
 			{#if row.kind !== 'personal' && row.kind !== 'invite' && expandedId === row.id}
-				<div class="ml-10 mt-1 mb-2 rounded-lg bg-gray-50 dark:bg-gray-850/60 px-3 py-2">
+				<div class="ml-10 mt-1 mb-2 rounded-lg bg-surface/60 px-3 py-2">
 					<div class="flex justify-end py-1">
 						<button
-							class="px-2.5 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-xs flex items-center gap-1.5"
+							class="px-2.5 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-xs flex items-center gap-1.5"
 							type="button"
 							on:click={() => {
 								showAddMember = !showAddMember;
@@ -922,11 +922,11 @@
 							/>
 							{#if !memberUserId && memberQuery.trim()}
 								<div
-									class="absolute z-10 mt-1 w-full rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-line py-1"
+									class="absolute z-10 mt-1 w-full rounded-lg bg-page shadow-lg border border-line py-1"
 								>
 									{#each candidatesFor(row, memberQuery) as person (person.id)}
 										<button
-											class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+											class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-tint"
 											type="button"
 											on:click={() => {
 												memberUserId = person.id;
@@ -953,7 +953,7 @@
 						</div>
 						{#if row.kind !== 'platform'}
 							<select
-								class="text-sm py-1.5 px-2 rounded-lg bg-white dark:bg-gray-900 outline-hidden"
+								class="text-sm py-1.5 px-2 rounded-lg bg-page outline-hidden"
 								bind:value={memberRole}
 							>
 								<option value="user">{$i18n.t('User')}</option>
@@ -963,7 +963,7 @@
 							<span class="text-xs text-muted">{$i18n.t('Admin')}</span>
 						{/if}
 						<button
-							class="text-xs px-2.5 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+							class="text-xs px-2.5 py-1.5 rounded-lg bg-inverse text-on-inverse disabled:opacity-50"
 							type="submit"
 							disabled={addingMember || !memberUserId}
 						>
@@ -992,7 +992,7 @@
 									{#if member.role !== 'owner' || (row.members ?? []).filter((item) => item.role === 'owner').length > 1}
 										<Tooltip content={$i18n.t('Remove from organization')}>
 											<button
-												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-muted hover:text-red-600"
+												class="self-center w-fit text-sm p-1 hover:bg-tint rounded-xl text-muted hover:text-red-600"
 												type="button"
 												on:click={() => askRemoveMember(row, member)}
 											>

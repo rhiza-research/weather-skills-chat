@@ -50,7 +50,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-44 rounded-xl p-1 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-44 rounded-xl p-1 z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={4}
 			side="bottom"
 			align="end"

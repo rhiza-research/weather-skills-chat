@@ -200,7 +200,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="field-bare flex-1"
+								class="w-full bg-transparent outline-hidden flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={STT_OPENAI_API_BASE_URL}
 								required
@@ -210,7 +210,7 @@
 						</div>
 					</div>
 
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div>
 						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
@@ -236,7 +236,7 @@
 						</div>
 					</div>
 
-					<hr class="divider" />
+					<hr class="border-line my-2" />
 
 					<div>
 						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
@@ -276,7 +276,7 @@
 							/>
 						</div>
 
-						<hr class="divider" />
+						<hr class="border-line my-2" />
 
 						<div>
 							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('Language Locales')}</div>
@@ -305,7 +305,7 @@
 							</div>
 
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
+								class="px-2.5 bg-surface hover:bg-gray-200 text-strong dark:hover:bg-gray-800 rounded-xl transition"
 								on:click={() => {
 									sttModelUpdateHandler();
 								}}
@@ -364,7 +364,7 @@
 				{/if}
 			</div>
 
-			<hr class="divider" />
+			<hr class="border-line my-2" />
 
 			<div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
@@ -402,7 +402,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="field-bare flex-1"
+								class="w-full bg-transparent outline-hidden flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={TTS_OPENAI_API_BASE_URL}
 								required
@@ -441,7 +441,7 @@
 					</div>
 				{/if}
 
-				<hr class="divider" />
+				<hr class="border-line my-2" />
 
 				{#if TTS_ENGINE === ''}
 					<div>
@@ -632,7 +632,7 @@
 					</div>
 				{/if}
 
-				<hr class="divider" />
+				<hr class="border-line my-2" />
 
 				<SettingRow label={$i18n.t('Response splitting')}>
 					<div class="flex items-center relative">

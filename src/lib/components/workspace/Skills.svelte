@@ -286,7 +286,7 @@
 
 {#if loaded}
 	<div class="mb-3">
-		<h1 class="page-title mb-1">{$i18n.t('Skills')}</h1>
+		<h1 class="text-xl font-medium dark:text-white mb-1">{$i18n.t('Skills')}</h1>
 		<div class="text-sm text-muted mb-4">
 			{#if catalog === 'public'}
 				{$i18n.t('Install Agent Skills into the public catalog. Organizations can then enable or disable each pack and skill. Skills run like tools in chat.')}
@@ -297,7 +297,7 @@
 
 		{#if canCreate}
 			<div
-				class="flex flex-col gap-4 mb-6 p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
+				class="flex flex-col gap-4 mb-6 p-4 rounded-xl bg-surface border border-line"
 			>
 				<div class="flex flex-col md:flex-row gap-2">
 					<input
@@ -313,7 +313,7 @@
 						disabled={busy}
 					/>
 					<button
-						class="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
+						class="px-4 py-2 text-sm rounded-lg bg-inverse text-on-inverse disabled:opacity-50"
 						disabled={busy}
 						on:click={installHandler}
 					>
@@ -345,7 +345,7 @@
 				<div class="flex flex-col gap-3 mb-6">
 					{#each publicPacks as pack (pack.id)}
 						<details
-							class="skill-pack rounded-xl border border-line bg-white dark:bg-gray-900 {packUsable(
+							class="skill-pack rounded-xl border border-line bg-page  {packUsable(
 								pack
 							)
 								? ''
@@ -472,7 +472,7 @@
 			<div class="flex flex-col gap-3">
 				{#each sectionPacks as pack (pack.id)}
 					<details
-						class="skill-pack rounded-xl border border-line bg-white dark:bg-gray-900 {catalog ===
+						class="skill-pack rounded-xl border border-line bg-page  {catalog ===
 							'org' && !packUsable(pack)
 							? 'opacity-60'
 							: ''}"
@@ -561,7 +561,7 @@
 								{#if canManage(pack)}
 									<button
 										type="button"
-										class="text-xs px-2.5 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+										class="text-xs px-2.5 py-1.5 rounded-xl hover:bg-tint"
 										disabled={busy}
 										on:click|stopPropagation={() => updateHandler(pack)}
 									>

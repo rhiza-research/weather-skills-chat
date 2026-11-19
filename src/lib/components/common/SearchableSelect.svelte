@@ -69,7 +69,7 @@
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content
-		class="z-40 min-w-64 max-w-[calc(100vw-1rem)] rounded-xl bg-white dark:bg-gray-850 dark:text-white shadow-lg outline-hidden"
+		class="z-40 min-w-64 max-w-[calc(100vw-1rem)] rounded-xl bg-panel dark:text-white shadow-lg outline-hidden"
 		transition={flyAndScale}
 		side="bottom"
 		align="start"
@@ -80,7 +80,7 @@
 			<Search className="size-4" strokeWidth="2.5" />
 			<input
 				bind:value={searchValue}
-				class="field-bare text-sm"
+				class="w-full bg-transparent outline-hidden text-sm"
 				placeholder={searchPlaceholder}
 				autocomplete="off"
 				on:input={() => {

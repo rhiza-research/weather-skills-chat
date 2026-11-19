@@ -27,7 +27,7 @@
 
 		{#if usageLimit}
 			<button
-				class="self-start mt-1 px-3 py-1 field-label bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+				class="self-start mt-1 px-3 py-1 text-xs font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full"
 				type="button"
 				on:click={() => {
 					showCreditRequest = true;

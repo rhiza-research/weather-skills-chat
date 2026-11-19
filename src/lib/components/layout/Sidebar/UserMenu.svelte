@@ -132,7 +132,7 @@
 
 	<slot name="content">
 		<DropdownMenu.Content
-			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg font-primary overflow-y-auto"
+			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg font-primary overflow-y-auto"
 			fitViewport
 			sideOffset={8}
 			side="bottom"
@@ -140,7 +140,7 @@
 			transition={(e) => fade(e, { duration: 100 })}
 		>
 			<button
-				class="flex items-center rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="flex items-center rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={(e) => {
 					e.preventDefault();
 					e.stopPropagation();
@@ -199,7 +199,7 @@
 						{/each}
 					</div>
 					<button
-						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-black/5 dark:hover:bg-white/5 transition text-body"
+						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-tint transition text-body"
 						on:click={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -228,7 +228,7 @@
 								bind:value={requestDescription}
 							/>
 							<button
-								class="self-start rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2.5 py-1 text-xs"
+								class="self-start rounded-lg bg-inverse text-on-inverse px-2.5 py-1 text-xs"
 								type="submit"
 								disabled={requesting}
 							>
@@ -240,7 +240,7 @@
 			{/if}
 
 			{#if usage}
-				<hr class="divider my-1 p-0" />
+				<hr class="border-line my-1 p-0" />
 				<div class="px-3 py-2">
 					<div class="text-xs uppercase tracking-wide text-muted truncate">
 						{#if currentOrg.kind === 'personal'}
@@ -257,7 +257,7 @@
 								{$i18n.t('Your usage')}
 							</div>
 						{/if}
-						<div class="field-label tabular-nums">
+						<div class="text-xs font-medium tabular-nums">
 							{formatCreditAmount(meter.spend, '0.00')}{#if meter.limit != null}
 								/ {formatCreditAmount(meter.limit)}{/if}{' '}{$i18n.t('credits')}
 						</div>
@@ -266,7 +266,7 @@
 								<div
 									class="h-full rounded-full {meter.over
 										? 'bg-red-500'
-										: 'bg-gray-900 dark:bg-white'}"
+										: 'bg-inverse'}"
 									style="width: {usageBarPercent(meter.spend, meter.limit, meter.over)}%"
 								></div>
 							</div>
@@ -278,10 +278,10 @@
 				</div>
 			{/if}
 
-			<hr class="divider my-1 p-0" />
+			<hr class="border-line my-1 p-0" />
 
 			<button
-				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={async () => {
 					await showSettings.set(true);
 					closeMenu();
@@ -313,7 +313,7 @@
 
 			{#if isOrgManager}
 				<a
-					class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 					href="/organization"
 					on:click={closeMenu}
 				>
@@ -325,7 +325,7 @@
 			{/if}
 
 			<button
-				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={() => {
 					dispatch('show', 'archived-chat');
 					closeMenu();
@@ -339,7 +339,7 @@
 
 			{#if role === 'admin'}
 				<a
-					class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 					href="/admin"
 					on:click={closeMenu}
 				>
@@ -363,10 +363,10 @@
 				</a>
 			{/if}
 
-			<hr class="divider my-1 p-0" />
+			<hr class="border-line my-1 p-0" />
 
 			<button
-				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={async () => {
 					try {
 						await userSignOut();
@@ -405,7 +405,7 @@
 			</button>
 
 			{#if $activeUserIds?.length > 0}
-				<hr class="divider my-1 p-0" />
+				<hr class="border-line my-1 p-0" />
 
 				<Tooltip
 					content={$USAGE_POOL && $USAGE_POOL.length > 0

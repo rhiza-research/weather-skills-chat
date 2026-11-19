@@ -77,29 +77,29 @@
 	onMount(load);
 </script>
 
-<div class="min-h-screen flex items-center justify-center px-6 bg-white dark:bg-gray-900">
+<div class="min-h-screen flex items-center justify-center px-6 bg-page">
 	<div class="w-full max-w-md">
 		{#if !loaded}
 			<div class="text-sm text-muted">{$i18n.t('Loading...')}</div>
 		{:else if error || !invite}
-			<h1 class="page-title">
+			<h1 class="text-xl font-medium dark:text-white">
 				{$i18n.t("Sorry, we couldn't find that invitation. It may have been canceled")}
 			</h1>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.accepted}
-			<h1 class="page-title">{$i18n.t('Invitation already used')}</h1>
+			<h1 class="text-xl font-medium dark:text-white">{$i18n.t('Invitation already used')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('This invitation has already been accepted.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.expired}
-			<h1 class="page-title">{$i18n.t('Invitation expired')}</h1>
+			<h1 class="text-xl font-medium dark:text-white">{$i18n.t('Invitation expired')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('Ask the person who invited you to send a new invitation.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if wrongAccount}
-			<h1 class="page-title">{$i18n.t('Signed in as someone else')}</h1>
+			<h1 class="text-xl font-medium dark:text-white">{$i18n.t('Signed in as someone else')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('You are signed in as {{email}}. Sign out to accept this invite for {{invite}}.', {
 					email: $user.email,
@@ -107,14 +107,14 @@
 				})}
 			</p>
 			<button
-				class="mt-6 px-4 py-2 rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 text-sm font-medium"
+				class="mt-6 px-4 py-2 rounded-full bg-inverse text-on-inverse text-sm font-medium"
 				type="button"
 				on:click={signOut}
 			>
 				{$i18n.t('Sign out')}
 			</button>
 		{:else}
-			<h1 class="page-title">
+			<h1 class="text-xl font-medium dark:text-white">
 				{#if invite.kind === 'organization'}
 					{$i18n.t("You're invited to {{name}}", {
 						name: invite.organization_name || $i18n.t('an organization')
@@ -130,14 +130,14 @@
 					{$i18n.t('Sign in as this email to accept the invitation.')}
 				</p>
 				<a
-					class="mt-6 inline-flex px-4 py-2 rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 text-sm font-medium"
+					class="mt-6 inline-flex px-4 py-2 rounded-full bg-inverse text-on-inverse text-sm font-medium"
 					href={`/auth?redirect=${encodeURIComponent($page.url.pathname + $page.url.search)}`}
 				>
 					{$i18n.t('Sign in')}
 				</a>
 			{:else if invite.account_exists}
 				<button
-					class="mt-6 px-4 py-2 rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 text-sm font-medium disabled:opacity-50"
+					class="mt-6 px-4 py-2 rounded-full bg-inverse text-on-inverse text-sm font-medium disabled:opacity-50"
 					type="button"
 					disabled={submitting}
 					on:click={accept}
@@ -164,7 +164,7 @@
 						/>
 					</label>
 					<button
-						class="mt-2 px-4 py-2 rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 text-sm font-medium disabled:opacity-50"
+						class="mt-2 px-4 py-2 rounded-full bg-inverse text-on-inverse text-sm font-medium disabled:opacity-50"
 						type="submit"
 						disabled={submitting}
 					>

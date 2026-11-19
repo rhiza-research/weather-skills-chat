@@ -99,7 +99,7 @@
 
 		<div class="flex gap-2.5 items-center mb-1">
 			<div>
-				<div class=" p-2 bg-black/5 dark:bg-white/5 rounded-full">
+				<div class=" p-2 bg-tint rounded-full">
 					{#if accessControl !== null}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -221,7 +221,7 @@
 									{/if}
 								</button>
 								<button
-									class=" rounded-full p-1 hover:bg-black/5 dark:hover:bg-white/5 transition"
+									class=" rounded-full p-1 hover:bg-tint transition"
 									type="button"
 									on:click={() => {
 										accessControl.read.organization_ids = (

@@ -35,7 +35,7 @@
 	<Tooltip content={$i18n.t('More')}>
 		<slot
 			><button
-				class="btn-ghost btn-ghost-sm"
+				class="btn-ghost p-1.5"
 				type="button"
 				on:click={(e) => {
 					e.stopPropagation();
@@ -49,7 +49,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[160px] rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[160px] rounded-xl px-1 py-1.5 border border-line z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={-2}
 			side="bottom"
 			align="end"

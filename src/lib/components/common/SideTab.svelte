@@ -7,8 +7,8 @@
 <button
 	class="px-2 py-1.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selected ===
 	id
-		? 'bg-black/5 dark:bg-white/5'
-		: 'tab-idle hover:bg-black/5 dark:hover:bg-white/5'}"
+		? 'bg-tint'
+		: 'text-muted hover:text-strong hover:bg-tint'}"
 	on:click={() => (selected = id)}
 >
 	<div class="self-center mr-2"><slot /></div>

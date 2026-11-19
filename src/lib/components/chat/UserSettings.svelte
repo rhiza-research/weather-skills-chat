@@ -342,7 +342,7 @@
 <div class="text-gray-700 dark:text-gray-100 {layout === 'page' ? 'h-full' : ''}">
 		{#if layout === 'modal'}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-				<h2 class="modal-title">{$i18n.t('Settings')}</h2>
+				<h2 class="text-lg font-medium self-center">{$i18n.t('Settings')}</h2>
 				<button
 					class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -372,7 +372,7 @@
 						<Search className="size-4" />
 					</div>
 					<input
-						class="field-bare py-1.5 text-sm dark:text-gray-300"
+						class="w-full bg-transparent outline-hidden py-1.5 text-sm dark:text-gray-300"
 						bind:value={search}
 						on:input={searchDebounceHandler}
 						placeholder={$i18n.t('Search')}
@@ -450,7 +450,7 @@
 									class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 									'admin'
 										? ''
-										: ' tab-idle'}"
+										: ' text-muted hover:text-strong'}"
 									on:click={async () => {
 										await goto('/admin/settings');
 										dispatch('close');

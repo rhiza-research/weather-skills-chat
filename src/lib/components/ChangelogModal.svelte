@@ -70,7 +70,7 @@
 								v{version} - {changelog[version].date}
 							</div>
 
-							<hr class="divider" />
+							<hr class="border-line my-2" />
 
 							{#each Object.keys(changelog[version]).filter((section) => section !== 'date') as section}
 								<div class="">
