@@ -408,7 +408,7 @@ export const getAllTags = async (token: string) => {
 			return res.json();
 		})
 		.then((json) => {
-			return json;
+			return json.sort((a, b) => a.name.localeCompare(b.name));
 		})
 		.catch((err) => {
 			error = err;
