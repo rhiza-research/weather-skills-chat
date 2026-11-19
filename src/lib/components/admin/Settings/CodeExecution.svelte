@@ -47,7 +47,7 @@
 
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">
+							<div class=" self-center field-label">
 								{$i18n.t('Enable Code Execution')}
 							</div>
 
@@ -57,10 +57,10 @@
 
 					<div class="mb-2.5">
 						<div class="flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">{$i18n.t('Code Execution Engine')}</div>
+							<div class=" self-center field-label">{$i18n.t('Code Execution Engine')}</div>
 							<div class="flex items-center relative">
 								<select
-									class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+									class="field-select"
 									bind:value={config.CODE_EXECUTION_ENGINE}
 									placeholder={$i18n.t('Select a engine')}
 									required
@@ -84,14 +84,14 @@
 
 					{#if config.CODE_EXECUTION_ENGINE === 'jupyter'}
 						<div class="mb-2.5 flex flex-col gap-1.5 w-full">
-							<div class="text-xs font-medium">
+							<div class="field-label">
 								{$i18n.t('Jupyter URL')}
 							</div>
 
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
-										class="w-full text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700 bg-transparent outline-hidden"
+										class="field-bare text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										placeholder={$i18n.t('Enter Jupyter URL')}
 										bind:value={config.CODE_EXECUTION_JUPYTER_URL}
@@ -103,13 +103,13 @@
 
 						<div class="mb-2.5 flex flex-col gap-1.5 w-full">
 							<div class=" flex gap-2 w-full items-center justify-between">
-								<div class="text-xs font-medium">
+								<div class="field-label">
 									{$i18n.t('Jupyter Auth')}
 								</div>
 
 								<div>
 									<select
-										class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-left"
+										class="field-select text-left"
 										bind:value={config.CODE_EXECUTION_JUPYTER_AUTH}
 										placeholder={$i18n.t('Select an auth method')}
 									>
@@ -144,7 +144,7 @@
 						</div>
 
 						<div class="flex gap-2 w-full items-center justify-between">
-							<div class="text-xs font-medium">
+							<div class="field-label">
 								{$i18n.t('Code Execution Timeout')}
 							</div>
 
@@ -170,7 +170,7 @@
 
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">
+							<div class=" self-center field-label">
 								{$i18n.t('Enable Code Interpreter')}
 							</div>
 
@@ -181,12 +181,12 @@
 					{#if config.ENABLE_CODE_INTERPRETER}
 						<div class="mb-2.5">
 							<div class="  flex w-full justify-between">
-								<div class=" self-center text-xs font-medium">
+								<div class=" self-center field-label">
 									{$i18n.t('Code Interpreter Engine')}
 								</div>
 								<div class="flex items-center relative">
 									<select
-										class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+										class="field-select"
 										bind:value={config.CODE_INTERPRETER_ENGINE}
 										placeholder={$i18n.t('Select a engine')}
 										required
@@ -210,14 +210,14 @@
 
 						{#if config.CODE_INTERPRETER_ENGINE === 'jupyter'}
 							<div class="mb-2.5 flex flex-col gap-1.5 w-full">
-								<div class="text-xs font-medium">
+								<div class="field-label">
 									{$i18n.t('Jupyter URL')}
 								</div>
 
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700 bg-transparent outline-hidden"
+											class="field-bare text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
 											type="text"
 											placeholder={$i18n.t('Enter Jupyter URL')}
 											bind:value={config.CODE_INTERPRETER_JUPYTER_URL}
@@ -229,13 +229,13 @@
 
 							<div class="mb-2.5 flex flex-col gap-1.5 w-full">
 								<div class="flex gap-2 w-full items-center justify-between">
-									<div class="text-xs font-medium">
+									<div class="field-label">
 										{$i18n.t('Jupyter Auth')}
 									</div>
 
 									<div>
 										<select
-											class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-left"
+											class="field-select text-left"
 											bind:value={config.CODE_INTERPRETER_JUPYTER_AUTH}
 											placeholder={$i18n.t('Select an auth method')}
 										>
@@ -270,7 +270,7 @@
 							</div>
 
 							<div class="flex gap-2 w-full items-center justify-between">
-								<div class="text-xs font-medium">
+								<div class="field-label">
 									{$i18n.t('Code Execution Timeout')}
 								</div>
 
@@ -292,7 +292,7 @@
 
 						<div>
 							<div class="py-0.5 w-full">
-								<div class=" mb-2.5 text-xs font-medium">
+								<div class=" mb-2.5 field-label">
 									{$i18n.t('Code Interpreter Prompt Template')}
 								</div>
 

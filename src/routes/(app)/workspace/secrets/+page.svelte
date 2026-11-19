@@ -153,7 +153,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Secrets')}
 				/>
@@ -177,7 +177,7 @@
 			/>
 			<input
 				bind:this={valueInput}
-				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+				class="field-outline flex-1"
 				type="password"
 				placeholder={$i18n.t('Value')}
 				bind:value
@@ -186,7 +186,7 @@
 			/>
 			{#if !isPersonal && isOrgAdmin}
 				<select
-					class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+					class="field-outline md:w-40"
 					bind:value={visibility}
 				>
 					<option value="private">{$i18n.t('Private')}</option>
@@ -259,7 +259,7 @@
 					{#if replacing === secret.id}
 						<form class="mt-3 flex gap-2" on:submit|preventDefault={() => replace(secret)}>
 							<input
-								class="flex-1 w-full text-sm rounded-lg py-1.5 px-2.5 bg-gray-50 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								type="password"
 								placeholder={$i18n.t('New value')}
 								bind:value={replaceValue}

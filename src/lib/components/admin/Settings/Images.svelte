@@ -240,7 +240,7 @@
 
 				<div>
 					<div class=" py-1 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
+						<div class=" self-center field-label">
 							{$i18n.t('Image Generation (Experimental)')}
 						</div>
 
@@ -281,7 +281,7 @@
 
 				{#if config.enabled}
 					<div class=" py-1 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Image Prompt Generation')}</div>
+						<div class=" self-center field-label">{$i18n.t('Image Prompt Generation')}</div>
 						<div class="px-1">
 							<Switch bind:state={config.prompt_generation} />
 						</div>
@@ -289,10 +289,10 @@
 				{/if}
 
 				<div class=" py-1 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Image Generation Engine')}</div>
+					<div class=" self-center field-label">{$i18n.t('Image Generation Engine')}</div>
 					<div class="flex items-center relative">
 						<select
-							class=" dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+							class="field-select"
 							bind:value={config.engine}
 							placeholder={$i18n.t('Select Engine')}
 							on:change={async () => {
@@ -506,7 +506,7 @@
 
 						{#if config.comfyui.COMFYUI_WORKFLOW}
 							<textarea
-								class="w-full rounded-lg mb-1 py-2 px-4 text-xs bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden disabled:text-gray-600 resize-none"
+								class="field mb-1 disabled:text-gray-600 resize-none"
 								rows="10"
 								bind:value={config.comfyui.COMFYUI_WORKFLOW}
 								required
@@ -602,7 +602,7 @@
 
 						<div class="flex gap-2 mb-1">
 							<input
-								class="flex-1 w-full text-sm bg-transparent outline-hidden"
+								class="field-bare flex-1 text-sm"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={config.openai.OPENAI_API_BASE_URL}
 								required

@@ -45,7 +45,7 @@
 	<div class="flex justify-between items-center text-sm">
 		<div class="  font-medium">{$i18n.t('Change Password')}</div>
 		<button
-			class="text-xs font-medium text-muted"
+			class="field-label text-muted"
 			type="button"
 			on:click={() => {
 				show = !show;
@@ -60,7 +60,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent dark:text-gray-300 outline-hidden placeholder:opacity-30"
+						class="field-bare dark:text-gray-300 placeholder:opacity-30"
 						type="password"
 						bind:value={currentPassword}
 						placeholder={$i18n.t('Enter your current password')}
@@ -75,7 +75,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent text-sm dark:text-gray-300 outline-hidden placeholder:opacity-30"
+						class="field-bare text-sm dark:text-gray-300 placeholder:opacity-30"
 						type="password"
 						bind:value={newPassword}
 						placeholder={$i18n.t('Enter your new password')}
@@ -90,7 +90,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent text-sm dark:text-gray-300 outline-hidden placeholder:opacity-30"
+						class="field-bare text-sm dark:text-gray-300 placeholder:opacity-30"
 						type="password"
 						bind:value={newPasswordConfirm}
 						placeholder={$i18n.t('Confirm your new password')}

@@ -132,7 +132,7 @@
               >{$i18n.t("Subject")}</span
             >
             <input
-              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition"
+              class="field border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 transition"
               type="text"
               maxlength={FEEDBACK_SUBJECT_MAX}
               bind:value={subject}
@@ -145,7 +145,7 @@
               >{$i18n.t("What happened?")}</span
             >
             <textarea
-              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition resize-none"
+              class="field border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 transition resize-none"
               rows="6"
               maxlength={FEEDBACK_DESCRIPTION_MAX}
               bind:value={description}

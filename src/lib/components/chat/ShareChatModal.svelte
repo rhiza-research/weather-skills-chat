@@ -182,7 +182,7 @@
 			<label class="flex flex-col w-full">
 				<span class="mb-1 text-xs text-muted">{$i18n.t('Expires after (days)')}</span>
 				<input
-					class="w-full text-sm bg-transparent rounded-lg border border-line-strong px-3 py-2 outline-hidden focus:border-gray-500"
+					class="field-outline focus:border-gray-500"
 					type="number"
 					min="1"
 					max={MAX_DAYS}

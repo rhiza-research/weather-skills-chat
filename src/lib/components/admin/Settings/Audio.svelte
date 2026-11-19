@@ -179,10 +179,10 @@
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('STT Settings')}</div>
 
 				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Speech-to-Text Engine')}</div>
+					<div class=" self-center field-label">{$i18n.t('Speech-to-Text Engine')}</div>
 					<div class="flex items-center relative">
 						<select
-							class="dark:bg-gray-900 cursor-pointer w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+							class="field-select"
 							bind:value={STT_ENGINE}
 							placeholder={$i18n.t('Select an engine')}
 						>
@@ -199,7 +199,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="flex-1 w-full bg-transparent outline-hidden"
+								class="field-bare flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={STT_OPENAI_API_BASE_URL}
 								required
@@ -268,7 +268,7 @@
 								required
 							/>
 							<input
-								class="flex-1 w-full rounded-lg py-2 pl-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								placeholder={$i18n.t('Azure Region')}
 								bind:value={STT_AZURE_REGION}
 								required
@@ -381,10 +381,10 @@
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
 
 				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Text-to-Speech Engine')}</div>
+					<div class=" self-center field-label">{$i18n.t('Text-to-Speech Engine')}</div>
 					<div class="flex items-center relative">
 						<select
-							class=" dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+							class="field-select"
 							bind:value={TTS_ENGINE}
 							placeholder={$i18n.t('Select a mode')}
 							on:change={async (e) => {
@@ -414,7 +414,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="flex-1 w-full bg-transparent outline-hidden"
+								class="field-bare flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={TTS_OPENAI_API_BASE_URL}
 								required
@@ -427,7 +427,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="flex-1 w-full rounded-lg py-2 pl-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								placeholder={$i18n.t('API Key')}
 								bind:value={TTS_API_KEY}
 								required
@@ -438,13 +438,13 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="flex-1 w-full rounded-lg py-2 pl-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								placeholder={$i18n.t('API Key')}
 								bind:value={TTS_API_KEY}
 								required
 							/>
 							<input
-								class="flex-1 w-full rounded-lg py-2 pl-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								placeholder={$i18n.t('Azure Region')}
 								bind:value={TTS_AZURE_SPEECH_REGION}
 								required
@@ -647,10 +647,10 @@
 				<hr class="border-line my-2" />
 
 				<div class="pt-0.5 flex w-full justify-between">
-					<div class="self-center text-xs font-medium">{$i18n.t('Response splitting')}</div>
+					<div class="self-center field-label">{$i18n.t('Response splitting')}</div>
 					<div class="flex items-center relative">
 						<select
-							class="dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+							class="field-select"
 							aria-label={$i18n.t('Select how to split message text for TTS requests')}
 							bind:value={TTS_SPLIT_ON}
 						>

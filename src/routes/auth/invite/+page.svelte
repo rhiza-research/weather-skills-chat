@@ -149,7 +149,7 @@
 					<label class="text-sm">
 						<span class="text-body">{$i18n.t('Name')}</span>
 						<input
-							class="mt-1 w-full rounded-lg py-2 px-3 text-sm bg-gray-50 dark:bg-gray-850 outline-hidden"
+							class="field mt-1"
 							bind:value={name}
 							required
 						/>
@@ -157,7 +157,7 @@
 					<label class="text-sm">
 						<span class="text-body">{$i18n.t('Password')}</span>
 						<input
-							class="mt-1 w-full rounded-lg py-2 px-3 text-sm bg-gray-50 dark:bg-gray-850 outline-hidden"
+							class="field mt-1"
 							type="password"
 							bind:value={password}
 							required

@@ -434,7 +434,7 @@
 				<pre class="mermaid">{code}</pre>
 			{/if}
 		{:else}
-			<div class="text-text-300 absolute pl-4 py-1.5 text-xs font-medium dark:text-white">
+			<div class="text-text-300 absolute pl-4 py-1.5 field-label dark:text-white">
 				{lang}
 			</div>
 

@@ -185,7 +185,7 @@
 
 								<div class="flex flex-1 items-center">
 									<input
-										class="w-full flex-1 text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										class="field-bare flex-1 text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -227,7 +227,7 @@
 								<div class="flex-1 flex items-center">
 									<div class="text-sm">/</div>
 									<input
-										class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={path}
 										placeholder={$i18n.t('openapi.json Path')}

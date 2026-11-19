@@ -233,7 +233,7 @@
 
 	{#if isAtLeastAdmin && !isPersonal}
 		<input
-			class="text-sm py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden md:w-64"
+			class="field md:w-64"
 			placeholder={$i18n.t('Search')}
 			bind:value={search}
 		/>
@@ -310,7 +310,7 @@
 			<hr class="border-line" />
 			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 				<input
-					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					class="field"
 					type="email"
 					required
 					placeholder={$i18n.t('Email')}
@@ -328,7 +328,7 @@
 								<span class="text-sm text-muted">$</span>
 							{/if}
 							<input
-								class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+								class="field"
 								type="number"
 								min="0"
 								step="0.01"
@@ -353,7 +353,7 @@
 					<label class="block">
 						<div class="mb-1 text-xs text-muted">{$i18n.t('Role')}</div>
 						<select
-							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={inviteRole}
 						>
 							<option value="user">{$i18n.t('User')}</option>

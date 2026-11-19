@@ -146,7 +146,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Preferences')}
 				/>
@@ -167,7 +167,7 @@
 				required
 			/>
 			<textarea
-				class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+				class="field-outline min-h-28"
 				placeholder={$i18n.t('Preference text')}
 				bind:value={content}
 				required
@@ -175,7 +175,7 @@
 			<div class="flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
 				{#if !isPersonal && isOrgAdmin}
 					<select
-						class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+						class="field-outline md:w-40"
 						bind:value={visibility}
 					>
 						<option value="private">{$i18n.t('Private')}</option>
@@ -225,11 +225,11 @@
 				{#if editing === preference.id}
 					<div class="mt-3 flex flex-col gap-2">
 						<input
-							class="w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+							class="field-outline"
 							bind:value={editTitle}
 						/>
 						<textarea
-							class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+							class="field-outline min-h-28"
 							bind:value={editContent}
 						></textarea>
 						<div class="flex gap-2">

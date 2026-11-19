@@ -267,7 +267,7 @@
 						<Search className="size-3.5" />
 					</div>
 					<input
-						class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+						class="field-bare text-sm py-1 rounded-r-xl"
 						bind:value={searchValue}
 						placeholder={$i18n.t('Search Models')}
 					/>

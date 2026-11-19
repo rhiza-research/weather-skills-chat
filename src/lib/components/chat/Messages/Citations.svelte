@@ -107,7 +107,7 @@
 {#if citations.length > 0}
 	<div class=" py-0.5 -mx-0.5 w-full flex gap-1 items-center flex-wrap">
 		{#if citations.length <= 3}
-			<div class="flex text-xs font-medium flex-wrap">
+			<div class="flex field-label flex-wrap">
 				{#each citations as citation, idx}
 					<button
 						id={`source-${id}-${idx + 1}`}
@@ -147,7 +147,7 @@
 							>{$i18n.t('References from')}</span
 						>
 						<div class="flex items-center overflow-auto scrollbar-none w-full max-w-full flex-1">
-							<div class="flex text-xs font-medium items-center">
+							<div class="flex field-label items-center">
 								{#each citations.slice(0, 2) as citation, idx}
 									<button
 										class="no-toggle outline-hidden flex dark:text-gray-300 p-1 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 transition rounded-xl max-w-96"
@@ -186,7 +186,7 @@
 					</div>
 				</div>
 				<div slot="content">
-					<div class="flex text-xs font-medium flex-wrap">
+					<div class="flex field-label flex-wrap">
 						{#each citations as citation, idx}
 							<button
 								id={`source-${id}-${idx + 1}`}

@@ -13,7 +13,7 @@
 		<div
 			class="relative group/tags px-1.5 py-[0.2px] gap-0.5 flex justify-between h-fit max-h-fit w-fit items-center rounded-full bg-gray-500/20 text-body transition cursor-pointer"
 		>
-			<div class=" text-xs font-medium self-center line-clamp-1 w-fit">
+			<div class=" field-label self-center line-clamp-1 w-fit">
 				{tag.name}
 			</div>
 			<div class="absolute invisible right-0.5 group-hover/tags:visible transition">

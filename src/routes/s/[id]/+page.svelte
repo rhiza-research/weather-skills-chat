@@ -190,7 +190,7 @@
 							</div>
 							<button
 								type="button"
-								class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-line-strong text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
+								class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-line-strong field-label hover:bg-black/5 dark:hover:bg-white/5 transition"
 								on:click={() => showArtifacts.set(!$showArtifacts)}
 								aria-pressed={$showArtifacts}
 							>

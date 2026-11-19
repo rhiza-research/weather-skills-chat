@@ -187,7 +187,7 @@
 
 								<div class="flex-1">
 									<input
-										class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -251,7 +251,7 @@
 										)}
 									>
 										<input
-											class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+											class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 											type="text"
 											bind:value={prefixId}
 											placeholder={$i18n.t('Prefix ID')}
@@ -274,7 +274,7 @@
 											)}
 										>
 											<input
-												class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+												class="field-bare text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
 												type="text"
 												bind:value={name}
 												placeholder={$i18n.t('e.g. openrouter')}
@@ -318,7 +318,7 @@
 
 									<div class="flex-1">
 										<select
-											class="w-full text-sm bg-transparent outline-hidden"
+											class="field-bare text-sm"
 											bind:value={modelCallTracing}
 										>
 											<!-- A new provider style is also added to _PROVIDER_TRACE_FIELD_BUILDERS in backend/open_webui/utils/langfuse_tracing.py. -->

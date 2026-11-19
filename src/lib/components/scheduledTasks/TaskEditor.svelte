@@ -216,9 +216,9 @@
 
 <form class="flex flex-col gap-4" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Name')}</span>
+		<span class="field-label text-muted">{$i18n.t('Name')}</span>
 		<input
-			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+			class="field"
 			bind:value={form.name}
 			disabled={!canManage}
 			required
@@ -226,9 +226,9 @@
 	</label>
 
 	<label class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Prompt')}</span>
+		<span class="field-label text-muted">{$i18n.t('Prompt')}</span>
 		<textarea
-			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+			class="field"
 			rows="10"
 			placeholder={$i18n.t('What the task should do each time it runs')}
 			bind:value={form.prompt}
@@ -238,10 +238,10 @@
 	</label>
 
 	<div class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Schedule')}</span>
+		<span class="field-label text-muted">{$i18n.t('Schedule')}</span>
 		{#if editingSchedule}
 			<input
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				class="field"
 				placeholder={$i18n.t('every weekday at 7am, or 0 7 * * 1-5')}
 				aria-label={$i18n.t('Schedule')}
 				bind:value={form.cron}
@@ -289,9 +289,9 @@
 	</div>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Model')}</span>
+		<span class="field-label text-muted">{$i18n.t('Model')}</span>
 		<select
-			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+			class="field"
 			bind:value={form.model}
 			disabled={!canManage}
 		>
@@ -303,9 +303,9 @@
 	</label>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Time limit (minutes)')}</span>
+		<span class="field-label text-muted">{$i18n.t('Time limit (minutes)')}</span>
 		<input
-			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+			class="field"
 			type="number"
 			min="1"
 			max="1440"
@@ -321,9 +321,9 @@
 
 	{#if runnerSizes.length > 1}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="text-xs font-medium text-muted">{$i18n.t('Tool runner size')}</span>
+			<span class="field-label text-muted">{$i18n.t('Tool runner size')}</span>
 			<select
-				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
+				class="field"
 				bind:value={form.runner_type}
 				disabled={!canManage}
 			>
@@ -342,7 +342,7 @@
 	{/if}
 
 	<div class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-muted">{$i18n.t('Tools')}</span>
+		<span class="field-label text-muted">{$i18n.t('Tools')}</span>
 		<div class="flex flex-col items-start gap-1.5">
 			<button
 				type="button"
@@ -372,7 +372,7 @@
 
 			{#if !form.features?.read_artifacts}
 				<input
-					class="w-full max-w-sm rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+					class="field max-w-sm"
 					bind:value={readPatterns}
 					disabled={!canManage}
 					aria-label={$i18n.t('Files the agent may read')}
@@ -384,9 +384,9 @@
 
 	{#if !isPersonal}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="text-xs font-medium text-muted">{$i18n.t('Sharing')}</span>
+			<span class="field-label text-muted">{$i18n.t('Sharing')}</span>
 			<select
-				class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+				class="field"
 				bind:value={form.visibility}
 				disabled={!canManage}
 			>

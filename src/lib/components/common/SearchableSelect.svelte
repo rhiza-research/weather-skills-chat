@@ -80,7 +80,7 @@
 			<Search className="size-4" strokeWidth="2.5" />
 			<input
 				bind:value={searchValue}
-				class="w-full text-sm bg-transparent outline-hidden"
+				class="field-bare text-sm"
 				placeholder={searchPlaceholder}
 				autocomplete="off"
 				on:input={() => {

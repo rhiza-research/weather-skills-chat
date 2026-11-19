@@ -249,7 +249,7 @@
 			{/if}
 			<div class="flex flex-col leading-tight min-w-0 text-left">
 				<span
-					class="text-xs font-medium whitespace-nowrap {state === 'degraded'
+					class="field-label whitespace-nowrap {state === 'degraded'
 						? 'text-red-600 dark:text-red-400'
 						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>

@@ -130,7 +130,7 @@
 									placeholder={inputPlaceholder
 										? inputPlaceholder
 										: $i18n.t('Type {{NAME}} to confirm', { NAME: inputMatch })}
-									class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden"
+									class="field mt-2"
 									autocomplete="off"
 									required
 								/>
@@ -138,7 +138,7 @@
 								<textarea
 									bind:value={inputValue}
 									placeholder={inputPlaceholder ? inputPlaceholder : $i18n.t('Enter your message')}
-									class="w-full mt-2 rounded-lg px-4 py-2 text-sm dark:text-gray-300 dark:bg-gray-900 outline-hidden resize-none"
+									class="field mt-2 resize-none"
 									rows="3"
 									required
 								/>

@@ -160,8 +160,20 @@ textarea::placeholder {
 		@apply text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white;
 	}
 
+	.field-label {
+		@apply text-xs font-medium;
+	}
+
+	.field-outline {
+		@apply w-full rounded-lg px-3 py-2 text-sm bg-transparent border border-gray-200 dark:border-gray-700 outline-hidden;
+	}
+
+	.field-bare {
+		@apply w-full bg-transparent outline-hidden;
+	}
+
 	.field-select {
-		@apply w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
+		@apply cursor-pointer w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
 	}
 }
 

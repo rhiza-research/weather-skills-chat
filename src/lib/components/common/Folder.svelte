@@ -141,7 +141,7 @@
 						? 'text-sm font-semibold'
 						: emphasis === 'medium'
 							? 'text-xs font-semibold uppercase tracking-wide'
-							: 'text-xs font-medium'}"
+							: 'field-label'}"
 				>
 					<div
 						class={emphasis === 'strong'

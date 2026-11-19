@@ -64,7 +64,7 @@
 	}
 </script>
 
-<div class="mb-1 flex gap-1 text-xs font-medium items-center text-subtle">
+<div class="mb-1 flex gap-1 field-label items-center text-subtle">
 	{#if filteredPrompts.length > 0}
 		<Bolt />
 		{$i18n.t('Suggested')}

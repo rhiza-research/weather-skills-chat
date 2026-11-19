@@ -112,7 +112,7 @@
 								<span class="text-sm text-muted">$</span>
 							{/if}
 							<input
-								class="w-full text-sm bg-transparent outline-hidden"
+								class="field-bare text-sm"
 								type="number"
 								min="0"
 								step="0.01"

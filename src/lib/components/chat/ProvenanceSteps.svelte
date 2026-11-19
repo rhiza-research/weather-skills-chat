@@ -45,7 +45,7 @@
 		<div class="mb-1.5 ml-1 space-y-1.5" slot="content">
 			{#if argEntries(step.args).length}
 				<div>
-					<div class="text-xs font-medium text-muted mb-0.5">
+					<div class="field-label text-muted mb-0.5">
 						{$i18n.t('Arguments')}
 					</div>
 					<dl class="space-y-0.5">
@@ -69,7 +69,7 @@
 
 			{#if inputList(step.input).length}
 				<div>
-					<div class="text-xs font-medium text-muted mb-0.5">
+					<div class="field-label text-muted mb-0.5">
 						{$i18n.t('Inputs')}
 					</div>
 					<ul class="space-y-1">

@@ -70,7 +70,7 @@
 
 		<div class="mb-2">
 			<div class="flex justify-between items-center text-xs pr-2">
-				<div class=" text-xs font-medium">{$i18n.t('Model Filtering')}</div>
+				<div class=" field-label">{$i18n.t('Model Filtering')}</div>
 
 				<Switch bind:state={permissions.model.filter} />
 			</div>
@@ -146,13 +146,13 @@
 		<div class=" space-y-1 mb-3">
 			<div class="">
 				<div class="flex justify-between items-center text-xs">
-					<div class=" text-xs font-medium">{$i18n.t('Default Model')}</div>
+					<div class=" field-label">{$i18n.t('Default Model')}</div>
 				</div>
 			</div>
 
 			<div class="flex-1 mr-2">
 				<select
-					class="w-full bg-transparent outline-hidden py-0.5 text-sm"
+					class="field-bare py-0.5 text-sm"
 					bind:value={permissions.model.default_id}
 					placeholder={$i18n.t('Select a model')}
 				>
@@ -171,21 +171,21 @@
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Workspace Permissions')}</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Models Access')}
 			</div>
 			<Switch bind:state={permissions.workspace.models} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Knowledge Access')}
 			</div>
 			<Switch bind:state={permissions.workspace.knowledge} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Prompts Access')}
 			</div>
 			<Switch bind:state={permissions.workspace.prompts} />
@@ -199,7 +199,7 @@
 				)}
 				placement="top-start"
 			>
-				<div class=" self-center text-xs font-medium">
+				<div class=" self-center field-label">
 					{$i18n.t('Tools Access')}
 				</div>
 				<Switch bind:state={permissions.workspace.tools} />
@@ -214,7 +214,7 @@
 				)}
 				placement="top-start"
 			>
-				<div class=" self-center text-xs font-medium">
+				<div class=" self-center field-label">
 					{$i18n.t('Skills Access')}
 				</div>
 				<Switch bind:state={permissions.workspace.skills} />
@@ -228,35 +228,35 @@
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Sharing Permissions')}</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Models Public Sharing')}
 			</div>
 			<Switch bind:state={permissions.sharing.public_models} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Knowledge Public Sharing')}
 			</div>
 			<Switch bind:state={permissions.sharing.public_knowledge} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Prompts Public Sharing')}
 			</div>
 			<Switch bind:state={permissions.sharing.public_prompts} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Tools Public Sharing')}
 			</div>
 			<Switch bind:state={permissions.sharing.public_tools} />
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Skills Public Sharing')}
 			</div>
 			<Switch bind:state={permissions.sharing.public_skills} />
@@ -269,7 +269,7 @@
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Chat Permissions')}</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow File Upload')}
 			</div>
 
@@ -277,7 +277,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Chat Controls')}
 			</div>
 
@@ -285,7 +285,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Chat Delete')}
 			</div>
 
@@ -293,7 +293,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Chat Edit')}
 			</div>
 
@@ -301,14 +301,14 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Speech to Text')}
 			</div>
 
 			<Switch bind:state={permissions.chat.stt} />
 		</div>
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Text to Speech')}
 			</div>
 
@@ -316,7 +316,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Call')}
 			</div>
 
@@ -324,7 +324,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Multiple Models in Chat')}
 			</div>
 
@@ -332,7 +332,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Allow Temporary Chat')}
 			</div>
 
@@ -341,7 +341,7 @@
 
 		{#if permissions.chat.temporary}
 			<div class="  flex w-full justify-between my-2 pr-2">
-				<div class=" self-center text-xs font-medium">
+				<div class=" self-center field-label">
 					{$i18n.t('Enforce Temporary Chat')}
 				</div>
 
@@ -356,7 +356,7 @@
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Direct Tool Servers')}
 			</div>
 
@@ -364,7 +364,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Web Search')}
 			</div>
 
@@ -372,7 +372,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Image Generation')}
 			</div>
 
@@ -380,7 +380,7 @@
 		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
-			<div class=" self-center text-xs font-medium">
+			<div class=" self-center field-label">
 				{$i18n.t('Code Interpreter')}
 			</div>
 

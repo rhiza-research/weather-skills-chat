@@ -107,7 +107,7 @@
 
 <div class="max-w-xl flex flex-col gap-4 text-sm">
 	<div class="flex flex-col gap-1">
-		<div class="text-xs font-medium text-muted">{$i18n.t('Name')}</div>
+		<div class="field-label text-muted">{$i18n.t('Name')}</div>
 		<input
 			class="field"
 			bind:value={name}
@@ -115,7 +115,7 @@
 	</div>
 
 	<div class="flex flex-col gap-2">
-		<div class="text-xs font-medium text-muted">{$i18n.t('Logo')}</div>
+		<div class="field-label text-muted">{$i18n.t('Logo')}</div>
 		<div class="flex items-center gap-4">
 			{#if logo}
 				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-gray-100 dark:bg-gray-850" />

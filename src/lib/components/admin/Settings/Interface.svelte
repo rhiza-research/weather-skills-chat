@@ -142,7 +142,7 @@
 				</div>
 
 				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
+					<div class=" self-center field-label">
 						{$i18n.t('Title Generation')}
 					</div>
 
@@ -151,7 +151,7 @@
 
 				{#if taskConfig.ENABLE_TITLE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">{$i18n.t('Title Generation Prompt')}</div>
+						<div class=" mb-1 field-label">{$i18n.t('Title Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -168,7 +168,7 @@
 				{/if}
 
 				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
+					<div class=" self-center field-label">
 						{$i18n.t('Tags Generation')}
 					</div>
 
@@ -177,7 +177,7 @@
 
 				{#if taskConfig.ENABLE_TAGS_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">{$i18n.t('Tags Generation Prompt')}</div>
+						<div class=" mb-1 field-label">{$i18n.t('Tags Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -194,7 +194,7 @@
 				{/if}
 
 				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
+					<div class=" self-center field-label">
 						{$i18n.t('Retrieval Query Generation')}
 					</div>
 
@@ -202,7 +202,7 @@
 				</div>
 
 				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
+					<div class=" self-center field-label">
 						{$i18n.t('Web Search Query Generation')}
 					</div>
 
@@ -210,7 +210,7 @@
 				</div>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Query Generation Prompt')}</div>
+					<div class=" mb-1 field-label">{$i18n.t('Query Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -226,7 +226,7 @@
 				</div>
 
 				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
+					<div class=" self-center field-label">
 						{$i18n.t('Autocomplete Generation')}
 					</div>
 
@@ -237,7 +237,7 @@
 
 				{#if taskConfig.ENABLE_AUTOCOMPLETE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">
+						<div class=" mb-1 field-label">
 							{$i18n.t('Autocomplete Generation Input Max Length')}
 						</div>
 
@@ -246,7 +246,7 @@
 							placement="top-start"
 						>
 							<input
-								class="w-full outline-hidden bg-transparent"
+								class="field-bare"
 								bind:value={taskConfig.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH}
 								placeholder={$i18n.t('-1 for no limit, or a positive integer for a specific limit')}
 							/>
@@ -255,7 +255,7 @@
 				{/if}
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Image Prompt Generation Prompt')}</div>
+					<div class=" mb-1 field-label">{$i18n.t('Image Prompt Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -271,7 +271,7 @@
 				</div>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Tools Function Calling Prompt')}</div>
+					<div class=" mb-1 field-label">{$i18n.t('Tools Function Calling Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}

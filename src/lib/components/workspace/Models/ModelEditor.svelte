@@ -484,7 +484,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="text-3xl font-semibold w-full bg-transparent outline-hidden"
+									class="field-bare text-3xl font-semibold"
 									placeholder={$i18n.t('Model Name')}
 									bind:value={name}
 									required
@@ -495,7 +495,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="text-xs w-full bg-transparent text-muted outline-hidden"
+									class="field-bare text-xs text-muted"
 									placeholder={$i18n.t('Model ID')}
 									bind:value={id}
 									disabled={edit}
@@ -813,7 +813,7 @@
 						{#if showPreview}
 							<div>
 								<textarea
-									class="text-sm w-full bg-transparent outline-hidden resize-none"
+									class="field-bare text-sm resize-none"
 									rows="10"
 									value={JSON.stringify(info, null, 2)}
 									disabled

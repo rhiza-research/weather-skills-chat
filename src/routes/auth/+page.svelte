@@ -299,7 +299,7 @@
 								</div>
 
 								{#if $config?.onboarding ?? false}
-									<div class="mt-1 text-xs font-medium text-muted">
+									<div class="mt-1 field-label text-muted">
 										ⓘ {$WEBUI_NAME}
 										{$i18n.t(
 											'does not make any external connections, and your data stays securely on your locally hosted server.'
@@ -316,7 +316,7 @@
 											<input
 												bind:value={name}
 												type="text"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="field-bare my-0.5 text-sm"
 												autocomplete="name"
 												placeholder={$i18n.t('Enter Your Full Name')}
 												required
@@ -330,7 +330,7 @@
 											<input
 												bind:value={ldapUsername}
 												type="text"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="field-bare my-0.5 text-sm"
 												autocomplete="username"
 												name="username"
 												placeholder={$i18n.t('Enter Your Username')}
@@ -343,7 +343,7 @@
 											<input
 												bind:value={email}
 												type="email"
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+												class="field-bare my-0.5 text-sm"
 												autocomplete="email"
 												name="email"
 												placeholder={$i18n.t('Enter Your Email')}
@@ -359,7 +359,7 @@
 											</div>
 											<textarea
 												bind:value={description}
-												class="my-0.5 w-full text-sm outline-hidden bg-transparent resize-none"
+												class="field-bare my-0.5 text-sm resize-none"
 												rows="3"
 												placeholder={$i18n.t(
 													'Tell us who you are and why you would like access'
@@ -375,7 +375,7 @@
 										<input
 											bind:value={password}
 											type="password"
-											class="my-0.5 w-full text-sm outline-hidden bg-transparent"
+											class="field-bare my-0.5 text-sm"
 											placeholder={$i18n.t('Enter Your Password')}
 											autocomplete="current-password"
 											name="current-password"

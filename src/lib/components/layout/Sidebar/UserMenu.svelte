@@ -216,13 +216,13 @@
 							on:click|stopPropagation
 						>
 							<input
-								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Organization name')}
 								bind:value={requestName}
 								required
 							/>
 							<textarea
-								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Description')}
 								rows="2"
 								bind:value={requestDescription}
@@ -257,7 +257,7 @@
 								{$i18n.t('Your usage')}
 							</div>
 						{/if}
-						<div class="text-xs font-medium tabular-nums">
+						<div class="field-label tabular-nums">
 							{formatCreditAmount(meter.spend, '0.00')}{#if meter.limit != null}
 								/ {formatCreditAmount(meter.limit)}{/if}{' '}{$i18n.t('credits')}
 						</div>

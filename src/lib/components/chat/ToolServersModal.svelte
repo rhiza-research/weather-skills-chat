@@ -126,7 +126,7 @@
 				bind:value={query}
 				type="search"
 				placeholder={$i18n.t('Search tools')}
-				class="w-full rounded-lg px-2.5 py-1.5 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-200 outline-hidden border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
+				class="field border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
 			/>
 		</div>
 

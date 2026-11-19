@@ -354,7 +354,7 @@
 					<input
 						id="model-search-input"
 						bind:value={searchValue}
-						class="w-full text-sm bg-transparent outline-hidden"
+						class="field-bare text-sm"
 						placeholder={searchPlaceholder}
 						autocomplete="off"
 						on:keydown={(e) => {
@@ -526,7 +526,7 @@
 																className="self-end"
 															>
 																<span
-																	class="text-xs font-medium text-body line-clamp-1"
+																	class="field-label text-body line-clamp-1"
 																	>{item.model.ollama?.details?.parameter_size ?? ''}</span
 																>
 															</Tooltip>

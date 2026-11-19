@@ -280,12 +280,12 @@
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<div class="flex w-full justify-between">
-							<div class="self-center text-xs font-medium">
+							<div class="self-center field-label">
 								{$i18n.t('Content Extraction Engine')}
 							</div>
 							<div class="">
 								<select
-									class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 text-xs bg-transparent outline-hidden text-right"
+									class="field-select"
 									bind:value={RAGConfig.CONTENT_EXTRACTION_ENGINE}
 								>
 									<option value="">{$i18n.t('Default')}</option>
@@ -300,7 +300,7 @@
 						{#if RAGConfig.CONTENT_EXTRACTION_ENGINE === ''}
 							<div class="flex w-full mt-1">
 								<div class="flex-1 flex justify-between">
-									<div class=" self-center text-xs font-medium">
+									<div class=" self-center field-label">
 										{$i18n.t('PDF Extract Images (OCR)')}
 									</div>
 									<div class="flex items-center relative">
@@ -312,7 +312,7 @@
 							<div class="flex w-full mt-1">
 								<div class="flex-1 mr-2">
 									<input
-										class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('Enter Tika Server URL')}
 										bind:value={RAGConfig.TIKA_SERVER_URL}
 									/>
@@ -321,7 +321,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'docling'}
 							<div class="flex w-full mt-1">
 								<input
-									class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+									class="field-bare flex-1 text-sm"
 									placeholder={$i18n.t('Enter Docling Server URL')}
 									bind:value={RAGConfig.DOCLING_SERVER_URL}
 								/>
@@ -329,7 +329,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'document_intelligence'}
 							<div class="my-0.5 flex gap-2 pr-2">
 								<input
-									class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+									class="field-bare flex-1 text-sm"
 									placeholder={$i18n.t('Enter Document Intelligence Endpoint')}
 									bind:value={RAGConfig.DOCUMENT_INTELLIGENCE_ENDPOINT}
 								/>
@@ -349,7 +349,7 @@
 					</div>
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
+						<div class=" self-center field-label">
 							<Tooltip content={$i18n.t('Full Context Mode')} placement="top-start">
 								{$i18n.t('Bypass Embedding and Retrieval')}
 							</Tooltip>
@@ -371,10 +371,10 @@
 
 					{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
 						<div class="  mb-2.5 flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">{$i18n.t('Text Splitter')}</div>
+							<div class=" self-center field-label">{$i18n.t('Text Splitter')}</div>
 							<div class="flex items-center relative">
 								<select
-									class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 text-xs bg-transparent outline-hidden text-right"
+									class="field-select"
 									bind:value={RAGConfig.TEXT_SPLITTER}
 								>
 									<option value="">{$i18n.t('Default')} ({$i18n.t('Character')})</option>
@@ -386,12 +386,12 @@
 						<div class="  mb-2.5 flex w-full justify-between">
 							<div class=" flex gap-1.5 w-full">
 								<div class="  w-full justify-between">
-									<div class="self-center text-xs font-medium min-w-fit mb-1">
+									<div class="self-center field-label min-w-fit mb-1">
 										{$i18n.t('Chunk Size')}
 									</div>
 									<div class="self-center">
 										<input
-											class=" w-full rounded-lg py-1.5 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											type="number"
 											placeholder={$i18n.t('Enter Chunk Size')}
 											bind:value={RAGConfig.CHUNK_SIZE}
@@ -402,13 +402,13 @@
 								</div>
 
 								<div class="w-full">
-									<div class=" self-center text-xs font-medium min-w-fit mb-1">
+									<div class=" self-center field-label min-w-fit mb-1">
 										{$i18n.t('Chunk Overlap')}
 									</div>
 
 									<div class="self-center">
 										<input
-											class="w-full rounded-lg py-1.5 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											type="number"
 											placeholder={$i18n.t('Enter Chunk Overlap')}
 											bind:value={RAGConfig.CHUNK_OVERLAP}
@@ -430,12 +430,12 @@
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
 							<div class="flex w-full justify-between">
-								<div class=" self-center text-xs font-medium">
+								<div class=" self-center field-label">
 									{$i18n.t('Embedding Model Engine')}
 								</div>
 								<div class="flex items-center relative">
 									<select
-										class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
+										class="field-select"
 										bind:value={embeddingEngine}
 										placeholder={$i18n.t('Select an embedding model engine')}
 										on:change={(e) => {
@@ -458,7 +458,7 @@
 							{#if embeddingEngine === 'openai'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OpenAIUrl}
 										required
@@ -469,7 +469,7 @@
 							{:else if embeddingEngine === 'ollama'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OllamaUrl}
 										required
@@ -485,14 +485,14 @@
 						</div>
 
 						<div class="  mb-2.5 flex flex-col w-full">
-							<div class=" mb-1 text-xs font-medium">{$i18n.t('Embedding Model')}</div>
+							<div class=" mb-1 field-label">{$i18n.t('Embedding Model')}</div>
 
 							<div class="">
 								{#if embeddingEngine === 'ollama'}
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+												class="field-bare flex-1 text-sm"
 												bind:value={embeddingModel}
 												placeholder={$i18n.t('Set embedding model')}
 												required
@@ -503,7 +503,7 @@
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+												class="field-bare flex-1 text-sm"
 												placeholder={$i18n.t('Set embedding model (e.g. {{model}})', {
 													model: embeddingModel.slice(-40)
 												})}
@@ -579,7 +579,7 @@
 
 						{#if embeddingEngine === 'ollama' || embeddingEngine === 'openai'}
 							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center text-xs font-medium">
+								<div class=" self-center field-label">
 									{$i18n.t('Embedding Batch Size')}
 								</div>
 
@@ -603,7 +603,7 @@
 						<hr class=" border-line my-2" />
 
 						<div class="  mb-2.5 flex w-full justify-between">
-							<div class=" self-center text-xs font-medium">{$i18n.t('Full Context Mode')}</div>
+							<div class=" self-center field-label">{$i18n.t('Full Context Mode')}</div>
 							<div class="flex items-center relative">
 								<Tooltip
 									content={RAGConfig.RAG_FULL_CONTEXT
@@ -621,7 +621,7 @@
 
 						{#if !RAGConfig.RAG_FULL_CONTEXT}
 							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center text-xs font-medium">{$i18n.t('Hybrid Search')}</div>
+								<div class=" self-center field-label">{$i18n.t('Hybrid Search')}</div>
 								<div class="flex items-center relative">
 									<Switch
 										bind:state={RAGConfig.ENABLE_RAG_HYBRID_SEARCH}
@@ -634,13 +634,13 @@
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="  mb-2.5 flex flex-col w-full">
-									<div class=" mb-1 text-xs font-medium">{$i18n.t('Reranking Model')}</div>
+									<div class=" mb-1 field-label">{$i18n.t('Reranking Model')}</div>
 
 									<div class="">
 										<div class="flex w-full">
 											<div class="flex-1 mr-2">
 												<input
-													class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+													class="field-bare flex-1 text-sm"
 													placeholder={$i18n.t('Set reranking model (e.g. {{model}})', {
 														model: 'BAAI/bge-reranker-v2-m3'
 													})}
@@ -706,10 +706,10 @@
 							{/if}
 
 							<div class="  mb-2.5 flex w-full justify-between">
-								<div class=" self-center text-xs font-medium">{$i18n.t('Top K')}</div>
+								<div class=" self-center field-label">{$i18n.t('Top K')}</div>
 								<div class="flex items-center relative">
 									<input
-										class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+										class="field-bare flex-1 text-sm"
 										type="number"
 										placeholder={$i18n.t('Enter Top K')}
 										bind:value={RAGConfig.TOP_K}
@@ -721,10 +721,10 @@
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="mb-2.5 flex w-full justify-between">
-									<div class="self-center text-xs font-medium">{$i18n.t('Top K Reranker')}</div>
+									<div class="self-center field-label">{$i18n.t('Top K Reranker')}</div>
 									<div class="flex items-center relative">
 										<input
-											class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+											class="field-bare flex-1 text-sm"
 											type="number"
 											placeholder={$i18n.t('Enter Top K Reranker')}
 											bind:value={RAGConfig.TOP_K_RERANKER}
@@ -738,12 +738,12 @@
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="  mb-2.5 flex flex-col w-full justify-between">
 									<div class=" flex w-full justify-between">
-										<div class=" self-center text-xs font-medium">
+										<div class=" self-center field-label">
 											{$i18n.t('Relevance Threshold')}
 										</div>
 										<div class="flex items-center relative">
 											<input
-												class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+												class="field-bare flex-1 text-sm"
 												type="number"
 												step="0.01"
 												placeholder={$i18n.t('Enter Score')}
@@ -766,7 +766,7 @@
 						{/if}
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
-							<div class=" mb-1 text-xs font-medium">{$i18n.t('RAG Template')}</div>
+							<div class=" mb-1 field-label">{$i18n.t('RAG Template')}</div>
 							<div class="flex w-full items-center relative">
 								<Tooltip
 									content={$i18n.t(
@@ -793,7 +793,7 @@
 					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Max Upload Size')}</div>
+						<div class=" self-center field-label">{$i18n.t('Max Upload Size')}</div>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={$i18n.t(
@@ -802,7 +802,7 @@
 								placement="top-start"
 							>
 								<input
-									class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+									class="field-bare flex-1 text-sm"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_SIZE}
@@ -814,7 +814,7 @@
 					</div>
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Max Upload Count')}</div>
+						<div class=" self-center field-label">{$i18n.t('Max Upload Count')}</div>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={$i18n.t(
@@ -823,7 +823,7 @@
 								placement="top-start"
 							>
 								<input
-									class="flex-1 w-full rounded-lg text-sm bg-transparent outline-hidden"
+									class="field-bare flex-1 text-sm"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_COUNT}
@@ -841,14 +841,14 @@
 					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Google Drive')}</div>
+						<div class=" self-center field-label">{$i18n.t('Google Drive')}</div>
 						<div class="flex items-center relative">
 							<Switch bind:state={RAGConfig.ENABLE_GOOGLE_DRIVE_INTEGRATION} />
 						</div>
 					</div>
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('OneDrive')}</div>
+						<div class=" self-center field-label">{$i18n.t('OneDrive')}</div>
 						<div class="flex items-center relative">
 							<Switch bind:state={RAGConfig.ENABLE_ONEDRIVE_INTEGRATION} />
 						</div>
@@ -861,7 +861,7 @@
 					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Reset Upload Directory')}</div>
+						<div class=" self-center field-label">{$i18n.t('Reset Upload Directory')}</div>
 						<div class="flex items-center relative">
 							<button
 								class="text-xs"
@@ -875,7 +875,7 @@
 					</div>
 
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
+						<div class=" self-center field-label">
 							{$i18n.t('Reset Vector Storage/Knowledge')}
 						</div>
 						<div class="flex items-center relative">
@@ -890,7 +890,7 @@
 						</div>
 					</div>
 					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
+						<div class=" self-center field-label">
 							{$i18n.t('Reindex Knowledge Base Vectors')}
 						</div>
 						<div class="flex items-center relative">

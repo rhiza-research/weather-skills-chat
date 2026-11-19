@@ -307,7 +307,7 @@
 						disabled={busy}
 					/>
 					<input
-						class="md:w-48 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
+						class="md:w-48 field-bare text-sm py-2 px-3 border border-line-strong"
 						placeholder={$i18n.t('branch / tag / sha')}
 						bind:value={gitRef}
 						disabled={busy}

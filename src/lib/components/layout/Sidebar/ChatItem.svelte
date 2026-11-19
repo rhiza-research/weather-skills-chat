@@ -249,7 +249,7 @@
 				use:focusEdit
 				bind:value={chatTitle}
 				id="chat-title-input-{id}"
-				class=" bg-transparent w-full outline-hidden mr-10"
+				class="field-bare mr-10"
 				on:keydown={chatTitleInputKeydownHandler}
 			/>
 		</div>

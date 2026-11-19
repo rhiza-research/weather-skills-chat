@@ -68,7 +68,7 @@
 		{/if}
 
 		<input
-			class="w-full text-sm bg-transparent outline-hidden"
+			class="field-bare text-sm"
 			placeholder={$i18n.t('Enter URL (e.g. http://localhost:11434)')}
 			bind:value={url}
 		/>

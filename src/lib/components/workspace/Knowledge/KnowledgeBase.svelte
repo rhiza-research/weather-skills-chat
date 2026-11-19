@@ -652,7 +652,7 @@
 						<div class="w-full">
 							<input
 								type="text"
-								class="text-left w-full font-semibold text-2xl font-primary bg-transparent outline-hidden"
+								class="field-bare text-left font-semibold text-2xl font-primary"
 								bind:value={knowledge.name}
 								placeholder={$i18n.t('Knowledge Name')}
 								disabled={!canWrite}
@@ -678,7 +678,7 @@
 					<div class="flex w-full px-1">
 						<input
 							type="text"
-							class="text-left text-xs w-full text-muted bg-transparent outline-hidden"
+							class="field-bare text-left text-xs text-muted"
 							bind:value={knowledge.description}
 							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}

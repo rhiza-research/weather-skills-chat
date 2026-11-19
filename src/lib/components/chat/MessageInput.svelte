@@ -407,7 +407,7 @@
 									scrollToBottom();
 								}}
 							>
-								<span class="text-xs font-medium whitespace-nowrap"
+								<span class="field-label whitespace-nowrap"
 									>{newMessagesBelow ? $i18n.t('New messages') : $i18n.t('Jump to latest')}</span
 								>
 								<svg
@@ -516,7 +516,7 @@
 							id="queued-sends"
 							class="mx-1 mb-1.5 rounded-2xl border border-line bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
 						>
-							<div class="text-xs font-medium text-muted">
+							<div class="field-label text-muted">
 								{$i18n.t('Queued — sends one at a time as each reply is done')}
 							</div>
 							{#each queuedSends as queued, idx}
@@ -529,7 +529,7 @@
 									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-body hover:bg-black/5 hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
+											class="shrink-0 rounded-full px-2 py-0.5 field-label text-body hover:bg-black/5 hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
 											on:click={() => onSendQueuedNow(idx)}
 										>
 											{$i18n.t('Send now')}

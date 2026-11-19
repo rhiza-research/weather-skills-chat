@@ -104,7 +104,7 @@
 
 					<div class=" w-full mt-1">
 						<textarea
-							class="w-full resize-none rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field resize-none"
 							rows="4"
 							bind:value={description}
 							placeholder={$i18n.t('Describe your knowledge base and objectives')}

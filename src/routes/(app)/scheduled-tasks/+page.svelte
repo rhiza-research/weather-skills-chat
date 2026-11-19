@@ -140,7 +140,7 @@
 			>
 				<Search className="size-3.5 shrink-0 text-gray-500" />
 				<input
-					class="w-full min-w-0 text-sm bg-transparent outline-hidden"
+					class="field-bare min-w-0 text-sm"
 					type="search"
 					bind:value={query}
 					placeholder={$i18n.t('Search scheduled tasks')}
@@ -201,7 +201,7 @@
 		{#each sections as section}
 			{#if section.items.length > 0}
 				<section class="flex flex-col gap-2">
-					<div class="text-xs font-medium text-muted uppercase tracking-wide">
+					<div class="field-label text-muted uppercase tracking-wide">
 						{section.title}
 					</div>
 					{#each section.items as task (task.id)}
