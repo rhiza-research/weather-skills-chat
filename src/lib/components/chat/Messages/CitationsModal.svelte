@@ -3,6 +3,8 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { settings } from '$lib/stores';
+	import { isValidHttpUrl } from '$lib/utils';
 
 	const i18n = getContext('i18n');
 
@@ -102,7 +104,7 @@
 										class="hover:text-gray-500 dark:hover:text-gray-100 underline grow"
 										href={document?.metadata?.file_id
 											? `${WEBUI_API_BASE_URL}/files/${document?.metadata?.file_id}/content${document?.metadata?.page !== undefined ? `#page=${document.metadata.page + 1}` : ''}`
-											: document.source?.url?.includes('http')
+											: isValidHttpUrl(document.source?.url)
 												? document.source.url
 												: `#`}
 										target="_blank"
@@ -168,7 +170,10 @@
 						{#if document.metadata?.html}
 							<iframe
 								class="w-full border-0 h-auto rounded-none"
-								sandbox="allow-scripts allow-forms allow-same-origin"
+								sandbox="allow-scripts allow-forms{($settings?.iframeSandboxAllowSameOrigin ??
+								false)
+									? ' allow-same-origin'
+									: ''}"
 								srcdoc={document.document}
 								title={$i18n.t('Content')}
 							></iframe>
