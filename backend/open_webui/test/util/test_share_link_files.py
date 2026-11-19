@@ -3,6 +3,7 @@
 import asyncio
 import re
 import tempfile
+import threading
 import time
 import unittest
 import uuid
@@ -196,17 +197,53 @@ class ShareRouteTest(unittest.TestCase):
         for days in (0, 366):
             self.assertEqual(self.share(expires_in_days=days).status_code, 422)
 
-    def test_deleting_one_link_keeps_the_others(self):
+    def test_deleting_one_link_stops_it_at_once_and_keeps_the_others(self):
+        from open_webui.utils import artifacts
+
         gone = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         kept = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        release = threading.Event()
 
-        res = self.client.delete(f"/chats/{self.chat.id}/shares/{gone.id}")
+        def slow_delete(chat_id):
+            release.wait(5)
+            return real_delete(chat_id)
 
-        self.assertEqual(res.status_code, 200)
-        self.assertFalse(Chats.is_live_share(gone.id))
+        real_delete = artifacts.delete_sandbox
+        # A client used without `with` waits for the background delete on
+        # every request; this one keeps its loop running like the server's.
+        with patch("open_webui.utils.artifacts.delete_sandbox", slow_delete), TestClient(
+            self.client.app
+        ) as client:
+            res = client.delete(f"/chats/{self.chat.id}/shares/{gone.id}")
+
+            # Answered while the files are still there, with the link already dead.
+            self.assertEqual(res.status_code, 200)
+            self.assertTrue((self.artifacts / gone.id).exists())
+            self.assertFalse(Chats.is_live_share(gone.id))
+            live = [l["id"] for l in Chats.get_live_shares_by_chat_id(self.chat.id)]
+            self.assertEqual(live, [kept.id])
+
+            release.set()
+            deadline = time.monotonic() + 5
+            while Chats.get_chat_by_id(gone.id) and time.monotonic() < deadline:
+                time.sleep(0.02)
+
+        self.assertIsNone(Chats.get_chat_by_id(gone.id))
         self.assertFalse((self.artifacts / gone.id).exists())
         self.assertTrue(Chats.is_live_share(kept.id))
         self.assertTrue((self.artifacts / kept.id / "map.png").exists())
+
+    def test_a_link_whose_files_remain_waits_for_the_cleanup(self):
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        with patch("open_webui.utils.artifacts.delete_sandbox", return_value=False):
+            Chats.delete_shared_chat_by_chat_id(self.chat.id, shared.id)
+
+        self.assertFalse(Chats.is_live_share(shared.id))
+        self.assertIsNotNone(Chats.get_chat_by_id(shared.id))
+        Chats.delete_expired_shared_chats()
+        self.assertIsNone(Chats.get_chat_by_id(shared.id))
+        self.assertFalse((self.artifacts / shared.id).exists())
 
     def test_a_link_to_another_chat_is_not_deleted(self):
         other = Chats.insert_new_chat(

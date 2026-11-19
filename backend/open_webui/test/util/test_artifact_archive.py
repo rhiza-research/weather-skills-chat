@@ -24,6 +24,7 @@ from open_webui.utils.artifacts import (
     copy_sandbox,
     copy_upload_into_chat_sandbox,
     create_folder,
+    delete_sandbox,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
@@ -126,7 +127,7 @@ class CopySandboxTest(unittest.TestCase):
     @staticmethod
     def _fake_clone(cmd, **kwargs):
         if cmd[1] == "rmr":
-            shutil.rmtree(cmd[2], ignore_errors=True)
+            shutil.rmtree(cmd[-1], ignore_errors=True)
             return subprocess.CompletedProcess(cmd, 0, "", "")
         src, dest = Path(cmd[-2]), Path(cmd[-1])
         if dest.exists():
@@ -237,6 +238,40 @@ class CopySandboxTest(unittest.TestCase):
                     with self.assertRaises(SandboxCopyError):
                         copy_sandbox("src", "dest")
                 self.assertEqual(artifact_copy_state("dest"), "failed")
+
+
+class DeleteSandboxTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.artifacts = Path(tmp.name) / "artifacts"
+        patcher = patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.chat = self.artifacts / "chat"
+        (self.chat / "plots").mkdir(parents=True)
+        for name in ("a.png", "b.png", "c.png"):
+            (self.chat / "plots" / name).write_bytes(b"png")
+
+    def test_juicefs_rmr_deletes_with_threads(self):
+        with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+            "open_webui.utils.artifacts.subprocess.run", side_effect=CopySandboxTest._fake_clone
+        ) as run:
+            self.assertTrue(delete_sandbox("chat"))
+        self.assertEqual(
+            run.call_args.args[0], ["juicefs", "rmr", "--threads", "50", str(self.chat.resolve())]
+        )
+
+    def test_without_juicefs_only_a_small_folder_is_deleted(self):
+        with patch("open_webui.utils.artifacts.shutil.which", return_value=None), patch(
+            "open_webui.utils.artifacts.PLAIN_COPY_MAX_FILES", 2
+        ):
+            self.assertFalse(delete_sandbox("chat"))
+            self.assertTrue((self.chat / "plots" / "a.png").exists())
+
+            (self.chat / "plots" / "b.png").unlink()
+            self.assertTrue(delete_sandbox("chat"))
+            self.assertFalse(self.chat.exists())
 
 
 class ArtifactCopyStateTest(unittest.TestCase):
