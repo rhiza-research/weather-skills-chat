@@ -43,12 +43,12 @@
 			? 'md:max-w-[calc(100%-260px)]'
 			: ''} max-w-full"
 	>
-		<nav class="   px-2.5 pt-1 backdrop-blur-xl drag-region">
+		<nav class="page-nav drag-region">
 			<div class=" flex items-center gap-1">
-				<div class="{$showSidebar ? 'md:hidden' : ''} flex flex-none items-center self-end">
+				<div class="{$showSidebar ? 'md:hidden' : ''} flex flex-none items-center">
 					<button
 						id="sidebar-toggle-button"
-						class="btn-ghost btn-ghost-sm"
+						class="btn-ghost"
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}
@@ -62,7 +62,7 @@
 
 				<div class=" flex w-full">
 					<div
-						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
+						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent"
 					>
 						<a
 							class="tab {['/admin', '/admin/users'].includes(
@@ -114,7 +114,7 @@
 			</div>
 		</nav>
 
-		<div class=" pb-1 px-4 flex-1 min-w-0 max-h-full overflow-y-auto">
+		<div class="page-body">
 			<slot />
 		</div>
 	</div>

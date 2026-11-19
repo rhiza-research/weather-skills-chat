@@ -112,35 +112,36 @@
 </svelte:head>
 
 <div class="flex flex-col w-full h-screen max-h-[100dvh]">
-	<nav class="px-2.5 pt-1 backdrop-blur-xl">
-		<div class="flex items-center justify-between gap-2">
+	<nav class="page-nav">
+		<div class="flex w-full items-center justify-between gap-2">
 			<div class="flex items-center gap-1 min-w-0">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
-						class="btn-ghost btn-ghost-sm"
+						class="btn-ghost"
+						aria-label="Toggle Sidebar"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
 					</button>
 				</div>
 				<a
-					class="p-1.5 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="btn-ghost"
 					href="/scheduled-tasks"
 					aria-label={$i18n.t('Scheduled tasks')}
 				>
 					<ArrowLeft className="size-4" />
 				</a>
-				<div class="text-lg font-medium px-1.5 truncate">
+				<h1 class="text-lg font-medium px-1.5 truncate">
 					{isNew ? $i18n.t('New scheduled task') : (task?.name ?? '')}
-				</div>
+				</h1>
 			</div>
 			{#if task}
 				<div class="flex items-center gap-2 mr-2 text-sm shrink-0">
 					{#if canManage}
-						<button class="text-red-500" on:click={remove}>{$i18n.t('Delete')}</button>
+						<button class="btn-secondary text-red-600 dark:text-red-400" on:click={remove}>{$i18n.t('Delete')}</button>
 					{/if}
 					<button
-						class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5"
+						class="btn-primary"
 						on:click={runNow}
 					>
 						{$i18n.t('Run now')}

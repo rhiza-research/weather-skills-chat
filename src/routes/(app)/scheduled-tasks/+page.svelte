@@ -117,19 +117,19 @@
 </svelte:head>
 
 <div class="flex flex-col w-full h-screen max-h-[100dvh]">
-	<nav class="px-2.5 pt-1 backdrop-blur-xl">
+	<nav class="page-nav">
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-1">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
-						class="btn-ghost btn-ghost-sm"
+						class="btn-ghost"
 						aria-label="Toggle Sidebar"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
 					</button>
 				</div>
-				<div class="text-lg font-medium px-1.5">{$i18n.t('Scheduled tasks')}</div>
+				<h1 class="text-lg font-medium px-1.5">{$i18n.t('Scheduled tasks')}</h1>
 			</div>
 		</div>
 	</nav>

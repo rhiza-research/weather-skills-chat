@@ -286,7 +286,7 @@
 
 {#if loaded}
 	<div class="mb-3">
-		<div class="text-lg font-medium mb-1">{$i18n.t('Skills')}</div>
+		<h1 class="page-title mb-1">{$i18n.t('Skills')}</h1>
 		<div class="text-sm text-muted mb-4">
 			{#if catalog === 'public'}
 				{$i18n.t('Install Agent Skills into the public catalog. Organizations can then enable or disable each pack and skill. Skills run like tools in chat.')}
