@@ -6,7 +6,7 @@
 		yellow: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
 		orange: 'bg-orange-500/20 text-orange-700 dark:text-orange-200',
 		red: 'bg-red-500/20 text-red-700 dark:text-red-200',
-		purple: 'bg-purple-500/20 text-purple-700 dark:text-purple-200',
+		purple: 'bg-blue-500/20 text-blue-700 dark:text-blue-200',
 		gray: 'bg-gray-500/20 text-gray-700 dark:text-gray-200'
 	};
 	export const LEGACY_BANNER_TYPES: Record<string, string> = {

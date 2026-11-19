@@ -15,7 +15,7 @@
 	class="flex h-5 min-h-5 w-9 shrink-0 items-center rounded-full px-[3px] mx-[1px] transition outline outline-1 outline-gray-100 dark:outline-gray-800 {disabled
 		? 'opacity-40 cursor-not-allowed'
 		: 'cursor-pointer'} {state
-		? ' bg-emerald-600'
+		? ' bg-green-600'
 		: 'bg-gray-200 dark:bg-transparent'}"
 >
 	<Switch.Thumb

@@ -244,7 +244,7 @@
 			{:else if state === 'degraded'}
 				<span class="inline-block size-2.5 shrink-0 rounded-full bg-red-500"></span>
 			{:else}
-				<span class="tool-runner-dot inline-block size-2.5 shrink-0 rounded-full bg-emerald-500"
+				<span class="tool-runner-dot inline-block size-2.5 shrink-0 rounded-full bg-green-500"
 				></span>
 			{/if}
 			<div class="flex flex-col leading-tight min-w-0 text-left">
@@ -270,7 +270,7 @@
 						{$i18n.t('cores')})
 					</div>
 					<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
-						<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
+						<div class="h-2 rounded bg-blue-500" style="width: {cpuPct}%"></div>
 					</div>
 					<div class="mt-2 mb-1 text-muted">
 						{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)}{memLimitBytes
@@ -279,7 +279,7 @@
 					</div>
 					<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 						<div
-							class="h-2 rounded {inSwap ? 'bg-red-500' : 'bg-sky-500'}"
+							class="h-2 rounded {inSwap ? 'bg-red-500' : 'bg-blue-500'}"
 							style="width: {memPct}%"
 						></div>
 					</div>
@@ -287,7 +287,7 @@
 					<div class="flex gap-0.5 h-8 items-end">
 						{#each samples as s}
 							<div
-								class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-sky-400'}"
+								class="flex-1 min-w-px {s.swap ? 'bg-red-500' : 'bg-blue-400'}"
 								style="height: {memLimitBytes ? Math.max(8, (s.memory / memLimitBytes) * 100) : 8}%"
 								title="{fmtMemGib(s.memory)} GB{s.swap ? ` · ${$i18n.t('swap')}` : ''}"
 							></div>
@@ -315,7 +315,7 @@
 								aria-checked={option.type === size?.type}
 								class="flex flex-col items-start rounded-xl px-2 py-1.5 text-left border {option.type ===
 								size?.type
-									? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
+									? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
 									: 'border-line hover:bg-gray-50 dark:hover:bg-gray-850'} disabled:opacity-60"
 								disabled={!!switching}
 								on:click={() => pickSize(option)}
