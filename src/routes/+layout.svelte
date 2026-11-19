@@ -584,13 +584,15 @@
 		initI18n(localStorage?.locale);
 
 		// The server sends a tab opened on an artifact link that failed here.
+		// The toast waits for the page: the splash hides it until then.
 		const bootUrl = new URL(window.location.href);
+		let bootNotice = '';
 		for (const [flag, message] of [
 			['shared-missing', $i18n.t('This shared item does not exist or is no longer available.')],
 			['sign-in-required', $i18n.t('Sign in to open this item.')]
 		]) {
 			if (!bootUrl.searchParams.has(flag)) continue;
-			toast.error(message);
+			bootNotice = message;
 			bootUrl.searchParams.delete(flag);
 			history.replaceState(history.state, '', bootUrl);
 		}
@@ -703,6 +705,7 @@
 			// A timeout is only a backstop so a failed child cannot trap it.
 			setTimeout(revealApp, 2000);
 		}
+		if (bootNotice) toast.error(bootNotice);
 
 		return () => {
 			window.removeEventListener('resize', onResize);

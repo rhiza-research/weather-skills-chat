@@ -202,13 +202,17 @@
 			// or the early responses are not reused.
 			(() => {
 				const isAuthPath = (path) => path === '/auth' || path.startsWith('/auth/');
-				const isShareLink = (path) => path.startsWith('/s/');
+				const isShareLink = (path) => /^\/s(\/|$)/.test(path);
 				const token = localStorage.token;
 				if (!token && !isAuthPath(location.pathname) && !isShareLink(location.pathname)) {
+					// The "shared item does not exist" flag is for sign-in to show, not to come back to.
+					const url = new URL(location.href);
+					const notice = url.searchParams.has('shared-missing') ? '&shared-missing=1' : '';
+					url.searchParams.delete('shared-missing');
 					history.replaceState(
 						null,
 						'',
-						`/auth?redirect=${encodeURIComponent(location.pathname + location.search)}`
+						`/auth?redirect=${encodeURIComponent(url.pathname + url.search)}${notice}`
 					);
 				}
 
