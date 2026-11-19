@@ -10,7 +10,7 @@
 <Modal bind:show>
 	<div class="text-strong">
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4">
-			<div class="modal-title">{$i18n.t('Keyboard shortcuts')}</div>
+			<h2 class="modal-title">{$i18n.t('Keyboard shortcuts')}</h2>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -235,7 +235,7 @@
 		</div>
 
 		<div class=" flex justify-between dark:text-gray-300 px-5">
-			<div class="modal-title">{$i18n.t('Input commands')}</div>
+			<h2 class="modal-title">{$i18n.t('Input commands')}</h2>
 		</div>
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">

@@ -59,7 +59,7 @@
 		{#if servers !== null}
 			<div class="">
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
+					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
 					<hr class=" border-line my-2" />
 

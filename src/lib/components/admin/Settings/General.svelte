@@ -131,7 +131,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 		{#if adminConfig !== null}
 			<div class="">
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
+					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
 					<hr class=" border-line my-2" />
 
@@ -204,7 +204,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Authentication')}</div>
+					<h3 class="section-title mb-2.5">{$i18n.t('Authentication')}</h3>
 
 					<hr class=" border-line my-2" />
 
@@ -550,7 +550,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Email Tool')}</div>
+					<h3 class="section-title mb-2.5">{$i18n.t('Email Tool')}</h3>
 
 					<hr class=" border-line my-2" />
 
@@ -621,7 +621,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
+					<h3 class="section-title mb-2.5">{$i18n.t('Features')}</h3>
 
 					<hr class=" border-line my-2" />
 

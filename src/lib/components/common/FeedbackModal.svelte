@@ -74,9 +74,9 @@
 <Modal size="sm" bind:show>
   <div>
     <div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-      <div class="modal-title">
+      <h2 class="modal-title">
         {$i18n.t("Send feedback")}
-      </div>
+      </h2>
       <button
         class="self-center"
         aria-label={$i18n.t("Close")}

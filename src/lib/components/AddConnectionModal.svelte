@@ -145,13 +145,13 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<div class="modal-title">
+			<h2 class="modal-title">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
 					{$i18n.t('Add Connection')}
 				{/if}
-			</div>
+			</h2>
 			<button
 				class="self-center"
 				on:click={() => {

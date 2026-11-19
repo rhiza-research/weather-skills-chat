@@ -128,6 +128,14 @@ textarea::placeholder {
 		@apply border-gray-200 dark:border-gray-700;
 	}
 
+	.page-title {
+		@apply text-xl font-medium dark:text-white;
+	}
+
+	.section-title {
+		@apply text-base font-medium;
+	}
+
 	.modal-title {
 		@apply text-lg font-medium self-center;
 	}

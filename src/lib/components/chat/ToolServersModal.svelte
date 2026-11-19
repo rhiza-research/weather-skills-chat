@@ -99,7 +99,7 @@
 <Modal bind:show size="md">
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-0.5">
-			<div class="modal-title">{$i18n.t('Available Tools and Skills')}</div>
+			<h2 class="modal-title">{$i18n.t('Available Tools and Skills')}</h2>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}
@@ -132,7 +132,7 @@
 
 		{#if builtinOptions.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-				<div class=" text-base font-medium self-center">{$i18n.t('Built-in Tools')}</div>
+				<h3 class="section-title self-center">{$i18n.t('Built-in Tools')}</h3>
 			</div>
 			<div class="px-3 pb-2 w-full flex flex-col">
 				{#each builtinOptions as option (option.key)}
@@ -159,7 +159,7 @@
 		{#if visibleTools.length > 0}
 			{#if builtinOptions.length > 0 || $toolServers.length > 0}
 				<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-					<div class=" text-base font-medium self-center">{$i18n.t('Weather Skills')}</div>
+					<h3 class="section-title self-center">{$i18n.t('Weather Skills')}</h3>
 				</div>
 			{/if}
 
@@ -246,7 +246,7 @@
 
 		{#if $toolServers.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-0.5">
-				<div class=" text-base font-medium self-center">{$i18n.t('Tool Servers')}</div>
+				<h3 class="section-title self-center">{$i18n.t('Tool Servers')}</h3>
 			</div>
 
 			<div class="px-5 pb-5 w-full flex flex-col justify-center">

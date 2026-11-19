@@ -82,24 +82,24 @@
 		{#if !loaded}
 			<div class="text-sm text-muted">{$i18n.t('Loading...')}</div>
 		{:else if error || !invite}
-			<div class="text-xl font-medium dark:text-white">
+			<h1 class="page-title">
 				{$i18n.t("Sorry, we couldn't find that invitation. It may have been canceled")}
-			</div>
+			</h1>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.accepted}
-			<div class="text-xl font-medium dark:text-white">{$i18n.t('Invitation already used')}</div>
+			<h1 class="page-title">{$i18n.t('Invitation already used')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('This invitation has already been accepted.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.expired}
-			<div class="text-xl font-medium dark:text-white">{$i18n.t('Invitation expired')}</div>
+			<h1 class="page-title">{$i18n.t('Invitation expired')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('Ask the person who invited you to send a new invitation.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if wrongAccount}
-			<div class="text-xl font-medium dark:text-white">{$i18n.t('Signed in as someone else')}</div>
+			<h1 class="page-title">{$i18n.t('Signed in as someone else')}</h1>
 			<p class="mt-3 text-sm text-body">
 				{$i18n.t('You are signed in as {{email}}. Sign out to accept this invite for {{invite}}.', {
 					email: $user.email,
@@ -114,7 +114,7 @@
 				{$i18n.t('Sign out')}
 			</button>
 		{:else}
-			<div class="text-xl font-medium dark:text-white">
+			<h1 class="page-title">
 				{#if invite.kind === 'organization'}
 					{$i18n.t("You're invited to {{name}}", {
 						name: invite.organization_name || $i18n.t('an organization')
@@ -122,7 +122,7 @@
 				{:else}
 					{$i18n.t("You're invited to Weather Skills")}
 				{/if}
-			</div>
+			</h1>
 			<p class="mt-2 text-sm text-muted">{invite.email}</p>
 
 			{#if invite.account_exists && !signedInEmail}

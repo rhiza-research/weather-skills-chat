@@ -65,7 +65,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class="modal-title">{$i18n.t('Edit monthly usage limit')}</div>
+			<h2 class="modal-title">{$i18n.t('Edit monthly usage limit')}</h2>
 			<button
 				class="self-center"
 				on:click={() => {
