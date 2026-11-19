@@ -428,7 +428,19 @@
 		{#if html && html.includes('<video')}
 			{@html html}
 		{:else if token.text.includes(`<iframe src="${WEBUI_BASE_URL}/api/v1/files/`)}
-			{@html `${token.text}`}
+			{@const htmlFileId = token.text.match(/\/api\/v1\/files\/([a-f0-9-]+)\/content\/html/)?.[1]}
+			{#if htmlFileId}
+				<iframe
+					src="{WEBUI_BASE_URL}/api/v1/files/{htmlFileId}/content/html"
+					title="Content"
+					width="100%"
+					frameborder="0"
+					sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
+						? ' allow-forms'
+						: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false) ? ' allow-same-origin' : ''}"
+					onload="this.style.height=(this.contentWindow.document.body.scrollHeight+20)+'px';"
+				></iframe>
+			{/if}
 		{:else if token.text.includes(`<source_id`)}
 			<Source {id} {token} onClick={onSourceClick} />
 		{:else}
