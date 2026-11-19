@@ -1226,7 +1226,7 @@
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
 															<CommandLine className="size-5" strokeWidth="1.75" slashed={!codeInterpreterEnabled} />
-															<span class="whitespace-nowrap translate-y-[0.5px]"
+															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
 																>{codeInterpreterEnabled
 																? $i18n.t('Code execution enabled')
 																: $i18n.t('Code execution disabled')}</span
