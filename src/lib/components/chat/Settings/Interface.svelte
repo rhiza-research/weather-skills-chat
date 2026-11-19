@@ -332,9 +332,9 @@
 		}}
 	/>
 
-	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane space-y-3">
 		<div>
-			<div class="setting-group">{$i18n.t('UI')}</div>
+			<h3 class="setting-group">{$i18n.t('UI')}</h3>
 
 			<SettingToggle
 				label={$i18n.t('Landing Page Mode')}
@@ -378,7 +378,7 @@
 				on:click={toggleNotificationSound}
 			/>
 
-			<div class="setting-group">{$i18n.t('Chat')}</div>
+			<h3 class="setting-group">{$i18n.t('Chat')}</h3>
 
 			<SettingToggle
 				label={$i18n.t('Title Auto-Generation')}
@@ -497,7 +497,7 @@
 				on:click={toggleIframeSandboxAllowForms}
 			/>
 
-			<div class="setting-group">{$i18n.t('Voice')}</div>
+			<h3 class="setting-group">{$i18n.t('Voice')}</h3>
 
 			<SettingToggle
 				label={$i18n.t('Allow Voice Interruption in Call')}
@@ -511,7 +511,7 @@
 				on:click={toggleEmojiInCall}
 			/>
 
-			<div class="setting-group">{$i18n.t('File')}</div>
+			<h3 class="setting-group">{$i18n.t('File')}</h3>
 
 			<SettingToggle
 				label={$i18n.t('Image Compression')}

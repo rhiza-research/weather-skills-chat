@@ -283,8 +283,9 @@
 			<button
 				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={async () => {
-					await showSettings.set(true);
 					closeMenu();
+					await tick();
+					await showSettings.set(true);
 				}}
 			>
 					<div class=" self-center mr-3">

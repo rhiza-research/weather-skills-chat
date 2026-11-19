@@ -173,9 +173,9 @@
 		dispatch('save');
 	}}
 >
-	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane space-y-3">
 		<div>
-			<div class="setting-group">{$i18n.t('STT Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('STT Settings')}</h3>
 
 			{#if $config.audio.stt.engine !== 'web'}
 				<SettingRow label={$i18n.t('Speech-to-Text Engine')}>
@@ -194,7 +194,7 @@
 		</div>
 
 		<div>
-			<div class="setting-group">{$i18n.t('TTS Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('TTS Settings')}</h3>
 
 			<SettingRow label={$i18n.t('Text-to-Speech Engine')}>
 				<select class="field-select" bind:value={TTSEngine} placeholder={$i18n.t('Select an engine')}>

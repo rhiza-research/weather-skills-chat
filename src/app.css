@@ -148,6 +148,11 @@ textarea::placeholder {
 		@apply w-40 cursor-pointer rounded-lg bg-gray-100 py-1 pr-8 pl-2 text-left text-xs outline-hidden transition hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700;
 	}
 
+	.settings-pane {
+		@apply max-h-[28rem] overflow-y-auto pr-3 lg:max-h-full;
+		scrollbar-gutter: stable;
+	}
+
 	.setting-group {
 		@apply mt-4 mb-1 border-t border-line pt-4 text-sm font-medium first:mt-0 first:border-t-0 first:pt-0;
 	}

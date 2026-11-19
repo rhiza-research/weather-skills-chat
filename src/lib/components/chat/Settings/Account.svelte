@@ -78,7 +78,7 @@
 </script>
 
 <div class="flex flex-col h-full justify-between text-sm">
-	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane space-y-3">
 		<input
 			id="profile-image-input"
 			bind:this={profileImageInputElement}

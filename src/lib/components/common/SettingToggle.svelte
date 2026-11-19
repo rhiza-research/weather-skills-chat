@@ -15,6 +15,6 @@
 	{#if checked !== undefined}
 		<Switch state={checked} on:change={(e) => e.detail !== checked && dispatch('click')} />
 	{:else}
-		<button class="btn-secondary" type="button" on:click>{text}</button>
+		<button class="btn-secondary" type="button" aria-label="{label}: {text}" on:click>{text}</button>
 	{/if}
 </SettingRow>

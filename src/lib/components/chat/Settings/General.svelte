@@ -113,9 +113,9 @@
 </script>
 
 <div class="flex flex-col h-full justify-between text-sm">
-	<div class="  overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane">
 		<div class="">
-			<div class="setting-group">{$i18n.t('WebUI Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('WebUI Settings')}</h3>
 
 			<SettingRow label={$i18n.t('Theme')}>
 				<select

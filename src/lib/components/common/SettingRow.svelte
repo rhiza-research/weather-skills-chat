@@ -19,7 +19,7 @@
 </script>
 
 <Tooltip content={tooltip} placement="top-start" className="inline-tooltip">
-	<div bind:this={row} class="flex w-full justify-between py-1.5">
+	<div bind:this={row} class="flex w-full items-center justify-between gap-4 py-2.5">
 		<div class="self-center">
 			<div {id} class="text-xs font-medium">{label}</div>
 			{#if description}<div class="text-xs text-muted">{description}</div>{/if}

@@ -9,6 +9,7 @@
 	id
 		? 'bg-tint'
 		: 'text-muted hover:text-strong hover:bg-tint'}"
+	aria-current={selected === id ? 'true' : undefined}
 	on:click={() => (selected = id)}
 >
 	<div class="self-center mr-2"><slot /></div>
