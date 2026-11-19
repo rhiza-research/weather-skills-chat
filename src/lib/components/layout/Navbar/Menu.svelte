@@ -371,7 +371,7 @@
 			{#if !$temporaryChatEnabled}
 				<hr class="border-line my-0.5" />
 
-				<div class="flex p-1">
+				<div class="flex">
 					<Tags chatId={chat.id} />
 				</div>
 			{/if}
