@@ -117,7 +117,7 @@
 					{/if}
 				</div>
 
-				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
+				<div class="self-start flex flex-none items-center gap-1 text-gray-600 dark:text-gray-400">
 					<div class="self-center flex">
 						<ContextRing {history} {compacting} {onCompact} />
 					</div>
