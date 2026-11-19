@@ -83,6 +83,7 @@
 			<h2 class="modal-title">{$i18n.t('Archived Chats')}</h2>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}

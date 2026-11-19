@@ -154,7 +154,7 @@
 					{#if showOrgPicker}
 						<div class="truncate font-medium">{$i18n.t('Organizations')}</div>
 					{:else}
-						<div class="text-xs uppercase tracking-wide text-subtle">
+						<div class="text-xs uppercase tracking-wide text-muted">
 							{$i18n.t('Organization')}
 						</div>
 						<div class="flex items-center gap-2 min-w-0">
@@ -242,7 +242,7 @@
 			{#if usage}
 				<hr class="divider my-1 p-0" />
 				<div class="px-3 py-2">
-					<div class="text-xs uppercase tracking-wide text-subtle truncate">
+					<div class="text-xs uppercase tracking-wide text-muted truncate">
 						{#if currentOrg.kind === 'personal'}
 							{$i18n.t('Personal usage')}
 						{:else}
@@ -253,7 +253,7 @@
 					</div>
 					{#each usageMeters(usage) as meter (meter.scope)}
 						{#if meter.scope === 'member'}
-							<div class="mt-2 text-xs uppercase tracking-wide text-subtle">
+							<div class="mt-2 text-xs uppercase tracking-wide text-muted">
 								{$i18n.t('Your usage')}
 							</div>
 						{/if}
@@ -435,7 +435,7 @@
 			{/if}
 
 			{#if $config?.image_tag}
-				<div class="px-3 py-1.5 text-xs leading-none text-subtle select-all">
+				<div class="px-3 py-1.5 text-xs leading-none text-muted select-all">
 					version {$config.image_tag}
 				</div>
 			{/if}

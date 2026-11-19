@@ -140,6 +140,7 @@
 
 	let extensions = [
 		basicSetup,
+		EditorView.contentAttributes.of({ 'aria-label': 'Code editor' }),
 		keymap.of([{ key: 'Tab', run: acceptCompletion }, indentWithTab]),
 		indentUnit.of('    '),
 		placeholder('Enter your code here...'),

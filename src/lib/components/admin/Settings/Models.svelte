@@ -306,7 +306,7 @@
 								</div>
 							</div>
 
-							<div class=" flex-1 self-center {(model?.is_active ?? true) ? '' : 'text-gray-500'}">
+							<div class=" flex-1 self-center {(model?.is_active ?? true) ? '' : 'text-muted'}">
 								<Tooltip
 									content={marked.parse(
 										!!model?.meta?.description

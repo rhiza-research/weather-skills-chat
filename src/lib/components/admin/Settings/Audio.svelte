@@ -248,7 +248,7 @@
 								/>
 							</div>
 						</div>
-						<div class="mt-2 mb-1 text-xs text-subtle">
+						<div class="mt-2 mb-1 text-xs text-muted">
 							{$i18n.t('Leave model field empty to use the default model.')}
 							<a
 								class="hover:underline text-strong"
@@ -358,7 +358,7 @@
 							</button>
 						</div>
 
-						<div class="mt-2 mb-1 text-xs text-subtle">
+						<div class="mt-2 mb-1 text-xs text-muted">
 							{$i18n.t('Transcription uses faster-whisper internally.')}
 
 							<a
@@ -492,7 +492,7 @@
 								</datalist>
 							</div>
 						</div>
-						<div class="mt-2 mb-1 text-xs text-subtle">
+						<div class="mt-2 mb-1 text-xs text-muted">
 							{$i18n.t('Speech synthesis uses SpeechT5 and CMU Arctic speaker embeddings.')}
 
 							To learn more about SpeechT5,
@@ -660,7 +660,7 @@
 						</select>
 					</div>
 				</SettingRow>
-				<div class="mt-2 mb-1 text-xs text-subtle">
+				<div class="mt-2 mb-1 text-xs text-muted">
 					{$i18n.t(
 						"Control how message text is split for TTS requests. 'Punctuation' splits into sentences, 'paragraphs' splits into paragraphs, and 'none' keeps the message as a single string."
 					)}

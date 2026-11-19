@@ -123,6 +123,7 @@
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
 						class="btn-ghost btn-ghost-sm"
+						aria-label="Toggle Sidebar"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
@@ -214,7 +215,7 @@
 								<TaskImage {task} className="size-14 rounded-lg text-lg" />
 								<div class="min-w-0 flex-1">
 								<div class="flex items-center gap-2 font-medium">
-									<span class="truncate {task.enabled ? '' : 'text-gray-400 dark:text-gray-500'}"
+									<span class="truncate {task.enabled ? '' : 'text-muted dark:text-gray-500'}"
 										>{task.name}</span
 									>
 									<TaskDot dot={taskDot(task)} />

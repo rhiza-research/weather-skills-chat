@@ -593,7 +593,7 @@
 
 				{#if message.timestamp}
 					<div
-						class="self-center text-xs invisible group-hover:visible text-subtle font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
+						class="self-center text-xs invisible group-hover:visible text-muted font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 					>
 						<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 							<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
@@ -803,7 +803,7 @@
 													<div
 																class="{status?.done === false
 																	? 'shimmer'
-																	: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+																	: ''} text-muted dark:text-gray-500 text-base line-clamp-1 text-wrap"
 													>
 																{$i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
 																	searchQuery: status.query
@@ -815,7 +815,7 @@
 													<div
 																class="{status?.done === false
 																	? 'shimmer'
-																	: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+																	: ''} text-muted dark:text-gray-500 text-base line-clamp-1 text-wrap"
 													>
 																<!-- $i18n.t(`Searching "{{searchQuery}}"`) -->
 																{#if status?.description.includes('{{searchQuery}}')}

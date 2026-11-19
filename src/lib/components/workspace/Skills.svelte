@@ -406,7 +406,7 @@
 													<span
 														class="font-medium {skillEnabled(skill)
 															? ''
-															: 'text-gray-400 dark:text-gray-500'}"
+															: 'text-muted dark:text-gray-500'}"
 													>
 														{skill.name}
 													</span>
@@ -414,7 +414,7 @@
 														<span class="text-xs text-muted">v{skill.version}</span>
 													{/if}
 													{#if !skillEnabled(skill)}
-														<span class="text-xs text-subtle ml-1">{$i18n.t('Disabled')}</span>
+														<span class="text-xs text-muted ml-1">{$i18n.t('Disabled')}</span>
 													{/if}
 													{#if skill.description}
 														<div class="text-xs text-muted line-clamp-2">
@@ -509,7 +509,7 @@
 									<Tooltip content={$i18n.t('Enabled by default')}>
 										<div class="flex items-center gap-1.5">
 											<span
-												class="text-xs leading-none text-gray-500 max-w-[4.5rem] text-right {pack.is_active ===
+												class="text-xs leading-none text-muted max-w-[4.5rem] text-right {pack.is_active ===
 												false
 													? 'opacity-40'
 													: ''}"
@@ -591,7 +591,7 @@
 												<span
 													class="font-medium {skillEnabled(skill) && skill.is_active !== false
 														? ''
-														: 'text-gray-400 dark:text-gray-500'}"
+														: 'text-muted dark:text-gray-500'}"
 												>
 													{skill.name}
 												</span>
@@ -599,9 +599,9 @@
 													<span class="text-xs text-muted">v{skill.version}</span>
 												{/if}
 												{#if catalog === 'public' && skill.is_active === false}
-													<span class="text-xs text-subtle ml-1">{$i18n.t('Not in catalog')}</span>
+													<span class="text-xs text-muted ml-1">{$i18n.t('Not in catalog')}</span>
 												{:else if !skillEnabled(skill)}
-													<span class="text-xs text-subtle ml-1"
+													<span class="text-xs text-muted ml-1"
 														>{catalog === 'public'
 															? 'off by default'
 															: $i18n.t('Disabled')}</span
@@ -625,7 +625,7 @@
 														<Tooltip content={$i18n.t('Enabled by default')}>
 															<div class="flex items-center gap-1.5">
 																<span
-																	class="text-xs leading-none text-gray-500 max-w-[4.5rem] text-right {skill.is_active ===
+																	class="text-xs leading-none text-muted max-w-[4.5rem] text-right {skill.is_active ===
 																	false
 																		? 'opacity-40'
 																		: ''}"

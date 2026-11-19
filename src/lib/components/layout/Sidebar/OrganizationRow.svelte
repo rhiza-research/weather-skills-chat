@@ -74,7 +74,7 @@
 				<span class="shrink-0 font-medium text-sm font-primary">{$i18n.t('Organization')}</span>
 				<div bind:this={nameBox} class="relative flex flex-1 min-w-0 h-5 items-center">
 					<span
-						class="min-w-0 text-gray-500 dark:text-gray-400 {twoLines
+						class="min-w-0 text-muted dark:text-gray-400 {twoLines
 							? 'line-clamp-2 break-words text-xs leading-[13px]'
 							: 'truncate text-sm'}">{current.name}</span
 					>

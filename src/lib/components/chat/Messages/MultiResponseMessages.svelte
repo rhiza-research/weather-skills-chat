@@ -296,7 +296,7 @@
 
 									{#if message.timestamp}
 										<span
-											class="self-center invisible group-hover:visible text-subtle field-label uppercase ml-0.5 -mt-0.5"
+											class="self-center invisible group-hover:visible text-muted field-label uppercase ml-0.5 -mt-0.5"
 										>
 											{dayjs(message.timestamp * 1000).format('LT')}
 										</span>

@@ -399,7 +399,7 @@
 				id="folder-{folderId}-button"
 				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-muted font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
 			>
-				<div class="text-subtle">
+				<div class="text-muted">
 					{#if open}
 						<ChevronDown className=" size-3" strokeWidth="2.5" />
 					{:else}

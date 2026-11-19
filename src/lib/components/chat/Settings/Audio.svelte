@@ -280,7 +280,7 @@
 				<div class="setting-title">{$i18n.t('Set Voice')}</div>
 				<div class="flex w-full">
 					<div class="flex-1">
-						<select class="field" bind:value={voice}>
+						<select class="field" aria-label={$i18n.t('Set Voice')} bind:value={voice}>
 							<option value="" selected={voice !== ''}>{$i18n.t('Default')}</option>
 							{#each voices.filter((v) => nonLocalVoices || v.localService === true) as _voice}
 								<option

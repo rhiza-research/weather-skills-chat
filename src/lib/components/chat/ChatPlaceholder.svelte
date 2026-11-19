@@ -103,7 +103,7 @@
 							)}
 						</div>
 						{#if models[selectedModelIdx]?.info?.meta?.user}
-							<div class="mt-0.5 text-sm font-normal text-subtle">
+							<div class="mt-0.5 text-sm font-normal text-muted">
 								By
 								{models[selectedModelIdx]?.info?.meta?.user.name
 									? models[selectedModelIdx]?.info?.meta?.user.name
@@ -111,7 +111,7 @@
 							</div>
 						{/if}
 					{:else}
-						<div class="font-medium text-subtle line-clamp-1 font-p">
+						<div class="font-medium text-muted line-clamp-1 font-p">
 							{$i18n.t('How can I help you today?')}
 						</div>
 					{/if}

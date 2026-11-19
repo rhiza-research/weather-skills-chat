@@ -564,7 +564,7 @@
 								{/if}
 							</div>
 
-							<div class="mt-1 mb-1 text-xs text-subtle">
+							<div class="mt-1 mb-1 text-xs text-muted">
 								{$i18n.t(
 									'Warning: If you update or change your embedding model, you will need to re-import all documents.'
 								)}
@@ -739,7 +739,7 @@
 											/>
 										</div>
 									</SettingRow>
-									<div class="mt-1 text-xs text-subtle">
+									<div class="mt-1 text-xs text-muted">
 										{$i18n.t(
 											'Note: If you set a minimum score, the search will only return documents with a score greater than or equal to the minimum score.'
 										)}

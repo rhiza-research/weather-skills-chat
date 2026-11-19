@@ -443,12 +443,12 @@
 			<div>
 				{$i18n.t('Invited')} · {row.invite.role === 'admin' ? $i18n.t('Admin') : $i18n.t('User')}
 			</div>
-			<div class="text-right text-subtle">—</div>
+			<div class="text-right text-muted">—</div>
 			<div class="text-right tabular-nums">
 				{usageAmount(row.invite.monthly_limit_usd, $i18n.t('No limit'))}{#if credits && row.invite.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
-			<div class="text-right text-subtle">—</div>
-			<div class="text-subtle">—</div>
+			<div class="text-right text-muted">—</div>
+			<div class="text-muted">—</div>
 			<div class="flex justify-end items-center gap-1 flex-wrap">
 				<button
 					class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"

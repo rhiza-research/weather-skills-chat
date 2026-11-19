@@ -101,9 +101,9 @@
 					{/if}
 					<div class="mb-1 pl-1 space-y-1" slot="content">
 						{#if !branch?.steps && loadSteps && failed}
-							<div class="text-xs text-subtle">{$i18n.t('Could not load provenance.')}</div>
+							<div class="text-xs text-muted">{$i18n.t('Could not load provenance.')}</div>
 						{:else if steps.length === 0}
-							<div class="text-xs text-subtle">{$i18n.t('No steps recorded.')}</div>
+							<div class="text-xs text-muted">{$i18n.t('No steps recorded.')}</div>
 						{:else}
 							<ProvenanceSteps {steps} />
 						{/if}

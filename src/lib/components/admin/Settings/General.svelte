@@ -248,7 +248,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							bind:value={adminConfig.OAUTH_ALLOWED_DOMAINS}
 						/>
 
-						<div class="mt-1 text-xs text-subtle">
+						<div class="mt-1 text-xs text-muted">
 							{$i18n.t('Use * to allow any domain.')}
 						</div>
 					</div>
@@ -279,7 +279,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									bind:value={adminConfig.API_KEY_ALLOWED_ENDPOINTS}
 								/>
 
-								<div class="mt-2 text-xs text-subtle">
+								<div class="mt-2 text-xs text-muted">
 									{$i18n.t(
 										'Comma-separated list of endpoint paths API keys may call. Leave empty to allow all.'
 									)}
@@ -302,9 +302,9 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							/>
 						</div>
 
-						<div class="mt-2 text-xs text-subtle">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Valid time units:')}
-							<span class=" text-gray-300 font-medium"
+							<span class="text-muted font-medium"
 								>{$i18n.t("'s', 'm', 'h', 'd', 'w' or '-1' for no expiration.")}</span
 							>
 						</div>
@@ -470,9 +470,9 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 											/>
 										</div>
 									</div>
-									<div class="text-xs text-subtle">
+									<div class="text-xs text-muted">
 										<a
-											class=" text-gray-300 font-medium underline"
+											class="text-muted font-medium underline"
 											href="https://ldap.com/ldap-filters/"
 											target="_blank"
 										>
@@ -636,7 +636,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							/>
 						</div>
 
-						<div class="mt-2 text-xs text-subtle">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t(
 								'Enter the public URL of your WebUI. This URL will be used to generate links in the notifications.'
 							)}

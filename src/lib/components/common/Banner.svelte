@@ -94,7 +94,7 @@
 							>
 
 							<div
-								class="ml-1 text-subtle group-hover:text-gray-600 dark:group-hover:text-white"
+								class="ml-1 text-muted group-hover:text-gray-600 dark:group-hover:text-white"
 							>
 								<!--  -->
 								<svg
@@ -127,7 +127,7 @@
 						target="_blank">{$i18n.t('Learn More')}</a
 					>
 
-					<div class="ml-1 text-subtle group-hover:text-gray-600 dark:group-hover:text-white">
+					<div class="ml-1 text-muted group-hover:text-gray-600 dark:group-hover:text-white">
 						<!--  -->
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -150,7 +150,7 @@
 						on:click={() => {
 							dismiss(banner.id);
 						}}
-						class="-mt-1 -mb-2 -translate-y-[1px] ml-1.5 mr-1 text-subtle dark:hover:text-white"
+						class="-mt-1 -mb-2 -translate-y-[1px] ml-1.5 mr-1 text-muted dark:hover:text-white"
 						>&times;</button
 					>
 				{/if}

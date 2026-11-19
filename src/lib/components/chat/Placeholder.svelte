@@ -170,7 +170,7 @@
 						</Tooltip>
 
 						{#if models[selectedModelIdx]?.info?.meta?.user}
-							<div class="mt-0.5 text-sm font-normal text-subtle">
+							<div class="mt-0.5 text-sm font-normal text-muted">
 								By
 								{models[selectedModelIdx]?.info?.meta?.user.name
 									? models[selectedModelIdx]?.info?.meta?.user.name

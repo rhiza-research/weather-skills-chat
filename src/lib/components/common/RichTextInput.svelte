@@ -225,7 +225,7 @@
 				}
 			},
 			editorProps: {
-				attributes: { id },
+				attributes: { id, 'aria-label': placeholder },
 				handleDOMEvents: {
 					compositionstart: (view, event) => {
 						oncompositionstart(event);

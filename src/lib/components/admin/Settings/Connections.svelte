@@ -321,7 +321,7 @@
 							</div>
 						</div>
 
-						<div class="mt-1 text-xs text-subtle">
+						<div class="mt-1 text-xs text-muted">
 							{$i18n.t('Trouble accessing Ollama?')}
 						</div>
 					</div>

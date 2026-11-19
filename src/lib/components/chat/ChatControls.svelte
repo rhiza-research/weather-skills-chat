@@ -21,6 +21,8 @@
 	export let modelId;
 
 	export let pane;
+	let controlsPaneEl: HTMLElement;
+	$: if (controlsPaneEl) controlsPaneEl.id = 'chat-controls-pane';
 
 	let mediaQuery;
 	let largeScreen =
@@ -251,6 +253,8 @@
 		{/if}
 
 		<Pane
+			id="chat-controls-pane"
+			bind:el={controlsPaneEl}
 			bind:pane
 			defaultSize={$showControls && panelOpen ? DEFAULT_SIZE : 0}
 			minSize={minSize}

@@ -30,7 +30,7 @@
 >
 	<button
 		type="button"
-		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-subtle hover:text-gray-700 dark:hover:text-gray-200"
+		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-muted hover:text-gray-700 dark:hover:text-gray-200"
 		aria-label={$i18n.t('Close')}
 		on:click|stopPropagation={() => dispatch('closeToast')}
 	>

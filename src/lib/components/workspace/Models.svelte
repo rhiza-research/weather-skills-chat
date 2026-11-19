@@ -335,7 +335,7 @@
 							class=" flex flex-1 w-full {usable ? 'cursor-pointer' : 'cursor-default'}"
 							href={usable ? `/?models=${encodeURIComponent(model.id)}` : undefined}
 						>
-							<div class=" flex-1 self-center {usable ? '' : 'text-gray-500'}">
+							<div class=" flex-1 self-center {usable ? '' : 'text-muted'}">
 								<Tooltip
 									content={marked.parse(model?.meta?.description ?? model.id)}
 									className=" w-fit"
@@ -444,7 +444,7 @@
 						class=" flex flex-1 cursor-pointer w-full"
 						href={`/?models=${encodeURIComponent(model.id)}`}
 					>
-						<div class=" flex-1 self-center {model.is_active ? '' : 'text-gray-500'}">
+						<div class=" flex-1 self-center {model.is_active ? '' : 'text-muted'}">
 							<Tooltip
 								content={marked.parse(model?.meta?.description ?? model.id)}
 								className=" w-fit"
@@ -560,7 +560,7 @@
 										<Tooltip content={$i18n.t('Enabled by default')}>
 											<div class="flex items-center gap-1">
 												<span
-													class="text-xs leading-none text-gray-500 max-w-[4.5rem] text-right {!model.is_active
+													class="text-xs leading-none text-muted max-w-[4.5rem] text-right {!model.is_active
 														? 'opacity-40'
 														: ''}"
 													>{$i18n.t('Enabled by default')}</span

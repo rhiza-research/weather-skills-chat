@@ -346,10 +346,10 @@
 							</button>
 						</div>
 
-						<div class="mt-2 text-xs text-subtle">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Include `--api` flag when running stable-diffusion-webui')}
 							<a
-								class=" text-gray-300 font-medium"
+								class="text-muted font-medium"
 								href="https://github.com/AUTOMATIC1111/stable-diffusion-webui/discussions/3734"
 								target="_blank"
 							>
@@ -368,10 +368,10 @@
 							required={false}
 						/>
 
-						<div class="mt-2 text-xs text-subtle">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Include `--api-auth` flag when running stable-diffusion-webui')}
 							<a
-								class=" text-gray-300 font-medium"
+								class="text-muted font-medium"
 								href="https://github.com/AUTOMATIC1111/stable-diffusion-webui/discussions/13993"
 								target="_blank"
 							>
@@ -540,7 +540,7 @@
 							</div>
 						</div>
 
-						<div class="mt-2 text-xs text-subtle">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Make sure to export a workflow.json file as API format from ComfyUI.')}
 						</div>
 					</div>
@@ -586,7 +586,7 @@
 								{/each}
 							</div>
 
-							<div class="mt-2 text-xs text-right text-subtle">
+							<div class="mt-2 text-xs text-right text-muted">
 								{$i18n.t('*Prompt node ID(s) are required for image generation')}
 							</div>
 						</div>

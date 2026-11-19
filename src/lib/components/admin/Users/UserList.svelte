@@ -679,7 +679,7 @@
 						}}
 					>
 						<span
-							class="shrink-0 text-gray-400 transition {expandedId === row.id ? 'rotate-90' : ''}"
+							class="shrink-0 text-muted transition {expandedId === row.id ? 'rotate-90' : ''}"
 						>
 							<ChevronRight className="size-4" strokeWidth="2" />
 						</span>
@@ -727,11 +727,11 @@
 					{/if}
 				</div>
 
-				<div class="text-sm {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500'}">
+				<div class="text-sm {row.kind === 'invite' ? 'text-muted dark:text-gray-600' : 'text-muted'}">
 					{row.kind === 'invite' ? '—' : row.memberCount}
 				</div>
 
-				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : ''}">
+				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-muted dark:text-gray-600' : ''}">
 					{row.kind === 'invite' ? '—' : formatUsd(row.usage?.cost_usd ?? 0, '$0.00')}
 				</div>
 				<div class="text-sm text-right tabular-nums">
@@ -739,7 +739,7 @@
 						? formatUsd(row.invite.monthly_limit_usd, $i18n.t('Unlimited'))
 						: formatUsd(row.monthly_limit_usd, $i18n.t('Unlimited'))}
 				</div>
-				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-gray-300 dark:text-gray-600' : 'text-gray-500'}">
+				<div class="text-sm text-right tabular-nums {row.kind === 'invite' ? 'text-muted dark:text-gray-600' : 'text-muted'}">
 					{row.kind === 'invite'
 						? '—'
 						: row.monthly_limit_usd == null
@@ -747,7 +747,7 @@
 							: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
 				</div>
 				{#if row.kind === 'invite'}
-					<div class="text-xs text-subtle">—</div>
+					<div class="text-xs text-muted">—</div>
 				{:else}
 				<Tooltip content={tokenUsageTooltip(row.usage)} className="min-w-0 block">
 					<div class="text-xs text-muted tabular-nums truncate">
@@ -1072,7 +1072,7 @@
 									{#if member.role !== 'owner' || (row.members ?? []).filter((item) => item.role === 'owner').length > 1}
 										<Tooltip content={$i18n.t('Remove from organization')}>
 											<button
-												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-subtle hover:text-red-600"
+												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-muted hover:text-red-600"
 												type="button"
 												on:click={() => askRemoveMember(row, member)}
 											>

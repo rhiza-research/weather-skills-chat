@@ -303,7 +303,7 @@
 					<div
 						class="{state === 'ready'
 							? 'mt-3 pt-2.5 border-t border-line'
-							: ''} mb-1.5 text-gray-500"
+							: ''} mb-1.5 text-muted"
 					>
 						{$i18n.t('Runner size')}
 					</div>

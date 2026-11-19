@@ -64,7 +64,7 @@
 	}
 </script>
 
-<div class="mb-1 flex gap-1 field-label items-center text-subtle">
+<div class="mb-1 flex gap-1 field-label items-center text-muted">
 	{#if filteredPrompts.length > 0}
 		<Bolt />
 		{$i18n.t('Suggested')}
@@ -72,7 +72,7 @@
 		<!-- Keine Vorschläge -->
 
 		<div
-			class="flex w-full text-center items-center justify-center self-start text-subtle"
+			class="flex w-full text-center items-center justify-center self-start text-muted"
 		>
 			{$WEBUI_NAME} ‧ {runningReleaseLabel($config?.image_tag)}
 		</div>

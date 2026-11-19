@@ -1294,7 +1294,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 20 20"
 								fill="currentColor"
-								class="size-4 text-gray-400 shrink-0 ml-1 {showDropdown ? 'rotate-180' : ''}"
+								class="size-4 text-muted shrink-0 ml-1 {showDropdown ? 'rotate-180' : ''}"
 							>
 								<path
 									fill-rule="evenodd"

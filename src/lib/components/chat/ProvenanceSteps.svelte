@@ -64,7 +64,7 @@
 					</dl>
 				</div>
 			{:else}
-				<div class="text-xs text-subtle">{$i18n.t('No arguments.')}</div>
+				<div class="text-xs text-muted">{$i18n.t('No arguments.')}</div>
 			{/if}
 
 			{#if inputList(step.input).length}

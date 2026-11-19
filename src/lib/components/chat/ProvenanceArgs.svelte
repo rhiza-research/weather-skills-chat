@@ -16,7 +16,7 @@
 		{#if row.multiline}
 			<!-- svelte-ignore a11y-no-noninteractive-tabindex: focusable so the keyboard can scroll it -->
 			<pre
-				class="m-0 mt-0.5 mb-1 max-h-[150px] overflow-auto rounded-lg border border-line bg-gray-50 dark:bg-gray-900 px-2 py-1.5 font-mono text-xs leading-[1.45] text-strong"
+				class="m-0 mt-0.5 mb-1 max-h-[150px] overflow-auto rounded-lg border divider bg-gray-50 dark:bg-gray-900 px-2 py-1.5 font-mono text-xs leading-[1.45] text-strong"
 				tabindex="0">{row.value}</pre>
 		{:else}
 			<span

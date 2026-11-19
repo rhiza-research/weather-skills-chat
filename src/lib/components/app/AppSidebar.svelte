@@ -57,7 +57,7 @@
 		</button>
 	</div>
 
-	<!-- <div class="flex justify-center relative group text-subtle">
+	<!-- <div class="flex justify-center relative group text-muted">
 		<button class=" cursor-pointer p-2" on:click={() => {}}>
 			<Plus className="size-4" strokeWidth="2" />
 		</button>

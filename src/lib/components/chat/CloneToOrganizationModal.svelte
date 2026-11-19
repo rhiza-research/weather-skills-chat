@@ -56,7 +56,7 @@
 				<XMark className="size-5" />
 			</button>
 		</div>
-		<hr class="border-line" />
+		<hr class="divider" />
 
 		<div class="px-5 py-4 dark:text-gray-200">
 			<div class="mb-2 text-sm text-muted">
@@ -77,7 +77,7 @@
 							<span class="size-5 shrink-0" />
 						{/if}
 						<span class="truncate flex-1">{org.name}</span>
-						<ChevronRight className="size-4 shrink-0 text-subtle" strokeWidth="2" />
+						<ChevronRight className="size-4 shrink-0 text-muted" strokeWidth="2" />
 					</button>
 				{/each}
 			</div>

@@ -134,7 +134,7 @@
 					? 'text-gray-800 dark:text-gray-100'
 					: emphasis === 'medium'
 						? 'text-gray-700 dark:text-gray-200'
-						: 'text-gray-500 dark:text-gray-500'}"
+						: 'text-muted dark:text-gray-500'}"
 			>
 				<button
 					class="w-full py-1.5 pl-2 flex items-center gap-1.5 {emphasis === 'strong'

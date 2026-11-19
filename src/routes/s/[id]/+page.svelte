@@ -185,7 +185,7 @@
 						</div>
 
 						<div class="flex text-sm justify-between items-center mt-1">
-							<div class="text-subtle">
+							<div class="text-muted">
 								{dayjs(chat.chat.timestamp).format('LLL')}
 							</div>
 							<button

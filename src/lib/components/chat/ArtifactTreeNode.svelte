@@ -180,7 +180,7 @@
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1 rounded-md" style={pad}>
 			<div class="truncate flex items-center gap-1 min-w-0">
 				<span class="truncate" title={node.name}>{node.name}</span>
-				<span class="text-subtle shrink-0">zarr</span>
+				<span class="text-muted shrink-0">zarr</span>
 			</div>
 			<div class="flex items-center gap-0.5 shrink-0">
 				{#if canAskProvenance}
@@ -237,12 +237,12 @@
 					on:click={() => dispatch('openImage', { path: file.path })}
 				>
 					<span class="truncate" title={node.name}>{node.name}</span>
-					<span class="text-subtle shrink-0">{file.kind}</span>
+					<span class="text-muted shrink-0">{file.kind}</span>
 				</button>
 			{:else}
 				<div class="truncate flex items-center gap-1 min-w-0">
 					<span class="truncate" title={node.name}>{node.name}</span>
-					<span class="text-subtle shrink-0">{kindLabel(file)}</span>
+					<span class="text-muted shrink-0">{kindLabel(file)}</span>
 				</div>
 			{/if}
 			<div class="flex items-center gap-0.5 shrink-0">

@@ -68,6 +68,7 @@
 			<h2 class="modal-title">{$i18n.t('Edit monthly usage limit')}</h2>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}

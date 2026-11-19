@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+
+	const i18n = getContext('i18n');
+
 	export let value: string = '';
 	export let placeholder = '';
 	export let required = true;
@@ -24,6 +28,7 @@
 	<button
 		class={showButtonClassName}
 		type="button"
+		aria-label={show ? $i18n.t('Hide') : $i18n.t('Show')}
 		on:click={(e) => {
 			e.preventDefault();
 			show = !show;

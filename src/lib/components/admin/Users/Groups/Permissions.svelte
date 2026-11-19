@@ -117,7 +117,7 @@
 					<select
 						class="w-full py-1 text-sm rounded-lg bg-transparent {selectedModelId
 							? ''
-							: 'text-gray-500'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+							: 'text-muted'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 						bind:value={selectedModelId}
 					>
 						<option value="">{$i18n.t('Select a model')}</option>

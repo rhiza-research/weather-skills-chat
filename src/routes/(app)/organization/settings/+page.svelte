@@ -121,7 +121,7 @@
 				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-gray-100 dark:bg-gray-850" />
 			{:else}
 				<div
-					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-subtle"
+					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-muted"
 				>
 					{$i18n.t('None')}
 				</div>

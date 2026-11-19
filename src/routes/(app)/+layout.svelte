@@ -358,7 +358,7 @@
 								</button>
 
 								<button
-									class="text-xs text-center w-full mt-2 text-subtle underline"
+									class="text-xs text-center w-full mt-2 text-muted underline"
 									on:click={async () => {
 										localDBChats = [];
 									}}>{$i18n.t('Close')}</button

@@ -165,6 +165,9 @@
 
 	const eventTarget = new EventTarget();
 	let controlPane;
+	let chatPaneEl: HTMLElement;
+	// paneforge points the resizer's aria-controls at an id it never renders
+	$: if (chatPaneEl) chatPaneEl.id = 'chat-pane';
 	let controlPaneComponent;
 
 	let autoScroll = true;
@@ -2945,7 +2948,12 @@
 	{/if}
 
 	<PaneGroup direction="horizontal" class="w-full h-full">
-		<Pane defaultSize={50} class="h-full flex relative max-w-full flex-col">
+		<Pane
+			id="chat-pane"
+			bind:el={chatPaneEl}
+			defaultSize={50}
+			class="h-full flex relative max-w-full flex-col"
+		>
 			{#if loading}
 				<div class="flex items-center justify-center h-full w-full">
 					<div class="m-auto">

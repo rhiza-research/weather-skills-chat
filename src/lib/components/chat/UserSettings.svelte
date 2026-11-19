@@ -340,6 +340,7 @@
 				<h2 class="modal-title">{$i18n.t('Settings')}</h2>
 				<button
 					class="self-center"
+					aria-label={$i18n.t('Close')}
 					on:click={() => {
 						dispatch('close');
 					}}

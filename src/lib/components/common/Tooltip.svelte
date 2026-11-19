@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { afterUpdate, onDestroy, onMount } from 'svelte';
 
 	export let placement = 'top';
 	export let content = `I'm a tooltip!`;
@@ -18,6 +18,16 @@
 	let tippyLib: ((element: Element, options: Record<string, unknown>) => { setContent: (value: string) => void; destroy: () => void }) | null = null;
 
 	const plainText = (value: unknown) => `${value ?? ''}`.replace(/<[^>]*>/g, '');
+
+	// Name the nested control (icon buttons have no text) instead of labelling the wrapper div.
+	const nameControl = () => {
+		const el = tooltipElement?.querySelector('button, a[href], [role="button"], [role="switch"]');
+		if (el && !el.textContent?.trim() && !el.hasAttribute('aria-label') && !el.hasAttribute('aria-labelledby')) {
+			el.setAttribute('aria-label', plainText(content));
+		}
+	};
+	onMount(nameControl);
+	afterUpdate(nameControl);
 
 	async function loadTippy() {
 		if (!tippyLib) {
@@ -75,7 +85,6 @@
 
 <div
 	bind:this={tooltipElement}
-	aria-label={plainText(content)}
 	class={className}
 	on:pointerenter={() => (active = hovering = true)}
 	on:pointerleave={() => (hovering = false)}

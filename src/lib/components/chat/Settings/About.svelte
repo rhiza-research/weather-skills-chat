@@ -51,7 +51,7 @@
 
 		<div>
 			<pre
-				class="text-xs text-subtle whitespace-pre-wrap">Copyright © 2026 Rhiza Research.
+				class="text-xs text-muted whitespace-pre-wrap">Copyright © 2026 Rhiza Research.
 Derived from Open WebUI v0.6.5.
 
 Copyright (c) 2023-2025 Open WebUI (Timothy Jaeryang Baek)
@@ -84,7 +84,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 </pre>
 		</div>
 
-		<div class="mt-2 text-xs text-subtle">
+		<div class="mt-2 text-xs text-muted">
 			Emoji graphics provided by
 			<a href="https://github.com/jdecked/twemoji" target="_blank">Twemoji</a>, licensed under
 			<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY 4.0</a>.

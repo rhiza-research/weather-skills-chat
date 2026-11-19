@@ -212,12 +212,12 @@
 									<span class="text-muted"> · {run.error}</span>
 								{/if}
 							</span>
-							<span class="text-xs text-subtle shrink-0">
+							<span class="text-xs text-muted shrink-0">
 								{run.started_at ? new Date(run.started_at * 1000).toLocaleString() : ''}
 							</span>
 						</button>
 					{:else}
-						<div class="text-xs text-subtle px-2">{$i18n.t('No runs yet')}</div>
+						<div class="text-xs text-muted px-2">{$i18n.t('No runs yet')}</div>
 					{/each}
 				</section>
 			{/if}

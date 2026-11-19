@@ -385,7 +385,7 @@
 				class="text-sm
         
         
-        {loading ? ' text-gray-500  dark:text-gray-400  ' : ' text-blue-400 '} 
+        {loading ? ' text-muted  dark:text-gray-400  ' : ' text-blue-400 '} 
        font-medium flex-1 mx-auto text-center"
 			>
 				{formatSeconds(durationSeconds)}

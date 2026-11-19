@@ -136,7 +136,7 @@
 
 					{#if message.timestamp}
 						<div
-							class="self-center text-xs invisible group-hover:visible text-subtle font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
+							class="self-center text-xs invisible group-hover:visible text-muted font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 						>
 							<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 								<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
