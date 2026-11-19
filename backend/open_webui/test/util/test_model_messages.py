@@ -82,6 +82,15 @@ class CompactToolResultTest(unittest.TestCase):
         self.assertIn("truncated", out["stdout"])
         self.assertLess(len(out["stdout"]), 20_000)
 
+    def test_drops_argv_on_success_and_failure(self):
+        # The model's own tool call already holds the arguments; echoing them is re-sent on every later call.
+        for ok, code in ((True, 0), (False, 2)):
+            payload = {"ok": ok, "exit_code": code, "script": "plot.py", "argv": ["-i", "a.zarr", "--title", "x" * 500],
+                       "stdout": "wrote a.png", "stderr": "usage error"}
+            out = json.loads(compact_tool_result_for_model(json.dumps(payload)))
+            self.assertNotIn("argv", out)
+            self.assertEqual(out["stdout"], "wrote a.png")
+
 
 class StripTaskHistoryTest(unittest.TestCase):
     def test_strips_tool_calls_and_reasoning(self):
