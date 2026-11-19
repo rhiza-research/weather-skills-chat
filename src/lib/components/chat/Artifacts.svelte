@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import { toast } from 'svelte-sonner';
 	import { onDestroy, getContext, createEventDispatcher } from 'svelte';
 	const i18n = getContext('i18n');
@@ -687,20 +688,7 @@
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									stroke-width="2.5"
-									class="size-3.5"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="m8.25 4.5 7.5 7.5-7.5 7.5"
-									/>
-								</svg>
+								<ChevronRight className="size-3.5" strokeWidth="2.5" />
 							</button>
 						</div>
 					</div>

@@ -1,4 +1,7 @@
 <script lang="ts">
+	import PlusSolid from '$lib/components/icons/PlusSolid.svelte';
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import PencilLine from '$lib/components/icons/PencilLine.svelte';
 	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { organizations, activeOrganizationId, user } from '$lib/stores';
@@ -242,16 +245,7 @@
 			type="button"
 			on:click={openInvite}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 20 20"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
-				/>
-			</svg>
+			<PlusSolid className="size-4" />
 			{$i18n.t('Invite a user')}
 		</button>
 	{/if}
@@ -300,11 +294,7 @@
 						showInvite = false;
 					}}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
-						<path
-							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-						/>
-					</svg>
+					<XMarkSolid className="size-5" />
 				</button>
 			</div>
 			<hr class="divider" />
@@ -523,20 +513,7 @@
 							class="btn-ghost"
 							on:click={() => openLimitEditor(row.member)}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="1.5"
-								stroke="currentColor"
-								class="size-4"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-								/>
-							</svg>
+							<PencilLine className="size-4" />
 						</button>
 					</Tooltip>
 					<button

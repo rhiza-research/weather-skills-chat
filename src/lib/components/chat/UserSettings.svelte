@@ -1,4 +1,9 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import SpeakerWaveSolid from '$lib/components/icons/SpeakerWaveSolid.svelte';
+	import ComputerDesktopSolid from '$lib/components/icons/ComputerDesktopSolid.svelte';
+	import WrenchSolid from '$lib/components/icons/WrenchSolid.svelte';
+	import UserCircleSolid from '$lib/components/icons/UserCircleSolid.svelte';
 	import SideTab from '$lib/components/common/SideTab.svelte';
 	import { createEventDispatcher, getContext, onMount, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -345,16 +350,7 @@
 						dispatch('close');
 					}}
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-						class="size-5"
-					>
-						<path
-							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-						/>
-					</svg>
+					<XMarkSolid className="size-5" />
 				</button>
 			</div>
 		{/if}
@@ -402,51 +398,17 @@
 							</SideTab>
 						{:else if tabId === 'interface'}
 							<SideTab id="interface" label={$i18n.t('Interface')} bind:selected={selectedTab}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 16 16"
-									fill="currentColor"
-									class="size-4"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M2 4.25A2.25 2.25 0 0 1 4.25 2h7.5A2.25 2.25 0 0 1 14 4.25v5.5A2.25 2.25 0 0 1 11.75 12h-1.312c.1.128.21.248.328.36a.75.75 0 0 1 .234.545v.345a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-.345a.75.75 0 0 1 .234-.545c.118-.111.228-.232.328-.36H4.25A2.25 2.25 0 0 1 2 9.75v-5.5Zm2.25-.75a.75.75 0 0 0-.75.75v4.5c0 .414.336.75.75.75h7.5a.75.75 0 0 0 .75-.75v-4.5a.75.75 0 0 0-.75-.75h-7.5Z"
-										clip-rule="evenodd"
-									/>
-								</svg>
+								<ComputerDesktopSolid className="size-4" />
 							</SideTab>
 						{:else if tabId === 'tools'}
 							{#if $user?.role === 'admin' || ($user?.role === 'user' && $user?.permissions?.features?.direct_tool_servers)}
 								<SideTab id="tools" label={$i18n.t('Tools')} bind:selected={selectedTab}>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 24 24"
-										fill="currentColor"
-										class="size-4"
-									>
-										<path
-											fill-rule="evenodd"
-											d="M12 6.75a5.25 5.25 0 0 1 6.775-5.025.75.75 0 0 1 .313 1.248l-3.32 3.319c.063.475.276.934.641 1.299.365.365.824.578 1.3.64l3.318-3.319a.75.75 0 0 1 1.248.313 5.25 5.25 0 0 1-5.472 6.756c-1.018-.086-1.87.1-2.309.634L7.344 21.3A3.298 3.298 0 1 1 2.7 16.657l8.684-7.151c.533-.44.72-1.291.634-2.309A5.342 5.342 0 0 1 12 6.75ZM4.117 19.125a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75h-.008a.75.75 0 0 1-.75-.75v-.008Z"
-											clip-rule="evenodd"
-										/>
-									</svg>
+									<WrenchSolid className="size-4" />
 								</SideTab>
 							{/if}
 						{:else if tabId === 'audio'}
 							<SideTab id="audio" label={$i18n.t('Audio')} bind:selected={selectedTab}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 16 16"
-									fill="currentColor"
-									class="size-4"
-								>
-									<path
-										d="M7.557 2.066A.75.75 0 0 1 8 2.75v10.5a.75.75 0 0 1-1.248.56L3.59 11H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.59l3.162-2.81a.75.75 0 0 1 .805-.124ZM12.95 3.05a.75.75 0 1 0-1.06 1.06 5.5 5.5 0 0 1 0 7.78.75.75 0 1 0 1.06 1.06 7 7 0 0 0 0-9.9Z"
-									/>
-									<path
-										d="M10.828 5.172a.75.75 0 1 0-1.06 1.06 2.5 2.5 0 0 1 0 3.536.75.75 0 1 0 1.06 1.06 4 4 0 0 0 0-5.656Z"
-									/>
-								</svg>
+								<SpeakerWaveSolid className="size-4" />
 							</SideTab>
 						{:else if tabId === 'chats'}
 							<SideTab id="chats" label={$i18n.t('Chats')} bind:selected={selectedTab}>
@@ -465,18 +427,7 @@
 							</SideTab>
 						{:else if tabId === 'account'}
 							<SideTab id="account" label={$i18n.t('Account')} bind:selected={selectedTab}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 16 16"
-									fill="currentColor"
-									class="size-4"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-5-2a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM8 9c-1.825 0-3.422.977-4.295 2.437A5.49 5.49 0 0 0 8 13.5a5.49 5.49 0 0 0 4.294-2.063A4.997 4.997 0 0 0 8 9Z"
-										clip-rule="evenodd"
-									/>
-								</svg>
+								<UserCircleSolid className="size-4" />
 							</SideTab>
 						{:else if tabId === 'about'}
 							<SideTab id="about" label={$i18n.t('About')} bind:selected={selectedTab}>

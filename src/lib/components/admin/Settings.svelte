@@ -1,4 +1,9 @@
 <script>
+	import Cog6Solid from '$lib/components/icons/Cog6Solid.svelte';
+	import SpeakerWaveSolid from '$lib/components/icons/SpeakerWaveSolid.svelte';
+	import PhotoMini from '$lib/components/icons/PhotoMini.svelte';
+	import ComputerDesktopSolid from '$lib/components/icons/ComputerDesktopSolid.svelte';
+	import WrenchSolid from '$lib/components/icons/WrenchSolid.svelte';
 	import SideTab from '$lib/components/common/SideTab.svelte';
 	import { getContext, tick, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -45,18 +50,7 @@
 		class="tabs flex flex-row overflow-x-auto gap-2.5 max-w-full lg:gap-1 lg:flex-col lg:flex-none lg:w-40 dark:text-gray-200 text-sm font-medium text-left scrollbar-none"
 	>
 		<SideTab id="general" label={$i18n.t('General')} bind:selected={selectedTab}
-			><svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 16 16"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					fill-rule="evenodd"
-					d="M6.955 1.45A.5.5 0 0 1 7.452 1h1.096a.5.5 0 0 1 .497.45l.17 1.699c.484.12.94.312 1.356.562l1.321-1.081a.5.5 0 0 1 .67.033l.774.775a.5.5 0 0 1 .034.67l-1.08 1.32c.25.417.44.873.561 1.357l1.699.17a.5.5 0 0 1 .45.497v1.096a.5.5 0 0 1-.45.497l-1.699.17c-.12.484-.312.94-.562 1.356l1.082 1.322a.5.5 0 0 1-.034.67l-.774.774a.5.5 0 0 1-.67.033l-1.322-1.08c-.416.25-.872.44-1.356.561l-.17 1.699a.5.5 0 0 1-.497.45H7.452a.5.5 0 0 1-.497-.45l-.17-1.699a4.973 4.973 0 0 1-1.356-.562L4.108 13.37a.5.5 0 0 1-.67-.033l-.774-.775a.5.5 0 0 1-.034-.67l1.08-1.32a4.971 4.971 0 0 1-.561-1.357l-1.699-.17A.5.5 0 0 1 1 8.548V7.452a.5.5 0 0 1 .45-.497l1.699-.17c.12-.484.312-.94.562-1.356L2.629 4.107a.5.5 0 0 1 .034-.67l.774-.774a.5.5 0 0 1 .67-.033L5.43 3.71a4.97 4.97 0 0 1 1.356-.561l.17-1.699ZM6 8c0 .538.212 1.026.558 1.385l.057.057a2 2 0 0 0 2.828-2.828l-.058-.056A2 2 0 0 0 6 8Z"
-					clip-rule="evenodd"
-				/>
-			</svg></SideTab
+			><Cog6Solid className="size-4" /></SideTab
 		>
 
 		<SideTab id="connections" label={$i18n.t('Connections')} bind:selected={selectedTab}
@@ -88,18 +82,7 @@
 		>
 
 		<SideTab id="tools" label={$i18n.t('Tools')} bind:selected={selectedTab}
-			><svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					fill-rule="evenodd"
-					d="M12 6.75a5.25 5.25 0 0 1 6.775-5.025.75.75 0 0 1 .313 1.248l-3.32 3.319c.063.475.276.934.641 1.299.365.365.824.578 1.3.64l3.318-3.319a.75.75 0 0 1 1.248.313 5.25 5.25 0 0 1-5.472 6.756c-1.018-.086-1.87.1-2.309.634L7.344 21.3A3.298 3.298 0 1 1 2.7 16.657l8.684-7.151c.533-.44.72-1.291.634-2.309A5.342 5.342 0 0 1 12 6.75ZM4.117 19.125a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75h-.008a.75.75 0 0 1-.75-.75v-.008Z"
-					clip-rule="evenodd"
-				/>
-			</svg></SideTab
+			><WrenchSolid className="size-4" /></SideTab
 		>
 
 		<SideTab id="documents" label={$i18n.t('Documents')} bind:selected={selectedTab}
@@ -150,49 +133,15 @@
 		>
 
 		<SideTab id="interface" label={$i18n.t('Interface')} bind:selected={selectedTab}
-			><svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 16 16"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					fill-rule="evenodd"
-					d="M2 4.25A2.25 2.25 0 0 1 4.25 2h7.5A2.25 2.25 0 0 1 14 4.25v5.5A2.25 2.25 0 0 1 11.75 12h-1.312c.1.128.21.248.328.36a.75.75 0 0 1 .234.545v.345a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-.345a.75.75 0 0 1 .234-.545c.118-.111.228-.232.328-.36H4.25A2.25 2.25 0 0 1 2 9.75v-5.5Zm2.25-.75a.75.75 0 0 0-.75.75v4.5c0 .414.336.75.75.75h7.5a.75.75 0 0 0 .75-.75v-4.5a.75.75 0 0 0-.75-.75h-7.5Z"
-					clip-rule="evenodd"
-				/>
-			</svg></SideTab
+			><ComputerDesktopSolid className="size-4" /></SideTab
 		>
 
 		<SideTab id="audio" label={$i18n.t('Audio')} bind:selected={selectedTab}
-			><svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 16 16"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					d="M7.557 2.066A.75.75 0 0 1 8 2.75v10.5a.75.75 0 0 1-1.248.56L3.59 11H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.59l3.162-2.81a.75.75 0 0 1 .805-.124ZM12.95 3.05a.75.75 0 1 0-1.06 1.06 5.5 5.5 0 0 1 0 7.78.75.75 0 1 0 1.06 1.06 7 7 0 0 0 0-9.9Z"
-				/>
-				<path
-					d="M10.828 5.172a.75.75 0 1 0-1.06 1.06 2.5 2.5 0 0 1 0 3.536.75.75 0 1 0 1.06 1.06 4 4 0 0 0 0-5.656Z"
-				/>
-			</svg></SideTab
+			><SpeakerWaveSolid className="size-4" /></SideTab
 		>
 
 		<SideTab id="images" label={$i18n.t('Images')} bind:selected={selectedTab}
-			><svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 16 16"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					fill-rule="evenodd"
-					d="M2 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm10.5 5.707a.5.5 0 0 0-.146-.353l-1-1a.5.5 0 0 0-.708 0L9.354 9.646a.5.5 0 0 1-.708 0L6.354 7.354a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0-.146.353V12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9.707ZM12 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-					clip-rule="evenodd"
-				/>
-			</svg></SideTab
+			><PhotoMini className="size-4" /></SideTab
 		>
 
 		<SideTab id="pipelines" label={$i18n.t('Pipelines')} bind:selected={selectedTab}

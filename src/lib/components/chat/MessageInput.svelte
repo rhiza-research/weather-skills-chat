@@ -1,4 +1,7 @@
 <script lang="ts">
+	import PlusSolid from '$lib/components/icons/PlusSolid.svelte';
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import ArrowUpSolid from '$lib/components/icons/ArrowUpSolid.svelte';
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 
@@ -644,16 +647,7 @@
 																files = files;
 															}}
 														>
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																viewBox="0 0 20 20"
-																fill="currentColor"
-																class="size-4"
-															>
-																<path
-																	d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-																/>
-															</svg>
+															<XMarkSolid className="size-4" />
 														</button>
 													</div>
 												</div>
@@ -1130,16 +1124,7 @@
 												type="button"
 												aria-label={$i18n.t('More')}
 											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 20 20"
-													fill="currentColor"
-													class="size-5"
-												>
-													<path
-														d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
-													/>
-												</svg>
+												<PlusSolid className="size-5" />
 											</button>
 										</InputMenu>
 
@@ -1328,18 +1313,7 @@
 															type="submit"
 															aria-label={$i18n.t('Queue send')}
 														>
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																viewBox="0 0 16 16"
-																fill="currentColor"
-																class="size-5"
-															>
-																<path
-																	fill-rule="evenodd"
-																	d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
-																	clip-rule="evenodd"
-																/>
-															</svg>
+															<ArrowUpSolid className="size-5" />
 														</button>
 													</Tooltip>
 												{/if}
@@ -1384,18 +1358,7 @@
 														type="submit"
 														disabled={(prompt === '' && files.length === 0) || sendBlocked}
 													>
-														<svg
-															xmlns="http://www.w3.org/2000/svg"
-															viewBox="0 0 16 16"
-															fill="currentColor"
-															class="size-5"
-														>
-															<path
-																fill-rule="evenodd"
-																d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
-																clip-rule="evenodd"
-															/>
-														</svg>
+														<ArrowUpSolid className="size-5" />
 													</button>
 												</Tooltip>
 											</div>
