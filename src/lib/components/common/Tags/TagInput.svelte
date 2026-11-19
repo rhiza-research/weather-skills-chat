@@ -61,7 +61,7 @@
 	{/if}
 
 	<button
-		class=" cursor-pointer self-center p-0.5 flex h-fit items-center dark:hover:bg-gray-700 rounded-full transition border dark:border-gray-600 border-dashed"
+		class=" cursor-pointer self-center p-0.5 flex h-fit items-center dark:hover:bg-white/5 rounded-full transition border dark:border-gray-600 border-dashed"
 		type="button"
 		aria-label={$i18n.t('Add Tag')}
 		on:click={() => {

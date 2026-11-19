@@ -625,7 +625,7 @@
 	>
 		<div class="px-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400">
 			<button
-				class=" cursor-pointer p-[7px] flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class=" cursor-pointer p-[7px] flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					showSidebar.set(!$showSidebar);
 				}}
@@ -650,7 +650,7 @@
 
 			<a
 				id="sidebar-new-chat-button"
-				class="flex justify-between items-center flex-1 rounded-lg px-2 py-1 h-full text-right hover:bg-gray-100 dark:hover:bg-gray-900 transition no-drag-region"
+				class="flex justify-between items-center flex-1 rounded-xl px-2 py-1 h-full text-right hover:bg-black/5 dark:hover:bg-white/5 transition no-drag-region"
 				href="/"
 				draggable="false"
 				on:click={async (event) => {
@@ -701,7 +701,7 @@
 		<!-- {#if $user?.role === 'admin'}
 			<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 				<a
-					class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+					class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 					href="/home"
 					on:click={() => {
 						selectedChatId = null;
@@ -726,7 +726,7 @@
 
 		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 			<a
-				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 				href="/workspace"
 				on:click={() => {
 					selectedChatId = null;
@@ -763,7 +763,7 @@
 
 		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
 			<a
-				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 				href="/scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
@@ -1268,7 +1268,7 @@
 					>
 						<button
 							id="sidebar-user-menu-button"
-							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 						>
 							<div class=" self-center mr-3">
 								<img

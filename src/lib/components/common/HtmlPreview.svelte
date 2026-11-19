@@ -74,7 +74,7 @@
 		>
 			<button
 				type="button"
-				class="p-3 rounded-md hover:bg-white/10"
+				class="p-3 rounded-xl hover:bg-white/10"
 				aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
@@ -98,7 +98,7 @@
 				href={src}
 				target="_blank"
 				rel="noopener noreferrer"
-				class="p-3 rounded-md hover:bg-white/10"
+				class="p-3 rounded-xl hover:bg-white/10"
 				aria-label={$i18n.t('Open in new tab')}
 				title={$i18n.t('Open in new tab')}
 			>
@@ -119,7 +119,7 @@
 
 			<button
 				type="button"
-				class="p-3 rounded-md hover:bg-white/10"
+				class="p-3 rounded-xl hover:bg-white/10"
 				aria-label={$i18n.t('Download')}
 				title={$i18n.t('Download')}
 				on:click={download}

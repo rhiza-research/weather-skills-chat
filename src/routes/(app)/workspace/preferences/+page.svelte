@@ -240,7 +240,7 @@
 								{$i18n.t('Save')}
 							</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
 								on:click={() => (editing = null)}
 							>
 								{$i18n.t('Cancel')}
@@ -254,7 +254,7 @@
 					{#if preference.can_manage}
 						<div class="mt-2 flex gap-1">
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
 								on:click={() => {
 									editing = preference.id;
 									editTitle = preference.title;
@@ -264,7 +264,7 @@
 								{$i18n.t('Edit')}
 							</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+								class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
 								on:click={() => {
 									selectedPreference = preference;
 									showDeleteConfirm = true;

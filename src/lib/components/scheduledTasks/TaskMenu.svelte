@@ -35,7 +35,7 @@
 			align="start"
 			transition={flyAndScale}
 		>
-			<DropdownMenu.Item class={itemClass} on:click={() => onPin(!pinned)}>
+			<DropdownMenu.Item class="menu-item" on:click={() => onPin(!pinned)}>
 				{#if pinned}
 					<BookmarkSlash strokeWidth="2" />
 					<div class="flex items-center">{$i18n.t('Unpin')}</div>
@@ -44,11 +44,11 @@
 					<div class="flex items-center">{$i18n.t('Pin')}</div>
 				{/if}
 			</DropdownMenu.Item>
-			<DropdownMenu.Item class={itemClass} on:click={onRun}>
+			<DropdownMenu.Item class="menu-item" on:click={onRun}>
 				<Play strokeWidth="2" />
 				<div class="flex items-center">{$i18n.t('Run now')}</div>
 			</DropdownMenu.Item>
-			<DropdownMenu.Item class={itemClass} on:click={onEdit}>
+			<DropdownMenu.Item class="menu-item" on:click={onEdit}>
 				<Pencil strokeWidth="2" />
 				<div class="flex items-center">{$i18n.t('Edit')}</div>
 			</DropdownMenu.Item>

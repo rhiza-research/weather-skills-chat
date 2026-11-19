@@ -228,7 +228,7 @@
 	<div class="relative" bind:this={root}>
 		<button
 			type="button"
-			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-md hover:bg-gray-50 dark:hover:bg-gray-850"
+			class="flex items-center gap-1.5 px-1.5 py-0.5 mr-0.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
 			on:click={toggle}
 			title={statusLabel}
 			aria-expanded={open}
@@ -313,7 +313,7 @@
 								type="button"
 								role="radio"
 								aria-checked={option.type === size?.type}
-								class="flex flex-col items-start rounded-md px-2 py-1.5 text-left border {option.type ===
+								class="flex flex-col items-start rounded-xl px-2 py-1.5 text-left border {option.type ===
 								size?.type
 									? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
 									: 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850'} disabled:opacity-60"

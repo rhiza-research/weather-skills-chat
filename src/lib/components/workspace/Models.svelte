@@ -375,7 +375,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost btn-ghost-sm"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -493,7 +493,7 @@
 						{#if shiftKey && manage}
 							<Tooltip content={$i18n.t('Delete')}>
 								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									on:click={() => {
 										deleteModelHandler(model);
@@ -505,7 +505,7 @@
 						{:else}
 							{#if manage}
 								<a
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									href={`${basePath}/models/edit?id=${encodeURIComponent(model.id)}`}
 								>
@@ -546,7 +546,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost btn-ghost-sm"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -679,7 +679,7 @@
 				/>
 
 				<button
-					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+					class="btn-secondary"
 					on:click={() => {
 						modelsImportInputElement.click();
 					}}
@@ -689,7 +689,7 @@
 
 				{#if models.length}
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={async () => {
 							downloadModels(models);
 						}}

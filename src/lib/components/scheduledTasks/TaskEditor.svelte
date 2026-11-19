@@ -346,7 +346,7 @@
 		<div class="flex flex-col items-start gap-1.5">
 			<button
 				type="button"
-				class="flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-800 px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-850 transition disabled:opacity-50"
+				class="flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-800 px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-50"
 				disabled={!canManage || !toolsReady}
 				on:click={() => (showTools = true)}
 			>

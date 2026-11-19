@@ -815,7 +815,7 @@
 							{$i18n.t('Resend')}
 						</button>
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
+							class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
 							type="button"
 							on:click={() => cancelInvite(row.invite.id)}
 						>
@@ -844,7 +844,7 @@
 						{#if $config?.features?.enable_admin_chat_access && row.person.id !== $user?.id}
 							<Tooltip content={$i18n.t('Chats')}>
 								<button
-									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									on:click={() => {
 										showUserChatsModal = !showUserChatsModal;
 										selectedUser = row.person;
@@ -857,7 +857,7 @@
 
 						<Tooltip content={$i18n.t('Edit User')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								on:click={() => {
 									showEditUserModal = !showEditUserModal;
 									selectedUser = row.person;
@@ -883,7 +883,7 @@
 						{#if row.person.id !== $user?.id}
 							<Tooltip content={$i18n.t('Delete User')}>
 								<button
-									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									on:click={() => {
 										selectedUser = row.person;
 										openDelete('user', row.person.id, row.person.name);
@@ -909,7 +909,7 @@
 					{:else}
 						<Tooltip content={$i18n.t('Edit Organization')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								on:click={() => {
 									selectedOrg = row;
 									showEditOrgModal = !showEditOrgModal;
@@ -935,7 +935,7 @@
 						{#if row.kind === 'workspace'}
 							<Tooltip content={$i18n.t('Delete Organization')}>
 								<button
-									class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									on:click={() => openDelete('organization', row.id, row.name)}
 								>
 									<svg
@@ -1072,7 +1072,7 @@
 									{#if member.role !== 'owner' || (row.members ?? []).filter((item) => item.role === 'owner').length > 1}
 										<Tooltip content={$i18n.t('Remove from organization')}>
 											<button
-												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg text-gray-400 hover:text-red-600"
+												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-gray-400 hover:text-red-600"
 												type="button"
 												on:click={() => askRemoveMember(row, member)}
 											>

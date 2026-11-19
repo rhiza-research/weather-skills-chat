@@ -140,7 +140,7 @@
 			transition={(e) => fade(e, { duration: 100 })}
 		>
 			<button
-				class="flex items-center rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex items-center rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={(e) => {
 					e.preventDefault();
 					e.stopPropagation();
@@ -181,7 +181,7 @@
 					<div bind:this={orgListElement} class="max-h-64 overflow-y-auto overscroll-contain">
 						{#each $organizations ?? [] as org}
 							<button
-								class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
+								class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
 								$activeOrganizationId
 									? 'bg-gray-50 dark:bg-gray-800 font-medium'
 									: 'text-gray-600 dark:text-gray-300'}"
@@ -199,7 +199,7 @@
 						{/each}
 					</div>
 					<button
-						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300"
+						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-black/5 dark:hover:bg-white/5 transition text-gray-600 dark:text-gray-300"
 						on:click={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -281,7 +281,7 @@
 			<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					await showSettings.set(true);
 					closeMenu();
@@ -313,7 +313,7 @@
 
 			{#if isOrgManager}
 				<a
-					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					href="/organization"
 					on:click={closeMenu}
 				>
@@ -325,7 +325,7 @@
 			{/if}
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
 					dispatch('show', 'archived-chat');
 					closeMenu();
@@ -339,7 +339,7 @@
 
 			{#if role === 'admin'}
 				<a
-					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					href="/admin"
 					on:click={closeMenu}
 				>
@@ -366,7 +366,7 @@
 			<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					try {
 						await userSignOut();

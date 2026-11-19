@@ -192,7 +192,7 @@
 			transition={flyAndScale}
 		>
 			<!-- <DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={async () => {
 					await showSettings.set(!$showSettings);
 				}}
@@ -222,7 +222,7 @@
 			<!-- Only the owner can share; others clone the chat first. -->
 			{#if !$temporaryChatEnabled && (!chat.user_id || chat.user_id === $user?.id)}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="menu-item"
 					id="chat-share-button"
 					on:click={() => {
 						shareHandler();
@@ -270,7 +270,7 @@
 			{/if}
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				id="chat-overview-button"
 				on:click={async () => {
 					await showControls.set(true);
@@ -283,7 +283,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				id="chat-overview-button"
 				on:click={async () => {
 					localStorage.artifactsPanelOpen = 'true';
@@ -299,7 +299,7 @@
 
 			<DropdownMenu.Sub>
 				<DropdownMenu.SubTrigger
-					class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="menu-item"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -324,7 +324,7 @@
 					sideOffset={8}
 				>
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadJSONExport();
 						}}
@@ -332,7 +332,7 @@
 						<div class="flex items-center line-clamp-1">{$i18n.t('Export chat (.json)')}</div>
 					</DropdownMenu.Item>
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadTxt();
 						}}
@@ -341,7 +341,7 @@
 					</DropdownMenu.Item>
 
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadPdf();
 						}}
@@ -352,7 +352,7 @@
 			</DropdownMenu.Sub>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				id="chat-copy-button"
 				on:click={async () => {
 					const res = await copyToClipboard(await getChatAsText()).catch((e) => {

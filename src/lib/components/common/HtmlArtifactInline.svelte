@@ -20,7 +20,7 @@
 	<HtmlArtifactFrame {src} {title} fit="width" />
 	<button
 		type="button"
-		class="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
+		class="absolute right-2 top-2 rounded-xl bg-black/60 p-1.5 text-white hover:bg-black/80"
 		aria-label={$i18n.t('Expand')}
 		title={$i18n.t('Expand')}
 		on:click={() => {

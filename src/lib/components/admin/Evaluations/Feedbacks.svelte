@@ -208,7 +208,7 @@
 								}}
 							>
 								<button
-									class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost btn-ghost-sm"
 								>
 									<EllipsisHorizontal />
 								</button>

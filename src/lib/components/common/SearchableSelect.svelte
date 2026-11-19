@@ -111,7 +111,7 @@
 			{#each filteredItems as item, index (item.value)}
 				<button
 					type="button"
-					class="flex w-full text-left items-center rounded-lg py-1.5 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 {index ===
+					class="flex w-full text-left items-center rounded-xl py-1.5 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 {index ===
 					highlighted
 						? 'bg-gray-100 dark:bg-gray-800'
 						: ''}"

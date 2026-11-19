@@ -151,7 +151,7 @@
 		{#if showClearButton && value}
 			<div class="self-center pr-2 pl-1.5 translate-y-[0.5px] rounded-l-xl bg-transparent">
 				<button
-					class="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+					class="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={clearSearchInput}
 				>
 					<XMark className="size-3" strokeWidth="2" />
@@ -179,7 +179,7 @@
 					<div class="max-h-60 overflow-auto">
 						{#each filteredTags as tag, tagIdx}
 							<button
-								class=" px-1.5 py-0.5 flex gap-1 hover:bg-gray-100 dark:hover:bg-gray-900 w-full rounded {selectedIdx ===
+								class=" px-1.5 py-0.5 flex gap-1 hover:bg-gray-100 dark:hover:bg-gray-900 w-full rounded-xl {selectedIdx ===
 								tagIdx
 									? 'bg-gray-100 dark:bg-gray-900'
 									: ''}"
@@ -213,7 +213,7 @@
 					<div class=" max-h-60 overflow-auto">
 						{#each filteredOptions as option, optionIdx}
 							<button
-								class=" px-1.5 py-0.5 flex gap-1 hover:bg-gray-100 dark:hover:bg-gray-900 w-full rounded {selectedIdx ===
+								class=" px-1.5 py-0.5 flex gap-1 hover:bg-gray-100 dark:hover:bg-gray-900 w-full rounded-xl {selectedIdx ===
 								optionIdx
 									? 'bg-gray-100 dark:bg-gray-900'
 									: ''}"

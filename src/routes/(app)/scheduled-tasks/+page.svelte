@@ -122,7 +122,7 @@
 			<div class="flex items-center gap-1">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
-						class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="btn-ghost btn-ghost-sm"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
@@ -150,7 +150,7 @@
 			<Dropdown bind:show={showSort}>
 				<Tooltip content={$i18n.t('Sort')}>
 					<button
-						class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 						aria-label={$i18n.t('Sort scheduled tasks')}
 					>
 						<BarsArrowUp className="size-5" strokeWidth="2" />
@@ -166,7 +166,7 @@
 					>
 						{#each sortOptions as option (option.value)}
 							<DropdownMenu.Item
-								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 								on:click={() => setSort(option.value)}
 							>
 								{option.label}
@@ -179,7 +179,7 @@
 				</div>
 			</Dropdown>
 			<a
-				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium text-sm"
+				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-sm"
 				href="/scheduled-tasks/new"
 			>
 				{$i18n.t('New scheduled task')}

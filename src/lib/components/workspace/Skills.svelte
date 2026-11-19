@@ -561,7 +561,7 @@
 								{#if canManage(pack)}
 									<button
 										type="button"
-										class="text-xs px-2.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850"
+										class="text-xs px-2.5 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
 										disabled={busy}
 										on:click|stopPropagation={() => updateHandler(pack)}
 									>
@@ -569,7 +569,7 @@
 									</button>
 									<button
 										type="button"
-										class="text-xs px-2.5 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+										class="text-xs px-2.5 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
 										disabled={busy}
 										on:click|stopPropagation={() => {
 											deletePackId = pack.id;

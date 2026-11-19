@@ -63,7 +63,7 @@
 
 			<button
 				type="button"
-				class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					document.getElementById('config-json-input').click();
 				}}
@@ -90,7 +90,7 @@
 
 			<button
 				type="button"
-				class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					const config = await exportConfig(localStorage.token);
 					const blob = new Blob([JSON.stringify(config)], {
@@ -126,7 +126,7 @@
 					<!-- <div class=" self-center text-xs font-medium">{$i18n.t('Allow Chat Deletion')}</div> -->
 
 					<button
-						class=" flex rounded-md py-1.5 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+						class=" flex rounded-xl py-1.5 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 						type="button"
 						on:click={() => {
 							// exportAllUserChats();
@@ -156,7 +156,7 @@
 				</div>
 
 				<button
-					class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+					class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={() => {
 						exportAllUserChats();
 					}}
@@ -186,7 +186,7 @@
 
 	<!-- <div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg"
+			class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-xl"
 			type="submit"
 		>
 			{$i18n.t('Save')}

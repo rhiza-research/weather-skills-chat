@@ -264,7 +264,7 @@
 						<SensitiveInput value={localStorage.token} readOnly={true} />
 
 						<button
-							class="ml-1.5 px-1.5 py-1 dark:hover:bg-gray-850 transition rounded-lg"
+							class="ml-1.5 px-1.5 py-1 dark:hover:bg-white/5 transition rounded-lg"
 							on:click={() => {
 								copyToClipboard(localStorage.token);
 								JWTTokenCopied = true;
@@ -318,7 +318,7 @@
 								<SensitiveInput value={APIKey} readOnly={true} />
 
 								<button
-									class="ml-1.5 px-1.5 py-1 dark:hover:bg-gray-850 transition rounded-lg"
+									class="ml-1.5 px-1.5 py-1 dark:hover:bg-white/5 transition rounded-lg"
 									on:click={() => {
 										copyToClipboard(APIKey);
 										APIKeyCopied = true;
@@ -386,7 +386,7 @@
 								</Tooltip>
 							{:else}
 								<button
-									class="flex gap-1.5 items-center font-medium px-3.5 py-1.5 rounded-lg bg-gray-100/70 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-850 transition"
+									class="flex gap-1.5 items-center font-medium px-3.5 py-1.5 rounded-xl bg-gray-100/70 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-850 transition"
 									on:click={() => {
 										createAPIKeyHandler();
 									}}

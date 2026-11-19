@@ -126,7 +126,7 @@
 				{:else}
 					{#each filteredItems as item}
 						<DropdownMenu.Item
-							class="flex gap-2.5 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+							class="flex gap-2.5 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 							on:click={() => {
 								dispatch('select', item);
 							}}

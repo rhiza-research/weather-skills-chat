@@ -489,7 +489,7 @@
 					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
 							type="button"
-							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							class="p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
 							aria-label={$i18n.t('Expand image')}
 						>
@@ -498,7 +498,7 @@
 					</Tooltip>
 					<button
 						type="button"
-						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+						class="p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
 						aria-label={$i18n.t('Close preview')}
 					>
@@ -654,7 +654,7 @@
 						<div class="flex items-center gap-0.5 self-center min-w-fit" dir="ltr">
 							<button
 								type="button"
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="btn-ghost btn-ghost-xs disabled:cursor-not-allowed"
 								on:click={() => navigateContent('prev')}
 								disabled={contents.length <= 1}
 							>
@@ -683,7 +683,7 @@
 
 							<button
 								type="button"
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="btn-ghost btn-ghost-xs disabled:cursor-not-allowed"
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
 							>
@@ -708,7 +708,7 @@
 					<div class="flex items-center gap-1">
 						<button
 							type="button"
-							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 							on:click={() => {
 								copyToClipboard(contents[selectedContentIdx].content);
 								copied = true;
@@ -722,7 +722,7 @@
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
 									type="button"
-									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md p-0.5"
+									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-xl p-0.5"
 									on:click={showFullScreen}
 								>
 									<ArrowsPointingOut className="size-3.5" />

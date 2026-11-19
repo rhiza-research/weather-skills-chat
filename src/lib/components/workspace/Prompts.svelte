@@ -146,7 +146,7 @@
 				</div>
 				<div class="flex flex-row gap-0.5 self-center">
 					<a
-						class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+						class="btn-ghost"
 						type="button"
 						href={`/workspace/prompts/edit?command=${encodeURIComponent(prompt.command)}`}
 					>
@@ -180,7 +180,7 @@
 						onClose={() => {}}
 					>
 						<button
-							class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost btn-ghost-sm"
 							type="button"
 						>
 							<EllipsisHorizontal className="size-5" />
@@ -233,7 +233,7 @@
 				/>
 
 				<button
-					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+					class="btn-secondary"
 					on:click={() => {
 						promptsImportInputElement.click();
 					}}
@@ -258,7 +258,7 @@
 
 				{#if prompts.length}
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={async () => {
 							let blob = new Blob([JSON.stringify(prompts)], {
 								type: 'application/json'

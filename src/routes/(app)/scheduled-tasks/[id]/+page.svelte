@@ -117,14 +117,14 @@
 			<div class="flex items-center gap-1 min-w-0">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
-						class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="btn-ghost btn-ghost-sm"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
 					</button>
 				</div>
 				<a
-					class="p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+					class="p-1.5 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 					href="/scheduled-tasks"
 					aria-label={$i18n.t('Scheduled tasks')}
 				>
@@ -199,7 +199,7 @@
 					<div class="text-xs font-medium text-gray-500">{$i18n.t('Runs')}</div>
 					{#each runs as run (run.id)}
 						<button
-							class="text-left text-sm px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-850 flex justify-between gap-3 disabled:cursor-default"
+							class="text-left text-sm px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex justify-between gap-3 disabled:cursor-default"
 							disabled={!run.chat_id}
 							on:click={() => goto(`/c/${run.chat_id}`)}
 						>

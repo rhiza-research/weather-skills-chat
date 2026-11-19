@@ -80,7 +80,7 @@
 			>
 				<button
 					id="sidebar-toggle-button"
-					class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+					class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={() => {
 						showSidebar.set(!$showSidebar);
 					}}
@@ -116,7 +116,7 @@
 						}}
 					>
 						<button
-							class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+							class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 							id="chat-context-menu-button"
 						>
 							<div class=" m-auto self-center">
@@ -141,18 +141,14 @@
 
 				<Tooltip content={artifactsPanelOpen ? $i18n.t('Hide artifacts') : $i18n.t('Show artifacts')}>
 					<button
-						class="flex cursor-pointer items-center gap-1.5 rounded-xl transition {artifactsPanelOpen
-							? 'px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850'
-							: 'px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 font-medium'}"
+						class="btn-ghost {artifactsPanelOpen ? 'bg-black/5 dark:bg-white/5' : ''}"
 						on:click={toggleArtifactsPanel}
 						aria-label={$i18n.t('Artifacts')}
 						aria-pressed={artifactsPanelOpen}
 						id="artifacts-toggle-button"
 					>
 						<DocumentChartBar className="size-5 shrink-0" />
-						{#if !artifactsPanelOpen}
-							<span class="text-xs whitespace-nowrap">{$i18n.t('Artifacts')}</span>
-						{/if}
+						<span class="text-xs whitespace-nowrap">{$i18n.t('Artifacts')}</span>
 					</button>
 				</Tooltip>
 
@@ -161,7 +157,7 @@
 						id="new-chat-button"
 						class=" flex {$showSidebar
 							? 'md:hidden'
-							: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+							: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition"
 						on:click={() => {
 							initNewChat();
 						}}
@@ -184,7 +180,7 @@
 						}}
 					>
 						<button
-							class="select-none flex rounded-xl p-1.5 w-full hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+							class="select-none flex rounded-xl p-1.5 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 							aria-label={$i18n.t('User Menu')}
 						>
 							<div class=" self-center">

@@ -232,7 +232,7 @@
 									/>
 
 									<button
-										class="w-full text-sm font-medium py-3 bg-transparent hover:bg-gray-100 border border-dashed dark:border-gray-850 dark:hover:bg-gray-850 text-center rounded-xl"
+										class="w-full text-sm font-medium py-3 bg-transparent hover:bg-black/5 border border-dashed dark:border-gray-850 dark:hover:bg-white/5 text-center rounded-xl"
 										type="button"
 										on:click={() => {
 											document.getElementById('upload-user-csv-input')?.click();

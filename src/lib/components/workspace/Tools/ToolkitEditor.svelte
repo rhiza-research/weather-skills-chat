@@ -218,7 +218,7 @@ class Tools:
 						<div class=" shrink-0 mr-2">
 							<Tooltip content={$i18n.t('Back')}>
 								<button
-									class="w-full text-left text-sm py-1.5 px-1 rounded-lg dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-gray-850"
+									class="w-full text-left text-sm py-1.5 px-1 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
 									on:click={() => {
 										goto('/workspace/tools');
 									}}

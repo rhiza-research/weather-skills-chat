@@ -258,7 +258,7 @@
 								{#if siblings.length > 1}
 									<div class="flex self-center" dir="ltr">
 										<button
-											class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+											class="btn-ghost btn-ghost-xs"
 											on:click={() => {
 												showPreviousMessage(message);
 											}}
@@ -327,7 +327,7 @@
 										{/if}
 
 										<button
-											class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+											class="btn-ghost btn-ghost-xs"
 											on:click={() => {
 												showNextMessage(message);
 											}}
@@ -353,7 +353,7 @@
 							{#if !readOnly}
 								<Tooltip content={$i18n.t('Edit')} placement="bottom">
 									<button
-										class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition edit-user-message-button"
+										class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl dark:hover:text-white hover:text-black transition edit-user-message-button"
 										on:click={() => {
 											editMessageHandler();
 										}}
@@ -378,7 +378,7 @@
 
 							<Tooltip content={$i18n.t('Copy')} placement="bottom">
 								<button
-									class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+									class="invisible group-hover:visible p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl dark:hover:text-white hover:text-black transition"
 									on:click={() => {
 										copyToClipboard(visibleUserContent(message.content));
 									}}
@@ -431,7 +431,7 @@
 								{#if siblings.length > 1}
 									<div class="flex self-center" dir="ltr">
 										<button
-											class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+											class="btn-ghost btn-ghost-xs"
 											on:click={() => {
 												showPreviousMessage(message);
 											}}
@@ -500,7 +500,7 @@
 										{/if}
 
 										<button
-											class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+											class="btn-ghost btn-ghost-xs"
 											on:click={() => {
 												showNextMessage(message);
 											}}

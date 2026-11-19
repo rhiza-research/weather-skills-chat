@@ -99,6 +99,26 @@ textarea::placeholder {
 	@apply px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full;
 }
 
+.btn-secondary {
+	@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
+}
+
+.btn-ghost {
+	@apply flex items-center gap-1.5 px-2 py-2 text-sm rounded-xl text-gray-600 hover:text-black hover:bg-black/5 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/5 transition;
+}
+
+.btn-ghost-sm {
+	@apply p-1.5;
+}
+
+.btn-ghost-xs {
+	@apply p-1;
+}
+
+.menu-item {
+	@apply flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg;
+}
+
 .field-select {
 	@apply w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
 }

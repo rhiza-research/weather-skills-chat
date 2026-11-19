@@ -129,7 +129,7 @@
 		>
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<div
-				class="w-full group rounded-md relative flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition {emphasis ===
+				class="w-full group rounded-md relative flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/5 transition {emphasis ===
 				'strong'
 					? 'text-gray-800 dark:text-gray-100'
 					: emphasis === 'medium'
@@ -186,7 +186,7 @@
 					>
 						<Tooltip content={onAddLabel}>
 							<button
-								class="p-0.5 dark:hover:bg-gray-850 rounded-lg touch-auto"
+								class="p-0.5 dark:hover:bg-white/5 rounded-lg touch-auto"
 								on:click={(e) => {}}
 							>
 								<Plus className=" size-3" strokeWidth="2.5" />

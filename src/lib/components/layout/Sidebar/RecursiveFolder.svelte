@@ -397,7 +397,7 @@
 		<div class="w-full group">
 			<button
 				id="folder-{folderId}-button"
-				class="relative w-full py-1.5 px-2 rounded-md flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-500 font-medium hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-500 font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
 			>
 				<div class="text-gray-300 dark:text-gray-600">
 					{#if open}
@@ -461,7 +461,7 @@
 							exportHandler();
 						}}
 					>
-						<button class="p-0.5 dark:hover:bg-gray-850 rounded-lg touch-auto" on:click={(e) => {}}>
+						<button class="p-0.5 dark:hover:bg-white/5 rounded-lg touch-auto" on:click={(e) => {}}>
 							<EllipsisHorizontal className="size-4" strokeWidth="2.5" />
 						</button>
 					</FolderMenu>

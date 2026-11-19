@@ -137,7 +137,7 @@
 			<div class="px-3 pb-2 w-full flex flex-col">
 				{#each builtinOptions as option (option.key)}
 					<div
-						class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition flex items-center gap-2"
+						class="px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"
 					>
 						<div class="flex-1 min-w-0">
 							<div class="text-sm font-medium dark:text-gray-100 text-gray-800">
@@ -168,7 +168,7 @@
 					{@const version = toolSkillVersion(tool)}
 					{@const repoRef = toolSkillRepoRef(tool)}
 					{@const description = tool?.meta?.description}
-					<div class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition">
+					<div class="px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition">
 						<div class="flex items-center gap-2">
 							<button
 								type="button"

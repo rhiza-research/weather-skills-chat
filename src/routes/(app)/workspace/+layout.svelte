@@ -40,7 +40,7 @@
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
 						id="sidebar-toggle-button"
-						class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="btn-ghost btn-ghost-sm"
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}

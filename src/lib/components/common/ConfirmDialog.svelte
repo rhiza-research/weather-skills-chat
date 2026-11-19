@@ -151,7 +151,7 @@
 					<div class="mt-6 flex flex-col gap-1.5">
 						{#each choices as choice (choice.value)}
 							<button
-								class="border border-gray-200 hover:bg-gray-100 text-gray-800 dark:border-gray-800 dark:hover:bg-gray-850 dark:text-white font-medium w-full py-2.5 rounded-lg transition"
+								class="border border-gray-200 hover:bg-black/5 text-gray-800 dark:border-gray-800 dark:hover:bg-white/5 dark:text-white font-medium w-full py-2.5 rounded-xl transition"
 								on:click={() => choose(choice.value)}
 								type="button"
 							>
@@ -163,7 +163,7 @@
 
 				<div class="{choices.length ? 'mt-1.5' : 'mt-6'} flex justify-between gap-1.5">
 					<button
-						class="bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white font-medium w-full py-2.5 rounded-lg transition"
+						class="bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-white font-medium w-full py-2.5 rounded-xl transition"
 						on:click={() => {
 							dismiss();
 						}}
@@ -172,7 +172,7 @@
 						{cancelLabel}
 					</button>
 					<button
-						class="bg-gray-900 hover:bg-gray-850 text-gray-100 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-800 font-medium w-full py-2.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+						class="bg-gray-900 hover:bg-gray-850 text-gray-100 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-800 font-medium w-full py-2.5 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
 						disabled={!matched}
 						on:click={() => {
 							confirmHandler();

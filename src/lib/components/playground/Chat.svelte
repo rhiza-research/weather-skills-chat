@@ -218,7 +218,7 @@
 
 					<div class=" translate-x-1.5">
 						<button
-							class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-lg"
+							class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-xl"
 							on:click={() => {
 								showSettings = !showSettings;
 							}}
@@ -267,7 +267,7 @@
 						{/if}
 
 						<div class="shrink-0">
-							<button class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-lg">
+							<button class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-xl">
 								{#if showSystem}
 									<ChevronUp className="size-3.5" />
 								{:else}
@@ -295,7 +295,7 @@
 
 				<div class="translate-y-1">
 					<button
-						class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-lg"
+						class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-xl"
 						on:click={() => {
 							showSettings = !showSettings;
 						}}
@@ -346,7 +346,7 @@
 					<div class="flex justify-between">
 						<div>
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-lg"
+								class="px-3.5 py-1.5 text-sm font-medium bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-xl"
 								on:click={() => {
 									role = role === 'user' ? 'assistant' : 'user';
 								}}
@@ -363,7 +363,7 @@
 							{#if !loading}
 								<button
 									disabled={message === ''}
-									class="px-3.5 py-1.5 text-sm font-medium disabled:bg-gray-50 dark:disabled:hover:bg-gray-850 disabled:cursor-not-allowed bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-lg"
+									class="px-3.5 py-1.5 text-sm font-medium disabled:bg-gray-50 dark:disabled:hover:bg-gray-850 disabled:cursor-not-allowed bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-xl"
 									on:click={() => {
 										addHandler();
 										role = role === 'user' ? 'assistant' : 'user';
@@ -373,7 +373,7 @@
 								</button>
 
 								<button
-									class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-lg"
+									class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-xl"
 									on:click={() => {
 										submitHandler();
 									}}

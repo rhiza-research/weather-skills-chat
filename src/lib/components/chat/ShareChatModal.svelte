@@ -146,7 +146,7 @@
 								<div class="flex">
 									<button
 										type="button"
-										class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+										class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 										aria-label={$i18n.t('Copy link')}
 										title={$i18n.t('Copy link')}
 										on:click={() => copyLink(link.id)}
@@ -155,7 +155,7 @@
 									</button>
 									<button
 										type="button"
-										class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+										class="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 										aria-label={$i18n.t('Delete link')}
 										title={$i18n.t('Delete link')}
 										on:click={() => {

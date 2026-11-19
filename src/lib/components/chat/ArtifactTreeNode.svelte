@@ -32,7 +32,7 @@
 	const i18n = getContext('i18n');
 	// The same look as the preview pane's icon buttons.
 	const iconButton =
-		'p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
+		'p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
 	const dispatch = createEventDispatcher();
 
 	export let node: {
@@ -126,7 +126,7 @@
 
 {#if navigable}
 	<div class="flex flex-col">
-		<div class="flex items-center gap-2 rounded-md hover:bg-black/5 dark:hover:bg-white/5">
+		<div class="flex items-center gap-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5">
 			<button
 				type="button"
 				class="flex items-center gap-1 flex-1 min-w-0 text-left text-xs px-1 py-1"

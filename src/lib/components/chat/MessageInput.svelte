@@ -529,7 +529,7 @@
 									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 transition"
+											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-black/5 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
 											on:click={() => onSendQueuedNow(idx)}
 										>
 											{$i18n.t('Send now')}
@@ -538,7 +538,7 @@
 									<Tooltip content={$i18n.t('Delete queued send')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition"
+											class="shrink-0 rounded-full p-1 text-gray-500 hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200 transition"
 											aria-label={$i18n.t('Delete queued send')}
 											on:click={() => onDeleteQueuedSend(idx)}
 										>
@@ -1126,7 +1126,7 @@
 											}}
 										>
 											<button
-												class="bg-transparent hover:bg-gray-100 text-gray-800 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
+												class="bg-transparent hover:bg-black/5 text-gray-800 dark:text-white dark:hover:bg-white/5 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
 												type="button"
 												aria-label={$i18n.t('More')}
 											>

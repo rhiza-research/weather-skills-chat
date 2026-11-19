@@ -322,7 +322,7 @@
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -458,7 +458,7 @@
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -534,7 +534,7 @@
 								/>
 
 								<button
-									class="w-full text-sm font-medium py-2 bg-transparent hover:bg-gray-100 border border-dashed dark:border-gray-850 dark:hover:bg-gray-850 text-center rounded-xl"
+									class="w-full text-sm font-medium py-2 bg-transparent hover:bg-black/5 border border-dashed dark:border-gray-850 dark:hover:bg-white/5 text-center rounded-xl"
 									type="button"
 									on:click={() => {
 										document.getElementById('upload-comfyui-workflow-input')?.click();

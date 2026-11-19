@@ -825,7 +825,7 @@
 
 					<div class="my-2 flex justify-end pb-20">
 						<button
-							class=" text-sm px-3 py-2 transition rounded-lg {loading
+							class=" text-sm px-3 py-2 transition rounded-xl {loading
 								? ' cursor-not-allowed bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'
 								: 'bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'} flex w-full justify-center"
 							type="submit"

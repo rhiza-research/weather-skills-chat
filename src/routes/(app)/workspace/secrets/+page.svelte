@@ -205,7 +205,7 @@
 	<div class="my-2 mb-5 gap-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
 		{#each items as secret (secret.id)}
 			<div
-				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl"
+				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl"
 			>
 				<div class="w-full">
 					<div class="flex items-center justify-between -mt-1">
@@ -218,7 +218,7 @@
 						{#if secret.visibility !== 'organization' || secret.can_manage}
 							<div class="flex self-center gap-0.5 -mr-1 translate-y-1">
 								<button
-									class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+									class="text-xs px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
 									on:click={() => {
 										replacing = replacing === secret.id ? null : secret.id;
 										replaceValue = '';
@@ -227,7 +227,7 @@
 									{$i18n.t('Replace')}
 								</button>
 								<button
-									class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+									class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
 									on:click={() => {
 										selectedSecret = secret;
 										showDeleteConfirm = true;

@@ -221,7 +221,7 @@
 									{/if}
 								</button>
 								<button
-									class=" rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+									class=" rounded-full p-1 hover:bg-black/5 dark:hover:bg-white/5 transition"
 									type="button"
 									on:click={() => {
 										accessControl.read.organization_ids = (

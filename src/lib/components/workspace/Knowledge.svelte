@@ -151,7 +151,7 @@
 			{#if canCreate}
 				<div>
 					<button
-						class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+						class=" px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 						aria-label={$i18n.t('Create Knowledge')}
 						on:click={() => {
 							goto(`${basePath}/knowledge/create`);
@@ -174,7 +174,7 @@
 		<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 			{#each publicItems as item}
 				<button
-					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl {isCatalogEnabled(
+					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl {isCatalogEnabled(
 						item
 					)
 						? 'cursor-pointer'
@@ -251,7 +251,7 @@
 	<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 		{#each sectionItems as item}
 			<button
-				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl"
+				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-xl"
 				on:click={() => {
 					if (item?.meta?.document) {
 						toast.error(

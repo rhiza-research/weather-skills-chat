@@ -129,7 +129,7 @@
 			<div class="flex flex-col gap-2">
 				<input bind:this={fileInput} type="file" accept="image/*" hidden on:change={onLogo} />
 				<button
-					class="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition font-medium"
+					class="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition font-medium"
 					type="button"
 					on:click={() => fileInput.click()}
 				>

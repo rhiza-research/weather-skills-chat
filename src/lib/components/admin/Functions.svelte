@@ -191,7 +191,7 @@
 
 		<div>
 			<a
-				class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+				class=" px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 				href="/admin/functions/create"
 			>
 				<Plus className="size-3.5" />
@@ -245,7 +245,7 @@
 				{#if shiftKey}
 					<Tooltip content={$i18n.t('Delete')}>
 						<button
-							class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost"
 							type="button"
 							on:click={() => {
 								deleteHandler(func);
@@ -258,7 +258,7 @@
 					{#if func?.meta?.manifest?.funding_url ?? false}
 						<Tooltip content={$i18n.t('Support')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								type="button"
 								on:click={() => {
 									selectedFunction = func;
@@ -272,7 +272,7 @@
 
 					<Tooltip content={$i18n.t('Valves')}>
 						<button
-							class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost"
 							type="button"
 							on:click={() => {
 								selectedFunction = func;
@@ -324,7 +324,7 @@
 						onClose={() => {}}
 					>
 						<button
-							class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost btn-ghost-sm"
 							type="button"
 						>
 							<EllipsisHorizontal className="size-5" />
@@ -376,7 +376,7 @@
 		/>
 
 		<button
-			class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+			class="btn-secondary"
 			on:click={() => {
 				functionsImportInputElement.click();
 			}}
@@ -401,7 +401,7 @@
 
 		{#if $functions.length}
 			<button
-				class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+				class="btn-secondary"
 				on:click={async () => {
 					const _functions = await exportFunctions(localStorage.token).catch((error) => {
 						toast.error(`${error}`);

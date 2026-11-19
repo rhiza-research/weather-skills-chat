@@ -76,7 +76,7 @@
 				className="w-full"
 			>
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-xl {!fileUploadEnabled
+					class="menu-item {!fileUploadEnabled
 						? 'opacity-50'
 						: ''}"
 					on:click={() => {
@@ -103,7 +103,7 @@
 				className="w-full"
 			>
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!fileUploadEnabled
+					class="menu-item {!fileUploadEnabled
 						? 'opacity-50'
 						: ''}"
 					on:click={() => {
@@ -119,7 +119,7 @@
 
 			{#if $config?.features?.enable_google_drive_integration}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+					class="menu-item"
 					on:click={() => {
 						uploadGoogleDriveHandler();
 					}}
@@ -156,7 +156,7 @@
 
 			{#if $config?.features?.enable_onedrive_integration}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+					class="menu-item"
 					on:click={() => {
 						uploadOneDriveHandler();
 					}}

@@ -153,7 +153,7 @@
 												<div class="flex justify-end w-full">
 													<Tooltip content={$i18n.t('Delete Chat')}>
 														<button
-															class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+															class="btn-ghost"
 															on:click={async () => {
 																chatToDelete = chat.id;
 																showDeleteConfirmDialog = true;

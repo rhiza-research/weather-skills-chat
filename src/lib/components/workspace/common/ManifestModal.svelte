@@ -70,7 +70,7 @@
 
 					<div class="flex justify-end pt-3 text-sm font-medium">
 						<button
-							class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg flex flex-row space-x-1 items-center"
+							class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-xl flex flex-row space-x-1 items-center"
 							type="submit"
 						>
 							{$i18n.t('Done')}

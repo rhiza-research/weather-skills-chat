@@ -65,7 +65,7 @@
 			{/if}
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-md"
+				class="menu-item"
 				on:click={() => {
 					editHandler();
 				}}
@@ -89,7 +89,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					cloneHandler();
 				}}
@@ -100,7 +100,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					exportHandler();
 				}}
@@ -113,7 +113,7 @@
 			<hr class="border-gray-100 dark:border-gray-850 my-1" />
 
 			<DropdownMenu.Item
-				class="flex  gap-2  items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					deleteHandler();
 				}}
