@@ -1400,23 +1400,17 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
                     )
-                    hints.append(
-                        "Tool calls issued in the same turn run in parallel. "
-                        "If a call needs another call's output, set its "
-                        "`depends_on` argument to that sibling's function name "
-                        "or tool_call id, or wait and call it in a later turn. "
-                        "Omit `depends_on` for independent work."
-                    )
-                    hints.append(
-                        "When you call a tool, set its optional `display` argument "
-                        "to a short phrase the user will see instead of the function "
-                        'name, such as "Checking the most recent available date for '
-                        'IMERG" or "Grouping the data into weekly bins". Omit '
-                        "`display` to show the function name. When you call several "
-                        "tools in one turn, also set optional `activity` on one of "
-                        "those calls to a short phrase for the whole batch, such as "
-                        '"Fetching IMERG and clipping to Kenya".'
-                    )
+                    # The per-tool parameter descriptions are short; these explain them once.
+                    from open_webui.utils.tool_parallel import TOOL_CALL_GUIDANCE
+
+                    hints.append(TOOL_CALL_GUIDANCE)
+                    if any(
+                        "argv" in (((tool.get("spec") or {}).get("parameters") or {}).get("properties") or {})
+                        for tool in tools_dict.values()
+                    ):
+                        from open_webui.utils.skills import skill_argument_guidance
+
+                        hints.append(skill_argument_guidance())
                     from open_webui.env import tool_runner_enabled
 
                     if tool_runner_enabled():
