@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tarfile
 import tempfile
 import time
@@ -25,6 +26,7 @@ from open_webui.utils.artifacts import (
     copy_upload_into_chat_sandbox,
     create_folder,
     delete_sandbox,
+    empty_trash,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
@@ -252,26 +254,44 @@ class DeleteSandboxTest(unittest.TestCase):
         (self.chat / "plots").mkdir(parents=True)
         for name in ("a.png", "b.png", "c.png"):
             (self.chat / "plots" / name).write_bytes(b"png")
+        self.trash = self.artifacts.resolve() / ".trash"
 
-    def test_juicefs_rmr_deletes_with_threads(self):
+    def days_from_now(self, days: float):
+        """Run empty_trash as if this many days had passed."""
+        return patch("open_webui.utils.artifacts.time.time", return_value=time.time() + days * 86400)
+
+    def test_delete_moves_the_files_to_the_trash_under_their_name(self):
+        self.assertTrue(delete_sandbox("chat"))
+        self.assertFalse(self.chat.exists())
+        self.assertTrue((self.trash / "chat" / "plots" / "a.png").exists())
+
+    def test_the_trash_is_emptied_after_seven_days_with_juicefs_rmr(self):
+        delete_sandbox("chat")
         with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
             "open_webui.utils.artifacts.subprocess.run", side_effect=CopySandboxTest._fake_clone
         ) as run:
-            self.assertTrue(delete_sandbox("chat"))
+            with self.days_from_now(6.9):
+                self.assertEqual(empty_trash(), 0)
+            self.assertTrue((self.trash / "chat").exists())
+            with self.days_from_now(7.1):
+                self.assertEqual(empty_trash(), 1)
+        self.assertFalse((self.trash / "chat").exists())
         self.assertEqual(
-            run.call_args.args[0], ["juicefs", "rmr", "--threads", "50", str(self.chat.resolve())]
+            run.call_args.args[0], ["juicefs", "rmr", "--threads", "50", str(self.trash / "chat")]
         )
 
-    def test_without_juicefs_only_a_small_folder_is_deleted(self):
+    def test_without_juicefs_only_a_small_folder_is_emptied(self):
+        delete_sandbox("chat")
+        old = self.trash / "chat"
         with patch("open_webui.utils.artifacts.shutil.which", return_value=None), patch(
             "open_webui.utils.artifacts.PLAIN_COPY_MAX_FILES", 2
-        ):
-            self.assertFalse(delete_sandbox("chat"))
-            self.assertTrue((self.chat / "plots" / "a.png").exists())
+        ), self.days_from_now(8):
+            self.assertEqual(empty_trash(), 0)
+            self.assertTrue((old / "plots" / "a.png").exists())
 
-            (self.chat / "plots" / "b.png").unlink()
-            self.assertTrue(delete_sandbox("chat"))
-            self.assertFalse(self.chat.exists())
+            (old / "plots" / "b.png").unlink()
+            self.assertEqual(empty_trash(), 1)
+            self.assertFalse(old.exists())
 
 
 class ArtifactCopyStateTest(unittest.TestCase):

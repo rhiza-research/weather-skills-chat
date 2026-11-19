@@ -767,6 +767,9 @@ PLAIN_COPY_MAX_FILES = 500
 PLAIN_COPY_MAX_BYTES = 500 * 1024 * 1024
 # Passed to juicefs rmr; the same as its default.
 REMOVE_THREADS = 50
+# Deleted files wait here this long, so a wrong delete can be undone by hand.
+TRASH_DIRNAME = ".trash"
+TRASH_DAYS = 7
 COPY_MARKER = ".artifact-copy"
 COPY_STAGING_DIRNAME = ".artifact-copy-staging"
 
@@ -1018,11 +1021,29 @@ def artifact_carryover_note(chat_id: str, source_title: str) -> str:
 
 
 def delete_sandbox(chat_id: str) -> bool:
-    """Delete a chat's files; True when they are gone."""
+    """Move a chat's files to the trash at once; True when they are gone.
+    empty_trash deletes them for good after TRASH_DAYS."""
     root = (ARTIFACTS_DIR / chat_id).resolve()
     if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:
-        _remove_tree(root)
+        trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+        trash.mkdir(exist_ok=True)
+        os.rename(root, trash / root.name)
     return not root.exists()
+
+
+def empty_trash() -> int:
+    """Delete what has been in the trash for TRASH_DAYS; how many went."""
+    trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+    if not trash.is_dir():
+        return 0
+    cutoff = time.time() - TRASH_DAYS * 86400
+    deleted = 0
+    for entry in trash.iterdir():
+        # A move keeps mtime but sets ctime, so ctime is when it was deleted.
+        if entry.lstat().st_ctime <= cutoff:
+            _remove_tree(entry)
+            deleted += not entry.exists()
+    return deleted
 
 
 def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:

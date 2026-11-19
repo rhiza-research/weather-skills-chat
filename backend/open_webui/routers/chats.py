@@ -1007,23 +1007,12 @@ async def get_share_links_by_chat_id(id: str, user=Depends(get_verified_user)):
     return await asyncio.to_thread(Chats.get_live_shares_by_chat_id, id)
 
 
-# Share link deletes running in the background; a reference keeps each alive.
-_share_deletes: set[asyncio.Task] = set()
-
-
 @router.delete("/{id}/shares/{share_id}", response_model=bool)
 async def delete_share_link_by_id(
     id: str, share_id: str, user=Depends(get_verified_user)
 ):
-    """Stop the link working at once; its files and row are deleted after."""
     await asyncio.to_thread(require_chat_write, id, user)
-    await asyncio.to_thread(Chats.expire_shares, id, share_id)
-    task = asyncio.create_task(
-        asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id, share_id)
-    )
-    _share_deletes.add(task)
-    task.add_done_callback(_share_deletes.discard)
-    return True
+    return await asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id, share_id)
 
 
 ############################
