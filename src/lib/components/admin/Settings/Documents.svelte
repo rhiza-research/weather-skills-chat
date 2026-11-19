@@ -277,7 +277,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<SettingRow label={$i18n.t('Content Extraction Engine')}>
@@ -423,7 +423,7 @@
 					<div class="mb-3">
 						<h3 class="section-title mb-2.5">{$i18n.t('Embedding')}</h3>
 
-						<hr class=" border-line my-2" />
+						<hr class="divider" />
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
 							<SettingRow label={$i18n.t('Embedding Model Engine')}>
@@ -590,7 +590,7 @@
 					<div class="mb-3">
 						<h3 class="section-title mb-2.5">{$i18n.t('Retrieval')}</h3>
 
-						<hr class=" border-line my-2" />
+						<hr class="divider" />
 
 						<SettingRow label={$i18n.t('Full Context Mode')}>
 							<div class="flex items-center relative">
@@ -773,7 +773,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Files')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Max Upload Size')}>
 						<div class="flex items-center relative">
@@ -819,7 +819,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Integration')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Google Drive')}>
 						<div class="flex items-center relative">
@@ -837,7 +837,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Danger Zone')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Reset Upload Directory')}>
 						<div class="flex items-center relative">

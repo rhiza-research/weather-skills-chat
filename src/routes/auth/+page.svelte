@@ -433,7 +433,7 @@
 
 						{#if mode !== 'signup' && Object.keys($config?.oauth?.providers ?? {}).length > 0}
 							<div class="inline-flex items-center justify-center w-full">
-								<hr class="w-32 h-px my-4 border-0 dark:bg-gray-100/10 bg-gray-700/10" />
+								<hr class="divider w-32 my-4" />
 								{#if $config?.features.enable_login_form || $config?.features.enable_ldap}
 									<span
 										class="px-3 text-sm font-medium text-gray-900 dark:text-white bg-transparent"
@@ -441,7 +441,7 @@
 									>
 								{/if}
 
-								<hr class="w-32 h-px my-4 border-0 dark:bg-gray-100/10 bg-gray-700/10" />
+								<hr class="divider w-32 my-4" />
 							</div>
 							<div class="flex flex-col space-y-2">
 								{#if $config?.oauth?.providers?.google}

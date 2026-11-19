@@ -240,7 +240,7 @@
 			{/if}
 
 			{#if usage}
-				<hr class="border-line my-1 p-0" />
+				<hr class="divider my-1 p-0" />
 				<div class="px-3 py-2">
 					<div class="text-xs uppercase tracking-wide text-subtle truncate">
 						{#if currentOrg.kind === 'personal'}
@@ -278,7 +278,7 @@
 				</div>
 			{/if}
 
-			<hr class="border-line my-1 p-0" />
+			<hr class="divider my-1 p-0" />
 
 			<button
 				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -363,7 +363,7 @@
 				</a>
 			{/if}
 
-			<hr class=" border-line my-1 p-0" />
+			<hr class="divider my-1 p-0" />
 
 			<button
 				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -405,7 +405,7 @@
 			</button>
 
 			{#if $activeUserIds?.length > 0}
-				<hr class=" border-line my-1 p-0" />
+				<hr class="divider my-1 p-0" />
 
 				<Tooltip
 					content={$USAGE_POOL && $USAGE_POOL.length > 0

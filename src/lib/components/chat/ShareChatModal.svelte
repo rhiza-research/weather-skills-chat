@@ -114,7 +114,7 @@
 				</svg>
 			</button>
 		</div>
-		<hr class="border-line" />
+		<hr class="divider" />
 
 		{#if rows.length}
 			<div class="px-5 pt-4 dark:text-gray-200">

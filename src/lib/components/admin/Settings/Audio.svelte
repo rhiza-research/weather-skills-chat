@@ -209,7 +209,7 @@
 						</div>
 					</div>
 
-					<hr class="border-line my-2" />
+					<hr class="divider" />
 
 					<div>
 						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
@@ -235,7 +235,7 @@
 						</div>
 					</div>
 
-					<hr class="border-line my-2" />
+					<hr class="divider" />
 
 					<div>
 						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
@@ -275,7 +275,7 @@
 							/>
 						</div>
 
-						<hr class="border-line my-2" />
+						<hr class="divider" />
 
 						<div>
 							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('Language Locales')}</div>
@@ -375,7 +375,7 @@
 				{/if}
 			</div>
 
-			<hr class="border-line" />
+			<hr class="divider" />
 
 			<div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
@@ -452,7 +452,7 @@
 					</div>
 				{/if}
 
-				<hr class="border-line my-2" />
+				<hr class="divider" />
 
 				{#if TTS_ENGINE === ''}
 					<div>
@@ -643,7 +643,7 @@
 					</div>
 				{/if}
 
-				<hr class="border-line my-2" />
+				<hr class="divider" />
 
 				<SettingRow label={$i18n.t('Response splitting')}>
 					<div class="flex items-center relative">

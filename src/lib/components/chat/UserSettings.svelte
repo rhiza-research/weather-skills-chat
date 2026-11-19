@@ -370,9 +370,9 @@
 					? '-translate-y-1'
 					: 'scrollbar-none'}"
 			>
-				<div class="hidden md:flex w-full rounded-xl -mb-1 px-0.5 gap-2" id="settings-search">
+				<div class="hidden md:flex w-full rounded-xl -mb-1 px-2 gap-2" id="settings-search">
 					<div class="self-center rounded-l-xl bg-transparent">
-						<Search className="size-3.5" />
+						<Search className="size-4" />
 					</div>
 					<input
 						class="field-bare py-1.5 text-sm dark:text-gray-300"

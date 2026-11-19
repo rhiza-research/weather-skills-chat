@@ -302,7 +302,7 @@
 					</div>
 				</SettingRow>
 			</div>
-			<hr class=" border-line" />
+			<hr class="divider" />
 
 			<div class="flex flex-col gap-2">
 				{#if (config?.engine ?? 'automatic1111') === 'automatic1111'}
@@ -631,7 +631,7 @@
 			</div>
 
 			{#if config?.enabled}
-				<hr class=" border-line" />
+				<hr class="divider" />
 
 				<div>
 					<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Default Model')}</div>

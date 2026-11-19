@@ -126,7 +126,7 @@
 					/>
 				</div>
 			</div>
-			<hr class="border-line my-2" />
+			<hr class="divider" />
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
 				{#if chats.length > 0}
 					<div class="w-full">

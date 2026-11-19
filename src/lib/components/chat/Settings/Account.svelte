@@ -178,11 +178,11 @@
 				</div>
 
 				<div class="flex-1 flex flex-col self-center gap-0.5">
-					<div class=" mb-0.5 text-sm font-medium">{$i18n.t('Profile Image')}</div>
+					<div class="setting-title">{$i18n.t('Profile Image')}</div>
 
-					<div>
+					<div class="flex flex-wrap gap-1.5">
 						<button
-							class=" text-xs text-center text-gray-800 dark:text-gray-400 rounded-full px-4 py-0.5 bg-gray-100 dark:bg-gray-850"
+							class="btn-secondary"
 							on:click={async () => {
 								if (canvasPixelTest()) {
 									profileImageUrl = generateInitialsImage(name);
@@ -200,7 +200,7 @@
 						>
 
 						<button
-							class=" text-xs text-center text-gray-800 dark:text-gray-400 rounded-full px-4 py-0.5 bg-gray-100 dark:bg-gray-850"
+							class="btn-secondary"
 							on:click={async () => {
 								const url = await getGravatarUrl(localStorage.token, $user?.email);
 
@@ -209,7 +209,7 @@
 						>
 
 						<button
-							class=" text-xs text-center text-gray-800 dark:text-gray-400 rounded-lg px-2 py-1"
+							class="btn-secondary"
 							on:click={async () => {
 								profileImageUrl = '/user.png';
 							}}>{$i18n.t('Remove')}</button
@@ -240,12 +240,12 @@
 			<UpdatePassword />
 		</div>
 
-		<hr class="border-line my-2" />
+		<hr class="divider" />
 
 		<div class="flex justify-between items-center text-sm">
-			<div class="  font-medium">{$i18n.t('API keys')}</div>
+			<div class="setting-title">{$i18n.t('API keys')}</div>
 			<button
-				class="field-label text-muted"
+				class="btn-secondary"
 				type="button"
 				on:click={() => {
 					showAPIKeys = !showAPIKeys;

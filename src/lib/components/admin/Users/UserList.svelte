@@ -531,7 +531,7 @@
 				</svg>
 			</button>
 		</div>
-		<hr class="border-line" />
+		<hr class="divider" />
 		<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 			<input
 				class="field"
@@ -610,7 +610,7 @@
 			<div class="text-center leading-tight">{$i18n.t('Allow large runners')}</div>
 			<div></div>
 		</div>
-		<hr class="mt-0.5 border-line" />
+		<hr class="mt-0.5 divider" />
 
 		{#each paged as row, idx (row.id)}
 		<div

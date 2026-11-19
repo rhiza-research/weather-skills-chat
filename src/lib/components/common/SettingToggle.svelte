@@ -1,13 +1,20 @@
 <script lang="ts">
+	import { createEventDispatcher } from 'svelte';
 	import SettingRow from './SettingRow.svelte';
+	import Switch from './Switch.svelte';
+
+	const dispatch = createEventDispatcher();
 
 	export let label = '';
 	export let tooltip = '';
 	export let text = '';
+	export let checked: boolean | undefined = undefined;
 </script>
 
 <SettingRow {label} {tooltip}>
-	<button class="py-1 px-3 text-xs transition shrink-0 outline-hidden" type="button" on:click>
-		{text}
-	</button>
+	{#if checked !== undefined}
+		<Switch state={checked} on:change={(e) => e.detail !== checked && dispatch('click')} />
+	{:else}
+		<button class="btn-secondary" type="button" on:click>{text}</button>
+	{/if}
 </SettingRow>

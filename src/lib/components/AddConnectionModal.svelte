@@ -336,7 +336,7 @@
 							</div>
 						{/if}
 
-						<hr class=" border-line my-2.5 w-full" />
+						<hr class="divider my-2.5 w-full" />
 
 						<div class="flex flex-col w-full">
 							<div class="mb-1 flex justify-between">
@@ -378,7 +378,7 @@
 							{/if}
 						</div>
 
-						<hr class=" border-line my-2.5 w-full" />
+						<hr class="divider my-2.5 w-full" />
 
 						<div class="flex items-center">
 							<input

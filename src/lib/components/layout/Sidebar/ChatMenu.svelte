@@ -366,7 +366,7 @@
 			</DropdownMenu.Item>
 			{/if}
 
-			<hr class="border-line my-0.5" />
+			<hr class="divider my-0.5" />
 
 			<div class="flex">
 				<Tags

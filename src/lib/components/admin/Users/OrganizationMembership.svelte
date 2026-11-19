@@ -307,7 +307,7 @@
 					</svg>
 				</button>
 			</div>
-			<hr class="border-line" />
+			<hr class="divider" />
 			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 				<input
 					class="field"
@@ -419,7 +419,7 @@
 		</div>
 		<div></div>
 	</div>
-	<hr class="mt-1.5 border-line" />
+	<hr class="mt-1.5 divider" />
 
 	{#each tableRows as row (row.id)}
 		<div class="member-table-row grid items-center gap-x-3 px-1 py-2 text-sm">

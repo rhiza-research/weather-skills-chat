@@ -43,9 +43,9 @@
 	}}
 >
 	<div class="flex justify-between items-center text-sm">
-		<div class="  font-medium">{$i18n.t('Change Password')}</div>
+		<div class="setting-title">{$i18n.t('Change Password')}</div>
 		<button
-			class="field-label text-muted"
+			class="btn-secondary"
 			type="button"
 			on:click={() => {
 				show = !show;

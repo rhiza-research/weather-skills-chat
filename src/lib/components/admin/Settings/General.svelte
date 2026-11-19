@@ -134,7 +134,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="mb-2.5">
 						<div class=" mb-1 field-label flex space-x-2 items-center">
@@ -207,7 +207,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Authentication')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Default User Role')}>
 						<div class="flex items-center relative">
@@ -526,7 +526,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Email Tool')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="space-y-2.5">
 						<div class="text-xs text-muted">
@@ -597,7 +597,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Features')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Enable Community Sharing')}>
 						<Switch bind:state={adminConfig.ENABLE_COMMUNITY_SHARING} />

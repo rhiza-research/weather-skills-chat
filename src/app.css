@@ -92,6 +92,10 @@ textarea::placeholder {
 		@apply w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-300 outline-hidden;
 	}
 
+	.setting-group {
+		@apply mt-4 mb-1 pt-4 border-t border-gray-100 dark:border-gray-850 text-sm font-medium first:mt-0 first:pt-0 first:border-t-0;
+	}
+
 	.setting-title {
 		@apply my-1.5 text-sm font-medium;
 	}
@@ -101,7 +105,7 @@ textarea::placeholder {
 	}
 
 	.btn-secondary {
-		@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
+		@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
 	}
 
 	.btn-ghost {
@@ -118,6 +122,10 @@ textarea::placeholder {
 
 	.menu-item {
 		@apply flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg;
+	}
+
+	.divider {
+		@apply my-2 border-gray-100 dark:border-gray-850;
 	}
 
 	.border-line {
@@ -169,7 +177,7 @@ textarea::placeholder {
 	}
 
 	.tab-idle {
-		@apply text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white;
+		@apply text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white;
 	}
 
 	.field-label {
@@ -185,7 +193,7 @@ textarea::placeholder {
 	}
 
 	.field-select {
-		@apply cursor-pointer w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
+		@apply cursor-pointer w-40 rounded-lg py-1 pl-2 pr-8 text-xs text-left bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 outline-hidden transition;
 	}
 }
 

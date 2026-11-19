@@ -35,7 +35,7 @@
 		</div>
 
 		{#if ollamaVersion}
-			<hr class=" border-line" />
+			<hr class="divider" />
 
 			<div>
 				<div class="setting-title">{$i18n.t('Ollama Version')}</div>
@@ -47,7 +47,7 @@
 			</div>
 		{/if}
 
-		<hr class=" border-line" />
+		<hr class="divider" />
 
 		<div>
 			<pre

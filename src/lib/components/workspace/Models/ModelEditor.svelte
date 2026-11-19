@@ -621,7 +621,7 @@
 						</div>
 					{/if}
 
-					<hr class=" border-line my-1.5" />
+					<hr class="divider my-1.5" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between">
@@ -647,7 +647,7 @@
 								</div>
 
 								<button
-									class="p-1 px-3 text-xs flex rounded-sm transition"
+									class="btn-secondary"
 									type="button"
 									on:click={() => {
 										showAdvanced = !showAdvanced;
@@ -675,7 +675,7 @@
 						</div>
 					</div>
 
-					<hr class=" border-line my-1" />
+					<hr class="divider my-1" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between items-center">
@@ -772,7 +772,7 @@
 						{/if}
 					</div>
 
-					<hr class=" border-line my-1.5" />
+					<hr class="divider my-1.5" />
 
 					<div class="my-2">
 						<Knowledge
@@ -796,7 +796,7 @@
 							<div class=" self-center text-sm font-semibold">{$i18n.t('JSON Preview')}</div>
 
 							<button
-								class="p-1 px-3 text-xs flex rounded-sm transition"
+								class="btn-secondary"
 								type="button"
 								on:click={() => {
 									showPreview = !showPreview;

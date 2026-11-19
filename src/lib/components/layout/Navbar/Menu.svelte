@@ -369,7 +369,7 @@
 			</DropdownMenu.Item>
 
 			{#if !$temporaryChatEnabled}
-				<hr class="border-line my-0.5" />
+				<hr class="divider my-0.5" />
 
 				<div class="flex">
 					<Tags chatId={chat.id} />

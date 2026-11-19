@@ -94,7 +94,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Web Search')}>
 						<div class="flex items-center relative">
@@ -534,7 +534,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Loader')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<SettingRow label={$i18n.t('Web Loader Engine')}>
 						<div class="flex items-center relative">

@@ -175,7 +175,7 @@
 >
 	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
 		<div>
-			<div class="setting-title">{$i18n.t('STT Settings')}</div>
+			<div class="setting-group">{$i18n.t('STT Settings')}</div>
 
 			{#if $config.audio.stt.engine !== 'web'}
 				<SettingRow label={$i18n.t('Speech-to-Text Engine')}>
@@ -188,13 +188,13 @@
 
 			<SettingToggle
 				label={$i18n.t('Instant Auto-Send After Voice Transcription')}
-				text={speechAutoSend === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={speechAutoSend === true}
 				on:click={toggleSpeechAutoSend}
 			/>
 		</div>
 
 		<div>
-			<div class="setting-title">{$i18n.t('TTS Settings')}</div>
+			<div class="setting-group">{$i18n.t('TTS Settings')}</div>
 
 			<SettingRow label={$i18n.t('Text-to-Speech Engine')}>
 				<select class="field-select" bind:value={TTSEngine} placeholder={$i18n.t('Select an engine')}>
@@ -221,7 +221,7 @@
 
 			<SettingToggle
 				label={$i18n.t('Auto-playback response')}
-				text={responseAutoPlayback === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={responseAutoPlayback === true}
 				on:click={toggleResponseAutoPlayback}
 			/>
 
@@ -234,7 +234,7 @@
 			</SettingRow>
 		</div>
 
-		<hr class=" border-line" />
+		<hr class="divider" />
 
 		{#if TTSEngine === 'browser-kokoro'}
 			{#if TTSModel}

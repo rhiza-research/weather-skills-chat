@@ -44,7 +44,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="mb-2.5">
 						<SettingRow label={$i18n.t('Enable Code Execution')}>
@@ -162,7 +162,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('Code Interpreter')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="mb-2.5">
 						<SettingRow label={$i18n.t('Enable Code Interpreter')}>
@@ -277,7 +277,7 @@
 							</div>
 						{/if}
 
-						<hr class="border-line my-2" />
+						<hr class="divider" />
 
 						<div>
 							<div class="py-0.5 w-full">

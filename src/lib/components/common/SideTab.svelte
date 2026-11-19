@@ -5,10 +5,10 @@
 </script>
 
 <button
-	class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selected ===
+	class="px-2 py-1.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selected ===
 	id
-		? ''
-		: 'tab-idle'}"
+		? 'bg-black/5 dark:bg-white/5'
+		: 'tab-idle hover:bg-black/5 dark:hover:bg-white/5'}"
 	on:click={() => (selected = id)}
 >
 	<div class="self-center mr-2"><slot /></div>

@@ -82,7 +82,7 @@
 			<div class="mb-3">
 				<h3 class="section-title mb-2.5">{$i18n.t('Tasks')}</h3>
 
-				<hr class=" border-line my-2" />
+				<hr class="divider" />
 
 				<div class=" mb-1 font-medium flex items-center">
 					<div class=" text-xs mr-1">{$i18n.t('Set Task Model')}</div>
@@ -271,7 +271,7 @@
 			<div class="mb-3">
 				<h3 class="section-title mb-2.5">{$i18n.t('UI')}</h3>
 
-				<hr class=" border-line my-2" />
+				<hr class="divider" />
 
 				<div class="  {banners.length > 0 ? ' mb-3' : ''}">
 					<div class="mb-2.5 flex w-full justify-between">
@@ -280,7 +280,7 @@
 						</div>
 
 						<button
-							class="p-1 px-3 text-xs flex rounded-sm transition"
+							class="btn-secondary"
 							type="button"
 							on:click={() => {
 								if (banners.length === 0 || banners.at(-1).content !== '') {
@@ -417,7 +417,7 @@
 							</div>
 
 							<button
-								class="p-1 px-3 text-xs flex rounded-sm transition"
+								class="btn-secondary"
 								type="button"
 								on:click={() => {
 									if (promptSuggestions.length === 0 || promptSuggestions.at(-1).content !== '') {

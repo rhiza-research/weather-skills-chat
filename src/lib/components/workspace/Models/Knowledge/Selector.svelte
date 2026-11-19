@@ -116,7 +116,7 @@
 				</div>
 			</div>
 
-			<hr class=" border-line my-1.5" />
+			<hr class="divider my-1.5" />
 
 			<div class="max-h-48 overflow-y-scroll">
 				{#if filteredItems.length === 0}

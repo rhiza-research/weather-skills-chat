@@ -197,7 +197,7 @@
 							</div>
 						</div>
 
-						<hr class=" border-line my-2.5 w-full" />
+						<hr class="divider my-2.5 w-full" />
 
 						<div>
 							<div class="flex flex-col w-full">
@@ -221,7 +221,7 @@
 									</select>
 								</div>
 
-								<!-- <hr class=" border-line my-2.5 w-full" /> -->
+								<!-- <hr class="divider my-2.5 w-full" /> -->
 
 								{#if defaultModelIds.length > 0}
 									<div class="flex flex-col">

@@ -115,7 +115,7 @@
 <div class="flex flex-col h-full justify-between text-sm">
 	<div class="  overflow-y-scroll max-h-[28rem] lg:max-h-full">
 		<div class="">
-			<div class="setting-title">{$i18n.t('WebUI Settings')}</div>
+			<div class="setting-group">{$i18n.t('WebUI Settings')}</div>
 
 			<SettingRow label={$i18n.t('Theme')}>
 				<select
@@ -149,7 +149,7 @@
 
 			<SettingToggle
 				label={$i18n.t('Notifications')}
-				text={notificationEnabled === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={notificationEnabled === true}
 				on:click={toggleNotification}
 			/>
 		</div>

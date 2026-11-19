@@ -111,7 +111,7 @@
 						{/if}
 					</div>
 				</div>
-				<hr class=" border-line mt-2.5 mb-1 w-full" />
+				<hr class="divider mt-2.5 mb-1 w-full" />
 
 				<div class="flex items-center">
 					<select
@@ -165,7 +165,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-line my-2" /> -->
+	<hr class="divider" /> -->
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Workspace Permissions')}</div>
@@ -222,7 +222,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-line my-2" />
+	<hr class="divider" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Sharing Permissions')}</div>
@@ -263,7 +263,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-line my-2" />
+	<hr class="divider" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Chat Permissions')}</div>
@@ -350,7 +350,7 @@
 		{/if}
 	</div>
 
-	<hr class=" border-line my-2" />
+	<hr class="divider" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>

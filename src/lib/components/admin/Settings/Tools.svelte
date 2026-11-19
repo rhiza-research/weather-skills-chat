@@ -61,7 +61,7 @@
 				<div class="mb-3">
 					<h3 class="section-title mb-2.5">{$i18n.t('General')}</h3>
 
-					<hr class=" border-line my-2" />
+					<hr class="divider" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<!-- {$i18n.t(`Failed to connect to {{URL}} OpenAPI tool server`, {

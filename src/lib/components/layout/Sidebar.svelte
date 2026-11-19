@@ -800,7 +800,7 @@
 		<OrganizationRow on:switch-org={(e) => onSwitchOrganization(e.detail)} />
 
 		<!-- Separates the settings rows above from search and the chats and tasks below. -->
-		<hr class="mx-5 my-2.5 border-line" />
+		<hr class="mx-5 my-2.5 divider" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}

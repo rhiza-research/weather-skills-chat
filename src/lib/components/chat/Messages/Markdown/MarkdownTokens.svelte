@@ -186,7 +186,7 @@
 <!-- {JSON.stringify(tokens)} -->
 {#each displayTokens as token, tokenIdx (tokenKey(token, tokenIdx))}
 	{#if token.type === 'hr'}
-		<hr class=" border-line" />
+		<hr class="divider" />
 	{:else if token.type === 'heading'}
 		<svelte:element this={headerComponent(token.depth)} dir="auto">
 			<MarkdownInlineTokens id={`${id}-${tokenIdx}-h`} tokens={token.tokens} {onSourceClick} />

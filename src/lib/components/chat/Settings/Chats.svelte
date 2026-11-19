@@ -111,7 +111,7 @@
 				hidden
 			/>
 			<button
-				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					chatImportInputElement.click();
 				}}
@@ -133,7 +133,7 @@
 				<div class=" self-center text-sm font-medium">{$i18n.t('Import Chats')}</div>
 			</button>
 			<button
-				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					exportChats();
 				}}
@@ -156,11 +156,11 @@
 			</button>
 		</div>
 
-		<hr class=" border-line" />
+		<hr class="divider" />
 
 		<div class="flex flex-col">
 			<button
-				class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					showArchivedChatsModal = true;
 				}}
@@ -246,7 +246,7 @@
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="menu-item w-full"
 					on:click={() => {
 						showArchiveConfirm = true;
 					}}
@@ -333,7 +333,7 @@
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-xl py-2 px-4 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
+					class="menu-item w-full text-red-600 dark:text-red-400"
 					on:click={() => {
 						showDeleteConfirm = true;
 					}}

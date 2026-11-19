@@ -72,7 +72,7 @@
 				<div class="flex items-center">{$i18n.t('Export')}</div>
 			</DropdownMenu.Item>
 
-			<hr class="border-line my-1" />
+			<hr class="divider my-1" />
 
 			<DropdownMenu.Item
 				class="menu-item"

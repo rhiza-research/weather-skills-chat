@@ -101,7 +101,7 @@
 				</svg>
 			</button>
 		</div>
-		<hr class="border-line" />
+		<hr class="divider" />
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
@@ -130,7 +130,7 @@
 						</div>
 					</div>
 
-					<hr class="border-line my-3 w-full" />
+					<hr class="divider my-3 w-full" />
 
 					<div class=" flex flex-col space-y-1.5">
 						<div class="flex flex-col w-full">

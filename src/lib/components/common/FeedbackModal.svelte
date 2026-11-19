@@ -96,7 +96,7 @@
         </svg>
       </button>
     </div>
-    <hr class="border-line" />
+    <hr class="divider" />
 
     <div class="flex flex-col w-full p-5 dark:text-gray-200">
       {#if sent}

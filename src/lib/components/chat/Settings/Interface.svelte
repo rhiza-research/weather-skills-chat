@@ -334,7 +334,7 @@
 
 	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
 		<div>
-			<div class=" mb-1.5 text-sm font-medium">{$i18n.t('UI')}</div>
+			<div class="setting-group">{$i18n.t('UI')}</div>
 
 			<SettingToggle
 				label={$i18n.t('Landing Page Mode')}
@@ -344,21 +344,21 @@
 
 			<SettingToggle
 				label={$i18n.t('Chat Bubble UI')}
-				text={chatBubble === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={chatBubble === true}
 				on:click={toggleChatBubble}
 			/>
 
 			{#if !$settings.chatBubble}
 				<SettingToggle
 					label={$i18n.t('Display the username instead of You in the Chat')}
-					text={showUsername === true ? $i18n.t('On') : $i18n.t('Off')}
+					checked={showUsername === true}
 					on:click={toggleShowUsername}
 				/>
 			{/if}
 
 			<SettingToggle
 				label={$i18n.t('Widescreen Mode')}
-				text={widescreenMode === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={widescreenMode === true}
 				on:click={toggleWidescreenMode}
 			/>
 
@@ -374,71 +374,71 @@
 
 			<SettingToggle
 				label={$i18n.t('Notification Sound')}
-				text={notificationSound === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={notificationSound === true}
 				on:click={toggleNotificationSound}
 			/>
 
-			<div class="setting-title">{$i18n.t('Chat')}</div>
+			<div class="setting-group">{$i18n.t('Chat')}</div>
 
 			<SettingToggle
 				label={$i18n.t('Title Auto-Generation')}
-				text={titleAutoGenerate === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={titleAutoGenerate === true}
 				on:click={toggleTitleAutoGenerate}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Chat Tags Auto-Generation')}
-				text={autoTags === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={autoTags === true}
 				on:click={toggleAutoTags}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Detect Artifacts Automatically')}
-				text={detectArtifacts === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={detectArtifacts === true}
 				on:click={toggleDetectArtifacts}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Auto-Copy Response to Clipboard')}
-				text={responseAutoCopy === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={responseAutoCopy === true}
 				on:click={toggleResponseAutoCopy}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Rich Text Input for Chat')}
-				text={richTextInput === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={richTextInput === true}
 				on:click={toggleRichTextInput}
 			/>
 
 			{#if $config?.features?.enable_autocomplete_generation && richTextInput}
 				<SettingToggle
 					label={$i18n.t('Prompt Autocompletion')}
-					text={promptAutocomplete === true ? $i18n.t('On') : $i18n.t('Off')}
+					checked={promptAutocomplete === true}
 					on:click={togglePromptAutocomplete}
 				/>
 			{/if}
 
 			<SettingToggle
 				label={$i18n.t('Paste Large Text as File')}
-				text={largeTextAsFile === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={largeTextAsFile === true}
 				on:click={toggleLargeTextAsFile}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Copy Formatted Text')}
-				text={copyFormatted === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={copyFormatted === true}
 				on:click={toggleCopyFormatted}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Always Collapse Code Blocks')}
-				text={collapseCodeBlocks === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={collapseCodeBlocks === true}
 				on:click={toggleCollapseCodeBlocks}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Always Expand Details')}
-				text={expandDetails === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={expandDetails === true}
 				on:click={toggleExpandDetails}
 			/>
 
@@ -457,13 +457,13 @@
 
 			<SettingToggle
 				label={$i18n.t('Allow User Location')}
-				text={userLocation === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={userLocation === true}
 				on:click={toggleUserLocation}
 			/>
 
 			<SettingToggle
 				label={`${$i18n.t('Haptic Feedback')} (${$i18n.t('Android')})`}
-				text={hapticFeedback === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={hapticFeedback === true}
 				on:click={toggleHapticFeedback}
 			/>
 
@@ -475,7 +475,7 @@
 
 			<SettingToggle
 				label={$i18n.t('Scroll to bottom when switching between branches')}
-				text={scrollOnBranchChange === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={scrollOnBranchChange === true}
 				on:click={togglesScrollOnBranchChange}
 			/>
 
@@ -487,35 +487,35 @@
 
 			<SettingToggle
 				label={$i18n.t('iframe Sandbox Allow Same Origin')}
-				text={iframeSandboxAllowSameOrigin === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={iframeSandboxAllowSameOrigin === true}
 				on:click={toggleIframeSandboxAllowSameOrigin}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('iframe Sandbox Allow Forms')}
-				text={iframeSandboxAllowForms === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={iframeSandboxAllowForms === true}
 				on:click={toggleIframeSandboxAllowForms}
 			/>
 
-			<div class="setting-title">{$i18n.t('Voice')}</div>
+			<div class="setting-group">{$i18n.t('Voice')}</div>
 
 			<SettingToggle
 				label={$i18n.t('Allow Voice Interruption in Call')}
-				text={voiceInterruption === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={voiceInterruption === true}
 				on:click={toggleVoiceInterruption}
 			/>
 
 			<SettingToggle
 				label={$i18n.t('Display Emoji in Call')}
-				text={showEmojiInCall === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={showEmojiInCall === true}
 				on:click={toggleEmojiInCall}
 			/>
 
-			<div class="setting-title">{$i18n.t('File')}</div>
+			<div class="setting-group">{$i18n.t('File')}</div>
 
 			<SettingToggle
 				label={$i18n.t('Image Compression')}
-				text={imageCompression === true ? $i18n.t('On') : $i18n.t('Off')}
+				checked={imageCompression === true}
 				on:click={toggleImageCompression}
 			/>
 
