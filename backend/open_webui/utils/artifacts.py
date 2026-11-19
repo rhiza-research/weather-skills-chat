@@ -765,6 +765,11 @@ COPY_MARKER_SLACK_SECONDS = 30
 # both limits: the plain copy managed about 20 files a second on staging.
 PLAIN_COPY_MAX_FILES = 500
 PLAIN_COPY_MAX_BYTES = 500 * 1024 * 1024
+# Passed to juicefs rmr; the same as its default.
+REMOVE_THREADS = 50
+# Deleted files wait here this long, so a wrong delete can be undone by hand.
+TRASH_DIRNAME = ".trash"
+TRASH_DAYS = 7
 COPY_MARKER = ".artifact-copy"
 COPY_STAGING_DIRNAME = ".artifact-copy-staging"
 
@@ -811,18 +816,30 @@ def _remove_path(path: Path) -> None:
 
 
 def _remove_tree(path: Path) -> None:
-    """``juicefs rmr`` deletes on the metadata server, much faster than a walk
-    for a large clone; whatever it leaves is removed the slow way."""
+    """``juicefs rmr`` deletes on the metadata server, much faster than a walk.
+    Without it, or for what it leaves, the walk only deletes a folder below the
+    plain-copy limits; a larger one is left for a later try."""
     if shutil.which("juicefs"):
-        subprocess.run(["juicefs", "rmr", str(path)], capture_output=True)
-    shutil.rmtree(path, ignore_errors=True)
+        result = subprocess.run(
+            ["juicefs", "rmr", "--threads", str(REMOVE_THREADS), str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            log.warning("juicefs rmr of %s failed: %s", path, result.stderr.strip())
+    if not path.exists():
+        return
+    if _small_enough_for_plain_copy(path, skip_hidden=False):
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        log.warning("%s is too large to delete without juicefs rmr", path)
 
 
-def _small_enough_for_plain_copy(src: Path) -> bool:
-    """Count visible files and bytes, stopping as soon as either limit is passed."""
+def _small_enough_for_plain_copy(src: Path, skip_hidden: bool = True) -> bool:
+    """Count files and bytes, stopping as soon as either limit is passed."""
     files = size = 0
     for entry in src.iterdir():
-        if entry.name.startswith("."):
+        if skip_hidden and entry.name.startswith("."):
             continue
         if entry.is_dir() and not entry.is_symlink():
             paths = (Path(root) / name for root, _, names in os.walk(entry) for name in names)
@@ -1003,10 +1020,30 @@ def artifact_carryover_note(chat_id: str, source_title: str) -> str:
     return "\n".join(lines)
 
 
-def delete_sandbox(chat_id: str) -> None:
+def delete_sandbox(chat_id: str) -> bool:
+    """Move a chat's files to the trash at once; True when they are gone.
+    empty_trash deletes them for good after TRASH_DAYS."""
     root = (ARTIFACTS_DIR / chat_id).resolve()
     if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:
-        shutil.rmtree(root, ignore_errors=True)
+        trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+        trash.mkdir(exist_ok=True)
+        os.rename(root, trash / root.name)
+    return not root.exists()
+
+
+def empty_trash() -> int:
+    """Delete what has been in the trash for TRASH_DAYS; how many went."""
+    trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+    if not trash.is_dir():
+        return 0
+    cutoff = time.time() - TRASH_DAYS * 86400
+    deleted = 0
+    for entry in trash.iterdir():
+        # A move keeps mtime but sets ctime, so ctime is when it was deleted.
+        if entry.lstat().st_ctime <= cutoff:
+            _remove_tree(entry)
+            deleted += not entry.exists()
+    return deleted
 
 
 def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:

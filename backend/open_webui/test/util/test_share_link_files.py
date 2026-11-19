@@ -203,10 +203,22 @@ class ShareRouteTest(unittest.TestCase):
         res = self.client.delete(f"/chats/{self.chat.id}/shares/{gone.id}")
 
         self.assertEqual(res.status_code, 200)
-        self.assertFalse(Chats.is_live_share(gone.id))
+        self.assertIsNone(Chats.get_chat_by_id(gone.id))
         self.assertFalse((self.artifacts / gone.id).exists())
         self.assertTrue(Chats.is_live_share(kept.id))
         self.assertTrue((self.artifacts / kept.id / "map.png").exists())
+
+    def test_a_link_whose_files_remain_waits_for_the_cleanup(self):
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        with patch("open_webui.utils.artifacts.delete_sandbox", return_value=False):
+            Chats.delete_shared_chat_by_chat_id(self.chat.id, shared.id)
+
+        self.assertFalse(Chats.is_live_share(shared.id))
+        self.assertIsNotNone(Chats.get_chat_by_id(shared.id))
+        Chats.delete_expired_shared_chats()
+        self.assertIsNone(Chats.get_chat_by_id(shared.id))
+        self.assertFalse((self.artifacts / shared.id).exists())
 
     def test_a_link_to_another_chat_is_not_deleted(self):
         other = Chats.insert_new_chat(

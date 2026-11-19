@@ -90,6 +90,7 @@ def remove_automation_job(automation_id: str) -> None:
 
 async def _delete_expired_share_links() -> None:
     from open_webui.models.chats import Chats
+    from open_webui.utils.artifacts import empty_trash
 
     try:
         deleted = await asyncio.to_thread(Chats.delete_expired_shared_chats)
@@ -97,6 +98,12 @@ async def _delete_expired_share_links() -> None:
             log.info("Deleted %d expired share links", deleted)
     except Exception:
         log.exception("Failed to delete expired share links")
+    try:
+        emptied = await asyncio.to_thread(empty_trash)
+        if emptied:
+            log.info("Deleted %d folders from the artifacts trash", emptied)
+    except Exception:
+        log.exception("Failed to empty the artifacts trash")
 
 
 def start_scheduler(app) -> None:
