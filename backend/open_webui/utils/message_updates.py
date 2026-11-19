@@ -8,6 +8,7 @@ copy (src/lib/chat/cache.ts), so a reloaded reply matches what was streamed.
 - sources: appended.
 - code_executions: replaced by ``id``, new ones appended.
 - files: appended, without repeating a file already listed.
+- context_trimmed: once set, ``contextTrimmed`` stays true.
 """
 
 import copy
@@ -108,6 +109,8 @@ def add_to_pending(pending: dict, kind: str, data: Any) -> None:
         )
     elif kind == "files":
         pending["files"] = merge_files(pending.get("files"), data)
+    elif kind == "context_trimmed":
+        pending["context_trimmed"] = True
 
 
 def apply_to_message(message: dict, updates: dict) -> dict:
@@ -127,4 +130,6 @@ def apply_to_message(message: dict, updates: dict) -> dict:
         )
     if updates.get("files"):
         merged["files"] = merge_files(merged.get("files"), updates["files"])
+    if updates.get("context_trimmed"):
+        merged["contextTrimmed"] = True
     return merged

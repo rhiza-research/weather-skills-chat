@@ -135,6 +135,8 @@ In one reply, the model can call tools, read their results, and call more, round
 |-|-|-|
 | `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |
 
+When a reply's tool output grows past the model's context budget, older output is left out of what the model reads. The budget and how it works are on [[Long Chats]].
+
 ## Other admin settings
 
 | Env var | Default | Effect |

@@ -100,6 +100,7 @@
 			usage?: unknown;
 		};
 		annotation?: { type: string; rating: number };
+		contextTrimmed?: boolean;
 	}
 
 	export let chatId = '';
@@ -834,6 +835,14 @@
 											{/if}
 										</div>
 									{/if}
+								{/if}
+
+								{#if message?.contextTrimmed}
+									<div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+										{$i18n.t(
+											"This chat is longer than the model can read at once, so older tool output (and, if needed, older messages) was left out of this reply. Everything is still saved and shown here."
+										)}
+									</div>
 								{/if}
 
 								{#if message?.error}

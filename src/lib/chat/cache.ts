@@ -606,6 +606,7 @@ const TURN_ACTIVITY_TYPES = new Set([
 	'chat:message',
 	'replace',
 	'chat:message:files',
+	'chat:message:context_trimmed',
 	'files',
 	'source',
 	'citation'
@@ -806,6 +807,8 @@ function writeCachedStream(event: any, token: string) {
 		message.content = data?.content ?? '';
 	} else if (type === 'chat:message:files' || type === 'files') {
 		message.files = mergeFiles(message.files, data?.files);
+	} else if (type === 'chat:message:context_trimmed') {
+		message.contextTrimmed = true;
 	} else if (type === 'source' || type === 'citation') {
 		if (data?.type === 'code_execution') {
 			if (!message.code_executions) message.code_executions = [];

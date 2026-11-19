@@ -322,4 +322,6 @@ test('the live copy keeps only the latest status and appends files without repea
 	send('files', { files: [{ url: '/a.png' }, { url: '/b.png' }] });
 	expect(message.files).toEqual([{ url: '/a.png' }, { url: '/b.png' }]);
 	expect(mergeFiles(undefined, [{ id: 'f' }, { id: 'f' }])).toEqual([{ id: 'f' }]);
+	send('chat:message:context_trimmed', {});
+	expect(message.contextTrimmed).toBe(true);
 });
