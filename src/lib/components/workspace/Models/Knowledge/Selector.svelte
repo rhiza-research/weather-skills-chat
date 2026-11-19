@@ -99,7 +99,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 20 20"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"
@@ -116,11 +116,11 @@
 				</div>
 			</div>
 
-			<hr class=" border-gray-50 dark:border-gray-700 my-1.5" />
+			<hr class=" border-line my-1.5" />
 
 			<div class="max-h-48 overflow-y-scroll">
 				{#if filteredItems.length === 0}
-					<div class="text-center text-sm text-gray-500 dark:text-gray-400">
+					<div class="text-center text-sm text-muted">
 						{$i18n.t('No knowledge found')}
 					</div>
 				{:else}
@@ -136,13 +136,13 @@
 									<div class=" w-fit mb-0.5">
 										{#if item.legacy}
 											<div
-												class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1"
+												class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1"
 											>
 												{$i18n.t('Legacy')}
 											</div>
 										{:else if item?.meta?.document}
 											<div
-												class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1"
+												class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1"
 											>
 												{$i18n.t('Document')}
 											</div>

@@ -211,7 +211,7 @@
 					</div>
 
 					{#if ENABLE_OPENAI_API}
-						<hr class=" border-gray-100 dark:border-gray-850" />
+						<hr class=" border-line" />
 
 						<div class="">
 							<div class="flex justify-between items-center">
@@ -261,7 +261,7 @@
 				</div>
 			</div>
 
-			<hr class=" border-gray-100 dark:border-gray-850" />
+			<hr class=" border-line" />
 
 			<div class="pr-1.5 my-2">
 				<div class="flex justify-between items-center text-sm mb-2">
@@ -278,7 +278,7 @@
 				</div>
 
 				{#if ENABLE_OLLAMA_API}
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="">
 						<div class="flex justify-between items-center">
@@ -321,7 +321,7 @@
 							</div>
 						</div>
 
-						<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-1 text-xs text-subtle">
 							{$i18n.t('Trouble accessing Ollama?')}
 						</div>
 					</div>

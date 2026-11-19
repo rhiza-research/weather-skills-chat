@@ -13,7 +13,7 @@
 				{$page.status}: {$page.error?.message ?? 'Sorry, something went wrong'}
 			</div>
 
-			<a class="text-sm underline text-gray-500 dark:text-gray-400" href="/">{$i18n.t('Back to chat')}</a>
+			<a class="text-sm underline text-muted" href="/">{$i18n.t('Back to chat')}</a>
 
 			<HelpContact
 				className="text-xs text-gray-500 dark:text-gray-400"

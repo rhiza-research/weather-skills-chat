@@ -216,7 +216,7 @@
 
 <form class="flex flex-col gap-4" on:submit|preventDefault={save}>
 	<label class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Name')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Name')}</span>
 		<input
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
 			bind:value={form.name}
@@ -226,7 +226,7 @@
 	</label>
 
 	<label class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Prompt')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Prompt')}</span>
 		<textarea
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
 			rows="10"
@@ -238,7 +238,7 @@
 	</label>
 
 	<div class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Schedule')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Schedule')}</span>
 		{#if editingSchedule}
 			<input
 				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
@@ -253,7 +253,7 @@
 				{#if canManage}
 					<button
 						type="button"
-						class="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-100"
+						class="text-xs text-muted hover:text-gray-800 dark:hover:text-gray-100"
 						on:click={() => (editingSchedule = true)}
 					>
 						{$i18n.t('Change')}
@@ -261,7 +261,7 @@
 				{/if}
 			</div>
 		{/if}
-		<div class="flex items-center gap-2 text-xs text-gray-500 min-h-4">
+		<div class="flex items-center gap-2 text-xs text-muted min-h-4">
 			{#if editingSchedule && form.cron?.trim()}
 				{#if previewCron}
 					<span>{describeSchedule(previewCron)}</span>
@@ -282,14 +282,14 @@
 			{/if}
 		</div>
 		{#if showCron}
-			<code class="text-xs text-gray-500">
+			<code class="text-xs text-muted">
 				{editingSchedule ? (previewCron ?? '') : form.cron}
 			</code>
 		{/if}
 	</div>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Model')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Model')}</span>
 		<select
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
 			bind:value={form.model}
@@ -303,7 +303,7 @@
 	</label>
 
 	<label class="flex flex-col gap-1 w-full max-w-sm">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Time limit (minutes)')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Time limit (minutes)')}</span>
 		<input
 			class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
 			type="number"
@@ -314,14 +314,14 @@
 			bind:value={form.timeout_minutes}
 			disabled={!canManage}
 		/>
-		<span class="text-xs text-gray-500">
+		<span class="text-xs text-muted">
 			{$i18n.t('A run that takes longer is stopped and shown as an error.')}
 		</span>
 	</label>
 
 	{#if runnerSizes.length > 1}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="text-xs font-medium text-gray-500">{$i18n.t('Tool runner size')}</span>
+			<span class="text-xs font-medium text-muted">{$i18n.t('Tool runner size')}</span>
 			<select
 				class="rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm outline-hidden"
 				bind:value={form.runner_type}
@@ -333,7 +333,7 @@
 					</option>
 				{/each}
 			</select>
-			<span class="text-xs text-gray-500">
+			<span class="text-xs text-muted">
 				{$i18n.t(
 					'Where the skills of each run go. Larger sizes cost more and can take a few minutes to start.'
 				)}
@@ -342,11 +342,11 @@
 	{/if}
 
 	<div class="flex flex-col gap-1">
-		<span class="text-xs font-medium text-gray-500">{$i18n.t('Tools')}</span>
+		<span class="text-xs font-medium text-muted">{$i18n.t('Tools')}</span>
 		<div class="flex flex-col items-start gap-1.5">
 			<button
 				type="button"
-				class="flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-800 px-2.5 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-50"
+				class="flex items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-1.5 text-sm text-body hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-50"
 				disabled={!canManage || !toolsReady}
 				on:click={() => (showTools = true)}
 			>
@@ -362,7 +362,7 @@
 					disabled={!canManage}
 					class="flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-sm transition {on
 						? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
-						: 'border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-850'}"
+						: 'border-line-strong text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-850'}"
 					on:click={() => toggleFeature(toggle.key)}
 				>
 					<svelte:component this={toggle.icon} className="size-4" strokeWidth="1.75" />
@@ -384,7 +384,7 @@
 
 	{#if !isPersonal}
 		<label class="flex flex-col gap-1 w-full max-w-sm">
-			<span class="text-xs font-medium text-gray-500">{$i18n.t('Sharing')}</span>
+			<span class="text-xs font-medium text-muted">{$i18n.t('Sharing')}</span>
 			<select
 				class="w-full rounded-lg bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
 				bind:value={form.visibility}
@@ -407,7 +407,7 @@
 			</button>
 		{/if}
 		{#if task}
-			<div class="flex flex-col text-xs text-gray-500">
+			<div class="flex flex-col text-xs text-muted">
 				{#each authorship(task) as line}
 					<span>{line}</span>
 				{/each}

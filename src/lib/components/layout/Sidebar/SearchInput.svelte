@@ -94,7 +94,7 @@
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 20 20"
 				fill="currentColor"
-				class="w-4 h-4"
+				class="size-4"
 			>
 				<path
 					fill-rule="evenodd"
@@ -163,7 +163,7 @@
 	{#if focused && (filteredOptions.length > 0 || filteredTags.length > 0)}
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<div
-			class="absolute top-0 mt-8 left-0 right-1 border border-gray-100 dark:border-gray-900 bg-gray-50 dark:bg-gray-950 rounded-lg z-10 shadow-lg"
+			class="absolute top-0 mt-8 left-0 right-1 border border-line bg-gray-50 dark:bg-gray-950 rounded-lg z-10 shadow-lg"
 			in:fade={{ duration: 50 }}
 			on:mouseenter={() => {
 				selectedIdx = null;
@@ -174,7 +174,7 @@
 		>
 			<div class="px-2 py-2 text-xs group">
 				{#if filteredTags.length > 0}
-					<div class="px-1 font-medium dark:text-gray-300 text-gray-700 mb-1">{$i18n.t('Tags')}</div>
+					<div class="px-1 font-medium text-body mb-1">{$i18n.t('Tags')}</div>
 
 					<div class="max-h-60 overflow-auto">
 						{#each filteredTags as tag, tagIdx}
@@ -195,18 +195,18 @@
 									dispatch('input');
 								}}
 							>
-								<div class="dark:text-gray-300 text-gray-700 font-medium line-clamp-1 shrink-0">
+								<div class="text-body font-medium line-clamp-1 shrink-0">
 									{tag.name}
 								</div>
 
-								<div class=" text-gray-500 line-clamp-1">
+								<div class="text-muted line-clamp-1">
 									{tag.id}
 								</div>
 							</button>
 						{/each}
 					</div>
 				{:else if filteredOptions.length > 0}
-					<div class="px-1 font-medium dark:text-gray-300 text-gray-700 mb-1">
+					<div class="px-1 font-medium text-body mb-1">
 						{$i18n.t('Search options')}
 					</div>
 
@@ -229,9 +229,9 @@
 									dispatch('input');
 								}}
 							>
-								<div class="dark:text-gray-300 text-gray-700 font-medium">{option.name}</div>
+								<div class="text-body font-medium">{option.name}</div>
 
-								<div class=" text-gray-500 line-clamp-1">
+								<div class="text-muted line-clamp-1">
 									{option.description}
 								</div>
 							</button>

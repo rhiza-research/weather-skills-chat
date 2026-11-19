@@ -138,7 +138,7 @@
 				buttonClassName="w-fit max-w-full"
 			>
 				<div
-					class="flex w-full overflow-auto items-center gap-2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition cursor-pointer"
+					class="flex w-full overflow-auto items-center gap-2 text-muted hover:text-gray-600 dark:hover:text-gray-400 transition cursor-pointer"
 				>
 					<div
 						class="flex-1 flex items-center gap-1 overflow-auto scrollbar-none w-full max-w-full"

@@ -93,7 +93,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
@@ -153,7 +153,7 @@
 									<div class="flex w-full">
 										<div class="flex-1">
 											<input
-												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												class="field"
 												type="text"
 												placeholder={$i18n.t('Enter Searxng Query URL')}
 												bind:value={webConfig.SEARXNG_QUERY_URL}
@@ -183,7 +183,7 @@
 									<div class="flex w-full">
 										<div class="flex-1">
 											<input
-												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												class="field"
 												type="text"
 												placeholder={$i18n.t('Enter Google PSE Engine Id')}
 												bind:value={webConfig.GOOGLE_PSE_ENGINE_ID}
@@ -318,7 +318,7 @@
 									<div class="flex w-full">
 										<div class="flex-1">
 											<input
-												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												class="field"
 												type="text"
 												placeholder={$i18n.t('Enter SearchApi Engine')}
 												bind:value={webConfig.SEARCHAPI_ENGINE}
@@ -348,7 +348,7 @@
 									<div class="flex w-full">
 										<div class="flex-1">
 											<input
-												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												class="field"
 												type="text"
 												placeholder={$i18n.t('Enter SerpApi Engine')}
 												bind:value={webConfig.SERPAPI_ENGINE}
@@ -381,7 +381,7 @@
 									<div class="flex w-full">
 										<div class="flex-1">
 											<input
-												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+												class="field"
 												type="text"
 												placeholder={$i18n.t('Enter Bing Search V7 Endpoint')}
 												bind:value={webConfig.BING_SEARCH_V7_ENDPOINT}
@@ -463,7 +463,7 @@
 									</div>
 
 									<input
-										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+										class="field"
 										placeholder={$i18n.t('Search Result Count')}
 										bind:value={webConfig.WEB_SEARCH_RESULT_COUNT}
 										required
@@ -476,7 +476,7 @@
 									</div>
 
 									<input
-										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+										class="field"
 										placeholder={$i18n.t('Concurrent Requests')}
 										bind:value={webConfig.WEB_SEARCH_CONCURRENT_REQUESTS}
 										required
@@ -491,7 +491,7 @@
 							</div>
 
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								placeholder={$i18n.t(
 									'Enter domains separated by commas (e.g., example.com,site.org)'
 								)}
@@ -542,7 +542,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Loader')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
@@ -581,7 +581,7 @@
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											type="text"
 											placeholder={$i18n.t('Enter Playwright WebSocket URL')}
 											bind:value={webConfig.PLAYWRIGHT_WS_URL}
@@ -599,7 +599,7 @@
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											placeholder={$i18n.t('Enter Playwright Timeout')}
 											bind:value={webConfig.PLAYWRIGHT_TIMEOUT}
 											autocomplete="off"
@@ -618,7 +618,7 @@
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											type="text"
 											placeholder={$i18n.t('Enter Firecrawl API Base URL')}
 											bind:value={webConfig.FIRECRAWL_API_BASE_URL}
@@ -649,7 +649,7 @@
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											type="text"
 											placeholder={$i18n.t('Enter Tavily Extract Depth')}
 											bind:value={webConfig.TAVILY_EXTRACT_DEPTH}

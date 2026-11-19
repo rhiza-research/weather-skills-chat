@@ -36,7 +36,7 @@
 				{$i18n.t('Request credit increase')}
 			</button>
 		{:else}
-			<div class="text-xs text-gray-600 dark:text-gray-400">
+			<div class="text-xs text-body">
 				{$i18n.t('If this keeps happening, please let us know by filling out the')}
 				<button
 					type="button"

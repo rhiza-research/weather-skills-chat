@@ -40,7 +40,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[180px] rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
+			class="w-full max-w-[180px] rounded-xl px-1 py-1.5 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
@@ -61,7 +61,7 @@
 					</div>
 				</div>
 
-				<hr class="border-gray-100 dark:border-gray-850 my-1" />
+				<hr class="border-line my-1" />
 			{/if}
 
 			<DropdownMenu.Item
@@ -76,7 +76,7 @@
 					viewBox="0 0 24 24"
 					stroke-width="1.5"
 					stroke="currentColor"
-					class="w-4 h-4"
+					class="size-4"
 				>
 					<path
 						stroke-linecap="round"
@@ -110,7 +110,7 @@
 				<div class="flex items-center">{$i18n.t('Export')}</div>
 			</DropdownMenu.Item>
 
-			<hr class="border-gray-100 dark:border-gray-850 my-1" />
+			<hr class="border-line my-1" />
 
 			<DropdownMenu.Item
 				class="menu-item"

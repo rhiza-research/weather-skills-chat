@@ -3049,10 +3049,10 @@
 								{#if chatNotes.length > 0}
 									<!-- Below the navbar, which overlaps the top of this pane. -->
 									<details
-										class="mx-auto w-full max-w-[58rem] px-2.5 pt-12 shrink-0 text-xs text-gray-600 dark:text-gray-400"
+										class="mx-auto w-full max-w-[58rem] px-2.5 pt-12 shrink-0 text-xs text-body"
 									>
 										<summary
-											class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
+											class="cursor-pointer select-none rounded-lg border border-line px-2.5 py-1.5"
 										>
 											{$i18n.t('The chat was started with the following notes as context:')}
 										</summary>
@@ -3093,7 +3093,7 @@
 							{#if !chatWritable}
 								<div class="mx-auto w-full max-w-[58rem] px-2.5 mb-2">
 									<div
-										class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-xs text-gray-700 dark:text-gray-300"
+										class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-line-strong bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-xs text-body"
 									>
 										<div class="min-w-0 flex-1 leading-snug">
 											{$i18n.t('Owned by')}
@@ -3182,7 +3182,7 @@
 							{/if}
 
 							<div
-								class="absolute bottom-1 text-xs text-gray-500 text-center line-clamp-1 right-0 left-0"
+								class="absolute bottom-1 text-xs text-muted text-center line-clamp-1 right-0 left-0"
 							>
 								<!-- {$i18n.t('LLMs can make mistakes. Verify important information.')} -->
 							</div>
@@ -3240,7 +3240,7 @@
 		{#if !loading && $chatId && $chatId !== 'local' && !($showControls && $showArtifacts)}
 			<button
 				type="button"
-				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750"
+				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-line-strong bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-strong hover:bg-gray-50 dark:hover:bg-gray-750"
 				on:click={() => openArtifactsPanel()}
 				aria-label={$i18n.t('Open artifacts')}
 			>

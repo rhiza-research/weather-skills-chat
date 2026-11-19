@@ -254,7 +254,7 @@
 						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
 				{#if detailLine}
-					<span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
+					<span class="text-xs text-muted whitespace-nowrap"
 						>{detailLine}</span
 					>
 				{/if}
@@ -262,17 +262,17 @@
 		</button>
 		{#if open}
 			<div
-				class="absolute right-0 top-full mt-1 z-40 w-72 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2.5 text-xs shadow"
+				class="absolute right-0 top-full mt-1 z-40 w-72 rounded-lg border border-line-strong bg-white dark:bg-gray-900 p-2.5 text-xs shadow-lg"
 			>
 				{#if state === 'ready'}
-					<div class="mb-1 text-gray-500">
+					<div class="mb-1 text-muted">
 						{$i18n.t('CPU')} ({fmtCpu(latest?.cpu ?? 0)}{cpuLimit ? ` / ${fmtCpu(cpuLimit)}` : ''}
 						{$i18n.t('cores')})
 					</div>
 					<div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
 						<div class="h-2 rounded bg-sky-500" style="width: {cpuPct}%"></div>
 					</div>
-					<div class="mt-2 mb-1 text-gray-500">
+					<div class="mt-2 mb-1 text-muted">
 						{$i18n.t('Memory')} ({fmtMemGib(latest?.memory ?? 0)}{memLimitBytes
 							? ` / ${fmtMemGib(memLimitBytes)}`
 							: ''} GB)
@@ -283,7 +283,7 @@
 							style="width: {memPct}%"
 						></div>
 					</div>
-					<div class="mt-2.5 mb-1 text-gray-500">{$i18n.t('Memory, last minute')}</div>
+					<div class="mt-2.5 mb-1 text-muted">{$i18n.t('Memory, last minute')}</div>
 					<div class="flex gap-0.5 h-8 items-end">
 						{#each samples as s}
 							<div
@@ -302,7 +302,7 @@
 				{#if sizes.length > 1}
 					<div
 						class="{state === 'ready'
-							? 'mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-800'
+							? 'mt-3 pt-2.5 border-t border-line'
 							: ''} mb-1.5 text-gray-500"
 					>
 						{$i18n.t('Runner size')}
@@ -316,27 +316,27 @@
 								class="flex flex-col items-start rounded-xl px-2 py-1.5 text-left border {option.type ===
 								size?.type
 									? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
-									: 'border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-850'} disabled:opacity-60"
+									: 'border-line hover:bg-gray-50 dark:hover:bg-gray-850'} disabled:opacity-60"
 								disabled={!!switching}
 								on:click={() => pickSize(option)}
 							>
 								<span class="flex w-full items-center justify-between gap-2">
-									<span class="font-medium text-gray-800 dark:text-gray-100"
+									<span class="font-medium text-strong"
 										>{option.display_name}{switching === option.type ? '…' : ''}</span
 									>
-									<span class="text-gray-500 tabular-nums">{sizeLimits(option)}</span>
+									<span class="text-muted tabular-nums">{sizeLimits(option)}</span>
 								</span>
 								{#if option.description}
-									<span class="text-xs text-gray-500">{option.description}</span>
+									<span class="text-xs text-muted">{option.description}</span>
 								{/if}
 							</button>
 						{/each}
 					</div>
-					<div class="mt-1.5 text-xs text-gray-500">
+					<div class="mt-1.5 text-xs text-muted">
 						{$i18n.t('A larger size goes back to the default after its runner has been idle.')}
 					</div>
 				{:else if state !== 'ready'}
-					<div class="text-gray-500">{statusLabel}</div>
+					<div class="text-muted">{statusLabel}</div>
 				{/if}
 			</div>
 		{/if}

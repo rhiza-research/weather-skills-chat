@@ -116,7 +116,7 @@
 </div>
 
 {#if showSetDefault}
-	<div class=" absolute text-left mt-[1px] ml-1 text-xs text-gray-500 font-primary">
+	<div class="absolute text-left mt-[1px] ml-1 text-xs text-muted font-primary">
 		<button on:click={saveDefaultModel}> {$i18n.t('Set as default')}</button>
 	</div>
 {/if}

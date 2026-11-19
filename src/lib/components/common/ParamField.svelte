@@ -43,7 +43,7 @@
 				<input class="field" type="number" {min} {max} {placeholder} bind:value />
 			{:else if type === 'switch'}
 				<div class="flex flex-1 justify-between items-center pr-2">
-					<div class="text-xs text-gray-500">{value ? 'Enabled' : 'Disabled'}</div>
+					<div class="text-xs text-muted">{value ? 'Enabled' : 'Disabled'}</div>
 					<Switch bind:state={value} />
 				</div>
 			{:else}

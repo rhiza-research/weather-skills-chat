@@ -307,7 +307,7 @@
 					</div>
 				</div>
 			</div>
-			<hr class=" border-gray-100 dark:border-gray-850" />
+			<hr class=" border-line" />
 
 			<div class="flex flex-col gap-2">
 				{#if (config?.engine ?? 'automatic1111') === 'automatic1111'}
@@ -316,13 +316,13 @@
 						<div class="flex w-full">
 							<div class="flex-1 mr-2">
 								<input
-									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+									class="field"
 									placeholder={$i18n.t('Enter URL (e.g. http://127.0.0.1:7860/)')}
 									bind:value={config.automatic1111.AUTOMATIC1111_BASE_URL}
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-xl transition"
+								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -340,7 +340,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										fill-rule="evenodd"
@@ -351,7 +351,7 @@
 							</button>
 						</div>
 
-						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-2 text-xs text-subtle">
 							{$i18n.t('Include `--api` flag when running stable-diffusion-webui')}
 							<a
 								class=" text-gray-300 font-medium"
@@ -373,7 +373,7 @@
 							required={false}
 						/>
 
-						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-2 text-xs text-subtle">
 							{$i18n.t('Include `--api-auth` flag when running stable-diffusion-webui')}
 							<a
 								class=" text-gray-300 font-medium"
@@ -395,7 +395,7 @@
 								<Tooltip content={$i18n.t('Enter Sampler (e.g. Euler a)')} placement="top-start">
 									<input
 										list="sampler-list"
-										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+										class="field"
 										placeholder={$i18n.t('Enter Sampler (e.g. Euler a)')}
 										bind:value={config.automatic1111.AUTOMATIC1111_SAMPLER}
 									/>
@@ -417,7 +417,7 @@
 								<Tooltip content={$i18n.t('Enter Scheduler (e.g. Karras)')} placement="top-start">
 									<input
 										list="scheduler-list"
-										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+										class="field"
 										placeholder={$i18n.t('Enter Scheduler (e.g. Karras)')}
 										bind:value={config.automatic1111.AUTOMATIC1111_SCHEDULER}
 									/>
@@ -438,7 +438,7 @@
 							<div class="flex-1 mr-2">
 								<Tooltip content={$i18n.t('Enter CFG Scale (e.g. 7.0)')} placement="top-start">
 									<input
-										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+										class="field"
 										placeholder={$i18n.t('Enter CFG Scale (e.g. 7.0)')}
 										bind:value={config.automatic1111.AUTOMATIC1111_CFG_SCALE}
 									/>
@@ -452,13 +452,13 @@
 						<div class="flex w-full">
 							<div class="flex-1 mr-2">
 								<input
-									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+									class="field"
 									placeholder={$i18n.t('Enter URL (e.g. http://127.0.0.1:7860/)')}
 									bind:value={config.comfyui.COMFYUI_BASE_URL}
 								/>
 							</div>
 							<button
-								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-xl transition"
+								class="px-2.5 bg-gray-50 hover:bg-gray-100 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 								type="button"
 								on:click={async () => {
 									await updateConfigHandler();
@@ -476,7 +476,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										fill-rule="evenodd"
@@ -545,7 +545,7 @@
 							</div>
 						</div>
 
-						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-2 text-xs text-subtle">
 							{$i18n.t('Make sure to export a workflow.json file as API format from ComfyUI.')}
 						</div>
 					</div>
@@ -591,7 +591,7 @@
 								{/each}
 							</div>
 
-							<div class="mt-2 text-xs text-right text-gray-400 dark:text-gray-500">
+							<div class="mt-2 text-xs text-right text-subtle">
 								{$i18n.t('*Prompt node ID(s) are required for image generation')}
 							</div>
 						</div>
@@ -636,7 +636,7 @@
 			</div>
 
 			{#if config?.enabled}
-				<hr class=" border-gray-100 dark:border-gray-850" />
+				<hr class=" border-line" />
 
 				<div>
 					<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Default Model')}</div>
@@ -647,7 +647,7 @@
 									<Tooltip content={$i18n.t('Enter Model ID')} placement="top-start">
 										<input
 											list="model-list"
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											bind:value={imageGenerationConfig.MODEL}
 											placeholder={$i18n.t('Select a model')}
 											required
@@ -671,7 +671,7 @@
 						<div class="flex-1 mr-2">
 							<Tooltip content={$i18n.t('Enter Image Size (e.g. 512x512)')} placement="top-start">
 								<input
-									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+									class="field"
 									placeholder={$i18n.t('Enter Image Size (e.g. 512x512)')}
 									bind:value={imageGenerationConfig.IMAGE_SIZE}
 									required
@@ -687,7 +687,7 @@
 						<div class="flex-1 mr-2">
 							<Tooltip content={$i18n.t('Enter Number of Steps (e.g. 50)')} placement="top-start">
 								<input
-									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+									class="field"
 									placeholder={$i18n.t('Enter Number of Steps (e.g. 50)')}
 									bind:value={imageGenerationConfig.IMAGE_STEPS}
 									required
@@ -713,7 +713,7 @@
 			{#if loading}
 				<div class="ml-2 self-center">
 					<svg
-						class=" w-4 h-4"
+						class=" size-4"
 						viewBox="0 0 24 24"
 						fill="currentColor"
 						xmlns="http://www.w3.org/2000/svg"

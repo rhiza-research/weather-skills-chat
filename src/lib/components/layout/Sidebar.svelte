@@ -623,7 +623,7 @@
 			? ''
 			: 'invisible'}"
 	>
-		<div class="px-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400">
+		<div class="px-1.5 flex justify-between space-x-1 text-body">
 			<button
 				class=" cursor-pointer p-[7px] flex rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={() => {
@@ -699,7 +699,7 @@
 		</div>
 
 		<!-- {#if $user?.role === 'admin'}
-			<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+			<div class="px-1.5 flex justify-center text-strong">
 				<a
 					class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 					href="/home"
@@ -724,7 +724,7 @@
 			</div>
 		{/if} -->
 
-		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+		<div class="px-1.5 flex justify-center text-strong">
 			<a
 				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 				href="/workspace"
@@ -761,7 +761,7 @@
 			</a>
 		</div>
 
-		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+		<div class="px-1.5 flex justify-center text-strong">
 			<a
 				class="grow flex items-center space-x-3 rounded-xl px-2 py-[7px] hover:bg-black/5 dark:hover:bg-white/5 transition"
 				href="/scheduled-tasks"
@@ -800,7 +800,7 @@
 		<OrganizationRow on:switch-org={(e) => onSwitchOrganization(e.detail)} />
 
 		<!-- Separates the settings rows above from search and the chats and tasks below. -->
-		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
+		<hr class="mx-5 my-2.5 border-line" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
@@ -893,7 +893,7 @@
 				{/if}
 
 				<div
-					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-line"
 				>
 				{#if !search && privatePinned.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
@@ -1112,7 +1112,7 @@
 					}}
 				>
 					<div
-						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-line"
 					>
 						{#if !search && teamPinned.length > 0}
 							<div class="flex flex-col space-y-1 rounded-xl">
@@ -1279,7 +1279,7 @@
 							</div>
 							<div class="self-center font-medium min-w-0 flex-1 text-left">
 								<div class="truncate">{$user?.name}</div>
-								<div class="truncate text-xs font-normal text-gray-500 dark:text-gray-400 flex items-center gap-1">
+								<div class="truncate text-xs font-normal text-muted flex items-center gap-1">
 									{#if currentOrg?.logo}
 										<img
 											src={currentOrg.logo}

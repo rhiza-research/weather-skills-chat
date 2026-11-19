@@ -336,7 +336,7 @@
 <div class="text-gray-700 dark:text-gray-100 {layout === 'page' ? 'h-full' : ''}">
 		{#if layout === 'modal'}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-				<div class=" text-lg font-medium self-center">{$i18n.t('Settings')}</div>
+				<div class="modal-title">{$i18n.t('Settings')}</div>
 				<button
 					class="self-center"
 					on:click={() => {
@@ -347,7 +347,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 20 20"
 						fill="currentColor"
-						class="w-5 h-5"
+						class="size-5"
 					>
 						<path
 							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -388,7 +388,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'general'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'general';
 								}}
@@ -398,7 +398,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -414,7 +414,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'interface'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'interface';
 								}}
@@ -424,7 +424,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 16 16"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -441,7 +441,7 @@
 									class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 									'tools'
 										? ''
-										: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+										: ' tab-idle'}"
 									on:click={() => {
 										selectedTab = 'tools';
 									}}
@@ -468,7 +468,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'audio'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'audio';
 								}}
@@ -478,7 +478,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 16 16"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											d="M7.557 2.066A.75.75 0 0 1 8 2.75v10.5a.75.75 0 0 1-1.248.56L3.59 11H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.59l3.162-2.81a.75.75 0 0 1 .805-.124ZM12.95 3.05a.75.75 0 1 0-1.06 1.06 5.5 5.5 0 0 1 0 7.78.75.75 0 1 0 1.06 1.06 7 7 0 0 0 0-9.9Z"
@@ -495,7 +495,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'chats'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'chats';
 								}}
@@ -505,7 +505,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 16 16"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -521,7 +521,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'account'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'account';
 								}}
@@ -531,7 +531,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 16 16"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -547,7 +547,7 @@
 								class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 								'about'
 									? ''
-									: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+									: ' tab-idle'}"
 								on:click={() => {
 									selectedTab = 'about';
 								}}
@@ -557,7 +557,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -574,7 +574,7 @@
 									class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
 									'admin'
 										? ''
-										: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+										: ' tab-idle'}"
 									on:click={async () => {
 										await goto('/admin/settings');
 										dispatch('close');
@@ -600,7 +600,7 @@
 						{/if}
 					{/each}
 				{:else}
-					<div class="text-center text-gray-500 mt-4">
+					<div class="text-center text-muted mt-4">
 						{$i18n.t('No results found')}
 					</div>
 				{/if}

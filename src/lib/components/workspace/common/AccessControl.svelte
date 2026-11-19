@@ -107,7 +107,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -122,7 +122,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -165,7 +165,7 @@
 					{/if}
 				</select>
 
-				<div class=" text-xs text-gray-400 font-medium">
+				<div class="text-xs text-subtle font-medium">
 					{#if accessControl !== null}
 						{$i18n.t('Only selected users and organizations with permission can access')}
 					{:else}
@@ -240,7 +240,7 @@
 					{/each}
 				{:else}
 					<div class="flex items-center justify-center">
-						<div class="text-gray-500 text-xs text-center py-2 px-10">
+						<div class="text-muted text-xs text-center py-2 px-10">
 							{$i18n.t('No organizations with access, add an organization to grant access')}
 						</div>
 					</div>

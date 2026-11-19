@@ -81,7 +81,7 @@
 			deleteHandler(deletePrompt);
 		}}
 	>
-		<div class=" text-sm text-gray-500">
+		<div class="text-sm text-muted">
 			{$i18n.t('This will delete')} <span class="  font-semibold">{deletePrompt.command}</span>.
 		</div>
 	</DeleteConfirmDialog>
@@ -91,7 +91,7 @@
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Prompts')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+				<span class="text-lg font-medium text-body"
 					>{filteredItems.length}</span
 				>
 			</div>
@@ -133,7 +133,7 @@
 								className="flex shrink-0"
 								placement="top-start"
 							>
-								<div class="shrink-0 text-gray-500">
+								<div class="shrink-0 text-muted">
 									{$i18n.t('By {{name}}', {
 										name: capitalizeFirstLetter(
 											prompt?.user?.name ?? prompt?.user?.email ?? $i18n.t('Deleted User')
@@ -156,7 +156,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								stroke-linecap="round"
@@ -245,7 +245,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"
@@ -275,7 +275,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-4 h-4"
+								class="size-4"
 							>
 								<path
 									fill-rule="evenodd"

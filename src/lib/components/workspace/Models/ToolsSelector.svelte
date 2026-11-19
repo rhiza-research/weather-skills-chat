@@ -65,7 +65,7 @@
 	<div class="flex flex-col">
 		{#if toolIds.length > 0}
 			<div class=" flex flex-col items-stretch mt-2 gap-1.5">
-				<div class=" flex items-center gap-2 pb-1 mb-0.5 border-b border-gray-100 dark:border-gray-800">
+				<div class=" flex items-center gap-2 pb-1 mb-0.5 border-b border-line">
 					<div class="self-center flex items-center shrink-0">
 						<Checkbox
 							state={selectAllState === 'checked' ? 'checked' : 'unchecked'}
@@ -117,14 +117,14 @@
 									<span class="break-all">{toolBaseName(item)}</span>
 									{#if version}
 										<span
-											class="text-xs font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+											class="text-xs font-semibold px-1 rounded-sm bg-gray-500/15 text-body"
 										>
 											v{version}
 										</span>
 									{/if}
 									{#if repoRef}
 										<span
-											class="text-xs font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+											class="text-xs font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-body"
 										>
 											{repoRef}
 										</span>

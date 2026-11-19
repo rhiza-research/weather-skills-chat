@@ -664,7 +664,7 @@
 
 						{#if catalog === 'public' && canWrite}
 							<div class="self-center shrink-0 flex items-center gap-2">
-								<span class="text-xs text-gray-500">{$i18n.t('Enabled by default')}</span>
+								<span class="text-xs text-muted">{$i18n.t('Enabled by default')}</span>
 								<Switch
 									bind:state={knowledge.enabled_by_default}
 									on:change={() => {
@@ -678,7 +678,7 @@
 					<div class="flex w-full px-1">
 						<input
 							type="text"
-							class="text-left text-xs w-full text-gray-500 bg-transparent outline-hidden"
+							class="text-left text-xs w-full text-muted bg-transparent outline-hidden"
 							bind:value={knowledge.description}
 							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}
@@ -826,7 +826,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -883,7 +883,7 @@
 								/>
 							</div>
 						{:else}
-							<div class="my-3 flex flex-col justify-center text-center text-gray-500 text-xs">
+							<div class="my-3 flex flex-col justify-center text-center text-muted text-xs">
 								<div>
 									{$i18n.t('No content found')}
 								</div>

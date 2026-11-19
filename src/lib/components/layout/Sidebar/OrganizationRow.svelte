@@ -41,7 +41,7 @@
 <!-- Which organization the sidebar shows, and a switcher, so it is easy to find.
      Styled like the Workspace and Scheduled tasks rows above it; the user menu
      keeps its own switcher too. -->
-<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+<div class="px-1.5 flex justify-center text-strong">
 	<DropdownMenu.Root bind:open closeFocus={false} typeahead={false}>
 		<DropdownMenu.Trigger
 			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-[7px] text-left hover:bg-black/5 dark:hover:bg-white/5 transition"

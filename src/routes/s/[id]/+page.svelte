@@ -170,7 +170,7 @@
 
 {#if loaded}
 	<div
-		class="h-screen max-h-[100dvh] w-full flex text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900"
+		class="h-screen max-h-[100dvh] w-full flex text-strong bg-white dark:bg-gray-900"
 	>
 		<div class="flex flex-col flex-auto min-w-0 justify-center relative">
 			<div class=" flex flex-col w-full flex-auto overflow-auto h-0" id="messages-container">
@@ -185,12 +185,12 @@
 						</div>
 
 						<div class="flex text-sm justify-between items-center mt-1">
-							<div class="text-gray-400">
+							<div class="text-subtle">
 								{dayjs(chat.chat.timestamp).format('LLL')}
 							</div>
 							<button
 								type="button"
-								class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
+								class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-line-strong text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
 								on:click={() => showArtifacts.set(!$showArtifacts)}
 								aria-pressed={$showArtifacts}
 							>
@@ -238,7 +238,7 @@
 
 		{#if $showArtifacts}
 			<div
-				class="fixed inset-0 z-40 md:static md:z-auto md:w-[28rem] md:shrink-0 md:border-l border-gray-100 dark:border-gray-800"
+				class="fixed inset-0 z-40 md:static md:z-auto md:w-[28rem] md:shrink-0 md:border-l border-line"
 			>
 				<Artifacts {history} readOnly />
 			</div>

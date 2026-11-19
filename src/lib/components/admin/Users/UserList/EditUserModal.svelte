@@ -82,7 +82,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Edit User')}</div>
+			<div class="modal-title">{$i18n.t('Edit User')}</div>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -93,7 +93,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -101,7 +101,7 @@
 				</svg>
 			</button>
 		</div>
-		<hr class="border-gray-100 dark:border-gray-850" />
+		<hr class="border-line" />
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
@@ -123,18 +123,18 @@
 						<div>
 							<div class=" self-center capitalize font-semibold">{selectedUser.name}</div>
 
-							<div class="text-xs text-gray-500">
+							<div class="text-xs text-muted">
 								{$i18n.t('Created at')}
 								{dayjs(selectedUser.created_at * 1000).format('LL')}
 							</div>
 						</div>
 					</div>
 
-					<hr class="border-gray-100 dark:border-gray-850 my-3 w-full" />
+					<hr class="border-line my-3 w-full" />
 
 					<div class=" flex flex-col space-y-1.5">
 						<div class="flex flex-col w-full">
-							<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Email')}</div>
+							<div class="mb-1 text-xs text-muted">{$i18n.t('Email')}</div>
 
 							<div class="flex-1">
 								<input
@@ -149,7 +149,7 @@
 						</div>
 
 						<div class="flex flex-col w-full">
-							<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Name')}</div>
+							<div class="mb-1 text-xs text-muted">{$i18n.t('Name')}</div>
 
 							<div class="flex-1">
 								<input
@@ -163,7 +163,7 @@
 						</div>
 
 						<div class="flex flex-col w-full">
-							<div class=" mb-1 text-xs text-gray-500">{$i18n.t('New Password')}</div>
+							<div class="mb-1 text-xs text-muted">{$i18n.t('New Password')}</div>
 
 							<div class="flex-1">
 								<input
@@ -177,14 +177,14 @@
 
 						{#if selectedOrg}
 							<div class="flex flex-col w-full pt-2">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Monthly usage limit')}</div>
 								<label class="flex items-center gap-2 text-sm mb-2">
 									<input type="checkbox" bind:checked={unlimited} />
 									{$i18n.t('Unlimited')}
 								</label>
 								{#if !unlimited}
 									<div class="flex items-center gap-1.5">
-										<span class="text-sm text-gray-500">$</span>
+										<span class="text-sm text-muted">$</span>
 										<input
 											class="w-full rounded-sm py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-hidden"
 											type="number"

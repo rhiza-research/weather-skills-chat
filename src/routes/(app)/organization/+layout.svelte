@@ -60,19 +60,19 @@
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 					>
 						<a
-							class="min-w-fit rounded-full p-1.5 {['/organization', '/organization/membership'].includes(
+							class="tab {['/organization', '/organization/membership'].includes(
 								$page.url.pathname
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/organization">{$i18n.t('Organization membership')}</a
 						>
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/organization/settings'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/organization/settings">{$i18n.t('Organization settings')}</a
 						>
 					</div>

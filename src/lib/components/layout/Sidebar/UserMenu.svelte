@@ -154,7 +154,7 @@
 					{#if showOrgPicker}
 						<div class="truncate font-medium">{$i18n.t('Organizations')}</div>
 					{:else}
-						<div class="text-xs uppercase tracking-wide text-gray-400">
+						<div class="text-xs uppercase tracking-wide text-subtle">
 							{$i18n.t('Organization')}
 						</div>
 						<div class="flex items-center gap-2 min-w-0">
@@ -199,7 +199,7 @@
 						{/each}
 					</div>
 					<button
-						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-black/5 dark:hover:bg-white/5 transition text-gray-600 dark:text-gray-300"
+						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-black/5 dark:hover:bg-white/5 transition text-body"
 						on:click={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -240,9 +240,9 @@
 			{/if}
 
 			{#if usage}
-				<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+				<hr class="border-line my-1 p-0" />
 				<div class="px-3 py-2">
-					<div class="text-xs uppercase tracking-wide text-gray-400 truncate">
+					<div class="text-xs uppercase tracking-wide text-subtle truncate">
 						{#if currentOrg.kind === 'personal'}
 							{$i18n.t('Personal usage')}
 						{:else}
@@ -253,7 +253,7 @@
 					</div>
 					{#each usageMeters(usage) as meter (meter.scope)}
 						{#if meter.scope === 'member'}
-							<div class="mt-2 text-xs uppercase tracking-wide text-gray-400">
+							<div class="mt-2 text-xs uppercase tracking-wide text-subtle">
 								{$i18n.t('Your usage')}
 							</div>
 						{/if}
@@ -278,7 +278,7 @@
 				</div>
 			{/if}
 
-			<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+			<hr class="border-line my-1 p-0" />
 
 			<button
 				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -294,7 +294,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -350,7 +350,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -363,7 +363,7 @@
 				</a>
 			{/if}
 
-			<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
+			<hr class=" border-line my-1 p-0" />
 
 			<button
 				class="flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -387,7 +387,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 20 20"
 						fill="currentColor"
-						class="w-5 h-5"
+						class="size-5"
 					>
 						<path
 							fill-rule="evenodd"
@@ -405,7 +405,7 @@
 			</button>
 
 			{#if $activeUserIds?.length > 0}
-				<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
+				<hr class=" border-line my-1 p-0" />
 
 				<Tooltip
 					content={$USAGE_POOL && $USAGE_POOL.length > 0
@@ -435,7 +435,7 @@
 			{/if}
 
 			{#if $config?.image_tag}
-				<div class="px-3 py-1.5 text-xs leading-none text-gray-400 dark:text-gray-500 select-all">
+				<div class="px-3 py-1.5 text-xs leading-none text-subtle select-all">
 					version {$config.image_tag}
 				</div>
 			{/if}

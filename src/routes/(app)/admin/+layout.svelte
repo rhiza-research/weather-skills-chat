@@ -65,48 +65,48 @@
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 					>
 						<a
-							class="min-w-fit rounded-full p-1.5 {['/admin', '/admin/users'].includes(
+							class="tab {['/admin', '/admin/users'].includes(
 								$page.url.pathname
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin">{$i18n.t('Users and Organizations')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/admin/membership'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin/membership">{$i18n.t('Platform organization membership')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/settings')
+							class="tab {$page.url.pathname.includes('/admin/settings')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin/settings">{$i18n.t('Admin settings')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/models')
+							class="tab {$page.url.pathname.includes('/admin/models')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin/models">{$i18n.t('Model catalog')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/skills')
+							class="tab {$page.url.pathname.includes('/admin/skills')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin/skills">{$i18n.t('Skill catalog')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/admin/knowledge')
+							class="tab {$page.url.pathname.includes('/admin/knowledge')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/admin/knowledge">{$i18n.t('Knowledge catalog')}</a
 						>
 					</div>

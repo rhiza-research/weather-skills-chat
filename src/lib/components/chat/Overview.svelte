@@ -170,7 +170,7 @@
 			>
 				<ArrowLeft className="size-3.5" />
 			</button>
-			<div class=" text-lg font-medium self-center font-primary">{$i18n.t('Chat Overview')}</div>
+			<div class="modal-title">{$i18n.t('Chat Overview')}</div>
 		</div>
 		<button
 			class="self-center p-0.5"

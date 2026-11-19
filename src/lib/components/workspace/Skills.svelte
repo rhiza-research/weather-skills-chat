@@ -287,7 +287,7 @@
 {#if loaded}
 	<div class="mb-3">
 		<div class="text-lg font-medium mb-1">{$i18n.t('Skills')}</div>
-		<div class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+		<div class="text-sm text-muted mb-4">
 			{#if catalog === 'public'}
 				{$i18n.t('Install Agent Skills into the public catalog. Organizations can then enable or disable each pack and skill. Skills run like tools in chat.')}
 			{:else}
@@ -297,7 +297,7 @@
 
 		{#if canCreate}
 			<div
-				class="flex flex-col gap-4 mb-6 p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800"
+				class="flex flex-col gap-4 mb-6 p-4 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
 			>
 				<div class="flex flex-col md:flex-row gap-2">
 					<input
@@ -307,7 +307,7 @@
 						disabled={busy}
 					/>
 					<input
-						class="md:w-48 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+						class="md:w-48 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 						placeholder={$i18n.t('branch / tag / sha')}
 						bind:value={gitRef}
 						disabled={busy}
@@ -323,7 +323,7 @@
 				{#if catalog === 'public'}
 					<label class="flex items-center gap-3 pt-1">
 						<Switch bind:state={enabledByDefault} />
-						<span class="text-sm text-gray-600 dark:text-gray-300"
+						<span class="text-sm text-body"
 							>{$i18n.t('Enabled by default')}</span
 						>
 					</label>
@@ -336,16 +336,16 @@
 		{/if}
 
 		{#if catalog === 'org'}
-			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			<div class="mt-4 mb-1 text-sm font-medium text-muted">
 				{$i18n.t('Skills from catalog')}
 			</div>
 			{#if publicPacks.length === 0}
-				<div class="text-sm text-gray-500 dark:text-gray-400 py-4">{$i18n.t('No platform skill packs.')}</div>
+				<div class="text-sm text-muted py-4">{$i18n.t('No platform skill packs.')}</div>
 			{:else}
 				<div class="flex flex-col gap-3 mb-6">
 					{#each publicPacks as pack (pack.id)}
 						<details
-							class="skill-pack rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 {packUsable(
+							class="skill-pack rounded-xl border border-line bg-white dark:bg-gray-900 {packUsable(
 								pack
 							)
 								? ''
@@ -355,15 +355,15 @@
 								class="flex flex-wrap items-start justify-between gap-2 p-3.5 cursor-pointer list-none"
 							>
 								<div class="flex min-w-0 flex-1 items-start gap-2">
-									<span class="skill-pack-chevron mt-0.5 shrink-0 text-gray-500">
+									<span class="skill-pack-chevron mt-0.5 shrink-0 text-muted">
 										<ChevronRight className="size-4" />
 									</span>
 									<div class="min-w-0">
 										<div class="font-medium truncate">{pack.name}</div>
-										<div class="text-xs text-gray-500 dark:text-gray-400 break-all">
+										<div class="text-xs text-muted break-all">
 											{pack.git_url}
 										</div>
-										<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+										<div class="text-xs text-muted mt-1">
 											ref <span class="font-mono">{pack.git_ref}</span>
 											{#if pack.commit_sha}
 												· <span class="font-mono">{shortSha(pack.commit_sha)}</span>
@@ -391,13 +391,13 @@
 											/>
 										</Tooltip>
 									{:else}
-										<span class="text-xs text-gray-500"
+										<span class="text-xs text-muted"
 											>{pack.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
 										>
 									{/if}
 								</div>
 							</summary>
-							<div class="px-3.5 pb-3.5 border-t border-gray-100 dark:border-gray-800">
+							<div class="px-3.5 pb-3.5 border-t border-line">
 								{#if (pack.skills || []).length}
 									<ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
 										{#each pack.skills as skill (skill.tool_id || skill.name)}
@@ -411,13 +411,13 @@
 														{skill.name}
 													</span>
 													{#if skill.version}
-														<span class="text-xs text-gray-500">v{skill.version}</span>
+														<span class="text-xs text-muted">v{skill.version}</span>
 													{/if}
 													{#if !skillEnabled(skill)}
-														<span class="text-xs text-gray-400 ml-1">{$i18n.t('Disabled')}</span>
+														<span class="text-xs text-subtle ml-1">{$i18n.t('Disabled')}</span>
 													{/if}
 													{#if skill.description}
-														<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+														<div class="text-xs text-muted line-clamp-2">
 															{skill.description}
 														</div>
 													{/if}
@@ -457,7 +457,7 @@
 			{/if}
 
 			{#if showOrgSection}
-				<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+				<div class="mt-4 mb-1 text-sm font-medium text-muted">
 					{$i18n.t('{{name}} Skills', { name: orgName })}
 				</div>
 			{/if}
@@ -465,14 +465,14 @@
 
 		{#if catalog === 'public' || showOrgSection}
 		{#if sectionPacks.length === 0}
-			<div class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+			<div class="text-sm text-muted py-6 text-center">
 				{$i18n.t('No skill packs installed yet.')}
 			</div>
 		{:else}
 			<div class="flex flex-col gap-3">
 				{#each sectionPacks as pack (pack.id)}
 					<details
-						class="skill-pack rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 {catalog ===
+						class="skill-pack rounded-xl border border-line bg-white dark:bg-gray-900 {catalog ===
 							'org' && !packUsable(pack)
 							? 'opacity-60'
 							: ''}"
@@ -481,15 +481,15 @@
 							class="flex flex-wrap items-start justify-between gap-2 p-3.5 cursor-pointer list-none"
 						>
 							<div class="flex min-w-0 flex-1 items-start gap-2">
-								<span class="skill-pack-chevron mt-0.5 shrink-0 text-gray-500">
+								<span class="skill-pack-chevron mt-0.5 shrink-0 text-muted">
 									<ChevronRight className="size-4" />
 								</span>
 								<div class="min-w-0">
 									<div class="font-medium truncate">{pack.name}</div>
-									<div class="text-xs text-gray-500 dark:text-gray-400 break-all">
+									<div class="text-xs text-muted break-all">
 										{pack.git_url}
 									</div>
-									<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+									<div class="text-xs text-muted mt-1">
 										ref <span class="font-mono">{pack.git_ref}</span>
 										{#if pack.commit_sha}
 											· <span class="font-mono">{shortSha(pack.commit_sha)}</span>
@@ -533,7 +533,7 @@
 											: $i18n.t('Not in catalog')}
 									>
 										<div class="flex items-center gap-1.5">
-											<span class="text-xs leading-none text-gray-500"
+											<span class="text-xs leading-none text-muted"
 												>{$i18n.t('In catalog')}</span
 											>
 											<Switch
@@ -582,7 +582,7 @@
 							</div>
 						</summary>
 
-						<div class="px-3.5 pb-3.5 border-t border-gray-100 dark:border-gray-800">
+						<div class="px-3.5 pb-3.5 border-t border-line">
 							{#if (pack.skills || []).length}
 								<ul class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
 									{#each pack.skills as skill (skill.tool_id || skill.name)}
@@ -596,19 +596,19 @@
 													{skill.name}
 												</span>
 												{#if skill.version}
-													<span class="text-xs text-gray-500">v{skill.version}</span>
+													<span class="text-xs text-muted">v{skill.version}</span>
 												{/if}
 												{#if catalog === 'public' && skill.is_active === false}
-													<span class="text-xs text-gray-400 ml-1">{$i18n.t('Not in catalog')}</span>
+													<span class="text-xs text-subtle ml-1">{$i18n.t('Not in catalog')}</span>
 												{:else if !skillEnabled(skill)}
-													<span class="text-xs text-gray-400 ml-1"
+													<span class="text-xs text-subtle ml-1"
 														>{catalog === 'public'
 															? 'off by default'
 															: $i18n.t('Disabled')}</span
 													>
 												{/if}
 												{#if skill.description}
-													<div class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+													<div class="text-xs text-muted line-clamp-2">
 														{skill.description}
 													</div>
 												{/if}
@@ -649,7 +649,7 @@
 																: $i18n.t('Not in catalog')}
 														>
 															<div class="flex items-center gap-1.5">
-																<span class="text-xs leading-none text-gray-500"
+																<span class="text-xs leading-none text-muted"
 																	>{$i18n.t('In catalog')}</span
 																>
 																<Switch
@@ -684,7 +684,7 @@
 									{/each}
 								</ul>
 							{:else}
-								<div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+								<div class="mt-3 text-xs text-muted">
 									{$i18n.t('No skills in this pack.')}
 								</div>
 							{/if}

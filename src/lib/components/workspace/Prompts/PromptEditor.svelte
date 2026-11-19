@@ -125,7 +125,7 @@
 						</div>
 					</div>
 
-					<div class="flex gap-0.5 items-center text-xs text-gray-500">
+					<div class="flex gap-0.5 items-center text-xs text-muted">
 						<div class="">/</div>
 						<input
 							class=" w-full bg-transparent outline-hidden"
@@ -155,19 +155,19 @@
 					/>
 				</div>
 
-				<div class="text-xs text-gray-400 dark:text-gray-500">
+				<div class="text-xs text-subtle">
 					ⓘ {$i18n.t('Format your variables using brackets like this:')}&nbsp;<span
-						class=" text-gray-600 dark:text-gray-300 font-medium"
+						class="text-body font-medium"
 						>{'{{'}{$i18n.t('variable')}{'}}'}</span
 					>.
 					{$i18n.t('Make sure to enclose them with')}
-					<span class=" text-gray-600 dark:text-gray-300 font-medium">{'{{'}</span>
+					<span class="text-body font-medium">{'{{'}</span>
 					{$i18n.t('and')}
-					<span class=" text-gray-600 dark:text-gray-300 font-medium">{'}}'}</span>.
+					<span class="text-body font-medium">{'}}'}</span>.
 				</div>
 
-				<div class="text-xs text-gray-400 dark:text-gray-500">
-					{$i18n.t('Utilize')}<span class=" text-gray-600 dark:text-gray-300 font-medium">
+				<div class="text-xs text-subtle">
+					{$i18n.t('Utilize')}<span class="text-body font-medium">
 						{` {{CLIPBOARD}}`}</span
 					>
 					{$i18n.t('variable to have them replaced with clipboard content.')}
@@ -188,7 +188,7 @@
 				{#if loading}
 					<div class="ml-1.5 self-center">
 						<svg
-							class=" w-4 h-4"
+							class=" size-4"
 							viewBox="0 0 24 24"
 							fill="currentColor"
 							xmlns="http://www.w3.org/2000/svg"

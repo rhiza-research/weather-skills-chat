@@ -127,7 +127,7 @@
 					{/if}
 				</button>
 			{:else}
-				<div class="px-3 py-2 text-sm text-gray-500">{noResults}</div>
+				<div class="px-3 py-2 text-sm text-muted">{noResults}</div>
 			{/each}
 		</div>
 	</DropdownMenu.Content>

@@ -524,7 +524,7 @@
 					<div
 						class="bg-gray-50 dark:bg-black dark:text-white rounded-b-lg! pt-2 pb-2 px-4 flex flex-col gap-2 text-xs"
 					>
-						<span class="text-gray-500 italic">
+						<span class="text-muted italic">
 							{$i18n.t('{{COUNT}} hidden lines', {
 								COUNT: code.split('\n').length
 							})}
@@ -545,13 +545,13 @@
 					>
 						{#if executing}
 							<div class=" ">
-								<div class=" text-gray-500 text-xs mb-1">STDOUT/STDERR</div>
+								<div class="text-muted text-xs mb-1">STDOUT/STDERR</div>
 								<div class="text-sm">{$i18n.t('Running...')}</div>
 							</div>
 						{:else}
 							{#if stdout || stderr}
 								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">STDOUT/STDERR</div>
+									<div class="text-muted text-xs mb-1">STDOUT/STDERR</div>
 									<div
 										class="text-sm {stdout?.split('\n')?.length > 100
 											? `max-h-96`
@@ -563,7 +563,7 @@
 							{/if}
 							{#if result || files}
 								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">RESULT</div>
+									<div class="text-muted text-xs mb-1">RESULT</div>
 									{#if result}
 										<div class="text-sm">{`${JSON.stringify(result)}`}</div>
 									{/if}

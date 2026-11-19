@@ -54,7 +54,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-4 h-4"
+					class="size-4"
 				>
 					<path
 						fill-rule="evenodd"
@@ -113,7 +113,7 @@
 					</div>
 				{/each}
 			{:else}
-				<div class="text-gray-500 text-xs text-center py-2 px-10">
+				<div class="text-muted text-xs text-center py-2 px-10">
 					{$i18n.t('No users were found.')}
 				</div>
 			{/if}

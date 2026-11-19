@@ -72,7 +72,7 @@
 	{:else if token.type === 'link' && feedbackDraftFor(token.href ?? '') !== null}
 		<button
 			type="button"
-			class="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 text-sm transition"
+			class="inline-flex items-center px-2 py-0.5 rounded-full border border-line-strong hover:bg-black/5 dark:hover:bg-white/5 text-sm transition"
 			on:click={() => feedbackDraft.set(feedbackDraftFor(token.href ?? '') ?? {})}
 		>
 			{#if token.tokens}

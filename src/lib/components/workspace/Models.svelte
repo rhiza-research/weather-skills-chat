@@ -278,7 +278,7 @@
 			<div class="flex items-center md:self-center text-xl font-medium px-0.5">
 				{$i18n.t('Models')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+				<span class="text-lg font-medium text-body"
 					>{filteredModels.length}</span
 				>
 			</div>
@@ -303,11 +303,11 @@
 	</div>
 
 	{#if catalog === 'org'}
-		<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+		<div class="mt-4 mb-1 text-sm font-medium text-muted">
 			{$i18n.t('Models from catalog')}
 		</div>
 		{#if publicModels.length === 0}
-			<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+			<div class="text-xs text-muted py-3">{$i18n.t('No models')}</div>
 		{/if}
 		<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3">
 			{#each publicModels as model}
@@ -395,7 +395,7 @@
 											}}
 										/>
 									{:else}
-										<span class="text-xs text-gray-500"
+										<span class="text-xs text-muted"
 											>{model.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
 										>
 									{/if}
@@ -408,11 +408,11 @@
 		</div>
 
 		{#if showOrgSection}
-			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			<div class="mt-4 mb-1 text-sm font-medium text-muted">
 				{$i18n.t('{{name}} Models', { name: orgName })}
 			</div>
 			{#if sectionModels.length === 0}
-				<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+				<div class="text-xs text-muted py-3">{$i18n.t('No models')}</div>
 			{/if}
 		{/if}
 	{/if}
@@ -478,7 +478,7 @@
 								className="flex shrink-0"
 								placement="top-start"
 							>
-								<div class="shrink-0 text-gray-500">
+								<div class="shrink-0 text-muted">
 									{$i18n.t('By {{name}}', {
 										name: capitalizeFirstLetter(
 											model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
@@ -515,7 +515,7 @@
 										viewBox="0 0 24 24"
 										stroke-width="1.5"
 										stroke="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											stroke-linecap="round"
@@ -583,7 +583,7 @@
 												: $i18n.t('Not in catalog')}
 										>
 											<div class="flex items-center gap-1">
-												<span class="text-xs leading-none text-gray-500"
+												<span class="text-xs leading-none text-muted"
 													>{$i18n.t('In catalog')}</span
 												>
 												<Switch

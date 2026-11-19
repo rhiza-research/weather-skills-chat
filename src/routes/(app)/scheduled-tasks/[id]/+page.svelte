@@ -160,7 +160,7 @@
 							className="w-full max-h-72 rounded-xl object-contain"
 						/>
 					{/if}
-					<div class="flex items-center gap-3 text-xs text-gray-500">
+					<div class="flex items-center gap-3 text-xs text-muted">
 						{#if !task.image_updated_at}
 							<TaskImage {task} className="size-10 rounded-lg text-base" />
 						{/if}
@@ -172,7 +172,7 @@
 									)}
 						</span>
 						{#if task.image_updated_at && canManage}
-							<button class="text-gray-500 hover:text-red-500" on:click={removeImage}>
+							<button class="text-muted hover:text-red-500" on:click={removeImage}>
 								{$i18n.t('Remove picture')}
 							</button>
 						{/if}
@@ -196,7 +196,7 @@
 
 			{#if task}
 				<section class="flex flex-col gap-1">
-					<div class="text-xs font-medium text-gray-500">{$i18n.t('Runs')}</div>
+					<div class="text-xs font-medium text-muted">{$i18n.t('Runs')}</div>
 					{#each runs as run (run.id)}
 						<button
 							class="text-left text-sm px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex justify-between gap-3 disabled:cursor-default"
@@ -206,18 +206,18 @@
 							<span class="min-w-0">
 								<span class={statusClass(run.status)}>{run.status}</span>
 								{#if run.summary}
-									<span class="text-gray-600 dark:text-gray-300"> · {run.summary}</span>
+									<span class="text-body"> · {run.summary}</span>
 								{/if}
 								{#if run.error}
-									<span class="text-gray-500"> · {run.error}</span>
+									<span class="text-muted"> · {run.error}</span>
 								{/if}
 							</span>
-							<span class="text-xs text-gray-400 shrink-0">
+							<span class="text-xs text-subtle shrink-0">
 								{run.started_at ? new Date(run.started_at * 1000).toLocaleString() : ''}
 							</span>
 						</button>
 					{:else}
-						<div class="text-xs text-gray-400 px-2">{$i18n.t('No runs yet')}</div>
+						<div class="text-xs text-subtle px-2">{$i18n.t('No runs yet')}</div>
 					{/each}
 				</section>
 			{/if}

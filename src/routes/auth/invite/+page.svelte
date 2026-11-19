@@ -80,7 +80,7 @@
 <div class="min-h-screen flex items-center justify-center px-6 bg-white dark:bg-gray-900">
 	<div class="w-full max-w-md">
 		{#if !loaded}
-			<div class="text-sm text-gray-500">{$i18n.t('Loading...')}</div>
+			<div class="text-sm text-muted">{$i18n.t('Loading...')}</div>
 		{:else if error || !invite}
 			<div class="text-xl font-medium dark:text-white">
 				{$i18n.t("Sorry, we couldn't find that invitation. It may have been canceled")}
@@ -88,19 +88,19 @@
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.accepted}
 			<div class="text-xl font-medium dark:text-white">{$i18n.t('Invitation already used')}</div>
-			<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+			<p class="mt-3 text-sm text-body">
 				{$i18n.t('This invitation has already been accepted.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if invite.expired}
 			<div class="text-xl font-medium dark:text-white">{$i18n.t('Invitation expired')}</div>
-			<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+			<p class="mt-3 text-sm text-body">
 				{$i18n.t('Ask the person who invited you to send a new invitation.')}
 			</p>
 			<HelpContact className="mt-6 text-sm text-gray-500" label={$i18n.t('Need help? Contact')} />
 		{:else if wrongAccount}
 			<div class="text-xl font-medium dark:text-white">{$i18n.t('Signed in as someone else')}</div>
-			<p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+			<p class="mt-3 text-sm text-body">
 				{$i18n.t('You are signed in as {{email}}. Sign out to accept this invite for {{invite}}.', {
 					email: $user.email,
 					invite: invite.email
@@ -123,10 +123,10 @@
 					{$i18n.t("You're invited to Weather Skills")}
 				{/if}
 			</div>
-			<p class="mt-2 text-sm text-gray-500">{invite.email}</p>
+			<p class="mt-2 text-sm text-muted">{invite.email}</p>
 
 			{#if invite.account_exists && !signedInEmail}
-				<p class="mt-4 text-sm text-gray-600 dark:text-gray-300">
+				<p class="mt-4 text-sm text-body">
 					{$i18n.t('Sign in as this email to accept the invitation.')}
 				</p>
 				<a
@@ -147,7 +147,7 @@
 			{:else}
 				<form class="mt-6 flex flex-col gap-3" on:submit|preventDefault={accept}>
 					<label class="text-sm">
-						<span class="text-gray-600 dark:text-gray-300">{$i18n.t('Name')}</span>
+						<span class="text-body">{$i18n.t('Name')}</span>
 						<input
 							class="mt-1 w-full rounded-lg py-2 px-3 text-sm bg-gray-50 dark:bg-gray-850 outline-hidden"
 							bind:value={name}
@@ -155,7 +155,7 @@
 						/>
 					</label>
 					<label class="text-sm">
-						<span class="text-gray-600 dark:text-gray-300">{$i18n.t('Password')}</span>
+						<span class="text-body">{$i18n.t('Password')}</span>
 						<input
 							class="mt-1 w-full rounded-lg py-2 px-3 text-sm bg-gray-50 dark:bg-gray-850 outline-hidden"
 							type="password"

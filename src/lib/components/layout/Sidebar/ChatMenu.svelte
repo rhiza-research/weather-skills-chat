@@ -294,7 +294,7 @@
 
 			{#if isMine && ($organizations ?? []).some((org) => org.id !== $activeOrganizationId)}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 					on:click={() => {
 						cloneToOrgHandler();
 					}}
@@ -366,7 +366,7 @@
 			</DropdownMenu.Item>
 			{/if}
 
-			<hr class="border-gray-100 dark:border-gray-850 my-0.5" />
+			<hr class="border-line my-0.5" />
 
 			<div class="flex p-1">
 				<Tags

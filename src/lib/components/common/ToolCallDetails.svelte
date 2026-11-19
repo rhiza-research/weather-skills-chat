@@ -60,10 +60,10 @@
 			className="my-1"
 		/>
 		{#if secretNames.length}
-			<div class="text-xs text-gray-500 dark:text-gray-400">
+			<div class="text-xs text-muted">
 				<span class="font-medium">{$i18n.t('Environment secrets')}:</span>
 				{#each secretNames as name, idx}
-					<code class="font-mono text-gray-700 dark:text-gray-200">{name}</code
+					<code class="font-mono text-body">{name}</code
 					>{idx < secretNames.length - 1 ? ', ' : ''}
 				{/each}
 			</div>
@@ -76,16 +76,16 @@
 			className="w-full"
 		>
 			<div class="mb-1 space-y-1.5" slot="content">
-				<p class="m-0 break-words font-sans text-sm leading-relaxed text-gray-700 dark:text-gray-200">
+				<p class="m-0 break-words font-sans text-sm leading-relaxed text-body">
 					{head}
 				</p>
 				{#if args.length}
 					<!-- not-prose: the chat's prose styles give dt/dd large top margins. -->
-					<dl class="not-prose m-0 space-y-0.5 text-sm text-gray-700 dark:text-gray-200">
+					<dl class="not-prose m-0 space-y-0.5 text-sm text-body">
 						{#each args as arg, idx}
 							<div class={arg.multiline ? '' : 'flex items-baseline gap-x-2'}>
 								{#if arg.key}
-									<dt class="shrink-0 font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">
+									<dt class="shrink-0 font-mono text-xs font-semibold text-strong">
 										{arg.key}
 									</dt>
 								{/if}
@@ -102,7 +102,7 @@
 											className="my-1"
 										/>
 									{:else}
-										<span class="whitespace-pre-wrap break-words font-mono text-xs text-gray-600 dark:text-gray-300">{arg.value}</span>
+										<span class="whitespace-pre-wrap break-words font-mono text-xs text-body">{arg.value}</span>
 									{/if}
 								</dd>
 							</div>
@@ -110,10 +110,10 @@
 					</dl>
 				{/if}
 				{#if secretNames.length}
-					<div class="text-xs text-gray-500 dark:text-gray-400">
+					<div class="text-xs text-muted">
 						<span class="font-medium">{$i18n.t('Environment secrets')}:</span>
 						{#each secretNames as name, idx}
-							<code class="font-mono text-gray-700 dark:text-gray-200">{name}</code
+							<code class="font-mono text-body">{name}</code
 							>{idx < secretNames.length - 1 ? ', ' : ''}
 						{/each}
 					</div>
@@ -136,12 +136,12 @@
 							? 'text-red-700 dark:text-red-300'
 							: 'text-gray-700 dark:text-gray-200'}">{text}</pre>
 				{:else}
-					<p class="m-0 text-sm text-gray-500 dark:text-gray-400">
+					<p class="m-0 text-sm text-muted">
 						{$i18n.t('No output.')}
 					</p>
 				{/if}
 				{#if usageLine}
-					<p class="m-0 mt-1.5 font-sans text-xs text-gray-500 dark:text-gray-400">{usageLine}</p>
+					<p class="m-0 mt-1.5 font-sans text-xs text-muted">{usageLine}</p>
 				{/if}
 			</div>
 		</Collapsible>

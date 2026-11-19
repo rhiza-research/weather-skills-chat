@@ -127,7 +127,7 @@
 				<Name>
 					{#if message.user}
 						{$i18n.t('You')}
-						<span class=" text-gray-500 text-sm font-medium">{message?.user ?? ''}</span>
+						<span class="text-muted text-sm font-medium">{message?.user ?? ''}</span>
 					{:else if $settings.showUsername || $_user.name !== user.name}
 						{user.name}
 					{:else}
@@ -136,7 +136,7 @@
 
 					{#if message.timestamp}
 						<div
-							class=" self-center text-xs invisible group-hover:visible text-gray-400 font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
+							class="self-center text-xs invisible group-hover:visible text-subtle font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 						>
 							<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 								<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
@@ -201,7 +201,7 @@
 							<div>
 								<button
 									id="save-edit-message-button"
-									class=" px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition rounded-3xl"
+									class="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-line text-body transition rounded-3xl"
 									on:click={() => {
 										editMessageConfirmHandler(false);
 									}}
@@ -213,7 +213,7 @@
 							<div class="flex space-x-1.5">
 								<button
 									id="close-edit-message-button"
-									class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-gray-800 dark:text-gray-100 transition rounded-3xl"
+									class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-strong transition rounded-3xl"
 									on:click={() => {
 										cancelEditMessage();
 									}}
@@ -364,7 +364,7 @@
 											viewBox="0 0 24 24"
 											stroke-width="2.3"
 											stroke="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												stroke-linecap="round"
@@ -389,7 +389,7 @@
 										viewBox="0 0 24 24"
 										stroke-width="2.3"
 										stroke="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											stroke-linecap="round"
@@ -415,7 +415,7 @@
 											viewBox="0 0 24 24"
 											stroke-width="2"
 											stroke="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												stroke-linecap="round"

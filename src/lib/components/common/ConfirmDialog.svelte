@@ -116,7 +116,7 @@
 				</div>
 
 				<slot>
-					<div class=" text-sm text-gray-500 flex-1">
+					<div class="text-sm text-muted flex-1">
 						{#if message !== ''}
 							{message}
 						{:else}

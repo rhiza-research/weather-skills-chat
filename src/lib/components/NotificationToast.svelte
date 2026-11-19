@@ -26,11 +26,11 @@
 </script>
 
 <div
-	class="relative flex min-w-[var(--width)] w-full dark:bg-gray-850 dark:text-white bg-white text-black border border-gray-100 dark:border-gray-850 rounded-xl"
+	class="relative flex min-w-[var(--width)] w-full dark:bg-gray-850 dark:text-white bg-white text-black border border-line rounded-xl"
 >
 	<button
 		type="button"
-		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-subtle hover:text-gray-700 dark:hover:text-gray-200"
 		aria-label={$i18n.t('Close')}
 		on:click|stopPropagation={() => dispatch('closeToast')}
 	>

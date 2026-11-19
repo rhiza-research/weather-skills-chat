@@ -84,7 +84,7 @@
 
 		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 
-		<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{feedbacks.length}</span>
+		<span class="text-lg font-medium text-body">{feedbacks.length}</span>
 	</div>
 
 	{#if feedbacks.length > 0}
@@ -107,12 +107,12 @@
 	class="scrollbar-hidden relative whitespace-nowrap overflow-x-auto max-w-full rounded-sm pt-0.5"
 >
 	{#if (feedbacks ?? []).length === 0}
-		<div class="text-center text-xs text-gray-500 dark:text-gray-400 py-1">
+		<div class="text-center text-xs text-muted py-1">
 			{$i18n.t('No feedbacks found')}
 		</div>
 	{:else}
 		<table
-			class="w-full text-sm text-left text-gray-500 dark:text-gray-400 table-auto max-w-full rounded-sm"
+			class="w-full text-sm text-left text-muted table-auto max-w-full rounded-sm"
 		>
 			<thead
 				class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-850 dark:text-gray-400 -translate-y-0.5"
@@ -158,12 +158,12 @@
 							<div class="flex flex-col items-start gap-0.5 h-full">
 								<div class="flex flex-col h-full">
 									{#if feedback.data?.sibling_model_ids}
-										<div class="font-semibold text-gray-600 dark:text-gray-400 flex-1">
+										<div class="font-semibold text-body flex-1">
 											{feedback.data?.model_id}
 										</div>
 
 										<Tooltip content={feedback.data.sibling_model_ids.join(', ')}>
-											<div class=" text-xs text-gray-600 dark:text-gray-400 line-clamp-1">
+											<div class="text-xs text-body line-clamp-1">
 												{#if feedback.data.sibling_model_ids.length > 2}
 													<!-- {$i18n.t('and {{COUNT}} more')} -->
 													{feedback.data.sibling_model_ids.slice(0, 2).join(', ')}, {$i18n.t(
@@ -177,7 +177,7 @@
 										</Tooltip>
 									{:else}
 										<div
-											class=" text-sm font-medium text-gray-600 dark:text-gray-400 flex-1 py-1.5"
+											class="text-sm font-medium text-body flex-1 py-1.5"
 										>
 											{feedback.data?.model_id}
 										</div>

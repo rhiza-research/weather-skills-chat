@@ -394,7 +394,7 @@
 
 		<div class="flex items-center">
 			{#if loading}
-				<div class=" text-gray-500 rounded-full cursor-not-allowed">
+				<div class="text-muted rounded-full cursor-not-allowed">
 					<svg
 						width="24"
 						height="24"

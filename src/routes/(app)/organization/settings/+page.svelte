@@ -107,21 +107,21 @@
 
 <div class="max-w-xl flex flex-col gap-4 text-sm">
 	<div class="flex flex-col gap-1">
-		<div class="text-xs font-medium text-gray-500">{$i18n.t('Name')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Name')}</div>
 		<input
-			class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+			class="field"
 			bind:value={name}
 		/>
 	</div>
 
 	<div class="flex flex-col gap-2">
-		<div class="text-xs font-medium text-gray-500">{$i18n.t('Logo')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Logo')}</div>
 		<div class="flex items-center gap-4">
 			{#if logo}
 				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-gray-100 dark:bg-gray-850" />
 			{:else}
 				<div
-					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-gray-400"
+					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-subtle"
 				>
 					{$i18n.t('None')}
 				</div>
@@ -137,7 +137,7 @@
 				</button>
 				{#if logo}
 					<button
-						class="self-start text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+						class="self-start text-xs text-muted hover:text-gray-800 dark:hover:text-gray-200"
 						type="button"
 						on:click={() => {
 							logo = '';

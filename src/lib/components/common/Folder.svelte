@@ -165,7 +165,7 @@
 				{#if $$slots.actions}
 					<!-- svelte-ignore a11y-click-events-have-key-events -->
 					<div
-						class="absolute z-10 right-2 self-center flex items-center text-gray-500 dark:text-gray-400"
+						class="absolute z-10 right-2 self-center flex items-center text-muted"
 						on:pointerup|stopPropagation
 						on:click|stopPropagation
 					>

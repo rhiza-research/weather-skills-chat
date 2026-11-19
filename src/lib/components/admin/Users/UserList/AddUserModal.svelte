@@ -122,7 +122,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Add User')}</div>
+			<div class="modal-title">{$i18n.t('Add User')}</div>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -133,7 +133,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -154,9 +154,9 @@
 						class="flex -mt-2 mb-1.5 gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent dark:text-gray-200"
 					>
 						<button
-							class="min-w-fit rounded-full p-1.5 {tab === ''
+							class="tab {tab === ''
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							type="button"
 							on:click={() => {
 								tab = '';
@@ -164,9 +164,9 @@
 						>
 
 						<button
-							class="min-w-fit rounded-full p-1.5 {tab === 'import'
+							class="tab {tab === 'import'
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							type="button"
 							on:click={() => {
 								tab = 'import';
@@ -177,7 +177,7 @@
 					<div class="px-1">
 						{#if tab === ''}
 							<div class="flex flex-col w-full mt-1">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Name')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Name')}</div>
 
 								<div class="flex-1">
 									<input
@@ -191,10 +191,10 @@
 								</div>
 							</div>
 
-							<hr class=" border-gray-100 dark:border-gray-850 my-2.5 w-full" />
+							<hr class=" border-line my-2.5 w-full" />
 
 							<div class="flex flex-col w-full">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Email')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Email')}</div>
 
 								<div class="flex-1">
 									<input
@@ -208,7 +208,7 @@
 							</div>
 
 							<div class="flex flex-col w-full mt-1">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Password')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Password')}</div>
 
 								<div class="flex-1">
 									<input
@@ -246,7 +246,7 @@
 									</button>
 								</div>
 
-								<div class=" text-xs text-gray-500">
+								<div class="text-xs text-muted">
 									ⓘ {$i18n.t(
 										'Ensure your CSV file includes 4 columns in this order: Name, Email, Password, Role.'
 									)}
@@ -274,7 +274,7 @@
 							{#if loading}
 								<div class="ml-2 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

@@ -136,7 +136,7 @@
 	<div class="flex-1 overflow-y-auto px-4 py-4 max-w-4xl w-full mx-auto flex flex-col gap-4">
 		<div class="flex items-center justify-end gap-1">
 			<div
-				class="flex w-64 min-w-0 items-center gap-2 mr-1 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-gray-850"
+				class="flex w-64 min-w-0 items-center gap-2 mr-1 px-3 py-1.5 rounded-lg border border-line"
 			>
 				<Search className="size-3.5 shrink-0 text-gray-500" />
 				<input
@@ -179,7 +179,7 @@
 				</div>
 			</Dropdown>
 			<a
-				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-sm"
+				class="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border border-line-strong text-strong hover:bg-black/5 dark:hover:bg-white/5 transition font-medium text-sm"
 				href="/scheduled-tasks/new"
 			>
 				{$i18n.t('New scheduled task')}
@@ -187,13 +187,13 @@
 		</div>
 
 		{#if loaded && allTasks.length === 0}
-			<div class="text-sm text-gray-500 text-center py-8">
+			<div class="text-sm text-muted text-center py-8">
 				{$i18n.t(
 					'No scheduled tasks yet. Create one, or ask in a chat to run a task on a schedule.'
 				)}
 			</div>
 		{:else if loaded && tasks.length === 0}
-			<div class="text-sm text-gray-500 text-center py-8">
+			<div class="text-sm text-muted text-center py-8">
 				{$i18n.t('No scheduled tasks match your search.')}
 			</div>
 		{/if}
@@ -201,12 +201,12 @@
 		{#each sections as section}
 			{#if section.items.length > 0}
 				<section class="flex flex-col gap-2">
-					<div class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+					<div class="text-xs font-medium text-muted uppercase tracking-wide">
 						{section.title}
 					</div>
 					{#each section.items as task (task.id)}
 						<div
-							class="rounded-xl border border-gray-100 dark:border-gray-850 p-4 flex items-start justify-between gap-3 {task.enabled
+							class="rounded-xl border border-line p-4 flex items-start justify-between gap-3 {task.enabled
 								? ''
 								: 'bg-gray-50 dark:bg-gray-900/50'}"
 						>
@@ -219,22 +219,22 @@
 									>
 									<TaskDot dot={taskDot(task)} />
 								</div>
-								<div class="text-xs text-gray-500" title={task.cron ?? ''}>
+								<div class="text-xs text-muted" title={task.cron ?? ''}>
 									{#if !task.enabled}
 										<span
-											class="mr-1 rounded px-1 py-px bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+											class="mr-1 rounded px-1 py-px bg-gray-200 dark:bg-gray-800 text-body"
 										>
 											{$i18n.t('Off')}
 										</span>
 									{/if}
 									{task.cron ? describeSchedule(task.cron) : $i18n.t('Runs only when started')}
 								</div>
-								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{task.prompt}</div>
+								<div class="text-xs text-muted mt-1 line-clamp-2">{task.prompt}</div>
 								</div>
 							</a>
 							<div class="flex items-center gap-3 text-xs shrink-0">
 								<button
-									class="text-gray-500"
+									class="text-muted"
 									on:click={() => setTaskPinned(localStorage.token, task.id, !task.pinned)}
 								>
 									{task.pinned ? $i18n.t('Unpin') : $i18n.t('Pin to sidebar')}

@@ -104,12 +104,12 @@
 </script>
 
 {#if loading}
-	<div class="flex items-center gap-1.5 text-xs text-gray-400">
+	<div class="flex items-center gap-1.5 text-xs text-subtle">
 		{$i18n.t('Loading artifacts')}
 		<Spinner className="size-3" />
 	</div>
 {:else if tree.length === 0}
-	<div class="text-xs text-gray-400">{$i18n.t('No files in this chat yet.')}</div>
+	<div class="text-xs text-subtle">{$i18n.t('No files in this chat yet.')}</div>
 {:else}
 	<div class="flex flex-col gap-0.5">
 		{#each tree as node (node.path)}

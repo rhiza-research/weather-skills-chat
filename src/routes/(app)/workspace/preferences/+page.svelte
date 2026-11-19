@@ -131,10 +131,10 @@
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Preferences')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{items.length}</span>
+				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
-		<div class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+		<div class="text-sm text-muted mb-2">
 			{$i18n.t(
 				'Enabled preferences are added to your chats. Organization preferences apply to every member.'
 			)}
@@ -157,7 +157,7 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800"
+			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
@@ -167,7 +167,7 @@
 				required
 			/>
 			<textarea
-				class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+				class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 				placeholder={$i18n.t('Preference text')}
 				bind:value={content}
 				required
@@ -175,7 +175,7 @@
 			<div class="flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
 				{#if !isPersonal && isOrgAdmin}
 					<select
-						class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+						class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 						bind:value={visibility}
 					>
 						<option value="private">{$i18n.t('Private')}</option>
@@ -196,7 +196,7 @@
 
 	<div class="my-2 mb-5 flex flex-col gap-2">
 		{#each items as preference (preference.id)}
-			<div class="px-3 py-3 rounded-xl border border-gray-100 dark:border-gray-800">
+			<div class="px-3 py-3 rounded-xl border border-line">
 				<div class="flex items-start justify-between gap-3">
 					<div class="min-w-0">
 						<div class="flex items-center gap-2">
@@ -215,7 +215,7 @@
 								on:change={(e) => setEnabled(preference, !!e.detail)}
 							/>
 						{:else}
-							<span class="text-xs text-gray-500">
+							<span class="text-xs text-muted">
 								{preference.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}
 							</span>
 						{/if}
@@ -225,11 +225,11 @@
 				{#if editing === preference.id}
 					<div class="mt-3 flex flex-col gap-2">
 						<input
-							class="w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+							class="w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 							bind:value={editTitle}
 						/>
 						<textarea
-							class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+							class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 							bind:value={editContent}
 						></textarea>
 						<div class="flex gap-2">
@@ -248,7 +248,7 @@
 						</div>
 					</div>
 				{:else}
-					<div class="mt-2 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+					<div class="mt-2 text-sm text-body whitespace-pre-wrap">
 						{preference.content}
 					</div>
 					{#if preference.can_manage}
@@ -277,7 +277,7 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+			<div class="text-sm text-muted py-6 text-center">
 				{$i18n.t('No preferences yet.')}
 			</div>
 		{/each}

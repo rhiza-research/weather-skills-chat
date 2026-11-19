@@ -32,7 +32,7 @@
 	const i18n = getContext('i18n');
 	// The same look as the preview pane's icon buttons.
 	const iconButton =
-		'p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
+		'p-1 rounded-xl text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
 	const dispatch = createEventDispatcher();
 
 	export let node: {
@@ -134,12 +134,12 @@
 				on:click={toggle}
 			>
 				{#if open}
-					<ChevronDown className="size-3 shrink-0 text-gray-400" />
+					<ChevronDown className="size-3 shrink-0 text-subtle" />
 				{:else}
-					<ChevronRight className="size-3 shrink-0 text-gray-400" />
+					<ChevronRight className="size-3 shrink-0 text-subtle" />
 				{/if}
 				<span class="truncate min-w-0" title={node.name}>{node.name}</span>
-				<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
+				<span class="text-subtle shrink-0">{kindLabel(file)}</span>
 			</button>
 			<!-- Zipping needs a sign-in: share-link visitors may be signed out. -->
 			{#if $user}
@@ -180,7 +180,7 @@
 		<div class="flex items-center justify-between gap-2 text-xs px-1 py-1 rounded-md" style={pad}>
 			<div class="truncate flex items-center gap-1 min-w-0">
 				<span class="truncate" title={node.name}>{node.name}</span>
-				<span class="text-gray-400 shrink-0">zarr</span>
+				<span class="text-subtle shrink-0">zarr</span>
 			</div>
 			<div class="flex items-center gap-0.5 shrink-0">
 				{#if canAskProvenance}
@@ -216,7 +216,7 @@
 		{#if crumbs.length}
 			<button
 				type="button"
-				class="w-full min-w-0 pb-0.5 text-left text-[10px] leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 truncate transition"
+				class="w-full min-w-0 pb-0.5 text-left text-xs leading-snug text-muted hover:text-gray-700 dark:hover:text-gray-300 truncate transition"
 				style={pad}
 				title={crumbs.join(' → ')}
 				on:click={openProvenance}>{crumbs.join(' → ')}</button
@@ -237,12 +237,12 @@
 					on:click={() => dispatch('openImage', { path: file.path })}
 				>
 					<span class="truncate" title={node.name}>{node.name}</span>
-					<span class="text-gray-400 shrink-0">{file.kind}</span>
+					<span class="text-subtle shrink-0">{file.kind}</span>
 				</button>
 			{:else}
 				<div class="truncate flex items-center gap-1 min-w-0">
 					<span class="truncate" title={node.name}>{node.name}</span>
-					<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
+					<span class="text-subtle shrink-0">{kindLabel(file)}</span>
 				</div>
 			{/if}
 			<div class="flex items-center gap-0.5 shrink-0">
@@ -314,7 +314,7 @@
 		{#if crumbs.length}
 			<button
 				type="button"
-				class="w-full min-w-0 pb-0.5 text-left text-[10px] leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 truncate transition"
+				class="w-full min-w-0 pb-0.5 text-left text-xs leading-snug text-muted hover:text-gray-700 dark:hover:text-gray-300 truncate transition"
 				style={pad}
 				title={crumbs.join(' → ')}
 				on:click={openProvenance}>{crumbs.join(' → ')}</button

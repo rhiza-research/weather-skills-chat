@@ -57,38 +57,38 @@
 						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
 					>
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/workspace/models'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/workspace/models">{$i18n.t('Models')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/workspace/skills')
+							class="tab {$page.url.pathname.includes('/workspace/skills')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/workspace/skills"
 						>
 							{$i18n.t('Skills')}
 						</a>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/workspace/secrets')
+							class="tab {$page.url.pathname.includes('/workspace/secrets')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/workspace/secrets"
 						>
 							{$i18n.t('Secrets')}
 						</a>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/workspace/preferences'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'tab-idle'}"
 							href="/workspace/preferences"
 						>
 							{$i18n.t('Preferences')}

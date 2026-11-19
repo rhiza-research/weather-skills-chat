@@ -145,7 +145,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center font-primary">
+			<div class="modal-title">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
@@ -162,7 +162,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -183,7 +183,7 @@
 					<div class="px-1">
 						<div class="flex gap-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('URL')}</div>
+								<div class="mb-0.5 text-xs text-muted">{$i18n.t('URL')}</div>
 
 								<div class="flex-1">
 									<input
@@ -209,7 +209,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											fill-rule="evenodd"
@@ -229,7 +229,7 @@
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Key')}</div>
+								<div class="mb-0.5 text-xs text-muted">{$i18n.t('Key')}</div>
 
 								<div class="flex-1">
 									<SensitiveInput
@@ -242,7 +242,7 @@
 							</div>
 
 							<div class="flex flex-col w-full">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Prefix ID')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Prefix ID')}</div>
 
 								<div class="flex-1">
 									<Tooltip
@@ -265,7 +265,7 @@
 						{#if !ollama && !direct}
 							<div class="flex gap-2 mt-2">
 								<div class="flex flex-col w-full">
-									<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
+									<div class="mb-0.5 text-xs text-muted">{$i18n.t('Name')}</div>
 
 									<div class="flex-1">
 										<Tooltip
@@ -288,7 +288,7 @@
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-1.5 text-xs text-gray-500">{$i18n.t('Tags')}</div>
+								<div class="mb-1.5 text-xs text-muted">{$i18n.t('Tags')}</div>
 
 								<div class="flex-1">
 									<Tags
@@ -312,7 +312,7 @@
 						{#if !ollama && !direct}
 							<div class="flex gap-2 mt-2">
 								<div class="flex flex-col w-full">
-									<div class=" mb-1 text-xs text-gray-500">
+									<div class="mb-1 text-xs text-muted">
 										{$i18n.t('Model-call tracing')}
 									</div>
 
@@ -327,7 +327,7 @@
 										</select>
 									</div>
 
-									<div class="mt-1 text-xs text-gray-500">
+									<div class="mt-1 text-xs text-muted">
 										{$i18n.t(
 											'OpenRouter records model calls only if Broadcast to this Langfuse project is enabled in OpenRouter. Otherwise leave this on App.'
 										)}
@@ -336,11 +336,11 @@
 							</div>
 						{/if}
 
-						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+						<hr class=" border-line my-2.5 w-full" />
 
 						<div class="flex flex-col w-full">
 							<div class="mb-1 flex justify-between">
-								<div class="text-xs text-gray-500">{$i18n.t('Model IDs')}</div>
+								<div class="text-xs text-muted">{$i18n.t('Model IDs')}</div>
 							</div>
 
 							{#if modelIds.length > 0}
@@ -364,7 +364,7 @@
 									{/each}
 								</div>
 							{:else}
-								<div class="text-gray-500 text-xs text-center py-2 px-10">
+								<div class="text-muted text-xs text-center py-2 px-10">
 									{#if ollama}
 										{$i18n.t('Leave empty to include all models from "{{url}}/api/tags" endpoint', {
 											url: url
@@ -378,7 +378,7 @@
 							{/if}
 						</div>
 
-						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+						<hr class=" border-line my-2.5 w-full" />
 
 						<div class="flex items-center">
 							<input
@@ -428,7 +428,7 @@
 							{#if loading}
 								<div class="ml-2 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

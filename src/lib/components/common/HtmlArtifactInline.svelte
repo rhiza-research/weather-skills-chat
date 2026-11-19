@@ -15,7 +15,7 @@
 </script>
 
 <div
-	class="relative my-2 w-full max-w-3xl overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
+	class="relative my-2 w-full max-w-3xl overflow-hidden rounded-lg border border-line-strong"
 >
 	<HtmlArtifactFrame {src} {title} fit="width" />
 	<button

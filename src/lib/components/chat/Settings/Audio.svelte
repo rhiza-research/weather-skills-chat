@@ -234,7 +234,7 @@
 			</SettingRow>
 		</div>
 
-		<hr class=" border-gray-100 dark:border-gray-850" />
+		<hr class=" border-line" />
 
 		{#if TTSEngine === 'browser-kokoro'}
 			{#if TTSModel}
@@ -270,7 +270,7 @@
 						</div>
 					</div>
 
-					<div class="text-xs text-gray-500">
+					<div class="text-xs text-muted">
 						{$i18n.t('Please do not close the settings page while loading the model.')}
 					</div>
 				</div>

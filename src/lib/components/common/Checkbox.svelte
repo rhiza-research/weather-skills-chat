@@ -15,7 +15,7 @@
 	class=" outline -outline-offset-1 outline-[1.5px] outline-gray-200 dark:outline-gray-600 {state !==
 	'unchecked'
 		? 'bg-black outline-black '
-		: 'hover:outline-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'} text-white transition-all rounded-xl inline-block w-3.5 h-3.5 relative {disabled
+		: 'hover:outline-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'} text-white transition-all rounded-xl inline-block size-3.5 relative {disabled
 		? 'opacity-50 cursor-not-allowed'
 		: ''}"
 	on:click={() => {
@@ -40,7 +40,7 @@
 	<div class="top-0 left-0 absolute w-full flex justify-center">
 		{#if _state === 'checked'}
 			<svg
-				class="w-3.5 h-3.5"
+				class="size-3.5"
 				aria-hidden="true"
 				xmlns="http://www.w3.org/2000/svg"
 				fill="none"

@@ -141,7 +141,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center font-primary">
+			<div class="modal-title">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
@@ -158,7 +158,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -180,7 +180,7 @@
 						<div class="flex gap-2">
 							<div class="flex flex-col w-full">
 								<div class="flex justify-between mb-0.5">
-									<div class=" text-xs text-gray-500">{$i18n.t('URL')}</div>
+									<div class="text-xs text-muted">{$i18n.t('URL')}</div>
 								</div>
 
 								<div class="flex flex-1 items-center">
@@ -208,7 +208,7 @@
 												xmlns="http://www.w3.org/2000/svg"
 												viewBox="0 0 20 20"
 												fill="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													fill-rule="evenodd"
@@ -238,7 +238,7 @@
 							</div>
 						</div>
 
-						<div class="text-xs text-gray-500 mt-1">
+						<div class="text-xs text-muted mt-1">
 							{$i18n.t(`WebUI will make requests to "{{url}}"`, {
 								url: `${url}/${path}`
 							})}
@@ -246,7 +246,7 @@
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
-								<div class="  text-xs text-gray-500">{$i18n.t('Auth')}</div>
+								<div class="text-xs text-muted">{$i18n.t('Auth')}</div>
 
 								<div class="flex gap-2">
 									<div class="flex-shrink-0 self-start">
@@ -268,7 +268,7 @@
 												required={false}
 											/>
 										{:else if auth_type === 'session'}
-											<div class="text-xs text-gray-500 self-center translate-y-[1px]">
+											<div class="text-xs text-muted self-center translate-y-[1px]">
 												{$i18n.t('Forwards system user session credentials to authenticate')}
 											</div>
 										{/if}
@@ -278,7 +278,7 @@
 						</div>
 
 						{#if !direct}
-							<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+							<hr class=" border-line my-2.5 w-full" />
 
 							<div class="my-2 -mx-2">
 								<div class="px-3 py-2 bg-gray-50 dark:bg-gray-950 rounded-lg">
@@ -314,7 +314,7 @@
 							{#if loading}
 								<div class="ml-2 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

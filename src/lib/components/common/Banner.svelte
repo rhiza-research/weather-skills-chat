@@ -68,7 +68,7 @@
 {#if !dismissed}
 	{#if mounted}
 		<div
-			class="{className} top-0 left-0 right-0 p-2 px-3 flex justify-center items-center relative rounded-xl border border-gray-100 dark:border-gray-850 text-gray-800 dark:text-gary-100 bg-white dark:bg-gray-900 backdrop-blur-xl z-30"
+			class="{className} top-0 left-0 right-0 p-2 px-3 flex justify-center items-center relative rounded-xl border border-line text-gray-800 dark:text-gary-100 bg-white dark:bg-gray-900 backdrop-blur-xl z-30"
 			transition:fade={{ delay: 100, duration: 300 }}
 		>
 			<div class=" flex flex-col md:flex-row md:items-center flex-1 text-sm w-fit gap-1.5">
@@ -94,14 +94,14 @@
 							>
 
 							<div
-								class=" ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-white"
+								class="ml-1 text-subtle group-hover:text-gray-600 dark:group-hover:text-white"
 							>
 								<!--  -->
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 16 16"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										fill-rule="evenodd"
@@ -127,7 +127,7 @@
 						target="_blank">{$i18n.t('Learn More')}</a
 					>
 
-					<div class=" ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-white">
+					<div class="ml-1 text-subtle group-hover:text-gray-600 dark:group-hover:text-white">
 						<!--  -->
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -150,7 +150,7 @@
 						on:click={() => {
 							dismiss(banner.id);
 						}}
-						class="  -mt-1 -mb-2 -translate-y-[1px] ml-1.5 mr-1 text-gray-400 dark:hover:text-white"
+						class="-mt-1 -mb-2 -translate-y-[1px] ml-1.5 mr-1 text-subtle dark:hover:text-white"
 						>&times;</button
 					>
 				{/if}

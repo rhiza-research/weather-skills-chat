@@ -94,7 +94,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Share chat')}</div>
+			<div class="modal-title">{$i18n.t('Share chat')}</div>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}
@@ -106,7 +106,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -114,17 +114,17 @@
 				</svg>
 			</button>
 		</div>
-		<hr class="border-gray-100 dark:border-gray-850" />
+		<hr class="border-line" />
 
 		{#if rows.length}
 			<div class="px-5 pt-4 dark:text-gray-200">
-				<div class="mb-1 text-xs text-gray-500">
+				<div class="mb-1 text-xs text-muted">
 					{$i18n.t('Active share links')}
 				</div>
 				<ul class="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
 					{#each rows as link (link.id)}
 						<li
-							class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2 text-xs"
+							class="flex items-center justify-between gap-3 rounded-lg border border-line-strong px-3 py-2 text-xs"
 							class:opacity-50={!link.id}
 							aria-busy={!link.id}
 						>
@@ -134,7 +134,7 @@
 										DATE: dayjs.unix(link.created_at).format('lll')
 									})}
 								</span>
-								<span class="text-gray-500">
+								<span class="text-muted">
 									{link.expires_at
 										? $i18n.t('Expires {{DATE}}', {
 												DATE: dayjs.unix(link.expires_at).format('lll')
@@ -180,9 +180,9 @@
 			on:submit|preventDefault={createHandler}
 		>
 			<label class="flex flex-col w-full">
-				<span class="mb-1 text-xs text-gray-500">{$i18n.t('Expires after (days)')}</span>
+				<span class="mb-1 text-xs text-muted">{$i18n.t('Expires after (days)')}</span>
 				<input
-					class="w-full text-sm bg-transparent rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 outline-hidden focus:border-gray-500"
+					class="w-full text-sm bg-transparent rounded-lg border border-line-strong px-3 py-2 outline-hidden focus:border-gray-500"
 					type="number"
 					min="1"
 					max={MAX_DAYS}
@@ -191,13 +191,13 @@
 					bind:value={days}
 				/>
 			</label>
-			<div class="mt-1 text-xs text-gray-500">
+			<div class="mt-1 text-xs text-muted">
 				{valid
 					? $i18n.t('Expires {{DATE}}', { DATE: dayjs().add(days, 'day').format('LL') })
 					: $i18n.t('Choose between 1 and {{MAX}} days.', { MAX: MAX_DAYS })}
 			</div>
 
-			<div class="mt-4 text-sm text-gray-600 dark:text-gray-300">
+			<div class="mt-4 text-sm text-body">
 				{$i18n.t(
 					'Anyone with this link will be able to see this chat and its files until the expiration date'
 				)}

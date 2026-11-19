@@ -213,7 +213,7 @@
 		deleteChatHandler(id);
 	}}
 >
-	<div class=" text-sm text-gray-500 flex-1 line-clamp-3">
+	<div class="text-sm text-muted flex-1 line-clamp-3">
 		{$i18n.t('This will delete')} <span class="  font-semibold">{title}</span>.
 	</div>
 </DeleteConfirmDialog>
@@ -284,7 +284,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="size-3 shrink-0 mt-[3px] text-gray-400"
+						class="size-3 shrink-0 mt-[3px] text-subtle"
 						aria-label={$i18n.t("You can't edit this chat")}
 					>
 						<title>{$i18n.t("You can't edit this chat")}</title>
@@ -310,7 +310,7 @@
 						<div class="truncate">{title}</div>
 					</Tooltip>
 					{#if ownerName && !isMine}
-						<div class="text-xs text-gray-500 truncate">{ownerName}</div>
+						<div class="text-xs text-muted truncate">{ownerName}</div>
 					{/if}
 				</div>
 			</div>
@@ -419,7 +419,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								d="M2 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM6.5 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM12.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
@@ -441,7 +441,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								d="M2 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM6.5 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM12.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"

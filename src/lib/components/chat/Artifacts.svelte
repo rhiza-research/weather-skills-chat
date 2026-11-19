@@ -479,17 +479,17 @@
 		<div
 			class="flex flex-col min-h-0 shrink-0 {contents.length > 0
 				? 'h-[38%]'
-				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
+				: 'h-1/2'} border-b border-line"
 		>
 			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-xs leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
+				<div class="text-xs leading-4 py-[3px] text-body break-words min-w-0">
 					{provenancePath ? `${$i18n.t('Provenance')}: ${provenancePath}` : previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
 					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
 							type="button"
-							class="p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							class="p-1 rounded-xl text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
 							aria-label={$i18n.t('Expand image')}
 						>
@@ -498,7 +498,7 @@
 					</Tooltip>
 					<button
 						type="button"
-						class="p-1 rounded-xl text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+						class="p-1 rounded-xl text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
 						aria-label={$i18n.t('Close preview')}
 					>
@@ -519,7 +519,7 @@
 							bind:fullscreen={provenanceFullscreen}
 						/>
 					{:else}
-						<div class="flex items-center gap-1.5 text-xs text-gray-400">
+						<div class="flex items-center gap-1.5 text-xs text-subtle">
 							{$i18n.t('Loading provenance')}
 							<Spinner className="size-3" />
 						</div>
@@ -530,7 +530,7 @@
 					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
 				>
 					<div
-						class="h-full w-full overflow-hidden rounded border border-gray-100 dark:border-gray-800"
+						class="h-full w-full overflow-hidden rounded border border-line"
 					>
 						<HtmlArtifactFrame
 							src={previewHtmlUrl}
@@ -547,7 +547,7 @@
 					on:click={expandPreview}
 				>
 					<img
-						class="max-w-full max-h-full object-contain rounded border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+						class="max-w-full max-h-full object-contain rounded border border-line bg-white dark:bg-gray-900"
 						src={previewUrl}
 						alt={previewTitle || 'preview'}
 					/>
@@ -566,7 +566,7 @@
 					<Tooltip content={$i18n.t('Start a new chat with a copy of these artifacts')} placement="bottom">
 						<button
 							type="button"
-							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center gap-1.5 text-sm text-muted hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={startingChat}
 							on:click={startChatWithArtifacts}
 							aria-label={$i18n.t('New chat with these artifacts')}
@@ -585,7 +585,7 @@
 					>
 						<button
 							type="button"
-							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center gap-1.5 text-sm text-muted hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={uploading || !$chatId || $chatId === 'local'}
 							on:click={() => fileInput?.click()}
 						>
@@ -603,7 +603,7 @@
 				<Tooltip content={$i18n.t('Close artifacts')} placement="bottom">
 					<button
 						type="button"
-						class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+						class="p-0.5 text-muted hover:text-gray-700 dark:hover:text-gray-300"
 						on:click={closePanel}
 						aria-label={$i18n.t('Close artifacts')}
 					>
@@ -615,7 +615,7 @@
 
 		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
 			{#if copyState === 'copying'}
-				<div class="flex items-center gap-2 text-xs text-gray-500" role="status">
+				<div class="flex items-center gap-2 text-xs text-muted" role="status">
 					<Spinner className="size-3.5" />
 					{$i18n.t('Artifact copy in progress...')}
 				</div>

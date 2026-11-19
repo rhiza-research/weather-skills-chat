@@ -61,7 +61,7 @@
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 20 20"
 				fill="currentColor"
-				class="w-4 h-4"
+				class="size-4"
 			>
 				<path
 					fill-rule="evenodd"
@@ -90,7 +90,7 @@
 
 					<div class="w-full mt-1">
 						<input
-							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							type="text"
 							bind:value={name}
 							placeholder={$i18n.t('Name your knowledge base')}
@@ -138,7 +138,7 @@
 					{#if loading}
 						<div class="ml-1.5 self-center">
 							<svg
-								class=" w-4 h-4"
+								class=" size-4"
 								viewBox="0 0 24 24"
 								fill="currentColor"
 								xmlns="http://www.w3.org/2000/svg"

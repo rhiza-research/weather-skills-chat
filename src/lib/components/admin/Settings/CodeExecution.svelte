@@ -43,7 +43,7 @@
 				<div class="mb-3.5">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
@@ -74,7 +74,7 @@
 						</div>
 
 						{#if config.CODE_EXECUTION_ENGINE === 'jupyter'}
-							<div class="text-gray-500 text-xs">
+							<div class="text-muted text-xs">
 								{$i18n.t(
 									'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.'
 								)}
@@ -166,7 +166,7 @@
 				<div class="mb-3.5">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Code Interpreter')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5">
 						<div class=" flex w-full justify-between">
@@ -200,7 +200,7 @@
 							</div>
 
 							{#if config.CODE_INTERPRETER_ENGINE === 'jupyter'}
-								<div class="text-gray-500 text-xs">
+								<div class="text-muted text-xs">
 									{$i18n.t(
 										'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.'
 									)}
@@ -288,7 +288,7 @@
 							</div>
 						{/if}
 
-						<hr class="border-gray-100 dark:border-gray-850 my-2" />
+						<hr class="border-line my-2" />
 
 						<div>
 							<div class="py-0.5 w-full">

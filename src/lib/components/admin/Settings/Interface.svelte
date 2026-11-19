@@ -81,7 +81,7 @@
 			<div class="mb-3.5">
 				<div class=" mb-2.5 text-base font-medium">{$i18n.t('Tasks')}</div>
 
-				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+				<hr class=" border-line my-2" />
 
 				<div class=" mb-1 font-medium flex items-center">
 					<div class=" text-xs mr-1">{$i18n.t('Set Task Model')}</div>
@@ -111,7 +111,7 @@
 					<div class="flex-1">
 						<div class=" text-xs mb-1">{$i18n.t('Local Models')}</div>
 						<select
-							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={taskConfig.TASK_MODEL}
 							placeholder={$i18n.t('Select a model')}
 						>
@@ -127,7 +127,7 @@
 					<div class="flex-1">
 						<div class=" text-xs mb-1">{$i18n.t('External Models')}</div>
 						<select
-							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={taskConfig.TASK_MODEL_EXTERNAL}
 							placeholder={$i18n.t('Select a model')}
 						>
@@ -290,7 +290,7 @@
 			<div class="mb-3.5">
 				<div class=" mb-2.5 text-base font-medium">{$i18n.t('UI')}</div>
 
-				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+				<hr class=" border-line my-2" />
 
 				<div class="  {banners.length > 0 ? ' mb-3' : ''}">
 					<div class="mb-2.5 flex w-full justify-between">
@@ -321,7 +321,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 20 20"
 								fill="currentColor"
-								class="w-4 h-4"
+								class="size-4"
 							>
 								<path
 									d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
@@ -334,7 +334,7 @@
 						{#each banners as banner, bannerIdx}
 							<div class=" flex justify-between">
 								<div
-									class="flex flex-row flex-1 border rounded-xl border-gray-100 dark:border-gray-850"
+									class="flex flex-row flex-1 border rounded-xl border-line"
 								>
 									<Dropdown>
 										<div
@@ -380,12 +380,12 @@
 									/>
 
 									<label
-										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+										class="flex items-center gap-1.5 pr-3 text-xs text-muted whitespace-nowrap"
 									>
 										{$i18n.t('Expires at')}
 										<input
 											type="date"
-											class="py-1.5 text-xs text-gray-800 dark:text-gray-100 bg-transparent outline-hidden"
+											class="py-1.5 text-xs text-strong bg-transparent outline-hidden"
 											value={banner.expires_at
 												? dayjs.unix(banner.expires_at).format('YYYY-MM-DD')
 												: ''}
@@ -397,7 +397,7 @@
 									</label>
 
 									<label
-										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+										class="flex items-center gap-1.5 pr-3 text-xs text-muted whitespace-nowrap"
 									>
 										{$i18n.t('Dismissible')}
 										<Switch bind:state={banner.dismissible} />
@@ -416,7 +416,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -448,7 +448,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
@@ -462,22 +462,22 @@
 									class=" flex border border-gray-100 dark:border-none dark:bg-gray-850 rounded-xl py-1.5"
 								>
 									<div class="flex flex-col flex-1 pl-1">
-										<div class="flex border-b border-gray-100 dark:border-gray-850 w-full">
+										<div class="flex border-b border-line w-full">
 											<input
-												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-line"
 												placeholder={$i18n.t('Title (e.g. Tell me a fun fact)')}
 												bind:value={prompt.title[0]}
 											/>
 
 											<input
-												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-line"
 												placeholder={$i18n.t('Subtitle (e.g. about the Roman Empire)')}
 												bind:value={prompt.title[1]}
 											/>
 										</div>
 
 										<textarea
-											class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850 resize-none"
+											class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-line resize-none"
 											placeholder={$i18n.t(
 												'Prompt (e.g. Tell me a fun fact about the Roman Empire)'
 											)}
@@ -498,7 +498,7 @@
 											xmlns="http://www.w3.org/2000/svg"
 											viewBox="0 0 20 20"
 											fill="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"

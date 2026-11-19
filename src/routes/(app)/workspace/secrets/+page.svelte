@@ -143,7 +143,7 @@
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Secrets')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{items.length}</span>
+				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
 
@@ -164,7 +164,7 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800"
+			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
@@ -177,7 +177,7 @@
 			/>
 			<input
 				bind:this={valueInput}
-				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 				type="password"
 				placeholder={$i18n.t('Value')}
 				bind:value
@@ -186,7 +186,7 @@
 			/>
 			{#if !isPersonal && isOrgAdmin}
 				<select
-					class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+					class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-line-strong"
 					bind:value={visibility}
 				>
 					<option value="private">{$i18n.t('Private')}</option>
@@ -241,12 +241,12 @@
 
 					<div class="px-1 mb-1">
 						<div class="font-semibold line-clamp-1 h-fit">{secret.name}</div>
-						<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 font-mono text-gray-500">
+						<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 font-mono text-muted">
 							{'{{secret:' + secret.name + '}}'}
 						</div>
 
 					{#if secret.visibility !== 'organization' && sharedNames.has(secret.name)}
-						<div class="mt-2 text-xs text-gray-500">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Overrides the organization secret with this name')}
 						</div>
 					{/if}
@@ -267,7 +267,7 @@
 							/>
 							<button class="text-xs px-2 py-1.5 rounded-lg" type="submit">{$i18n.t('Save')}</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg text-gray-500"
+								class="text-xs px-2 py-1.5 rounded-lg text-muted"
 								type="button"
 								on:click={() => {
 									replacing = null;
@@ -280,13 +280,13 @@
 				</div>
 			</div>
 		{:else}
-			<div class="col-span-full text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+			<div class="col-span-full text-sm text-muted py-6 text-center">
 				{$i18n.t('No secrets yet.')}
 			</div>
 		{/each}
 	</div>
 
-	<div class="text-gray-500 text-xs mt-1 mb-2">
+	<div class="text-muted text-xs mt-1 mb-2">
 		ⓘ {$i18n.t(
 			'Values are encrypted at rest and never shown again. In a tool call, use a secret placeholder — the server fills the value in before the tool runs. A private secret overrides an organization secret with the same name.'
 		)}

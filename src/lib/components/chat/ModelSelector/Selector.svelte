@@ -395,10 +395,10 @@
 						>
 							{#if (items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')) || items.find((item) => item.model?.direct) || tags.length > 0}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedTag === '' &&
+									class="tab outline-none {selectedTag === '' &&
 									selectedConnectionType === ''
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'tab-idle'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = '';
@@ -410,9 +410,9 @@
 
 							{#if items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'ollama'
+									class="tab outline-none {selectedConnectionType === 'ollama'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'tab-idle'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'ollama';
@@ -421,9 +421,9 @@
 									{$i18n.t('Local')}
 								</button>
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'openai'
+									class="tab outline-none {selectedConnectionType === 'openai'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'tab-idle'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'openai';
@@ -435,9 +435,9 @@
 
 							{#if items.find((item) => item.model?.direct)}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'direct'
+									class="tab outline-none {selectedConnectionType === 'direct'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'tab-idle'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'direct';
@@ -449,9 +449,9 @@
 
 							{#each tags as tag}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedTag === tag
+									class="tab outline-none {selectedTag === tag
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'tab-idle'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = tag;
@@ -485,7 +485,7 @@
 								<div class="flex gap-0.5 self-start h-full mb-1.5 -translate-x-1">
 									{#each item.model?.tags.sort((a, b) => a.name.localeCompare(b.name)) as tag}
 										<div
-											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+											class="text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-body"
 										>
 											{tag.name}
 										</div>
@@ -526,7 +526,7 @@
 																className="self-end"
 															>
 																<span
-																	class=" text-xs font-medium text-gray-600 dark:text-gray-400 line-clamp-1"
+																	class="text-xs font-medium text-body line-clamp-1"
 																	>{item.model.ollama?.details?.parameter_size ?? ''}</span
 																>
 															</Tooltip>
@@ -597,7 +597,7 @@
 												viewBox="0 0 24 24"
 												stroke-width="1.5"
 												stroke="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													stroke-linecap="round"
@@ -616,7 +616,7 @@
 										{#each item.model?.tags.sort((a, b) => a.name.localeCompare(b.name)) as tag}
 											<Tooltip content={tag.name} className="flex-shrink-0">
 												<div
-													class=" text-xs font-bold px-1 rounded-sm uppercase bg-gray-500/20 text-gray-700 dark:text-gray-200"
+													class="text-xs font-bold px-1 rounded-sm uppercase bg-gray-500/20 text-body"
 												>
 													{tag.name}
 												</div>
@@ -635,7 +635,7 @@
 					</button>
 				{:else}
 					<div class="">
-						<div class="block px-3 py-2 text-sm text-gray-700 dark:text-gray-100">
+						<div class="block px-3 py-2 text-sm text-strong">
 							{$i18n.t('No results found')}
 						</div>
 					</div>
@@ -649,7 +649,7 @@
 						placement="top-start"
 					>
 						<button
-							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
+							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
 							on:click={() => {
 								pullModelHandler();
 							}}
@@ -663,7 +663,7 @@
 
 				{#each Object.keys($MODEL_DOWNLOAD_POOL) as model}
 					<div
-						class="flex w-full justify-between font-medium select-none rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 rounded-lg cursor-pointer data-highlighted:bg-muted"
+						class="flex w-full justify-between font-medium select-none rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 rounded-lg cursor-pointer data-highlighted:bg-muted"
 					>
 						<div class="flex">
 							<div class="-ml-2 mr-2.5 translate-y-0.5">
@@ -716,13 +716,13 @@
 						<div class="mr-2 ml-1 translate-y-0.5">
 							<Tooltip content={$i18n.t('Cancel')}>
 								<button
-									class="text-gray-800 dark:text-gray-100"
+									class="text-strong"
 									on:click={() => {
 										cancelModelPullHandler(model);
 									}}
 								>
 									<svg
-										class="w-4 h-4 text-gray-800 dark:text-white"
+										class="size-4 text-gray-800 dark:text-white"
 										aria-hidden="true"
 										xmlns="http://www.w3.org/2000/svg"
 										width="24"
@@ -748,7 +748,7 @@
 			{#if showTemporaryChatControl}
 				<div class="flex items-center mx-2 mb-2">
 					<button
-						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
+						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl cursor-pointer data-highlighted:bg-muted"
 						on:click={async () => {
 							temporaryChatEnabled.set(!$temporaryChatEnabled);
 							await goto('/');

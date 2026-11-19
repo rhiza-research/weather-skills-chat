@@ -457,7 +457,7 @@
 			{$i18n.t('Users & Organizations')}
 		</div>
 		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-		<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{rows.length}</span>
+		<span class="text-lg font-medium text-body">{rows.length}</span>
 	</div>
 
 	<div class="flex gap-1">
@@ -468,7 +468,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 20 20"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path
 							fill-rule="evenodd"
@@ -516,7 +516,7 @@
 <Modal bind:show={showInvite} size="sm">
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</div>
+			<div class="modal-title">{$i18n.t('Invite a user')}</div>
 			<button
 				class="self-center"
 				type="button"
@@ -524,14 +524,14 @@
 					showInvite = false;
 				}}
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
 					/>
 				</svg>
 			</button>
 		</div>
-		<hr class="border-gray-100 dark:border-gray-850" />
+		<hr class="border-line" />
 		<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 			<input
 				class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
@@ -541,14 +541,14 @@
 				bind:value={inviteEmail}
 			/>
 			<div>
-				<div class="mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
+				<div class="mb-1 text-xs text-muted">{$i18n.t('Monthly usage limit')}</div>
 				<label class="flex items-center gap-2 text-sm">
 					<input type="checkbox" bind:checked={inviteUnlimited} />
 					{$i18n.t('Unlimited')}
 				</label>
 				{#if !inviteUnlimited}
 					<div class="flex items-center gap-1.5 mt-2">
-						<span class="text-sm text-gray-500">$</span>
+						<span class="text-sm text-muted">$</span>
 						<input
 							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
 							type="number"
@@ -560,7 +560,7 @@
 				{/if}
 			</div>
 			<label class="block">
-				<div class="mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
+				<div class="mb-1 text-xs text-muted">{$i18n.t('Role')}</div>
 				<select
 					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
 					bind:value={inviteRole}
@@ -585,7 +585,7 @@
 <div class="overflow-x-auto">
 	<div class="org-table">
 		<div
-			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400"
+			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-xs font-semibold text-muted"
 		>
 			<div>
 				{$i18n.t('Name')}
@@ -610,7 +610,7 @@
 			<div class="text-center leading-tight">{$i18n.t('Allow large runners')}</div>
 			<div></div>
 		</div>
-		<hr class="mt-0.5 border-gray-100 dark:border-gray-850" />
+		<hr class="mt-0.5 border-line" />
 
 		{#each paged as row, idx (row.id)}
 		<div
@@ -623,13 +623,13 @@
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="shrink-0 w-4"></span>
 						<div
-							class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+							class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
 						>
 							<UserCircleSolid className="size-4" />
 						</div>
 						<div class="min-w-0">
 							<div class="text-sm font-medium truncate">{row.email}</div>
-							<div class="text-xs text-gray-500 truncate">
+							<div class="text-xs text-muted truncate">
 								{$i18n.t('Sent')} {dayjs(row.invite.created_at * 1000).format('LL')}
 								· {row.invite.role === 'admin' ? $i18n.t('Admin') : $i18n.t('User')}
 								· {row.invite.expired
@@ -643,20 +643,20 @@
 						<span class="shrink-0 w-4"></span>
 						{#if row.person}
 							<img
-								class="rounded-full w-6 h-6 object-cover shrink-0"
+								class="rounded-full size-6 object-cover shrink-0"
 								src={avatarSrc(row.image)}
 								alt=""
 							/>
 						{:else}
 							<div
-								class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+								class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
 							>
 								<UserCircleSolid className="size-4" />
 							</div>
 						{/if}
 						<div class="min-w-0">
 							<div class="text-sm font-medium truncate">{row.displayName}</div>
-							<div class="text-xs text-gray-500 truncate">
+							<div class="text-xs text-muted truncate">
 								{#if row.email}
 									{row.email}
 								{:else if row.description}
@@ -685,20 +685,20 @@
 						</span>
 						{#if row.logo}
 							<img
-								class="rounded-full w-6 h-6 object-cover shrink-0"
+								class="rounded-full size-6 object-cover shrink-0"
 								src={row.logo}
 								alt=""
 							/>
 						{:else}
 							<div
-								class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
+								class="rounded-full size-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center"
 							>
 								<UserCircleSolid className="size-4" />
 							</div>
 						{/if}
 						<div class="min-w-0">
 							<div class="text-sm font-medium truncate">{row.displayName}</div>
-							<div class="text-xs text-gray-500 truncate">
+							<div class="text-xs text-muted truncate">
 								{#if row.description}
 									{row.description}
 								{/if}
@@ -747,10 +747,10 @@
 							: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
 				</div>
 				{#if row.kind === 'invite'}
-					<div class="text-xs text-gray-300 dark:text-gray-600">—</div>
+					<div class="text-xs text-subtle">—</div>
 				{:else}
 				<Tooltip content={tokenUsageTooltip(row.usage)} className="min-w-0 block">
-					<div class="text-xs text-gray-500 tabular-nums truncate">
+					<div class="text-xs text-muted tabular-nums truncate">
 						{tokenLine(row.usage)}
 					</div>
 				</Tooltip>
@@ -869,7 +869,7 @@
 									viewBox="0 0 24 24"
 									stroke-width="1.5"
 									stroke="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										stroke-linecap="round"
@@ -895,7 +895,7 @@
 										viewBox="0 0 24 24"
 										stroke-width="1.5"
 										stroke="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											stroke-linecap="round"
@@ -921,7 +921,7 @@
 									viewBox="0 0 24 24"
 									stroke-width="1.5"
 									stroke="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										stroke-linecap="round"
@@ -944,7 +944,7 @@
 										viewBox="0 0 24 24"
 										stroke-width="1.5"
 										stroke="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											stroke-linecap="round"
@@ -1002,7 +1002,7 @@
 							/>
 							{#if !memberUserId && memberQuery.trim()}
 								<div
-									class="absolute z-10 mt-1 w-full rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-100 dark:border-gray-800 py-1"
+									class="absolute z-10 mt-1 w-full rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-line py-1"
 								>
 									{#each candidatesFor(row, memberQuery) as person (person.id)}
 										<button
@@ -1014,17 +1014,17 @@
 											}}
 										>
 											<img
-												class="rounded-full w-5 h-5 object-cover shrink-0"
+												class="rounded-full size-5 object-cover shrink-0"
 												src={avatarSrc(person.profile_image_url)}
 												alt=""
 											/>
 											<div class="min-w-0">
 												<div class="truncate">{person.name}</div>
-												<div class="text-xs text-gray-500 truncate">{person.email ?? ''}</div>
+												<div class="text-xs text-muted truncate">{person.email ?? ''}</div>
 											</div>
 										</button>
 									{:else}
-										<div class="px-2 py-1.5 text-xs text-gray-500">
+										<div class="px-2 py-1.5 text-xs text-muted">
 											{$i18n.t('No matching users')}
 										</div>
 									{/each}
@@ -1040,7 +1040,7 @@
 								<option value="admin">{$i18n.t('Admin')}</option>
 							</select>
 						{:else}
-							<span class="text-xs text-gray-500">{$i18n.t('Admin')}</span>
+							<span class="text-xs text-muted">{$i18n.t('Admin')}</span>
 						{/if}
 						<button
 							class="text-xs px-2.5 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 disabled:opacity-50"
@@ -1052,27 +1052,27 @@
 					</form>
 					{/if}
 					{#if (row.members ?? []).length === 0}
-						<div class="text-xs text-gray-500 py-1">{$i18n.t('No members yet.')}</div>
+						<div class="text-xs text-muted py-1">{$i18n.t('No members yet.')}</div>
 					{:else}
 						{#each row.members as member (member.user_id)}
 							<div class="flex items-center justify-between gap-3 py-1.5 text-sm">
 								<div class="flex items-center gap-2 min-w-0">
 									<img
-										class="rounded-full w-5 h-5 object-cover shrink-0"
+										class="rounded-full size-5 object-cover shrink-0"
 										src={avatarSrc(member.profile_image_url)}
 										alt=""
 									/>
 									<div class="min-w-0">
 										<div class="truncate">{member.name ?? member.user_id}</div>
-										<div class="text-xs text-gray-500 truncate">{member.email ?? ''}</div>
+										<div class="text-xs text-muted truncate">{member.email ?? ''}</div>
 									</div>
 								</div>
 								<div class="flex items-center gap-1 shrink-0">
-									<div class="text-xs text-gray-500 capitalize">{member.role}</div>
+									<div class="text-xs text-muted capitalize">{member.role}</div>
 									{#if member.role !== 'owner' || (row.members ?? []).filter((item) => item.role === 'owner').length > 1}
 										<Tooltip content={$i18n.t('Remove from organization')}>
 											<button
-												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-gray-400 hover:text-red-600"
+												class="self-center w-fit text-sm p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-subtle hover:text-red-600"
 												type="button"
 												on:click={() => askRemoveMember(row, member)}
 											>
@@ -1082,7 +1082,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="1.5"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1101,14 +1101,14 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="text-sm text-gray-500 py-6 text-center">
+		<div class="text-sm text-muted py-6 text-center">
 			{$i18n.t('No users or organizations yet.')}
 		</div>
 	{/each}
 	</div>
 </div>
 
-<div class=" text-gray-500 text-xs mt-1.5 text-right">
+<div class="text-muted text-xs mt-1.5 text-right">
 	ⓘ {$i18n.t('Admin access is granted by membership in the Platform organization.')}
 </div>
 

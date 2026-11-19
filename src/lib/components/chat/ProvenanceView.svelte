@@ -23,7 +23,7 @@
 	export let fullscreenButton = true;
 
 	const iconButton =
-		'p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
+		'p-1 rounded-md text-muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
 	const modes = [
 		['graph', 'Graph'],
 		['text', 'Text']
@@ -49,8 +49,8 @@
 					<button
 						type="button"
 						class="px-2 py-0.5 rounded {mode === value
-							? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 shadow-sm'
-							: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+							? 'bg-white dark:bg-gray-700 text-strong shadow-lg'
+							: 'text-muted hover:text-gray-700 dark:hover:text-gray-300'}"
 						aria-pressed={mode === value}
 						on:click={() => (mode = value)}>{$i18n.t(label)}</button
 					>
@@ -78,8 +78,8 @@
 					<button
 						type="button"
 						class="px-2 py-0.5 rounded {mode === value
-							? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 shadow-sm'
-							: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+							? 'bg-white dark:bg-gray-700 text-strong shadow-lg'
+							: 'text-muted hover:text-gray-700 dark:hover:text-gray-300'}"
 						aria-pressed={mode === value}
 						on:click={() => (mode = value)}>{$i18n.t(label)}</button
 					>
@@ -117,7 +117,7 @@
 		aria-label={$i18n.t('Provenance')}
 	>
 		<div class="flex items-center justify-between gap-2 h-12 shrink-0">
-			<div class="text-sm text-gray-600 dark:text-gray-300 truncate min-w-0">
+			<div class="text-sm text-body truncate min-w-0">
 				{title || fileName}
 			</div>
 			<button

@@ -593,7 +593,7 @@
 
 				{#if message.timestamp}
 					<div
-						class=" self-center text-xs invisible group-hover:visible text-gray-400 font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
+						class="self-center text-xs invisible group-hover:visible text-subtle font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 					>
 						<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 							<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
@@ -655,7 +655,7 @@
 									<div>
 										<button
 											id="save-new-message-button"
-											class=" px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition rounded-3xl"
+											class="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-line text-body transition rounded-3xl"
 											on:click={() => {
 												saveAsCopyHandler();
 											}}
@@ -667,7 +667,7 @@
 									<div class="flex space-x-1.5">
 										<button
 											id="close-edit-message-button"
-											class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-gray-800 dark:text-gray-100 transition rounded-3xl"
+											class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-strong transition rounded-3xl"
 											on:click={() => {
 												cancelEditMessage();
 											}}
@@ -842,7 +842,7 @@
 										<div class="mt-2">
 											<button
 												type="button"
-												class="text-sm px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 transition"
+												class="text-sm px-3 py-1.5 rounded-xl border border-line-strong hover:bg-black/5 dark:hover:bg-white/5 transition"
 												on:click={() => {
 													showRateComment = false;
 													regenerateResponse(message);
@@ -980,7 +980,7 @@
 											viewBox="0 0 24 24"
 											stroke-width="2.3"
 											stroke="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												stroke-linecap="round"
@@ -1006,7 +1006,7 @@
 										>
 											{#if loadingSpeech}
 												<svg
-													class=" w-4 h-4"
+													class=" size-4"
 													fill="currentColor"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg"
@@ -1043,7 +1043,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1058,7 +1058,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1085,7 +1085,7 @@
 										>
 											{#if generatingImage}
 												<svg
-													class=" w-4 h-4"
+													class=" size-4"
 													fill="currentColor"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg"
@@ -1122,7 +1122,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1165,7 +1165,7 @@
 												viewBox="0 0 24 24"
 												stroke-width="2.3"
 												stroke="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													stroke-linecap="round"
@@ -1205,7 +1205,7 @@
 													viewBox="0 0 24 24"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													class="w-4 h-4"
+													class="size-4"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1241,7 +1241,7 @@
 													viewBox="0 0 24 24"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													class="w-4 h-4"
+													class="size-4"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1281,7 +1281,7 @@
 												viewBox="0 0 24 24"
 												stroke-width="2.3"
 												stroke="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													stroke-linecap="round"
@@ -1310,7 +1310,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1338,7 +1338,7 @@
 														<div class="size-4">
 															<img
 																src={action.icon_url}
-																class="w-4 h-4 {action.icon_url.includes('svg')
+																class="size-4 {action.icon_url.includes('svg')
 																	? 'dark:invert-[80%]'
 																	: ''}"
 																style="fill: currentColor;"

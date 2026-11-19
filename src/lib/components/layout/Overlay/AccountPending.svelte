@@ -66,7 +66,7 @@
 					</button>
 
 					<button
-						class="text-xs text-center w-full mt-2 text-gray-400 underline"
+						class="text-xs text-center w-full mt-2 text-subtle underline"
 						on:click={async () => {
 							localStorage.removeItem('token');
 							location.href = '/auth';

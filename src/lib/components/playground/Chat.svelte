@@ -234,7 +234,7 @@
 
 						<div class="w-full">
 							<select
-								class="w-full bg-transparent border border-gray-100 dark:border-gray-850 rounded-lg py-1 px-2 -mx-0.5 text-sm outline-hidden"
+								class="w-full bg-transparent border border-line rounded-lg py-1 px-2 -mx-0.5 text-sm outline-hidden"
 								bind:value={selectedModelId}
 							>
 								{#each $models as model}
@@ -261,7 +261,7 @@
 						</div>
 
 						{#if !showSystem}
-							<div class=" flex-1 text-gray-500 line-clamp-1">
+							<div class="flex-1 text-muted line-clamp-1">
 								{system}
 							</div>
 						{/if}
@@ -318,10 +318,10 @@
 			</div>
 
 			<div class="pb-3">
-				<div class="text-xs font-medium text-gray-500 px-2 py-1">
+				<div class="text-xs font-medium text-muted px-2 py-1">
 					{selectedModelId}
 				</div>
-				<div class="border border-gray-100 dark:border-gray-850 w-full px-3 py-2.5 rounded-xl">
+				<div class="border border-line w-full px-3 py-2.5 rounded-xl">
 					<div class="py-0.5">
 						<!-- $i18n.t('a user') -->
 						<!-- $i18n.t('an assistant') -->

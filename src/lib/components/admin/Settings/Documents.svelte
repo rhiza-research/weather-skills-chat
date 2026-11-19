@@ -276,7 +276,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<div class="flex w-full justify-between">
@@ -426,7 +426,7 @@
 					<div class="mb-3">
 						<div class=" mb-2.5 text-base font-medium">{$i18n.t('Embedding')}</div>
 
-						<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+						<hr class=" border-line my-2" />
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
 							<div class="flex w-full justify-between">
@@ -513,7 +513,7 @@
 
 										{#if embeddingEngine === ''}
 											<button
-												class="px-2.5 bg-transparent text-gray-800 dark:bg-transparent dark:text-gray-100 rounded-lg transition"
+												class="px-2.5 bg-transparent text-strong dark:bg-transparent rounded-lg transition"
 												on:click={() => {
 													embeddingModelUpdateHandler();
 												}}
@@ -522,7 +522,7 @@
 												{#if updateEmbeddingModelLoading}
 													<div class="self-center">
 														<svg
-															class=" w-4 h-4"
+															class=" size-4"
 															viewBox="0 0 24 24"
 															fill="currentColor"
 															xmlns="http://www.w3.org/2000/svg"
@@ -554,7 +554,7 @@
 														xmlns="http://www.w3.org/2000/svg"
 														viewBox="0 0 16 16"
 														fill="currentColor"
-														class="w-4 h-4"
+														class="size-4"
 													>
 														<path
 															d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"
@@ -570,7 +570,7 @@
 								{/if}
 							</div>
 
-							<div class="mt-1 mb-1 text-xs text-gray-400 dark:text-gray-500">
+							<div class="mt-1 mb-1 text-xs text-subtle">
 								{$i18n.t(
 									'Warning: If you update or change your embedding model, you will need to re-import all documents.'
 								)}
@@ -600,7 +600,7 @@
 					<div class="mb-3">
 						<div class=" mb-2.5 text-base font-medium">{$i18n.t('Retrieval')}</div>
 
-						<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+						<hr class=" border-line my-2" />
 
 						<div class="  mb-2.5 flex w-full justify-between">
 							<div class=" self-center text-xs font-medium">{$i18n.t('Full Context Mode')}</div>
@@ -648,7 +648,7 @@
 												/>
 											</div>
 											<button
-												class="px-2.5 bg-transparent text-gray-800 dark:bg-transparent dark:text-gray-100 rounded-lg transition"
+												class="px-2.5 bg-transparent text-strong dark:bg-transparent rounded-lg transition"
 												on:click={() => {
 													rerankingModelUpdateHandler();
 												}}
@@ -657,7 +657,7 @@
 												{#if updateRerankingModelLoading}
 													<div class="self-center">
 														<svg
-															class=" w-4 h-4"
+															class=" size-4"
 															viewBox="0 0 24 24"
 															fill="currentColor"
 															xmlns="http://www.w3.org/2000/svg"
@@ -689,7 +689,7 @@
 														xmlns="http://www.w3.org/2000/svg"
 														viewBox="0 0 16 16"
 														fill="currentColor"
-														class="w-4 h-4"
+														class="size-4"
 													>
 														<path
 															d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"
@@ -756,7 +756,7 @@
 											/>
 										</div>
 									</div>
-									<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+									<div class="mt-1 text-xs text-subtle">
 										{$i18n.t(
 											'Note: If you set a minimum score, the search will only return documents with a score greater than or equal to the minimum score.'
 										)}
@@ -790,7 +790,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Files')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">{$i18n.t('Max Upload Size')}</div>
@@ -838,7 +838,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Integration')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">{$i18n.t('Google Drive')}</div>
@@ -858,7 +858,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Danger Zone')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="  mb-2.5 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">{$i18n.t('Reset Upload Directory')}</div>

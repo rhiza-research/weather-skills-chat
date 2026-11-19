@@ -352,7 +352,7 @@
 		deleteHandler();
 	}}
 >
-	<div class=" text-sm text-gray-700 dark:text-gray-300 flex-1 line-clamp-3">
+	<div class="text-sm text-body flex-1 line-clamp-3">
 		{#if (folders[folderId]?.visibility || 'private') === 'organization'}
 			{$i18n.t('This will remove')}
 			<span class="font-semibold">{folders[folderId].name}</span>.
@@ -397,9 +397,9 @@
 		<div class="w-full group">
 			<button
 				id="folder-{folderId}-button"
-				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-500 font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
+				class="relative w-full py-1.5 px-2 rounded-xl flex items-center gap-1.5 text-xs text-muted font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
 			>
-				<div class="text-gray-300 dark:text-gray-600">
+				<div class="text-subtle">
 					{#if open}
 						<ChevronDown className=" size-3" strokeWidth="2.5" />
 					{:else}
@@ -434,7 +434,7 @@
 									edit = false;
 								}
 							}}
-							class="w-full h-full bg-transparent text-gray-500 dark:text-gray-500 outline-hidden"
+							class="w-full h-full bg-transparent text-muted outline-hidden"
 						/>
 					{:else}
 						{folders[folderId].name}
@@ -472,7 +472,7 @@
 		<div slot="content" class="w-full">
 			{#if (folders[folderId]?.childrenIds ?? []).length > 0 || (folders[folderId].items?.chats ?? []).length > 0}
 				<div
-					class="ml-3 pl-1 mt-[1px] flex flex-col overflow-y-auto scrollbar-hidden border-s border-gray-100 dark:border-gray-900"
+					class="ml-3 pl-1 mt-[1px] flex flex-col overflow-y-auto scrollbar-hidden border-s border-line"
 				>
 					{#if folders[folderId]?.childrenIds}
 						{@const children = folders[folderId]?.childrenIds

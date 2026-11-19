@@ -34,7 +34,7 @@
 		</Tooltip>
 	</div>
 
-	<div class=" -mt-1 border-[1.5px] border-gray-100 dark:border-gray-900 mx-4"></div>
+	<div class=" -mt-1 border-[1.5px] border-line mx-4"></div>
 
 	<div class="flex justify-center relative group">
 		{#if selected === ''}
@@ -57,7 +57,7 @@
 		</button>
 	</div>
 
-	<!-- <div class="flex justify-center relative group text-gray-400">
+	<!-- <div class="flex justify-center relative group text-subtle">
 		<button class=" cursor-pointer p-2" on:click={() => {}}>
 			<Plus className="size-4" strokeWidth="2" />
 		</button>

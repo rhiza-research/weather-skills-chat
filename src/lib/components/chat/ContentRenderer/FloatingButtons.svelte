@@ -227,7 +227,7 @@
 	{#if responseContent === null}
 		{#if !floatingInput}
 			<div
-				class="flex flex-row gap-0.5 shrink-0 p-1 bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-lg shadow-xl"
+				class="flex flex-row gap-0.5 shrink-0 p-1 bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-lg shadow-lg"
 			>
 				<button
 					class="px-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl flex items-center gap-1 min-w-fit"
@@ -262,7 +262,7 @@
 			</div>
 		{:else}
 			<div
-				class="py-1 flex dark:text-gray-100 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-850 w-72 rounded-full shadow-xl"
+				class="py-1 flex dark:text-gray-100 bg-gray-50 dark:bg-gray-800 border border-line w-72 rounded-full shadow-lg"
 			>
 				<input
 					type="text"
@@ -303,7 +303,7 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="bg-white dark:bg-gray-850 dark:text-gray-100 rounded-xl shadow-xl w-80 max-w-full">
+		<div class="bg-white dark:bg-gray-850 dark:text-gray-100 rounded-xl shadow-lg w-80 max-w-full">
 			<div
 				class="bg-gray-50/50 dark:bg-gray-800 dark:text-gray-100 text-medium rounded-xl px-3.5 py-3 w-full"
 			>

@@ -165,7 +165,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-5 h-5"
+										class="size-5"
 									>
 										<path
 											d="m2.695 14.762-1.262 3.155a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.886L17.5 5.501a2.121 2.121 0 0 0-3-3L3.58 13.419a4 4 0 0 0-.885 1.343Z"
@@ -240,12 +240,12 @@
 			<UpdatePassword />
 		</div>
 
-		<hr class="border-gray-50 dark:border-gray-850 my-2" />
+		<hr class="border-line my-2" />
 
 		<div class="flex justify-between items-center text-sm">
 			<div class="  font-medium">{$i18n.t('API keys')}</div>
 			<button
-				class=" text-xs font-medium text-gray-500"
+				class="text-xs font-medium text-muted"
 				type="button"
 				on:click={() => {
 					showAPIKeys = !showAPIKeys;
@@ -278,7 +278,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										fill-rule="evenodd"
@@ -291,7 +291,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 16 16"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										fill-rule="evenodd"
@@ -332,7 +332,7 @@
 											xmlns="http://www.w3.org/2000/svg"
 											viewBox="0 0 20 20"
 											fill="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												fill-rule="evenodd"
@@ -345,7 +345,7 @@
 											xmlns="http://www.w3.org/2000/svg"
 											viewBox="0 0 16 16"
 											fill="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												fill-rule="evenodd"

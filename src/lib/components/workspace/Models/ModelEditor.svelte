@@ -467,7 +467,7 @@
 
 						<div class="flex w-full mt-1 justify-end">
 							<button
-								class="px-2 py-1 text-gray-500 rounded-lg text-xs"
+								class="px-2 py-1 text-muted rounded-lg text-xs"
 								on:click={() => {
 									info.meta.profile_image_url = '/static/favicon.png';
 								}}
@@ -495,7 +495,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="text-xs w-full bg-transparent text-gray-500 outline-hidden"
+									class="text-xs w-full bg-transparent text-muted outline-hidden"
 									placeholder={$i18n.t('Model ID')}
 									bind:value={id}
 									disabled={edit}
@@ -548,7 +548,7 @@
 								/>
 							</div>
 
-							<div class="text-xs text-gray-500 mt-1">
+							<div class="text-xs text-muted mt-1">
 								{#if fallbackNote === 'suggested'}
 									{$i18n.t(
 										'Suggested because the model name matches. Check it is the right model before saving.'
@@ -621,7 +621,7 @@
 						</div>
 					{/if}
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
+					<hr class=" border-line my-1.5" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between">
@@ -675,7 +675,7 @@
 						</div>
 					</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1" />
+					<hr class=" border-line my-1" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between items-center">
@@ -723,7 +723,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 20 20"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
@@ -739,7 +739,7 @@
 									{#each info.meta.suggestion_prompts as prompt, promptIdx}
 										<div class=" flex rounded-lg">
 											<input
-												class=" text-sm w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class=" text-sm w-full bg-transparent outline-hidden border-r border-line"
 												placeholder={$i18n.t('Write a prompt suggestion (e.g. Who are you?)')}
 												bind:value={prompt.content}
 											/>
@@ -756,7 +756,7 @@
 													xmlns="http://www.w3.org/2000/svg"
 													viewBox="0 0 20 20"
 													fill="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -772,7 +772,7 @@
 						{/if}
 					</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
+					<hr class=" border-line my-1.5" />
 
 					<div class="my-2">
 						<Knowledge
@@ -781,7 +781,7 @@
 						/>
 					</div>
 
-					<div class="my-2 text-xs text-gray-500 dark:text-gray-400">
+					<div class="my-2 text-xs text-muted">
 						{$i18n.t(
 							'Skills and tools available to you are enabled by default in chat (highest skill version). Use the chat tools menu to change that per conversation.'
 						)}
@@ -842,7 +842,7 @@
 							{#if loading}
 								<div class="ml-1.5 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

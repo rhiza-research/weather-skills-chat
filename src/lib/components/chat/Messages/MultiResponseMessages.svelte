@@ -222,10 +222,10 @@
 					<div
 						class=" snap-center w-full max-w-full m-1 border {history.messages[messageId]
 							?.modelIdx == modelIdx
-							? `border-gray-100 dark:border-gray-850 border-[1.5px] ${
+							? `border-line border-[1.5px] ${
 									$mobile ? 'min-w-full' : 'min-w-80'
 								}`
-							: `border-gray-100 dark:border-gray-850 border-dashed ${
+							: `border-line border-dashed ${
 									$mobile ? 'min-w-full' : 'min-w-80'
 								}`} transition-all p-5 rounded-2xl"
 						on:click={async () => {
@@ -296,7 +296,7 @@
 
 									{#if message.timestamp}
 										<span
-											class=" self-center invisible group-hover:visible text-gray-400 text-xs font-medium uppercase ml-0.5 -mt-0.5"
+											class="self-center invisible group-hover:visible text-subtle text-xs font-medium uppercase ml-0.5 -mt-0.5"
 										>
 											{dayjs(message.timestamp * 1000).format('LT')}
 										</span>

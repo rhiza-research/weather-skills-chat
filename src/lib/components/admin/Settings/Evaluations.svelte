@@ -106,7 +106,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5 flex w-full justify-between">
 						<div class=" text-xs font-medium">{$i18n.t('Arena Models')}</div>
@@ -139,7 +139,7 @@
 							</div>
 						</div>
 
-						<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+						<hr class=" border-line my-2" />
 
 						<div class="flex flex-col gap-2">
 							{#if (evaluationConfig?.EVALUATION_ARENA_MODELS ?? []).length > 0}
@@ -155,7 +155,7 @@
 									/>
 								{/each}
 							{:else}
-								<div class=" text-center text-xs text-gray-500">
+								<div class="text-center text-xs text-muted">
 									{$i18n.t(
 										`Using the default arena model with all models. Click the plus button to add custom models.`
 									)}

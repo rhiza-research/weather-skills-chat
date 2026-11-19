@@ -135,7 +135,7 @@
 		</div>
 
 		<div
-			class="ml-3 pl-1 mt-[1px] flex flex-col max-h-48 overflow-y-auto border-s border-gray-100 dark:border-gray-900"
+			class="ml-3 pl-1 mt-[1px] flex flex-col max-h-48 overflow-y-auto border-s border-line"
 		>
 			{#each pinned as task (task.id)}
 				{@const dot = taskDot(task, now)}
@@ -178,7 +178,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 16 16"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										d="M2 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM6.5 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM12.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"

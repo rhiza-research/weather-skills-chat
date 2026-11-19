@@ -87,40 +87,82 @@ textarea::placeholder {
 	@apply text-xs prose dark:prose-invert prose-blockquote:border-s-gray-100 prose-blockquote:dark:border-gray-800 prose-blockquote:border-s-2 prose-blockquote:not-italic prose-blockquote:font-normal  prose-headings:font-semibold prose-hr:my-0  prose-hr:border-gray-100 prose-hr:dark:border-gray-800 prose-p:my-0 prose-img:my-1 prose-headings:my-1 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-ul:-my-0 prose-ol:-my-0 prose-li:-my-0 whitespace-pre-line;
 }
 
-.field {
-	@apply w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-300 outline-hidden;
-}
+@layer components {
+	.field {
+		@apply w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-300 outline-hidden;
+	}
 
-.setting-title {
-	@apply my-1.5 text-sm font-medium;
-}
+	.setting-title {
+		@apply my-1.5 text-sm font-medium;
+	}
 
-.btn-primary {
-	@apply px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full;
-}
+	.btn-primary {
+		@apply px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full;
+	}
 
-.btn-secondary {
-	@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
-}
+	.btn-secondary {
+		@apply flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition;
+	}
 
-.btn-ghost {
-	@apply flex items-center gap-1.5 px-2 py-2 text-sm rounded-xl text-gray-600 hover:text-black hover:bg-black/5 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/5 transition;
-}
+	.btn-ghost {
+		@apply flex items-center gap-1.5 px-2 py-2 text-sm rounded-xl text-gray-600 hover:text-black hover:bg-black/5 dark:text-gray-300 dark:hover:text-white dark:hover:bg-white/5 transition;
+	}
 
-.btn-ghost-sm {
-	@apply p-1.5;
-}
+	.btn-ghost-sm {
+		@apply p-1.5;
+	}
 
-.btn-ghost-xs {
-	@apply p-1;
-}
+	.btn-ghost-xs {
+		@apply p-1;
+	}
 
-.menu-item {
-	@apply flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg;
-}
+	.menu-item {
+		@apply flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg;
+	}
 
-.field-select {
-	@apply w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
+	.border-line {
+		@apply border-gray-100 dark:border-gray-850;
+	}
+
+	.border-line-strong {
+		@apply border-gray-200 dark:border-gray-700;
+	}
+
+	.modal-title {
+		@apply text-lg font-medium self-center;
+	}
+
+	.text-strong {
+		@apply text-gray-800 dark:text-gray-100;
+	}
+
+	.text-body {
+		@apply text-gray-600 dark:text-gray-300;
+	}
+
+	.text-muted {
+		@apply text-gray-500 dark:text-gray-400;
+	}
+
+	.text-subtle {
+		@apply text-gray-400 dark:text-gray-500;
+	}
+
+	.btn-tonal {
+		@apply w-full rounded-full py-2.5 text-sm font-medium bg-gray-700/5 hover:bg-gray-700/10 dark:bg-gray-100/5 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition;
+	}
+
+	.tab {
+		@apply min-w-fit rounded-full p-1.5 transition;
+	}
+
+	.tab-idle {
+		@apply text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white;
+	}
+
+	.field-select {
+		@apply w-fit rounded-sm py-1 pl-2 pr-8 text-xs text-right bg-transparent dark:bg-gray-900 outline-hidden;
+	}
 }
 
 .markdown a {

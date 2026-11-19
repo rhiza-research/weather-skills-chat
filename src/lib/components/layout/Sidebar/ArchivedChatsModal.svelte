@@ -80,7 +80,7 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Archived Chats')}</div>
+			<div class="modal-title">{$i18n.t('Archived Chats')}</div>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -91,7 +91,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						fill-rule="evenodd"
@@ -110,7 +110,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 20 20"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"
@@ -126,15 +126,15 @@
 					/>
 				</div>
 			</div>
-			<hr class="border-gray-100 dark:border-gray-850 my-2" />
+			<hr class="border-line my-2" />
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
 				{#if chats.length > 0}
 					<div class="w-full">
 						<div class="text-left text-sm w-full mb-3 max-h-[22rem] overflow-y-scroll">
 							<div class="relative overflow-x-auto">
-								<table class="w-full text-sm text-left text-gray-600 dark:text-gray-400 table-auto">
+								<table class="w-full text-sm text-left text-body table-auto">
 									<thead
-										class="text-xs text-gray-700 uppercase bg-transparent dark:text-gray-200 border-b-2 border-gray-50 dark:border-gray-850"
+										class="text-xs text-body uppercase bg-transparent border-b-2 border-line"
 									>
 										<tr>
 											<th scope="col" class="px-3 py-2"> {$i18n.t('Name')} </th>
@@ -150,7 +150,7 @@
 													.includes(searchValue.toLowerCase())) as chat, idx}
 											<tr
 												class="bg-transparent {idx !== chats.length - 1 &&
-													'border-b'} dark:bg-gray-900 border-gray-50 dark:border-gray-850 text-xs"
+													'border-b'} dark:bg-gray-900 border-line text-xs"
 											>
 												<td class="px-3 py-1 w-2/3">
 													<a href="/c/{chat.id}" target="_blank">
@@ -205,7 +205,7 @@
 																	viewBox="0 0 24 24"
 																	stroke-width="1.5"
 																	stroke="currentColor"
-																	class="w-4 h-4"
+																	class="size-4"
 																>
 																	<path
 																		stroke-linecap="round"

@@ -117,7 +117,7 @@
 					{/if}
 				</div>
 
-				<div class="self-start flex flex-none items-center gap-1 text-gray-600 dark:text-gray-400">
+				<div class="self-start flex flex-none items-center gap-1 text-body">
 					<div class="self-center flex">
 						<ContextRing {history} {compacting} {onCompact} />
 					</div>
@@ -166,9 +166,9 @@
 
 					<Tooltip content={artifactsPanelOpen ? $i18n.t('Hide artifacts') : $i18n.t('Show artifacts')}>
 						<button
-							class="flex cursor-pointer items-center gap-1.5 rounded-xl transition {artifactsPanelOpen
-								? 'px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850'
-								: 'px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 font-medium'}"
+							class="btn-ghost {artifactsPanelOpen
+							? ''
+							: 'border border-line-strong bg-white px-2.5 py-1.5 font-medium text-strong shadow-lg hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-750'}"
 							on:click={toggleArtifactsPanel}
 							aria-label={$i18n.t('Artifacts')}
 							aria-pressed={artifactsPanelOpen}

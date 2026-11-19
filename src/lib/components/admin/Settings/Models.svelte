@@ -229,7 +229,7 @@
 				<div class="flex items-center md:self-center text-xl font-medium px-0.5">
 					{$i18n.t('Models')}
 					<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-					<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+					<span class="text-lg font-medium text-body"
 						>{filteredModels.length}</span
 					>
 				</div>
@@ -320,7 +320,7 @@
 								>
 									<div class="  font-semibold line-clamp-1">{model.name}</div>
 								</Tooltip>
-								<div class=" text-xs overflow-hidden text-ellipsis line-clamp-1 text-gray-500">
+								<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 text-muted">
 									<span class=" line-clamp-1">
 										{!!model?.meta?.description
 											? model?.meta?.description
@@ -362,7 +362,7 @@
 										viewBox="0 0 24 24"
 										stroke-width="1.5"
 										stroke="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											stroke-linecap="round"
@@ -409,7 +409,7 @@
 				{/each}
 			{:else}
 				<div class="flex flex-col items-center justify-center w-full h-20">
-					<div class="text-gray-500 dark:text-gray-400 text-xs">
+					<div class="text-muted text-xs">
 						{$i18n.t('No models found')}
 					</div>
 				</div>
@@ -477,7 +477,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-3.5 h-3.5"
+								class="size-3.5"
 							>
 								<path
 									fill-rule="evenodd"
@@ -503,7 +503,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-3.5 h-3.5"
+								class="size-3.5"
 							>
 								<path
 									fill-rule="evenodd"

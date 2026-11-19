@@ -26,7 +26,7 @@
 				</div>
 			</div>
 			<div class="flex w-full justify-between items-center">
-				<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
+				<div class="flex flex-col text-xs text-body">
 					<Tooltip content={$config?.build_hash}>
 						{runningReleaseLabel($config?.image_tag)}
 					</Tooltip>
@@ -35,23 +35,23 @@
 		</div>
 
 		{#if ollamaVersion}
-			<hr class=" border-gray-100 dark:border-gray-850" />
+			<hr class=" border-line" />
 
 			<div>
 				<div class="setting-title">{$i18n.t('Ollama Version')}</div>
 				<div class="flex w-full">
-					<div class="flex-1 text-xs text-gray-700 dark:text-gray-200">
+					<div class="flex-1 text-xs text-body">
 						{ollamaVersion ?? 'N/A'}
 					</div>
 				</div>
 			</div>
 		{/if}
 
-		<hr class=" border-gray-100 dark:border-gray-850" />
+		<hr class=" border-line" />
 
 		<div>
 			<pre
-				class="text-xs text-gray-400 dark:text-gray-500 whitespace-pre-wrap">Copyright © 2026 Rhiza Research.
+				class="text-xs text-subtle whitespace-pre-wrap">Copyright © 2026 Rhiza Research.
 Derived from Open WebUI v0.6.5.
 
 Copyright (c) 2023-2025 Open WebUI (Timothy Jaeryang Baek)
@@ -84,7 +84,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 </pre>
 		</div>
 
-		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+		<div class="mt-2 text-xs text-subtle">
 			Emoji graphics provided by
 			<a href="https://github.com/jdecked/twemoji" target="_blank">Twemoji</a>, licensed under
 			<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY 4.0</a>.

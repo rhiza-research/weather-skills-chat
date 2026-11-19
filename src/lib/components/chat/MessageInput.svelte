@@ -414,7 +414,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 20 20"
 									fill="currentColor"
-									class="w-5 h-5 shrink-0"
+									class="size-5 shrink-0"
 								>
 									<path
 										fill-rule="evenodd"
@@ -514,9 +514,9 @@
 					{#if queuedSends.length > 0}
 						<div
 							id="queued-sends"
-							class="mx-1 mb-1.5 rounded-2xl border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
+							class="mx-1 mb-1.5 rounded-2xl border border-line bg-gray-50 dark:bg-gray-850 px-3 py-2 text-sm"
 						>
-							<div class="text-xs font-medium text-gray-500 dark:text-gray-400">
+							<div class="text-xs font-medium text-muted">
 								{$i18n.t('Queued — sends one at a time as each reply is done')}
 							</div>
 							{#each queuedSends as queued, idx}
@@ -529,7 +529,7 @@
 									<Tooltip content={$i18n.t('Stop the reply and send this now')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-gray-600 hover:bg-black/5 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
+											class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-body hover:bg-black/5 hover:text-gray-800 dark:hover:bg-white/5 dark:hover:text-gray-100 transition"
 											on:click={() => onSendQueuedNow(idx)}
 										>
 											{$i18n.t('Send now')}
@@ -538,7 +538,7 @@
 									<Tooltip content={$i18n.t('Delete queued send')}>
 										<button
 											type="button"
-											class="shrink-0 rounded-full p-1 text-gray-500 hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200 transition"
+											class="shrink-0 rounded-full p-1 text-muted hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200 transition"
 											aria-label={$i18n.t('Delete queued send')}
 											on:click={() => onDeleteQueuedSend(idx)}
 										>
@@ -582,7 +582,7 @@
 							}}
 						>
 							<div
-								class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-gray-50 dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
+								class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-line hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
 								dir={$settings?.chatDirection ?? 'auto'}
 							>
 								{#if files.length > 0}
@@ -1151,7 +1151,7 @@
 													})}
 												>
 													<button
-														class="translate-y-[0.5px] flex gap-1 items-center text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition shrink-0"
+														class="translate-y-[0.5px] flex gap-1 items-center text-body hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition shrink-0"
 														aria-label={$i18n.t('Available Tools')}
 														type="button"
 														on:click={() => {
@@ -1160,7 +1160,7 @@
 													>
 														<Wrench className="size-4" strokeWidth="1.75" />
 
-														<span class="text-sm font-medium text-gray-600 dark:text-gray-300">
+														<span class="text-sm font-medium text-body">
 															{toolServers.length + selectedToolIds.length}
 														</span>
 													</button>
@@ -1199,7 +1199,7 @@
 																(imageGenerationEnabled = !imageGenerationEnabled)}
 															type="button"
 															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {imageGenerationEnabled
-																? 'bg-gray-50 dark:bg-gray-400/10 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+																? 'bg-gray-50 dark:bg-gray-400/10 border-line text-gray-600 dark:text-gray-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300  hover:bg-gray-100 dark:hover:bg-gray-800 '}"
 														>
 															<Photo className="size-5" strokeWidth="1.75" />
@@ -1273,7 +1273,7 @@
 											<Tooltip content={$i18n.t('Record voice')}>
 												<button
 													id="voice-input-button"
-													class=" text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 transition rounded-full p-1.5 mr-0.5 self-center"
+													class="text-body hover:text-gray-700 dark:hover:text-gray-200 transition rounded-full p-1.5 mr-0.5 self-center"
 													type="button"
 													on:click={async () => {
 														try {
@@ -1307,7 +1307,7 @@
 														xmlns="http://www.w3.org/2000/svg"
 														viewBox="0 0 20 20"
 														fill="currentColor"
-														class="w-5 h-5 translate-y-[0.5px]"
+														class="size-5 translate-y-[0.5px]"
 													>
 														<path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
 														<path

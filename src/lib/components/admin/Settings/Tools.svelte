@@ -61,7 +61,7 @@
 				<div class="mb-3">
 					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class=" border-line my-2" />
 
 					<div class="mb-2.5 flex flex-col w-full justify-between">
 						<!-- {$i18n.t(`Failed to connect to {{URL}} OpenAPI tool server`, {
@@ -99,7 +99,7 @@
 						</div>
 
 						<div class="my-1.5">
-							<div class="text-xs text-gray-500">
+							<div class="text-xs text-muted">
 								{$i18n.t('Connect to your own OpenAPI compatible external tool servers.')}
 							</div>
 						</div>
