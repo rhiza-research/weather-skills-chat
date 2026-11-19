@@ -63,7 +63,7 @@
 						on:mousemove={() => (selectedIdx = idx)}
 					>
 						<div class="font-mono">{secret.name}</div>
-						<div class="text-[11px] text-gray-400">
+						<div class="text-xs text-gray-400">
 							{#if secret.visibility !== 'organization' && secrets.some((s) => s.visibility === 'organization' && s.name === secret.name)}
 								{$i18n.t('Private · overrides organization')}
 							{:else}

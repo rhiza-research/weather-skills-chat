@@ -585,15 +585,15 @@
 <div class="overflow-x-auto">
 	<div class="org-table">
 		<div
-			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400"
+			class="org-table-row grid items-end gap-x-3 px-2 pb-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400"
 		>
-			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+			<div>
 				{$i18n.t('Name')}
 			</div>
-			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+			<div>
 				{$i18n.t('Type')}
 			</div>
-			<div class="uppercase text-xs font-bold text-gray-900 dark:text-gray-100">
+			<div>
 				{$i18n.t('Members')}
 			</div>
 			<div class="text-right leading-tight">{$i18n.t('Used')}</div>
@@ -747,10 +747,10 @@
 							: formatUsd(remainingUsd(row.monthly_limit_usd, row.usage?.cost_usd ?? 0))}
 				</div>
 				{#if row.kind === 'invite'}
-					<div class="text-[11px] text-gray-300 dark:text-gray-600">—</div>
+					<div class="text-xs text-gray-300 dark:text-gray-600">—</div>
 				{:else}
 				<Tooltip content={tokenUsageTooltip(row.usage)} className="min-w-0 block">
-					<div class="text-[11px] text-gray-500 tabular-nums truncate">
+					<div class="text-xs text-gray-500 tabular-nums truncate">
 						{tokenLine(row.usage)}
 					</div>
 				</Tooltip>

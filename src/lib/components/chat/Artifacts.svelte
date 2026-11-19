@@ -482,7 +482,7 @@
 				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
 		>
 			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-[11px] leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
+				<div class="text-xs leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
 					{provenancePath ? `${$i18n.t('Provenance')}: ${provenancePath}` : previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
@@ -519,7 +519,7 @@
 							bind:fullscreen={provenanceFullscreen}
 						/>
 					{:else}
-						<div class="flex items-center gap-1.5 text-[11px] text-gray-400">
+						<div class="flex items-center gap-1.5 text-xs text-gray-400">
 							{$i18n.t('Loading provenance')}
 							<Spinner className="size-3" />
 						</div>

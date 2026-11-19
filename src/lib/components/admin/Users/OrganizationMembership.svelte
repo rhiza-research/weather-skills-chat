@@ -404,7 +404,9 @@
 
 	<div class="overflow-x-auto">
 	<div class="min-w-[56rem]">
-	<div class="member-table-row grid items-end gap-x-3 px-1 text-xs uppercase font-bold">
+	<div
+		class="member-table-row grid items-end gap-x-3 px-1 text-xs font-semibold text-gray-500 dark:text-gray-400"
+	>
 		<div>{$i18n.t('Member')}</div>
 		<div>{$i18n.t('Role')}</div>
 		<div class="text-right">{$i18n.t('Used')}</div>
@@ -510,7 +512,7 @@
 					: usageAmount(remainingUsd(row.member.monthly_limit_usd, row.member.usage?.cost_usd ?? 0))}{#if credits && row.member.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<Tooltip content={tokenUsageTooltip(row.member.usage)} className="min-w-0 block">
-				<div class="text-[11px] text-gray-500 tabular-nums truncate">
+				<div class="text-xs text-gray-500 tabular-nums truncate">
 					{tokenLine(row.member.usage)}
 				</div>
 			</Tooltip>

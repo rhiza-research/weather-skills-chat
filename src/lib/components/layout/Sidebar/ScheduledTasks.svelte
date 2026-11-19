@@ -149,7 +149,7 @@
 						class="flex-1 min-w-0 flex items-center gap-2 text-left"
 						on:click={() => openTask(task)}
 					>
-						<TaskImage {task} className="size-5 rounded text-[10px]" />
+						<TaskImage {task} className="size-5 rounded text-xs" />
 						<Tooltip
 							content={task.name}
 							className="min-w-0"

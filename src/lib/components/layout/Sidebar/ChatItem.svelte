@@ -310,7 +310,7 @@
 						<div class="truncate">{title}</div>
 					</Tooltip>
 					{#if ownerName && !isMine}
-						<div class="text-[10px] text-gray-500 truncate">{ownerName}</div>
+						<div class="text-xs text-gray-500 truncate">{ownerName}</div>
 					{/if}
 				</div>
 			</div>

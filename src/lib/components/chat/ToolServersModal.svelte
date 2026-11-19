@@ -189,20 +189,20 @@
 										<span class="truncate">{toolBaseName(tool)}</span>
 										{#if isSkillTool(tool) && version}
 											<span
-												class="text-[10px] font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+												class="text-xs font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
 											>
 												v{version}
 											</span>
 										{/if}
 										{#if isSkillTool(tool) && repoRef}
 											<span
-												class="text-[10px] font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+												class="text-xs font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
 											>
 												{repoRef}
 											</span>
 										{/if}
 										{#if !isSkillDefaultEnabled(tool)}
-											<span class="text-[10px] text-gray-500 dark:text-gray-400">
+											<span class="text-xs text-gray-500 dark:text-gray-400">
 												{$i18n.t('off by default')}
 											</span>
 										{/if}

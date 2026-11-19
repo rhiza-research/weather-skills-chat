@@ -509,7 +509,7 @@
 									<Tooltip content={$i18n.t('Enabled by default')}>
 										<div class="flex items-center gap-1.5">
 											<span
-												class="text-[10px] leading-none text-gray-500 max-w-[4.5rem] text-right {pack.is_active ===
+												class="text-xs leading-none text-gray-500 max-w-[4.5rem] text-right {pack.is_active ===
 												false
 													? 'opacity-40'
 													: ''}"
@@ -533,7 +533,7 @@
 											: $i18n.t('Not in catalog')}
 									>
 										<div class="flex items-center gap-1.5">
-											<span class="text-[10px] leading-none text-gray-500"
+											<span class="text-xs leading-none text-gray-500"
 												>{$i18n.t('In catalog')}</span
 											>
 											<Switch
@@ -625,7 +625,7 @@
 														<Tooltip content={$i18n.t('Enabled by default')}>
 															<div class="flex items-center gap-1.5">
 																<span
-																	class="text-[10px] leading-none text-gray-500 max-w-[4.5rem] text-right {skill.is_active ===
+																	class="text-xs leading-none text-gray-500 max-w-[4.5rem] text-right {skill.is_active ===
 																	false
 																		? 'opacity-40'
 																		: ''}"
@@ -649,7 +649,7 @@
 																: $i18n.t('Not in catalog')}
 														>
 															<div class="flex items-center gap-1.5">
-																<span class="text-[10px] leading-none text-gray-500"
+																<span class="text-xs leading-none text-gray-500"
 																	>{$i18n.t('In catalog')}</span
 																>
 																<Switch

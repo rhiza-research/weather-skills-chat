@@ -254,7 +254,7 @@
 						: 'text-gray-700 dark:text-gray-200'}">{statusLabel}</span
 				>
 				{#if detailLine}
-					<span class="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap"
+					<span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
 						>{detailLine}</span
 					>
 				{/if}
@@ -327,12 +327,12 @@
 									<span class="text-gray-500 tabular-nums">{sizeLimits(option)}</span>
 								</span>
 								{#if option.description}
-									<span class="text-[11px] text-gray-500">{option.description}</span>
+									<span class="text-xs text-gray-500">{option.description}</span>
 								{/if}
 							</button>
 						{/each}
 					</div>
-					<div class="mt-1.5 text-[11px] text-gray-500">
+					<div class="mt-1.5 text-xs text-gray-500">
 						{$i18n.t('A larger size goes back to the default after its runner has been idle.')}
 					</div>
 				{:else if state !== 'ready'}

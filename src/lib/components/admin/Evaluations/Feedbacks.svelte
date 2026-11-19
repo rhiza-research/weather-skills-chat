@@ -163,7 +163,7 @@
 										</div>
 
 										<Tooltip content={feedback.data.sibling_model_ids.join(', ')}>
-											<div class=" text-[0.65rem] text-gray-600 dark:text-gray-400 line-clamp-1">
+											<div class=" text-xs text-gray-600 dark:text-gray-400 line-clamp-1">
 												{#if feedback.data.sibling_model_ids.length > 2}
 													<!-- {$i18n.t('and {{COUNT}} more')} -->
 													{feedback.data.sibling_model_ids.slice(0, 2).join(', ')}, {$i18n.t(

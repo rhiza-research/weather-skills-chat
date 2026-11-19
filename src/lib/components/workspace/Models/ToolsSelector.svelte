@@ -109,7 +109,7 @@
 								<div class="flex flex-wrap items-center gap-1.5">
 									{#if isSkillTool(item)}
 										<span
-											class="text-[10px] font-bold px-1 rounded-sm uppercase bg-amber-500/20 text-amber-800 dark:text-amber-200"
+											class="text-xs font-bold px-1 rounded-sm uppercase bg-amber-500/20 text-amber-800 dark:text-amber-200"
 										>
 											{$i18n.t('skill')}
 										</span>
@@ -117,14 +117,14 @@
 									<span class="break-all">{toolBaseName(item)}</span>
 									{#if version}
 										<span
-											class="text-[10px] font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+											class="text-xs font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
 										>
 											v{version}
 										</span>
 									{/if}
 									{#if repoRef}
 										<span
-											class="text-[10px] font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+											class="text-xs font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
 										>
 											{repoRef}
 										</span>
