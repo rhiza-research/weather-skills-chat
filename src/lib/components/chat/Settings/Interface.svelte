@@ -6,6 +6,8 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { updateUserInfo } from '$lib/apis/users';
 	import { getUserPosition } from '$lib/utils';
+	import SettingToggle from '$lib/components/common/SettingToggle.svelte';
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
@@ -334,639 +336,214 @@
 		<div>
 			<div class=" mb-1.5 text-sm font-medium">{$i18n.t('UI')}</div>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Landing Page Mode')}</div>
+			<SettingToggle
+				label={$i18n.t('Landing Page Mode')}
+				text={landingPageMode === '' ? $i18n.t('Default') : $i18n.t('Chat')}
+				on:click={toggleLandingPageMode}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleLandingPageMode();
-						}}
-						type="button"
-					>
-						{#if landingPageMode === ''}
-							<span class="ml-2 self-center">{$i18n.t('Default')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Chat')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Chat Bubble UI')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleChatBubble();
-						}}
-						type="button"
-					>
-						{#if chatBubble === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Chat Bubble UI')}
+				text={chatBubble === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleChatBubble}
+			/>
 
 			{#if !$settings.chatBubble}
-				<div>
-					<div class=" py-0.5 flex w-full justify-between">
-						<div class=" self-center text-xs">
-							{$i18n.t('Display the username instead of You in the Chat')}
-						</div>
-
-						<button
-							class="p-1 px-3 text-xs flex rounded-sm transition"
-							on:click={() => {
-								toggleShowUsername();
-							}}
-							type="button"
-						>
-							{#if showUsername === true}
-								<span class="ml-2 self-center">{$i18n.t('On')}</span>
-							{:else}
-								<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-							{/if}
-						</button>
-					</div>
-				</div>
+				<SettingToggle
+					label={$i18n.t('Display the username instead of You in the Chat')}
+					text={showUsername === true ? $i18n.t('On') : $i18n.t('Off')}
+					on:click={toggleShowUsername}
+				/>
 			{/if}
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Widescreen Mode')}</div>
+			<SettingToggle
+				label={$i18n.t('Widescreen Mode')}
+				text={widescreenMode === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleWidescreenMode}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleWidescreenMode();
-						}}
-						type="button"
-					>
-						{#if widescreenMode === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Chat direction')}
+				text={chatDirection === 'LTR'
+					? $i18n.t('LTR')
+					: chatDirection === 'RTL'
+						? $i18n.t('RTL')
+						: $i18n.t('Auto')}
+				on:click={toggleChangeChatDirection}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Chat direction')}</div>
+			<SettingToggle
+				label={$i18n.t('Notification Sound')}
+				text={notificationSound === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleNotificationSound}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={toggleChangeChatDirection}
-						type="button"
-					>
-						{#if chatDirection === 'LTR'}
-							<span class="ml-2 self-center">{$i18n.t('LTR')}</span>
-						{:else if chatDirection === 'RTL'}
-							<span class="ml-2 self-center">{$i18n.t('RTL')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Auto')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<div class="setting-title">{$i18n.t('Chat')}</div>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Notification Sound')}
-					</div>
+			<SettingToggle
+				label={$i18n.t('Title Auto-Generation')}
+				text={titleAutoGenerate === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleTitleAutoGenerate}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleNotificationSound();
-						}}
-						type="button"
-					>
-						{#if notificationSound === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Chat Tags Auto-Generation')}
+				text={autoTags === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleAutoTags}
+			/>
 
-			<div class=" my-1.5 text-sm font-medium">{$i18n.t('Chat')}</div>
+			<SettingToggle
+				label={$i18n.t('Detect Artifacts Automatically')}
+				text={detectArtifacts === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleDetectArtifacts}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Title Auto-Generation')}</div>
+			<SettingToggle
+				label={$i18n.t('Auto-Copy Response to Clipboard')}
+				text={responseAutoCopy === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleResponseAutoCopy}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleTitleAutoGenerate();
-						}}
-						type="button"
-					>
-						{#if titleAutoGenerate === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Chat Tags Auto-Generation')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleAutoTags();
-						}}
-						type="button"
-					>
-						{#if autoTags === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Detect Artifacts Automatically')}
-					</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleDetectArtifacts();
-						}}
-						type="button"
-					>
-						{#if detectArtifacts === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Auto-Copy Response to Clipboard')}
-					</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleResponseAutoCopy();
-						}}
-						type="button"
-					>
-						{#if responseAutoCopy === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Rich Text Input for Chat')}
-					</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleRichTextInput();
-						}}
-						type="button"
-					>
-						{#if richTextInput === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Rich Text Input for Chat')}
+				text={richTextInput === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleRichTextInput}
+			/>
 
 			{#if $config?.features?.enable_autocomplete_generation && richTextInput}
-				<div>
-					<div class=" py-0.5 flex w-full justify-between">
-						<div class=" self-center text-xs">
-							{$i18n.t('Prompt Autocompletion')}
-						</div>
-
-						<button
-							class="p-1 px-3 text-xs flex rounded-sm transition"
-							on:click={() => {
-								togglePromptAutocomplete();
-							}}
-							type="button"
-						>
-							{#if promptAutocomplete === true}
-								<span class="ml-2 self-center">{$i18n.t('On')}</span>
-							{:else}
-								<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-							{/if}
-						</button>
-					</div>
-				</div>
+				<SettingToggle
+					label={$i18n.t('Prompt Autocompletion')}
+					text={promptAutocomplete === true ? $i18n.t('On') : $i18n.t('Off')}
+					on:click={togglePromptAutocomplete}
+				/>
 			{/if}
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Paste Large Text as File')}
-					</div>
+			<SettingToggle
+				label={$i18n.t('Paste Large Text as File')}
+				text={largeTextAsFile === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleLargeTextAsFile}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleLargeTextAsFile();
-						}}
-						type="button"
-					>
-						{#if largeTextAsFile === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Copy Formatted Text')}
+				text={copyFormatted === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleCopyFormatted}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Copy Formatted Text')}
-					</div>
+			<SettingToggle
+				label={$i18n.t('Always Collapse Code Blocks')}
+				text={collapseCodeBlocks === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleCollapseCodeBlocks}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleCopyFormatted();
-						}}
-						type="button"
-					>
-						{#if copyFormatted === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Always Expand Details')}
+				text={expandDetails === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleExpandDetails}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Always Collapse Code Blocks')}</div>
+			<SettingToggle
+				label={$i18n.t('Chat Background Image')}
+				text={backgroundImageUrl !== null ? $i18n.t('Reset') : $i18n.t('Upload')}
+				on:click={() => {
+					if (backgroundImageUrl !== null) {
+						backgroundImageUrl = null;
+						saveSettings({ backgroundImageUrl });
+					} else {
+						filesInputElement.click();
+					}
+				}}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleCollapseCodeBlocks();
-						}}
-						type="button"
-					>
-						{#if collapseCodeBlocks === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Allow User Location')}
+				text={userLocation === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleUserLocation}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Always Expand Details')}</div>
+			<SettingToggle
+				label={`${$i18n.t('Haptic Feedback')} (${$i18n.t('Android')})`}
+				text={hapticFeedback === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleHapticFeedback}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleExpandDetails();
-						}}
-						type="button"
-					>
-						{#if expandDetails === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Enter Key Behavior')}
+				text={ctrlEnterToSend === true ? $i18n.t('Ctrl+Enter to Send') : $i18n.t('Enter to Send')}
+				on:click={togglectrlEnterToSend}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Chat Background Image')}
-					</div>
+			<SettingToggle
+				label={$i18n.t('Scroll to bottom when switching between branches')}
+				text={scrollOnBranchChange === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={togglesScrollOnBranchChange}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							if (backgroundImageUrl !== null) {
-								backgroundImageUrl = null;
-								saveSettings({ backgroundImageUrl });
-							} else {
-								filesInputElement.click();
-							}
-						}}
-						type="button"
-					>
-						{#if backgroundImageUrl !== null}
-							<span class="ml-2 self-center">{$i18n.t('Reset')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Upload')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Web Search in Chat')}
+				text={webSearch === 'always' ? $i18n.t('Always') : $i18n.t('Default')}
+				on:click={toggleWebSearch}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Allow User Location')}</div>
+			<SettingToggle
+				label={$i18n.t('iframe Sandbox Allow Same Origin')}
+				text={iframeSandboxAllowSameOrigin === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleIframeSandboxAllowSameOrigin}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleUserLocation();
-						}}
-						type="button"
-					>
-						{#if userLocation === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('iframe Sandbox Allow Forms')}
+				text={iframeSandboxAllowForms === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleIframeSandboxAllowForms}
+			/>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Haptic Feedback')} ({$i18n.t('Android')})
-					</div>
+			<div class="setting-title">{$i18n.t('Voice')}</div>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleHapticFeedback();
-						}}
-						type="button"
-					>
-						{#if hapticFeedback === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Allow Voice Interruption in Call')}
+				text={voiceInterruption === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleVoiceInterruption}
+			/>
 
-			<!-- <div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Fluidly stream large external response chunks')}
-					</div>
+			<SettingToggle
+				label={$i18n.t('Display Emoji in Call')}
+				text={showEmojiInCall === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleEmojiInCall}
+			/>
 
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleSplitLargeChunks();
-						}}
-						type="button"
-					>
-						{#if splitLargeChunks === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div> -->
+			<div class="setting-title">{$i18n.t('File')}</div>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Enter Key Behavior')}
-					</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded transition"
-						on:click={() => {
-							togglectrlEnterToSend();
-						}}
-						type="button"
-					>
-						{#if ctrlEnterToSend === true}
-							<span class="ml-2 self-center">{$i18n.t('Ctrl+Enter to Send')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Enter to Send')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">
-						{$i18n.t('Scroll to bottom when switching between branches')}
-					</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							togglesScrollOnBranchChange();
-						}}
-						type="button"
-					>
-						{#if scrollOnBranchChange === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Web Search in Chat')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleWebSearch();
-						}}
-						type="button"
-					>
-						{#if webSearch === 'always'}
-							<span class="ml-2 self-center">{$i18n.t('Always')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Default')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('iframe Sandbox Allow Same Origin')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleIframeSandboxAllowSameOrigin();
-						}}
-						type="button"
-					>
-						{#if iframeSandboxAllowSameOrigin === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('iframe Sandbox Allow Forms')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleIframeSandboxAllowForms();
-						}}
-						type="button"
-					>
-						{#if iframeSandboxAllowForms === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div class=" my-1.5 text-sm font-medium">{$i18n.t('Voice')}</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Allow Voice Interruption in Call')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleVoiceInterruption();
-						}}
-						type="button"
-					>
-						{#if voiceInterruption === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Display Emoji in Call')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleEmojiInCall();
-						}}
-						type="button"
-					>
-						{#if showEmojiInCall === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div class=" my-1.5 text-sm font-medium">{$i18n.t('File')}</div>
-
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs">{$i18n.t('Image Compression')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleImageCompression();
-						}}
-						type="button"
-					>
-						{#if imageCompression === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Image Compression')}
+				text={imageCompression === true ? $i18n.t('On') : $i18n.t('Off')}
+				on:click={toggleImageCompression}
+			/>
 
 			{#if imageCompression}
-				<div>
-					<div class=" py-0.5 flex w-full justify-between text-xs">
-						<div class=" self-center text-xs">{$i18n.t('Image Max Compression Size')}</div>
-
-						<div>
-							<input
-								bind:value={imageCompressionSize.width}
-								type="number"
-								class="w-20 bg-transparent outline-hidden text-center"
-								min="0"
-								placeholder={$i18n.t('Width')}
-							/>x
-							<input
-								bind:value={imageCompressionSize.height}
-								type="number"
-								class="w-20 bg-transparent outline-hidden text-center"
-								min="0"
-								placeholder={$i18n.t('Height')}
-							/>
-						</div>
+				<SettingRow label={$i18n.t('Image Max Compression Size')}>
+					<div>
+						<input
+							bind:value={imageCompressionSize.width}
+							type="number"
+							class="w-20 bg-transparent outline-hidden text-center"
+							min="0"
+							placeholder={$i18n.t('Width')}
+						/>x
+						<input
+							bind:value={imageCompressionSize.height}
+							type="number"
+							class="w-20 bg-transparent outline-hidden text-center"
+							min="0"
+							placeholder={$i18n.t('Height')}
+						/>
 					</div>
-				</div>
+				</SettingRow>
 			{/if}
 		</div>
 	</div>
 
-	<div class="flex justify-end text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
+	<div class="flex justify-end pt-3">
+		<button class="btn-primary" type="submit">
 			{$i18n.t('Save')}
 		</button>
 	</div>

@@ -224,7 +224,7 @@
 
 					<div class="flex-1">
 						<input
-							class="w-full text-sm dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							type="text"
 							bind:value={name}
 							required
@@ -403,9 +403,9 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="flex justify-end pt-3">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			on:click={async () => {
 				const res = await submitHandler();
 
