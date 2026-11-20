@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.chats import ChatResponse, Chats
 from open_webui.routers import artifacts
+from open_webui.utils.artifacts import LISTED_PROVENANCE_DEPTH
 
 router = APIRouter()
 
@@ -37,9 +38,12 @@ async def get_share_artifacts(
     share_id: str,
     depth: Optional[int] = Query(None, ge=1),
     provenance: bool = True,
+    provenance_depth: int = Query(LISTED_PROVENANCE_DEPTH, ge=1),
 ):
     _require_live_share(share_id)
-    return await artifacts.get_artifacts(share_id, depth, provenance, user=None)
+    return await artifacts.get_artifacts(
+        share_id, depth, provenance, provenance_depth, user=None
+    )
 
 
 @router.get("/{share_id}/artifacts/provenance")

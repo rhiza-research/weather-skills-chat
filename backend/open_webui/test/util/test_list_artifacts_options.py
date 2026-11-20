@@ -36,11 +36,12 @@ def _page_with_provenance() -> str:
 
 
 class SandboxCase(unittest.TestCase):
-    """runs/2024/day1/out.csv, plots/map.html (with provenance), notes.csv"""
+    """runs/2024/day1/out.csv, plots/map.html and summary.html (both with
+    provenance), notes.csv"""
 
     chat_id = "chat-opts"
     # chat_sandbox always creates intermediate_results.
-    top = {"intermediate_results", "notes.csv", "plots", "runs"}
+    top = {"intermediate_results", "notes.csv", "plots", "runs", "summary.html"}
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -50,6 +51,7 @@ class SandboxCase(unittest.TestCase):
         (root / "runs" / "2024" / "day1" / "out.csv").write_text("a\n")
         (root / "plots").mkdir()
         (root / "plots" / "map.html").write_text(_page_with_provenance())
+        (root / "summary.html").write_text(_page_with_provenance())
         (root / "notes.csv").write_text("a,b\n")
         self.patch = patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts)
         self.patch.start()
@@ -128,6 +130,28 @@ class ListArtifactsOptionsTest(SandboxCase):
         self.assertEqual(items["plots/map.html"]["kind"], "html")
         self.assertNotIn("provenance", items["plots/map.html"])
 
+    def test_provenance_depth_reads_only_the_top_level(self):
+        with patch.object(
+            artifacts_utils, "provenance_for_html", wraps=artifacts_utils.provenance_for_html
+        ) as read:
+            items = self.paths(provenance_depth=1)
+        self.assertEqual(items["summary.html"]["provenance"], ["dynamical-fetch", "plot"])
+        self.assertNotIn("provenance", items["plots/map.html"])
+        self.assertIn("plots/map.html", items)
+        self.assertEqual(read.call_count, 1)
+
+    def test_provenance_depth_counts_from_path(self):
+        items = self.paths(path="plots", provenance_depth=1)
+        self.assertEqual(items["plots/map.html"]["provenance"], ["dynamical-fetch", "plot"])
+
+    def test_provenance_depth_two_reaches_the_next_level(self):
+        items = self.paths(provenance_depth=2)
+        self.assertIn("provenance", items["plots/map.html"])
+
+    def test_provenance_depth_below_one_is_rejected(self):
+        with self.assertRaises(ValueError):
+            list_artifacts(self.chat_id, provenance_depth=0)
+
     def test_depth_below_one_is_rejected(self):
         with self.assertRaises(ValueError):
             list_artifacts(self.chat_id, depth=0)
@@ -172,12 +196,20 @@ class ArtifactsRouteOptionsTest(SandboxCase):
     def url(self, query: str = "") -> str:
         return f"/api/v1/chats/{self.chat_id}/artifacts{query}"
 
-    def test_default_is_the_full_tree_with_provenance(self):
+    def test_default_is_the_full_tree_with_top_level_provenance(self):
         res = self.client.get(self.url())
         self.assertEqual(res.status_code, 200)
         items = {i["path"]: i for i in res.json()}
         self.assertIn("runs/2024/day1/out.csv", items)
+        self.assertIn("provenance", items["summary.html"])
+        self.assertNotIn("provenance", items["plots/map.html"])
+
+    def test_provenance_depth_query(self):
+        res = self.client.get(self.url("?provenance_depth=2"))
+        self.assertEqual(res.status_code, 200)
+        items = {i["path"]: i for i in res.json()}
         self.assertIn("provenance", items["plots/map.html"])
+        self.assertEqual(self.client.get(self.url("?provenance_depth=0")).status_code, 422)
 
     def test_depth_and_provenance_query(self):
         res = self.client.get(self.url("?depth=2&provenance=false"))
@@ -228,6 +260,16 @@ class ListArtifactsToolOptionsTest(SandboxCase):
     def test_provenance_is_off_by_default_and_shown_on_request(self):
         self.assertNotIn("made by", self.call())
         self.assertIn("made by: dynamical-fetch → plot", self.call(provenance=True))
+
+    def test_provenance_covers_only_the_folder_asked_about(self):
+        out = self.call(provenance=True)
+        line = lambda path: next(l for l in out.splitlines() if f"`{path}`" in l)
+        self.assertIn("made by: dynamical-fetch → plot", line("summary.html"))
+        self.assertNotIn("made by", line("plots/map.html"))
+        self.assertIn(
+            "made by: dynamical-fetch → plot",
+            next(l for l in self.call(path="plots", provenance=True).splitlines() if "map.html" in l),
+        )
 
     def test_depth_below_one(self):
         self.assertIn("depth must be at least 1", self.call(depth=0))

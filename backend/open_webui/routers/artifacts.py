@@ -38,6 +38,7 @@ from open_webui.utils.artifacts import (
     extract_sandbox_archive,
     is_zarr_store,
     list_artifacts_async,
+    LISTED_PROVENANCE_DEPTH,
     pack_sandbox_archive,
     pack_sandbox_zip,
     resolve_in_sandbox,
@@ -86,10 +87,13 @@ async def get_artifacts(
     chat_id: str,
     depth: Optional[int] = Query(None, ge=1),
     provenance: bool = True,
+    provenance_depth: int = Query(LISTED_PROVENANCE_DEPTH, ge=1),
     user=Depends(get_verified_user),
 ):
     await asyncio.to_thread(require_chat_files_read, chat_id, user)
-    return await list_artifacts_async(chat_id, depth=depth, provenance=provenance)
+    return await list_artifacts_async(
+        chat_id, depth=depth, provenance=provenance, provenance_depth=provenance_depth
+    )
 
 
 @router.get("/{chat_id}/artifacts/copy")
@@ -363,7 +367,7 @@ async def upload_artifact(
     from open_webui.utils.chat_realtime import schedule_artifacts
 
     schedule_artifacts(chat_id)
-    return await list_artifacts_async(chat_id)
+    return await list_artifacts_async(chat_id, provenance_depth=LISTED_PROVENANCE_DEPTH)
 
 
 @router.get("/{chat_id}/artifacts/zarr/meta")

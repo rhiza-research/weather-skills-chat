@@ -1233,7 +1233,11 @@ def list_artifacts(
     __metadata__: dict = None,
 ) -> str:
     """List files and folders in the current chat artifact sandbox."""
-    from open_webui.utils.artifacts import list_artifacts as _list, resolve_in_sandbox
+    from open_webui.utils.artifacts import (
+        LISTED_PROVENANCE_DEPTH,
+        list_artifacts as _list,
+        resolve_in_sandbox,
+    )
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
@@ -1266,7 +1270,14 @@ def list_artifacts(
             return reply
 
     try:
-        entries = _list(chat_id, path=prefix or None, depth=depth, provenance=provenance)
+        entries = _list(
+            chat_id,
+            path=prefix or None,
+            depth=depth,
+            provenance=provenance,
+            # Only the folder asked about: deeper entries are listed without it.
+            provenance_depth=LISTED_PROVENANCE_DEPTH,
+        )
     except Exception as e:
         return f"Failed to list artifacts: {e}"
 
@@ -1314,7 +1325,7 @@ LIST_ARTIFACTS_SPEC = {
         "or plotting/attaching them. "
         "Optionally pass a relative folder path to list only that subtree, a depth "
         "to limit how many folder levels are listed, and provenance to show which "
-        "skills produced each image, HTML page and Zarr store."
+        "skills produced each image, HTML page and Zarr store directly in that folder."
     ),
     "parameters": {
         "type": "object",
@@ -1338,7 +1349,9 @@ LIST_ARTIFACTS_SPEC = {
                 "type": "boolean",
                 "description": (
                     "Show the chain of skills that produced each image, HTML page "
-                    "and Zarr store. Slower on large sandboxes. Defaults to false."
+                    "and Zarr store directly in `path` (or at the top level when "
+                    "`path` is omitted). Deeper entries are listed without it; pass "
+                    "their folder as `path` to see theirs. Defaults to false."
                 ),
             },
         },
