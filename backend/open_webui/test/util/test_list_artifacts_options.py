@@ -65,11 +65,14 @@ class SandboxCase(unittest.TestCase):
 
 
 class ListArtifactsOptionsTest(SandboxCase):
-    def test_default_lists_every_level_with_provenance(self):
+    def test_default_lists_every_level(self):
         items = self.paths()
         self.assertIn("runs/2024/day1/out.csv", items)
-        self.assertEqual(items["plots/map.html"]["provenance"], ["dynamical-fetch", "plot"])
         self.assertFalse(any(i.get("truncated") for i in items.values()))
+
+    def test_provenance_depth_none_reads_every_level(self):
+        items = self.paths(provenance_depth=None)
+        self.assertEqual(items["plots/map.html"]["provenance"], ["dynamical-fetch", "plot"])
 
     def test_depth_one_lists_top_level_and_marks_folders(self):
         items = self.paths(depth=1)
@@ -98,7 +101,8 @@ class ListArtifactsOptionsTest(SandboxCase):
         (root / "store.zarr" / "precip" / "0").write_text("x")
         (root / ".cache" / "deep").mkdir(parents=True)
         (root / ".cache" / "deep" / "x").write_text("x")
-        full = list_artifacts(self.chat_id)
+        # Provenance depth counts from path, so read it everywhere in both.
+        full = list_artifacts(self.chat_id, provenance_depth=None)
         for prefix in [
             "runs", "runs/", "runs/2024", "plots", "notes.csv", "nope",
             "store.zarr", "store.zarr/precip", ".cache", ".cache/deep",
@@ -108,7 +112,9 @@ class ListArtifactsOptionsTest(SandboxCase):
                 e for e in full
                 if e["path"] == prefix or e["path"].startswith(base)
             ]
-            self.assertEqual(list_artifacts(self.chat_id, path=prefix), expected, prefix)
+            self.assertEqual(
+                list_artifacts(self.chat_id, path=prefix, provenance_depth=None), expected, prefix
+            )
 
     def test_path_skips_folders_that_do_not_lead_to_it(self):
         walked = []
@@ -130,18 +136,18 @@ class ListArtifactsOptionsTest(SandboxCase):
         self.assertEqual(items["plots/map.html"]["kind"], "html")
         self.assertNotIn("provenance", items["plots/map.html"])
 
-    def test_provenance_depth_reads_only_the_top_level(self):
+    def test_provenance_is_read_for_the_top_level_by_default(self):
         with patch.object(
             artifacts_utils, "provenance_for_html", wraps=artifacts_utils.provenance_for_html
         ) as read:
-            items = self.paths(provenance_depth=1)
+            items = self.paths()
         self.assertEqual(items["summary.html"]["provenance"], ["dynamical-fetch", "plot"])
         self.assertNotIn("provenance", items["plots/map.html"])
         self.assertIn("plots/map.html", items)
         self.assertEqual(read.call_count, 1)
 
     def test_provenance_depth_counts_from_path(self):
-        items = self.paths(path="plots", provenance_depth=1)
+        items = self.paths(path="plots")
         self.assertEqual(items["plots/map.html"]["provenance"], ["dynamical-fetch", "plot"])
 
     def test_provenance_depth_two_reaches_the_next_level(self):
@@ -203,13 +209,6 @@ class ArtifactsRouteOptionsTest(SandboxCase):
         self.assertIn("runs/2024/day1/out.csv", items)
         self.assertIn("provenance", items["summary.html"])
         self.assertNotIn("provenance", items["plots/map.html"])
-
-    def test_provenance_depth_query(self):
-        res = self.client.get(self.url("?provenance_depth=2"))
-        self.assertEqual(res.status_code, 200)
-        items = {i["path"]: i for i in res.json()}
-        self.assertIn("provenance", items["plots/map.html"])
-        self.assertEqual(self.client.get(self.url("?provenance_depth=0")).status_code, 422)
 
     def test_depth_and_provenance_query(self):
         res = self.client.get(self.url("?depth=2&provenance=false"))

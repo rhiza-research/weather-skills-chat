@@ -654,17 +654,13 @@ def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
     return _provenance_for_entry(path, kind)
 
 
-# The file list in the app reads provenance for top-level entries only. Reading
-# it for every file parses each one's whole history, seconds on a large chat.
-LISTED_PROVENANCE_DEPTH = 1
-
 
 def list_artifacts(
     chat_id: str,
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
-    provenance_depth: int | None = None,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """List a chat's sandbox. Blocks on JuiceFS; async code uses list_artifacts_async.
 
@@ -678,7 +674,8 @@ def list_artifacts(
     read opens the file, so turning it off makes large listings much cheaper.
     provenance_depth: read provenance only this many folder levels below path,
     or below the root, counted like depth. Deeper entries are listed without
-    it; artifact_provenance reads one on request. None reads every level.
+    it; artifact_provenance reads one on request. None reads every level,
+    which parses each file's whole history: seconds on a large chat.
     """
     if depth is not None and depth < 1:
         raise ValueError("depth must be at least 1")
@@ -762,7 +759,7 @@ async def list_artifacts_async(
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
-    provenance_depth: int | None = None,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """list_artifacts on a worker thread, so the walk never blocks the event loop."""
     return await asyncio.to_thread(

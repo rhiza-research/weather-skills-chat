@@ -1233,11 +1233,7 @@ def list_artifacts(
     __metadata__: dict = None,
 ) -> str:
     """List files and folders in the current chat artifact sandbox."""
-    from open_webui.utils.artifacts import (
-        LISTED_PROVENANCE_DEPTH,
-        list_artifacts as _list,
-        resolve_in_sandbox,
-    )
+    from open_webui.utils.artifacts import list_artifacts as _list, resolve_in_sandbox
 
     metadata = __metadata__ or {}
     chat_id = metadata.get("chat_id")
@@ -1270,14 +1266,7 @@ def list_artifacts(
             return reply
 
     try:
-        entries = _list(
-            chat_id,
-            path=prefix or None,
-            depth=depth,
-            provenance=provenance,
-            # Only the folder asked about: deeper entries are listed without it.
-            provenance_depth=LISTED_PROVENANCE_DEPTH,
-        )
+        entries = _list(chat_id, path=prefix or None, depth=depth, provenance=provenance)
     except Exception as e:
         return f"Failed to list artifacts: {e}"
 

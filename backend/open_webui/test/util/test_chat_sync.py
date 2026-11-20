@@ -326,9 +326,8 @@ class TestChatRealtimeSync(_NoBackgroundPublish, AbstractPostgresTest):
 
         calls = {"n": 0}
 
-        def fake_list(_chat_id, **kwargs):
+        def fake_list(_chat_id, **_kwargs):
             calls["n"] += 1
-            calls.setdefault("kwargs", []).append(kwargs)
             time.sleep(0.05)
             return [{"name": f"file-{calls['n']}.txt"}]
 
@@ -348,8 +347,6 @@ class TestChatRealtimeSync(_NoBackgroundPublish, AbstractPostgresTest):
 
         asyncio.run(run())
         assert calls["n"] >= 2
-        # Pushed lists read provenance for top-level entries only.
-        assert all(k.get("provenance_depth") == 1 for k in calls["kwargs"])
 
     def test_headless_completion_does_not_bump_revision(self):
         from open_webui.socket.main import get_event_emitter
