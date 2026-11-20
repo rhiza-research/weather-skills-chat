@@ -29,10 +29,13 @@ ACTIVITY_SCHEMA = {
 }
 
 TOOL_CALL_GUIDANCE = (
-    "Tool calls issued in the same turn run in parallel. If a call needs another "
-    "call's output, set its `depends_on` argument to the function names or tool_call "
-    "ids of the calls in this same turn that must finish before it starts, or wait "
-    "and call it in a later turn. Omit `depends_on` for independent work.\n\n"
+    "Tool calls in the same turn start at the same moment, regardless of the order "
+    "you list them. Before sending several calls together, check each call's input "
+    "paths: if any of them is the `-o` output of another call in the same turn, that "
+    "call must set `depends_on` to the writer's tool_call id, or go in a later turn. "
+    "This applies to every reader, including inspect_zarr, verify, concat and plot. "
+    "Two calls must never write the same `-o` path in one turn. Omit `depends_on` "
+    "only for calls that read files that already existed before this turn.\n\n"
     "When you call a tool, set its optional `display` argument to a short phrase the "
     "user will see instead of the function name while the call runs, such as "
     '"Checking the most recent available date for IMERG" or "Grouping the data into '
