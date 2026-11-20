@@ -93,6 +93,6 @@ curl -fsS "$url/health" >/dev/null || { echo "Not up. Logs: docker logs $stack" 
 
 if [[ $new == true ]]; then
     docker exec -i -w /app/backend "$stack" python - <scripts/preview-seed/seed.py 2>&1 | tail -1
-    python3 scripts/preview-seed/staging.py import "$url"
+    python3 scripts/preview-seed/staging.py import "$url" "$stack"
 fi
 sign_in_help "$url"

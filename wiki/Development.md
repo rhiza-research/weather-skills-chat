@@ -113,7 +113,7 @@ scripts/preview.sh up
 1. Reads staging's platform models and platform skill packs and passes them to the stack as `CATALOG_MODELS` and `SKILL_PACKS`.
 2. Runs `./run-compose.sh --name=NAME --build -q` and waits until the app answers. Skills run on the emulated Kubernetes runners, as on staging, unless the options give another `--isolation`. The first start takes longer while it installs the skill packs.
 3. On a new stack, adds three accounts, all with the password `preview`: `admin@example.com`, the platform admin; `researcher@example.com`, a user; and `pending@example.com`, waiting for access. It also adds a workspace, Demo Org, with the admin as owner and the researcher as a member.
-4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files, into the local admin's chats. Tag a chat on staging to add it to new stacks.
+4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files and the files' provenance, into the local admin's chats. Tag a chat on staging to add it to new stacks.
 
 `up` ends by printing the address, the accounts, and how to sign in: a line to run in an agent's browser tool that signs in through the API and reloads, and the sign-in page with the email filled in (`/auth?email=EMAIL`).
 

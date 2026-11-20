@@ -5,20 +5,32 @@ staging's platform admin.
 
     staging.py catalog            CATALOG_MODELS JSON: staging's platform models
     staging.py packs              SKILL_PACKS JSON: staging's platform skill packs
-    staging.py import LOCAL_URL   saved settings, then chats tagged preview-seed with their files
+    staging.py import LOCAL_URL CONTAINER
+                                  saved settings, then chats tagged preview-seed with their files
 """
 
 import json
 import os
+import subprocess
 import sys
 import urllib.request
-import uuid
 
 STAGING = "https://chat-staging.hornbill-avior.ts.net"
 SEED_TAG = "preview-seed"
 # Staging settings a local stack must not use: its webhook would post local events.
 DROP_SETTINGS = ("webhook_url",)
 PLATFORM = {"X-Organization-Id": "platform"}
+# Unpacks a tar archive from stdin into a chat's sandbox, run in the stack's container.
+# The archive upload API would strip weather-skills provenance from the files, as it
+# does for code output, so the copies are written straight to disk instead.
+EXTRACT = """
+import sys, tarfile
+from open_webui.utils.artifacts import chat_sandbox, own_sandbox_tree
+root = chat_sandbox(sys.argv[1])
+with tarfile.open(fileobj=sys.stdin.buffer, mode="r|*") as tar:
+    tar.extractall(root, filter="data")
+own_sandbox_tree(root)
+"""
 
 
 def call(base, path, token, body=None, raw=False, headers=None):
@@ -60,16 +72,7 @@ def packs():
     return list(seen.values())
 
 
-def multipart(name, filename, data):
-    boundary = uuid.uuid4().hex
-    body = (
-        f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"; "
-        f"filename=\"{filename}\"\r\nContent-Type: application/gzip\r\n\r\n"
-    ).encode() + data + f"\r\n--{boundary}--\r\n".encode()
-    return body, {"Content-Type": f"multipart/form-data; boundary={boundary}"}
-
-
-def import_into(local):
+def import_into(local, container):
     admin = {"email": os.environ["BOOTSTRAP_ADMIN_EMAIL"], "password": os.environ["BOOTSTRAP_ADMIN_PASSWORD"]}
     token = call(local, "/api/v1/auths/signin", "", admin)["token"]
 
@@ -92,8 +95,12 @@ def import_into(local):
         if top:
             query = "&".join(f"path={urllib.request.quote(e['path'])}" for e in top)
             archive = staging(f"/api/v1/chats/{listed['id']}/artifacts/archive?{query}", raw=True)
-            body, headers = multipart("file", "artifacts.tar.gz", archive)
-            call(local, f"/api/v1/chats/{copy['id']}/artifacts/archive", token, body, headers=headers)
+            subprocess.run(
+                ["docker", "exec", "-i", "-w", "/app/backend", container, "python", "-c", EXTRACT, copy["id"]],
+                input=archive,
+                stdout=subprocess.DEVNULL,  # the app prints paths on import
+                check=True,
+            )
         print(f"Copied chat: {listed['title']} ({len(top)} top-level files)")
     print(f"Copied staging settings and {len(chats)} chats tagged {SEED_TAG}")
 
@@ -104,7 +111,7 @@ if __name__ == "__main__":
         print(json.dumps(catalog()))
     elif command == "packs":
         print(json.dumps(packs()))
-    elif command == "import" and len(sys.argv) == 3:
-        import_into(sys.argv[2].rstrip("/"))
+    elif command == "import" and len(sys.argv) == 4:
+        import_into(sys.argv[2].rstrip("/"), sys.argv[3])
     else:
         sys.exit(__doc__)
