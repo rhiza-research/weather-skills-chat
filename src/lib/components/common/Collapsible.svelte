@@ -295,13 +295,19 @@
 		displayImageLoadedKey = '';
 	}
 
+	// The transcript remounts for each chat, so the first chat a card sees is its own.
+	// $chatId switches before the old chat's cards unmount; they must not load from the new one.
+	let cardChatId = '';
+	$: if (!cardChatId && $chatId) cardChatId = $chatId;
+	$: onCardChat = Boolean(cardChatId) && $chatId === cardChatId;
+
 	$: displayImageRequestKey =
 		showResultMedia &&
 		displayImagePath &&
 		!displayHtmlPath &&
-		$chatId &&
+		onCardChat &&
 		attributes?.done === 'true'
-			? `${$chatId}::${displayImagePath}`
+			? `${cardChatId}::${displayImagePath}`
 			: '';
 
 	$: if (displayImageRequestKey) {
@@ -542,10 +548,10 @@
 			{/if}
 
 			{#if showResultMedia && attributes?.done === 'true'}
-				{#if displayHtmlPath && displayHtmlShown && $chatId}
+				{#if displayHtmlPath && displayHtmlShown && onCardChat}
 					<HtmlArtifactInline
-						src={getArtifactViewUrl($chatId, displayHtmlPath)}
-						downloadUrl={getArtifactContentUrl($chatId, displayHtmlPath)}
+						src={getArtifactViewUrl(cardChatId, displayHtmlPath)}
+						downloadUrl={getArtifactContentUrl(cardChatId, displayHtmlPath)}
 						title={displayHtmlPath}
 					/>
 				{:else if displayImageSrc}
