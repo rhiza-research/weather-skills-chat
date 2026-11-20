@@ -52,7 +52,6 @@ from open_webui.utils.response import (
     convert_streaming_response_ollama_to_openai,
 )
 from open_webui.utils.langfuse_tracing import (
-    CACHE_KEEPALIVE_GENERATION_NAME,
     MODEL_CALL_TRACING_APP,
     MODEL_CALL_TRACING_KEY,
     end_open_generations,
@@ -276,7 +275,6 @@ async def generate_cache_keepalive(
             form_data,
             send_cache_keepalive(request, form_data, user, bypass_filter),
             style=style,
-            name=CACHE_KEEPALIVE_GENERATION_NAME,
         )
     except asyncio.CancelledError:
         end_open_generations(error="cancelled")

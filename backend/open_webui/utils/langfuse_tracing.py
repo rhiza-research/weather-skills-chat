@@ -428,10 +428,20 @@ MODEL_CALL_TRACING_KEY = "model_call_tracing"
 MODEL_CALL_TRACING_APP = "app"
 MODEL_CALL_TRACING_OPENROUTER = "openrouter"
 
-# Generation names: a model call, and a call that only keeps the provider's
-# prompt cache alive while tools run.
-MODEL_CALL_GENERATION_NAME = "llm"
-CACHE_KEEPALIVE_GENERATION_NAME = "cache-keepalive"
+# usage_source of a call that only keeps the provider's prompt cache alive.
+# Defined here, not in usage, because usage imports this module.
+CACHE_KEEPALIVE_USAGE_SOURCE = "cache_keepalive"
+
+
+def _generation_name(metadata: Optional[dict]) -> str:
+    """A model call's name in a trace; keep-alives are named apart from the
+    calls whose cache they keep."""
+    if (
+        isinstance(metadata, dict)
+        and metadata.get("usage_source") == CACHE_KEEPALIVE_USAGE_SOURCE
+    ):
+        return "cache-keepalive"
+    return "llm"
 
 _warned_tracing_styles: set = set()
 _warned_tracing_styles_lock = threading.Lock()
@@ -443,7 +453,6 @@ def _openrouter_trace_fields(
     trace_metadata: Optional[dict],
     user: Any,
     metadata: Optional[dict],
-    generation_name: str = MODEL_CALL_GENERATION_NAME,
 ) -> dict:
     """OpenRouter Broadcast fields: ``user``, ``session_id``, ``trace``."""
     fields: dict[str, Any] = {}
@@ -465,7 +474,7 @@ def _openrouter_trace_fields(
         "parent_span_id": parent_span_id if trace_id and parent_span_id else None,
         "environment": LANGFUSE_TRACING_ENVIRONMENT,
         "release": WEBUI_IMAGE_TAG or None,
-        "generation_name": generation_name,
+        "generation_name": _generation_name(metadata),
         "chat_id": source.get("chat_id"),
         "message_id": source.get("message_id"),
         "model": source.get("model"),
@@ -515,7 +524,6 @@ def apply_provider_trace_fields(
     *,
     user: Any,
     metadata: Optional[dict],
-    generation_name: str = MODEL_CALL_GENERATION_NAME,
 ) -> dict:
     """Add the style's provider fields to an outgoing request body.
 
@@ -531,7 +539,6 @@ def apply_provider_trace_fields(
             trace_metadata=_trace_metadata_var.get(),
             user=user,
             metadata=metadata,
-            generation_name=generation_name,
         )
     except Exception:
         log.debug("Building %s trace fields failed", style, exc_info=True)
@@ -564,9 +571,7 @@ def end_open_generations(error: Any) -> None:
         end_generation(error=error)
 
 
-def start_generation(
-    form_data: Optional[dict], name: str = MODEL_CALL_GENERATION_NAME
-) -> Any:
+def start_generation(form_data: Optional[dict]) -> Any:
     trace = current_trace()
     if not trace:
         return None
@@ -587,9 +592,9 @@ def start_generation(
     tools = form_data.get("tools") or []
     tool_names = []
     for tool in tools:
-        tool_name = (tool.get("function") or {}).get("name")
-        if tool_name:
-            tool_names.append(tool_name)
+        name = (tool.get("function") or {}).get("name")
+        if name:
+            tool_names.append(name)
     # Include full tool specs (names + descriptions + parameters) so Langfuse
     # shows what the model actually received — not just tool name metadata.
     generation_input: dict[str, Any] = {
@@ -603,7 +608,7 @@ def start_generation(
         metadata["tool_count"] = len(tool_names)
     generation = _safe_call(
         trace.start_observation,
-        name=name,
+        name=_generation_name(form_data.get("metadata")),
         as_type="generation",
         model=form_data.get("model"),
         input=truncate_payload(
@@ -901,9 +906,7 @@ def _provider_response_failure(response: Any) -> Optional[str]:
     return None
 
 
-def record_provider_call_error(
-    style: str, error: str, name: str = MODEL_CALL_GENERATION_NAME
-) -> None:
+def record_provider_call_error(style: str, error: str, name: str) -> None:
     """Record a failed provider-traced call as an ERROR span under the root.
 
     The provider may never see or record a call that fails here, so without
@@ -926,19 +929,15 @@ def record_provider_call_error(
 
 
 async def observe_generation(
-    form_data: dict,
-    coro,
-    *,
-    style: str = MODEL_CALL_TRACING_APP,
-    name: str = MODEL_CALL_GENERATION_NAME,
+    form_data: dict, coro, *, style: str = MODEL_CALL_TRACING_APP
 ):
     """Record the model call as a generation unless its provider records it.
 
     Callers resolve the style first, so a provider-traced call never creates
-    a generation here. ``name`` names the generation, or the error span of a
-    provider-traced call.
+    a generation here.
     """
     if style != MODEL_CALL_TRACING_APP:
+        name = _generation_name((form_data or {}).get("metadata"))
         try:
             response = await coro
         except Exception as e:
@@ -948,7 +947,7 @@ async def observe_generation(
         if failure is not None:
             record_provider_call_error(style, failure, name=name)
         return response
-    start_generation(form_data, name=name)
+    start_generation(form_data)
     try:
         response = await coro
         return bind_generation_to_response(response)

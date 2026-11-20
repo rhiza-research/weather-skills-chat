@@ -45,8 +45,6 @@ from open_webui.utils.misc import (
 )
 from open_webui.utils.chat_timing import log_timing
 from open_webui.utils.langfuse_tracing import (
-    CACHE_KEEPALIVE_GENERATION_NAME,
-    MODEL_CALL_GENERATION_NAME,
     MODEL_CALL_TRACING_APP,
     MODEL_CALL_TRACING_KEY,
     apply_provider_trace_fields,
@@ -891,7 +889,6 @@ def prepare_provider_call(
     bypass_filter: bool,
     upstream_model_id: Optional[str] = None,
     max_tokens: Optional[int] = None,
-    generation_name: str = MODEL_CALL_GENERATION_NAME,
 ) -> ProviderCall:
     """Check the model and build the provider request for one model call.
 
@@ -900,8 +897,7 @@ def prepare_provider_call(
     That is how a call is resent to the model's backup.
 
     With ``max_tokens`` the call's output budget is that, whatever the
-    model's parameters say. ``generation_name`` names the call in a
-    provider's trace record.
+    model's parameters say.
 
     Synchronous: it reads the model row and the user's organizations, and
     serializes the whole conversation. Callers on the event loop run it in a
@@ -1024,7 +1020,6 @@ def prepare_provider_call(
         provider_trace_style(metadata, api_config),
         user=user,
         metadata=metadata,
-        generation_name=generation_name,
     )
 
     t_dump = time.perf_counter()
@@ -1260,7 +1255,6 @@ async def send_cache_keepalive(
         user,
         bypass_filter,
         max_tokens=0,
-        generation_name=CACHE_KEEPALIVE_GENERATION_NAME,
     )
     return await _send_provider_call(call, user)
 
