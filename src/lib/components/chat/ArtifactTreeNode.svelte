@@ -91,7 +91,7 @@
 		if (await copyToClipboard(url)) toast.success($i18n.t('Copied link to clipboard'));
 	};
 
-	// Listings carry provenance for top-level entries only; deeper images, HTML
+	// Listings carry provenance for top-level entries only; deeper PNGs, HTML
 	// pages and Zarr stores show it when their stamp button is pressed.
 	let askingProvenance = false;
 	const toggleProvenance = async () => {
@@ -116,10 +116,13 @@
 
 	$: file = node.file;
 	$: askedKey = file ? `${$chatId}\n${file.path}\n${file.modified ?? ''}` : '';
+	// Only the kinds the server reads provenance from (artifacts._provenance_for_entry).
 	$: canAskProvenance =
 		!!file &&
 		!file.provenance_branches?.length &&
-		['image', 'html', 'zarr'].includes(file.kind);
+		(file.kind === 'html' ||
+			file.kind === 'zarr' ||
+			(file.kind === 'image' && /\.png$/i.test(file.path)));
 	$: shownBranches = file?.provenance_branches?.length
 		? file.provenance_branches
 		: ($askedProvenance[askedKey] ?? []);

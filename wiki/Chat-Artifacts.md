@@ -18,7 +18,7 @@ Each file in the list has icon buttons beside its name: Open and Copy link for i
 
 A long name is cut short in the list; hovering over it shows the full name. The name of the open file is shown in full above the list.
 
-Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows the chain of skill names under each entry at the top level of the chat's files. Entries inside folders have a stamp button, the ring and star that skills draw on their figures; pressing it shows the chain under that entry, and pressing it again hides it. An image or page shown in the conversation with `display_image` (see [[Built-in Tools]]) shows its chain below the image. Opening a chain shows each step's version, arguments, and inputs, so a user can see how a result was made.
+Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows the chain of skill names under each entry at the top level of the chat's files. PNG images, HTML pages, and Zarr stores inside folders have a stamp button, the ring and star that skills draw on their figures; pressing it shows the chain under that entry, and pressing it again hides it. An image or page shown in the conversation with `display_image` (see [[Built-in Tools]]) shows its chain below the image. Opening a chain shows each step's version, arguments, and inputs, so a user can see how a result was made.
 
 ## Downloading and uploading
 
