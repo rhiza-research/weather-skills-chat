@@ -336,14 +336,6 @@ def get_event_emitter(request_info, update_db=True):
                 )
                 if not transient:
                     save_part("status", status_data)
-                if (
-                    status_data.get("done")
-                    and action not in ("generation_heartbeat", "waiting_response")
-                    and request_info.get("chat_id")
-                ):
-                    from open_webui.utils.chat_realtime import schedule_artifacts
-
-                    schedule_artifacts(request_info["chat_id"])
 
             if "type" in event_data and event_data["type"] == "message":
                 await asyncio.to_thread(
