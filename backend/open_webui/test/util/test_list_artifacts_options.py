@@ -128,6 +128,32 @@ class ListArtifactsOptionsTest(SandboxCase):
         self.assertEqual(items["plots/map.html"]["kind"], "html")
         self.assertNotIn("provenance", items["plots/map.html"])
 
+    def test_unchanged_artifact_is_not_read_again(self):
+        self.paths()
+        with patch.object(artifacts_utils, "provenance_for_html") as read:
+            items = self.paths()
+        read.assert_not_called()
+        self.assertEqual(items["plots/map.html"]["provenance"], ["dynamical-fetch", "plot"])
+
+    def test_rewritten_artifact_is_read_again(self):
+        self.paths()
+        page = self.artifacts / self.chat_id / "plots" / "map.html"
+        page.write_text(_page_with_provenance().replace("dynamical-fetch", "chirps-fetch"))
+        self.assertEqual(self.paths()["plots/map.html"]["provenance"], ["chirps-fetch", "plot"])
+
+    def test_restamped_zarr_store_is_read_again(self):
+        store = self.artifacts / self.chat_id / "plots" / "a.zarr"
+        store.mkdir()
+
+        def stamp(chain):
+            attrs = {"weather_skills_history": json.dumps(chain)}
+            (store / "zarr.json").write_text(json.dumps({"attributes": attrs}))
+
+        stamp(CHAIN)
+        self.assertEqual(self.paths()["plots/a.zarr"]["provenance"], ["dynamical-fetch", "plot"])
+        stamp(CHAIN[:1])
+        self.assertEqual(self.paths()["plots/a.zarr"]["provenance"], ["dynamical-fetch"])
+
     def test_depth_below_one_is_rejected(self):
         with self.assertRaises(ValueError):
             list_artifacts(self.chat_id, depth=0)

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import functools
 import io
 import json
@@ -641,6 +642,20 @@ def _provenance_for_entry(path: Path, kind: str) -> dict | None:
     return None
 
 
+@functools.lru_cache(maxsize=50_000)
+def _provenance_names(path: str, kind: str, signature: tuple | None) -> tuple | None:
+    """Crumbs and branch names of one artifact. The signature (mtime, size of the file
+    holding the history) only keys the cache, so a rewritten artifact is read again."""
+    prov = _provenance_for_entry(Path(path), kind)
+    return prov and (
+        prov.get("crumbs") or [],
+        [
+            {"label": b.get("label"), "crumbs": b.get("crumbs") or []}
+            for b in prov.get("branches") or []
+        ],
+    )
+
+
 def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
     """Crumbs and full branches for one sandbox entry, or None. Blocks on JuiceFS."""
     path = resolve_in_sandbox(chat_id, rel_path)
@@ -711,15 +726,20 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            prov = _provenance_for_entry(path, kind) if provenance else None
-            if prov:
+            names = None
+            if provenance:
+                history = stat
+                if kind == "zarr":
+                    for name in ("zarr.json", ".zattrs"):
+                        with contextlib.suppress(OSError):
+                            history = (path / name).stat()
+                            break
+                signature = history and (history.st_mtime_ns, history.st_size)
+                names = _provenance_names(str(path), kind, signature)
+            if names:
                 # Names only: full steps grow with every step and the list is
                 # pushed to every watching tab. artifact_provenance reads them.
-                item["provenance"] = prov.get("crumbs") or []
-                item["provenance_branches"] = [
-                    {"label": branch.get("label"), "crumbs": branch.get("crumbs") or []}
-                    for branch in prov.get("branches") or []
-                ]
+                item["provenance"], item["provenance_branches"] = names
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
             level = rel.count("/") + 1 - base_levels
