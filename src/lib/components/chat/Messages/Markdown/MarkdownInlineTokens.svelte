@@ -15,8 +15,8 @@
 		isHtmlArtifact
 	} from '$lib/apis/artifacts';
 	import { WEBUI_BASE_URL, helpEmailAddress } from '$lib/constants';
-	import { chatId, config, feedbackDraft } from '$lib/stores';
-	import { copyToClipboard, unescapeHtml } from '$lib/utils';
+	import { chatId, config, feedbackDraft, settings } from '$lib/stores';
+	import { copyToClipboard, safeLinkUrl, unescapeHtml } from '$lib/utils';
 	import { feedbackLinkDraft } from '$lib/utils/feedback';
 
 	// The model is told to link #feedback; a link to the help address opens the same form.
@@ -51,7 +51,19 @@
 		{#if html && html.includes('<video')}
 			{@html html}
 		{:else if token.text.includes(`<iframe src="${WEBUI_BASE_URL}/api/v1/files/`)}
-			{@html `${token.text}`}
+			{@const htmlFileId = token.text.match(/\/api\/v1\/files\/([a-f0-9-]+)\/content\/html/)?.[1]}
+			{#if htmlFileId}
+				<iframe
+					src="{WEBUI_BASE_URL}/api/v1/files/{htmlFileId}/content/html"
+					title="Content"
+					width="100%"
+					frameborder="0"
+					sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)
+						? ' allow-forms'
+						: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false) ? ' allow-same-origin' : ''}"
+					onload="this.style.height=(this.contentWindow.document.body.scrollHeight+20)+'px';"
+				></iframe>
+			{/if}
 		{:else if token.text.includes(`<source_id`)}
 			<Source {id} {token} onClick={onSourceClick} />
 		{:else}
@@ -85,7 +97,7 @@
 		</button>
 	{:else if token.type === 'link'}
 		{@const sandboxHref = artifactHrefForChat(token.href ?? '', $chatId)}
-		{@const href = sandboxHref ?? token.href}
+		{@const href = sandboxHref ?? safeLinkUrl(token.href)}
 		{@const internalLink = !sandboxHref && isInternalAppPath(token.href ?? '')}
 		{#if token.tokens}
 			<a

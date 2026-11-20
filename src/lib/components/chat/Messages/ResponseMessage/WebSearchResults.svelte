@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { safeLinkUrl } from '$lib/utils';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import MagnifyingGlass from '$lib/components/icons/MagnifyingGlass.svelte';
@@ -60,7 +61,7 @@
 
 		{#each status.urls as url, urlIdx}
 			<a
-				href={url}
+				href={safeLinkUrl(url)}
 				target="_blank"
 				class="flex w-full items-center p-3 px-4 {urlIdx === status.urls.length - 1
 					? ''

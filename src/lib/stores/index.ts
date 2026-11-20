@@ -143,6 +143,8 @@ type OllamaModelDetails = {
 };
 
 type Settings = {
+	iframeSandboxAllowForms?: boolean;
+	iframeSandboxAllowSameOrigin?: boolean;
 	models?: string[];
 	conversationMode?: boolean;
 	speechAutoSend?: boolean;
