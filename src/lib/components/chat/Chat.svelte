@@ -124,6 +124,7 @@
 		fileFromDataUrl
 	} from '$lib/apis/artifacts';
 	import { defaultEnabledToolIds } from '$lib/utils/toolDisplay';
+	import { defaultTextSkillToolIds, loadTextSkills } from '$lib/utils/textSkills';
 	import { revealApp } from '$lib/utils/splash';
 	import {
 		answerEventPrompt as answerPrompt,
@@ -484,7 +485,10 @@
 			// Enable org-usable tools/skills by default (highest skill version).
 			// Catalog "enabled by default" only seeds the workspace toggle; the
 			// tools list already reflects org-admin enablement.
-			selectedToolIds = defaultEnabledToolIds($tools ?? []);
+			selectedToolIds = [
+				...defaultEnabledToolIds($tools ?? []),
+				...defaultTextSkillToolIds(await loadTextSkills())
+			];
 		}
 	};
 
