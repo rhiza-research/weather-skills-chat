@@ -53,9 +53,10 @@
 					arrow: false,
 					offset: offset,
 					...tippyOptions,
-					// The instance is made on the first hover, so showing it on
-					// creation only makes sense while the pointer is still here.
-					showOnCreate: !!tippyOptions.showOnCreate && hovering
+					// The instance is made on the first hover, after tippy's own hover
+					// handler would have run: show it now if the pointer is still here,
+					// or the first hover over anything shows no tooltip.
+					showOnCreate: hovering && tippyOptions.showOnCreate !== false
 				});
 			}
 		});
