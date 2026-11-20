@@ -76,9 +76,14 @@ export const feedbackDraft: Writable<FeedbackDraft | null> = writable(null);
 export const showControls = writable(false);
 export const showOverview = writable(false);
 export const showArtifacts = writable(false);
+// The share link the page is showing; its files load from the public share API.
+export const sharedChatId: Writable<string | null> = writable(null);
 export const showCallOverlay = writable(false);
 /** Bump to force the artifacts panel to reload its file list. */
 export const artifactsRefresh = writable(0);
+/** A chat whose files are still being copied in, or failed to copy; null when none. */
+export const artifactCopy: Writable<{ chatId: string; state: 'copying' | 'failed' } | null> =
+	writable(null);
 
 export const temporaryChatEnabled = writable(false);
 export const scrollPaginationEnabled = writable(false);

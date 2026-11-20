@@ -1,22 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 import tarfile
 import tempfile
+import time
 import unittest
 import zipfile
 import zlib
+import shutil
 import struct
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
 from open_webui.utils.artifacts import (
+    SandboxCopyError,
+    artifact_carryover_note,
+    artifact_copy_state,
+    list_artifacts,
+    mark_copy_started,
     SANDBOX_FILE_MODE,
     SANDBOX_OWNER_UID,
     copy_sandbox,
     copy_upload_into_chat_sandbox,
     create_folder,
+    delete_sandbox,
+    empty_trash,
     extract_sandbox_archive,
     normalize_sandbox_relpath,
     pack_sandbox_archive,
@@ -54,11 +64,45 @@ class CreateFolderTest(unittest.TestCase):
                     self.assertTrue(mode & stat.S_ISGID, f"{path} missing setgid: {oct(mode)}")
 
 
+class ArtifactCarryoverNoteTest(unittest.TestCase):
+    def test_lists_every_file_with_skills_for_the_first_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.ARTIFACT_NOTE_PROVENANCE_FILES", 1
+            ), patch(
+                "open_webui.utils.artifacts._provenance_for_entry",
+                return_value={"crumbs": ["chirps-fetch", "plot"]},
+            ) as provenance:
+                write_bytes("c1", "plots/a.png", b"png")
+                write_bytes("c1", "plots/b.png", b"png")
+                note = artifact_carryover_note("c1", "Kenya rain")
+
+        self.assertTrue(note.startswith('This chat has been started with 2 files from the chat "Kenya rain".'))
+        self.assertIn("explore these files before downloading anything again", note)
+        self.assertIn("- `plots/` (directory)", note)
+        self.assertIn("- `plots/a.png` (image) made by chirps-fetch → plot", note)
+        self.assertIn("- `plots/b.png` (image)\n", note + "\n")
+        self.assertEqual(provenance.call_count, 1)
+        self.assertNotIn("intermediate_results/`", note)
+
+    def test_sandbox_without_files_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", Path(tmp) / "artifacts"):
+                create_folder("c1", "empty")
+                self.assertEqual(
+                    artifact_carryover_note("c1", "Empty"),
+                    'This chat has been started from the chat "Empty". It has no files from that chat.',
+                )
+
+
 class CopySandboxTest(unittest.TestCase):
     def test_copies_visible_files_and_zarr_dotfiles_not_root_dotdirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp) / "artifacts"
-            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.shutil.which", return_value=None
+            ):
                 src = artifacts / "src"
                 (src / "plots").mkdir(parents=True)
                 (src / "plots" / "map.png").write_bytes(b"png")
@@ -71,6 +115,8 @@ class CopySandboxTest(unittest.TestCase):
                 self.assertEqual((dest / "plots" / "map.png").read_bytes(), b"png")
                 self.assertEqual((dest / "data.zarr" / ".zgroup").read_text(), "{}")
                 self.assertFalse((dest / ".local").exists())
+                self.assertEqual(artifact_copy_state("dest"), "done")
+                self.assertEqual(sorted(p.name for p in dest.iterdir()), ["data.zarr", "intermediate_results", "plots"])
 
     def _sandbox_with_results(self, artifacts: Path) -> Path:
         src = artifacts / "src"
@@ -80,44 +126,53 @@ class CopySandboxTest(unittest.TestCase):
         (src / ".cache").mkdir()
         return src
 
-    def test_uses_juicefs_clone_for_each_visible_entry_when_available(self):
+    @staticmethod
+    def _fake_clone(cmd, **kwargs):
+        if cmd[1] == "rmr":
+            shutil.rmtree(cmd[-1], ignore_errors=True)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        src, dest = Path(cmd[-2]), Path(cmd[-1])
+        if dest.exists():
+            return subprocess.CompletedProcess(cmd, 1, "", "clone failed: file exists")
+        if src.is_dir():
+            shutil.copytree(src, dest)
+        else:
+            shutil.copy(src, dest)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    def test_clones_with_32_threads_into_staging_then_moves_into_place(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp) / "artifacts"
             with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
-                src = self._sandbox_with_results(artifacts)
-                dest = artifacts / "dest"
-
-                def fake_clone(cmd, **kwargs):
-                    # Clone refuses an existing target, so the empty folder must be gone.
-                    self.assertFalse(Path(cmd[-1]).exists(), cmd[-1])
-                    return subprocess.CompletedProcess(cmd, 0, "", "")
-
+                self._sandbox_with_results(artifacts)
                 with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
-                    "open_webui.utils.artifacts.subprocess.run", side_effect=fake_clone
+                    "open_webui.utils.artifacts.subprocess.run", side_effect=self._fake_clone
                 ) as run, patch("open_webui.utils.artifacts._copy_sandbox_entry") as plain_copy:
                     copy_sandbox("src", "dest")
 
-                cloned = sorted(call.args[0][-2:] for call in run.call_args_list)
-                self.assertEqual(
-                    cloned,
-                    [
-                        [str(src.resolve() / "intermediate_results"), str(dest.resolve() / "intermediate_results")],
-                        [str(src.resolve() / "map.png"), str(dest.resolve() / "map.png")],
-                    ],
-                )
-                self.assertTrue(all(call.args[0][:3] == ["juicefs", "clone", "--preserve"] for call in run.call_args_list))
+                clones = [c.args[0] for c in run.call_args_list if c.args[0][1] == "clone"]
+                self.assertEqual({tuple(c[:5]) for c in clones}, {("juicefs", "clone", "--preserve", "--threads", "32")})
+                # The new chat's own intermediate_results never blocks the clone.
+                self.assertTrue(all(".artifact-copy-staging" in c[-1] for c in clones))
                 plain_copy.assert_not_called()
+                dest = artifacts / "dest"
+                self.assertEqual((dest / "intermediate_results" / "run.nc").read_bytes(), b"nc")
+                self.assertEqual((dest / "map.png").read_bytes(), b"png")
+                self.assertFalse((dest / ".artifact-copy-staging").exists())
+                self.assertEqual(artifact_copy_state("dest"), "done")
 
-    def test_falls_back_to_plain_copy_when_juicefs_clone_fails(self):
+    def test_small_chat_falls_back_to_plain_copy_when_juicefs_clone_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = Path(tmp) / "artifacts"
             with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
                 self._sandbox_with_results(artifacts)
 
                 def failed_clone(cmd, **kwargs):
-                    Path(cmd[-1]).mkdir()  # partial output a failed clone may leave
-                    (Path(cmd[-1]) / "partial").write_bytes(b"x")
-                    return subprocess.CompletedProcess(cmd, 1, "", "not a JuiceFS mount")
+                    if cmd[1] == "clone":
+                        Path(cmd[-1]).mkdir()  # partial output a failed clone may leave
+                        (Path(cmd[-1]) / "partial").write_bytes(b"x")
+                        return subprocess.CompletedProcess(cmd, 1, "", "not a JuiceFS mount")
+                    return self._fake_clone(cmd)
 
                 with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
                     "open_webui.utils.artifacts.subprocess.run", side_effect=failed_clone
@@ -129,6 +184,132 @@ class CopySandboxTest(unittest.TestCase):
                 self.assertEqual((dest / "intermediate_results" / "run.nc").read_bytes(), b"nc")
                 self.assertFalse((dest / "intermediate_results" / "partial").exists())
                 self.assertFalse((dest / ".cache").exists())
+                self.assertEqual(artifact_copy_state("dest"), "done")
+
+    def test_large_chat_is_not_plain_copied_when_juicefs_clone_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.PLAIN_COPY_MAX_FILES", 1
+            ):
+                self._sandbox_with_results(artifacts)
+
+                def failed_clone(cmd, **kwargs):
+                    if cmd[1] == "clone":
+                        return subprocess.CompletedProcess(cmd, 1, "", "clone failed")
+                    return self._fake_clone(cmd)
+
+                with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+                    "open_webui.utils.artifacts.subprocess.run", side_effect=failed_clone
+                ), patch("open_webui.utils.artifacts._copy_sandbox_entry") as plain_copy:
+                    with self.assertRaises(SandboxCopyError):
+                        copy_sandbox("src", "dest")
+
+                plain_copy.assert_not_called()
+                dest = artifacts / "dest"
+                self.assertEqual(artifact_copy_state("dest"), "failed")
+                self.assertFalse((dest / ".artifact-copy-staging").exists())
+                self.assertFalse((dest / "map.png").exists())
+
+    def test_large_chat_without_juicefs_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts), patch(
+                "open_webui.utils.artifacts.PLAIN_COPY_MAX_BYTES", 2
+            ), patch("open_webui.utils.artifacts.shutil.which", return_value=None):
+                self._sandbox_with_results(artifacts)
+                with self.assertRaises(SandboxCopyError):
+                    copy_sandbox("src", "dest")
+                self.assertEqual(artifact_copy_state("dest"), "failed")
+
+    def test_clone_that_runs_past_the_time_limit_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                self._sandbox_with_results(artifacts)
+
+                def slow_clone(cmd, **kwargs):
+                    if cmd[1] == "clone":
+                        self.assertLessEqual(kwargs["timeout"], 180)
+                        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+                    return self._fake_clone(cmd)
+
+                with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+                    "open_webui.utils.artifacts.subprocess.run", side_effect=slow_clone
+                ):
+                    with self.assertRaises(SandboxCopyError):
+                        copy_sandbox("src", "dest")
+                self.assertEqual(artifact_copy_state("dest"), "failed")
+
+
+class DeleteSandboxTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.artifacts = Path(tmp.name) / "artifacts"
+        patcher = patch("open_webui.utils.artifacts.ARTIFACTS_DIR", self.artifacts)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.chat = self.artifacts / "chat"
+        (self.chat / "plots").mkdir(parents=True)
+        for name in ("a.png", "b.png", "c.png"):
+            (self.chat / "plots" / name).write_bytes(b"png")
+        self.trash = self.artifacts.resolve() / ".trash"
+
+    def days_from_now(self, days: float):
+        """Run empty_trash as if this many days had passed."""
+        return patch("open_webui.utils.artifacts.time.time", return_value=time.time() + days * 86400)
+
+    def test_delete_moves_the_files_to_the_trash_under_their_name(self):
+        self.assertTrue(delete_sandbox("chat"))
+        self.assertFalse(self.chat.exists())
+        self.assertTrue((self.trash / "chat" / "plots" / "a.png").exists())
+
+    def test_the_trash_is_emptied_after_seven_days_with_juicefs_rmr(self):
+        delete_sandbox("chat")
+        with patch("open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"), patch(
+            "open_webui.utils.artifacts.subprocess.run", side_effect=CopySandboxTest._fake_clone
+        ) as run:
+            with self.days_from_now(6.9):
+                self.assertEqual(empty_trash(), 0)
+            self.assertTrue((self.trash / "chat").exists())
+            with self.days_from_now(7.1):
+                self.assertEqual(empty_trash(), 1)
+        self.assertFalse((self.trash / "chat").exists())
+        self.assertEqual(
+            run.call_args.args[0], ["juicefs", "rmr", "--threads", "50", str(self.trash / "chat")]
+        )
+
+    def test_without_juicefs_only_a_small_folder_is_emptied(self):
+        delete_sandbox("chat")
+        old = self.trash / "chat"
+        with patch("open_webui.utils.artifacts.shutil.which", return_value=None), patch(
+            "open_webui.utils.artifacts.PLAIN_COPY_MAX_FILES", 2
+        ), self.days_from_now(8):
+            self.assertEqual(empty_trash(), 0)
+            self.assertTrue((old / "plots" / "a.png").exists())
+
+            (old / "plots" / "b.png").unlink()
+            self.assertEqual(empty_trash(), 1)
+            self.assertFalse(old.exists())
+
+
+class ArtifactCopyStateTest(unittest.TestCase):
+    def test_marker_states(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts"
+            with patch("open_webui.utils.artifacts.ARTIFACTS_DIR", artifacts):
+                self.assertEqual(artifact_copy_state("c1"), "done")
+                mark_copy_started("c1")
+                self.assertEqual(artifact_copy_state("c1"), "copying")
+                marker = artifacts / "c1" / ".artifact-copy"
+                # A copy that outlived the time limit died with its process.
+                marker.write_text(json.dumps({"state": "copying", "started": time.time() - 211}))
+                self.assertEqual(artifact_copy_state("c1"), "failed")
+                marker.write_text(json.dumps({"state": "failed", "started": time.time()}))
+                self.assertEqual(artifact_copy_state("c1"), "failed")
+                # The marker never shows in the file list.
+                self.assertFalse(any(e["path"].startswith(".") for e in list_artifacts("c1")))
 
 
 class ArchiveRoundTripTest(unittest.TestCase):

@@ -4,12 +4,15 @@
 	import { quintOut } from 'svelte/easing';
 	import dayjs from 'dayjs';
 	import duration from 'dayjs/plugin/duration';
+	import relativeTime from 'dayjs/plugin/relativeTime';
 	import { decodeEntities } from '$lib/utils/entities';
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
 	dayjs.extend(duration);
+	// humanize() needs relativeTime; the share page loads no other component that extends it.
+	dayjs.extend(relativeTime);
 
 	const i18n = getContext('i18n');
 

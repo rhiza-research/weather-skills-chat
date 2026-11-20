@@ -202,8 +202,9 @@
 			// or the early responses are not reused.
 			(() => {
 				const isAuthPath = (path) => path === '/auth' || path.startsWith('/auth/');
+				const isShareLink = (path) => path.startsWith('/s/');
 				const token = localStorage.token;
-				if (!token && !isAuthPath(location.pathname)) {
+				if (!token && !isAuthPath(location.pathname) && !isShareLink(location.pathname)) {
 					history.replaceState(
 						null,
 						'',

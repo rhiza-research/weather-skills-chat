@@ -184,14 +184,18 @@ def _snapshot_chat_files(chat_id: str, snapshot_id: str) -> None:
         log.exception("Failed to snapshot files of chat %s for its share link", chat_id)
 
 
-def _delete_snapshot_files(snapshot_ids: list[str]) -> None:
+def _delete_snapshot_files(snapshot_ids: list[str]) -> list[str]:
+    """Delete the links' files; the ids whose files are gone."""
     from open_webui.utils.artifacts import delete_sandbox
 
+    gone = []
     for snapshot_id in snapshot_ids:
         try:
-            delete_sandbox(snapshot_id)
+            if delete_sandbox(snapshot_id):
+                gone.append(snapshot_id)
         except Exception:
             log.exception("Failed to delete share link files %s", snapshot_id)
+    return gone
 
 
 class ChatTable:
@@ -883,14 +887,48 @@ class ChatTable:
         _snapshot_chat_files(chat_id, shared_chat.id)
         return shared_chat
 
-    def delete_shared_chat_by_chat_id(self, chat_id: str) -> bool:
+    def get_live_shares_by_chat_id(self, chat_id: str) -> list[dict]:
+        """The chat's share links that have not expired, newest first. A link's
+        snapshot keeps the chat's created_at, so updated_at is when it was made."""
+        now = int(time.time())
+        with get_db() as db:
+            rows = (
+                db.query(Chat.id, Chat.updated_at, Chat.meta)
+                .filter_by(user_id=f"shared-{chat_id}")
+                .order_by(Chat.updated_at.desc())
+                .all()
+            )
+        links = [
+            {
+                "id": row.id,
+                "created_at": row.updated_at,
+                "expires_at": (row.meta or {}).get("expires_at"),
+            }
+            for row in rows
+        ]
+        return [l for l in links if l["expires_at"] is None or l["expires_at"] > now]
+
+    def expire_shares(self, chat_id: str, share_id: Optional[str] = None) -> list[str]:
+        """Stop the chat's share links working now, or only share_id, and
+        return their ids. The hourly cleanup deletes them if nothing else does."""
+        now = int(time.time())
+        with get_db() as db:
+            query = db.query(Chat).filter_by(user_id=f"shared-{chat_id}")
+            if share_id:
+                query = query.filter_by(id=share_id)
+            snapshot_ids = []
+            for row in query:
+                row.meta = {**(row.meta or {}), "expires_at": now}
+                snapshot_ids.append(row.id)
+            db.commit()
+        return snapshot_ids
+
+    def delete_shared_chat_by_chat_id(
+        self, chat_id: str, share_id: Optional[str] = None
+    ) -> bool:
+        """Delete the chat's share links, or only share_id when given."""
         try:
-            with get_db() as db:
-                snapshot_ids = [
-                    row.id
-                    for row in db.query(Chat.id).filter_by(user_id=f"shared-{chat_id}")
-                ]
-            self._delete_shared_chats(snapshot_ids)
+            self._delete_shared_chats(self.expire_shares(chat_id, share_id))
         except Exception:
             return False
         return True
@@ -911,11 +949,12 @@ class ChatTable:
     def _delete_shared_chats(self, snapshot_ids: list[str]) -> None:
         if not snapshot_ids:
             return
-        # Files first: if deleting the rows then fails, the rows remain and
-        # the next delete retries, rather than leaving files nothing points to.
-        _delete_snapshot_files(snapshot_ids)
+        # Callers expire the links first. A row goes only once its files are
+        # gone, so the hourly cleanup retries any delete that stops part way
+        # rather than leaving files nothing points to.
+        gone = _delete_snapshot_files(snapshot_ids)
         with get_db() as db:
-            db.query(Chat).filter(Chat.id.in_(snapshot_ids)).delete(
+            db.query(Chat).filter(Chat.id.in_(gone)).delete(
                 synchronize_session=False
             )
             db.query(Chat).filter(Chat.share_id.in_(snapshot_ids)).update(
@@ -961,10 +1000,12 @@ class ChatTable:
         except Exception:
             return None
 
-    def archive_all_chats_by_user_id(self, user_id: str) -> bool:
+    def archive_all_chats_by_user_id(self, user_id: str, organization_id: str) -> bool:
         try:
             with get_db() as db:
-                db.query(Chat).filter(_chat_visible_filter(user_id, user_id)).update(
+                db.query(Chat).filter(
+                    _chat_visible_filter(user_id, organization_id)
+                ).update(
                     {"archived": True}
                 )
                 db.commit()
@@ -973,12 +1014,12 @@ class ChatTable:
             return False
 
     def get_archived_chat_list_by_user_id(
-        self, user_id: str, skip: int = 0, limit: int = 50
+        self, user_id: str, organization_id: str, skip: int = 0, limit: int = 50
     ) -> list[ChatModel]:
         with get_db() as db:
             all_chats = (
                 db.query(Chat)
-                .filter(_chat_visible_filter(user_id, user_id))
+                .filter(_chat_visible_filter(user_id, organization_id))
                 .filter_by(archived=True)
                 .order_by(Chat.updated_at.desc())
                 .all()

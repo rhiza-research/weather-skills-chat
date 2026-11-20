@@ -35,3 +35,5 @@ The email names the user, the organization, the limit reached, and this month's 
 ## Seeing usage
 
 The usage counter in the user menu shows the active organization's spend this month against the organization limit. A user with a member limit also sees their own spend against it. Members of an organization see its usage this month, and platform admins see the usage of every organization.
+
+A small ring to the right of the send button shows how full the model's context window was on the latest model call in the chat: the tokens sent to the model against the most the model accepts. Clicking it opens a small panel with both token counts and the percentage used. When a reply runs skills, the ring shows the reply's last model call, not the sum of all its calls. The window size comes from the model provider's model list. The ring is hidden for models whose provider does not list a context window, and for replies made before the ring was added.

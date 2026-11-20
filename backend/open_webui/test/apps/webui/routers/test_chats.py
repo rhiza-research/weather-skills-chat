@@ -83,7 +83,7 @@ class TestChats(AbstractPostgresTest):
         self.test_get_session_user_chat_list()
 
     def test_get_user_archived_chats(self):
-        self.chats.archive_all_chats_by_user_id("2")
+        self.chats.archive_all_chats_by_user_id("2", "2")
         from open_webui.internal.db import Session
 
         Session.commit()
@@ -220,6 +220,18 @@ class TestChats(AbstractPostgresTest):
 
         chat = self.chats.get_chat_by_id(chat_id)
         assert chat.share_id is not None
+
+    def test_get_share_links_by_chat_id(self):
+        chat_id = self.chats.get_chats()[0].id
+        share_id = self.chats.insert_shared_chat_by_chat_id(chat_id).id
+        with mock_webui_user(id="2"):
+            response = self.fast_api_client.get(self.create_url(f"/{chat_id}/shares"))
+        assert response.status_code == 200
+        assert share_id in [link["id"] for link in response.json()]
+
+        with mock_webui_user(id="3"):
+            response = self.fast_api_client.get(self.create_url(f"/{chat_id}/shares"))
+        assert response.status_code == 401
 
     def test_delete_shared_chat_by_id(self):
         chat_id = self.chats.get_chats()[0].id

@@ -33,6 +33,7 @@
 		showOverview,
 		chatTitle,
 		showArtifacts,
+		artifactCopy,
 		tools,
 		toolServers,
 		activeOrganizationId,
@@ -98,11 +99,13 @@
 		holdPendingTurn,
 		moveTurnToEnd,
 		refetchChat,
+		refreshArtifacts,
 		revisionOf,
 		settleLoadedTurn,
 		setViewingLeaf,
 		viewingLeafFor
 	} from '$lib/chat/cache';
+	import { getArtifactCopyState } from '$lib/apis/artifacts';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import { switchOrganization } from '$lib/utils/organizationContext';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
@@ -149,6 +152,7 @@
 
 	$: if (
 		($settings?.landingPageMode === 'chat' ||
+			chatNotes.length > 0 ||
 			createMessagesList(history, history.currentId).length > 0) &&
 		!messagesComponent &&
 		!messagesLoad
@@ -247,6 +251,8 @@
 	let builtinFeatures: Record<string, boolean> = {};
 
 	let chat = null;
+	// What the model is told about this chat, such as the files it started with.
+	$: chatNotes = ((chat?.id === $chatId && chat?.chat?.chatNotes) || []) as string[];
 	let tags = [];
 	let chatOwnerName = '';
 	let cloning = false;
@@ -275,6 +281,30 @@
 
 	let artifactPanelGeneration = 0;
 	let chatAlive = true;
+
+	// A chat started with another chat's artifacts gets its files in the
+	// background; until they are in, the panel says so and sending is blocked.
+	let artifactCopyTimer: ReturnType<typeof setTimeout> | undefined;
+	const watchArtifactCopy = async (id: string) => {
+		clearTimeout(artifactCopyTimer);
+		let state: 'copying' | 'failed' | 'done';
+		try {
+			state = await getArtifactCopyState(localStorage.token, id);
+		} catch {
+			state = 'done';
+		}
+		if (!chatAlive || get(chatId) !== id) return;
+		const wasCopying = get(artifactCopy)?.chatId === id && get(artifactCopy)?.state === 'copying';
+		if (state !== 'copying' && wasCopying) {
+			// Keep "copy in progress" up until the new list is in, so every file shows at once.
+			await refreshArtifacts(localStorage.token, id).catch(console.error);
+			if (!chatAlive || get(chatId) !== id) return;
+		}
+		artifactCopy.set(state === 'done' ? null : { chatId: id, state });
+		if (state === 'copying') {
+			artifactCopyTimer = setTimeout(() => watchArtifactCopy(id), 2000);
+		}
+	};
 	let stopControlsWatch: Unsubscriber = () => {};
 
 	const openArtifactsPanel = async (forChatId: string | null = null) => {
@@ -396,6 +426,7 @@
 
 			loading = false;
 			await tick();
+			void watchArtifactCopy(id);
 			if (chatAlive && get(chatId) === id) await openArtifactsPanel(id);
 			revealApp();
 
@@ -714,6 +745,8 @@
 
 	onDestroy(() => {
 		chatAlive = false;
+		clearTimeout(artifactCopyTimer);
+		artifactCopy.set(null);
 		if (scrollChatId) saveChatScroll(scrollChatId);
 		stopDocumentWatch();
 		stopLostWatch();
@@ -1943,6 +1976,10 @@
 			toast.error($i18n.t('Clone this chat to continue it.'));
 			return false;
 		}
+		if ($artifactCopy?.chatId === $chatId && $artifactCopy?.state === 'copying') {
+			toast.error($i18n.t('Wait for the artifact copy to finish before sending.'));
+			return false;
+		}
 		const messages = createMessagesList(history, history.currentId);
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
@@ -2796,26 +2833,30 @@
 
 		if (!$temporaryChatEnabled) {
 			void openArtifactsPanel();
-			chat = await createNewChat(
-				localStorage.token,
-				{
-					id: _chatId,
-					title: $i18n.t('New Chat'),
-					models: selectedModels,
-					params: params,
-					history: history,
-					messages: createMessagesList(history, history.currentId),
-					tags: [],
-					timestamp: Date.now()
-				},
-				get(activeOrganizationId)
-			);
+			// A chat started with another chat's artifacts already exists, empty;
+			// its first turn is stored like any later one.
+			if (!(_chatId && chat?.id === _chatId)) {
+				chat = await createNewChat(
+					localStorage.token,
+					{
+						id: _chatId,
+						title: $i18n.t('New Chat'),
+						models: selectedModels,
+						params: params,
+						history: history,
+						messages: createMessagesList(history, history.currentId),
+						tags: [],
+						timestamp: Date.now()
+					},
+					get(activeOrganizationId)
+				);
 
-			_chatId = chat.id;
-			putChat(chat, null);
-			await chatId.set(_chatId);
-			// Sends queued before the chat had an id are stored now.
-			if (queuedSends.length > 0) writeQueuedSends(_chatId, queuedSends);
+				_chatId = chat.id;
+				putChat(chat, null);
+				await chatId.set(_chatId);
+				// Sends queued before the chat had an id are stored now.
+				if (queuedSends.length > 0) writeQueuedSends(_chatId, queuedSends);
+			}
 
 			const createdAt = chat.updated_at ?? Math.floor(Date.now() / 1000);
 			chats.update((list) => {
@@ -2947,6 +2988,7 @@
 					bind:this={navbarElement}
 					chat={{
 						id: $chatId,
+						user_id: chat?.user_id,
 						chat: {
 							title: $chatTitle,
 							models: selectedModels,
@@ -2963,7 +3005,7 @@
 				/>
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
-					{#if $settings?.landingPageMode === 'chat' || createMessagesList(history, history.currentId).length > 0}
+					{#if $settings?.landingPageMode === 'chat' || chatNotes.length > 0 || createMessagesList(history, history.currentId).length > 0}
 						<div
 							class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10"
 							id="messages-container"
@@ -3028,7 +3070,25 @@
 							}}
 						>
 							<div class=" min-h-full w-full flex flex-col">
-								{#if messagesComponent}
+								{#if chatNotes.length > 0}
+									<!-- Below the navbar, which overlaps the top of this pane. -->
+									<details
+										class="mx-auto w-full max-w-[58rem] px-2.5 pt-12 shrink-0 text-xs text-gray-600 dark:text-gray-400"
+									>
+										<summary
+											class="cursor-pointer select-none rounded-lg border border-gray-100 dark:border-gray-850 px-2.5 py-1.5"
+										>
+											{$i18n.t('The chat was started with the following notes as context:')}
+										</summary>
+										<div
+											class="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 dark:bg-gray-900 px-2.5 py-2"
+										>
+											{chatNotes.join('\n\n')}
+										</div>
+									</details>
+								{/if}
+								<!-- A chat with notes and no messages opens as a chat, not the welcome screen. -->
+								{#if messagesComponent && (chatNotes.length === 0 || Object.keys(history?.messages ?? {}).length > 0)}
 									<svelte:component
 										this={messagesComponent}
 										chatId={$chatId}
@@ -3047,6 +3107,7 @@
 										{chatActionHandler}
 										{addMessages}
 										bottomPadding={files.length > 0}
+										className={chatNotes.length > 0 ? 'h-full flex pt-2' : 'h-full flex pt-8'}
 									/>
 								{/if}
 							</div>

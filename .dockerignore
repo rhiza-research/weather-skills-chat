@@ -51,3 +51,7 @@ backend/data/*
 backend/data/litellm/*
 !backend/data/litellm/config.yaml
 !backend/data/config.json
+
+# Pyodide is fetched in the image; local copies stay out. The tracked lock file is kept.
+static/pyodide/*
+!static/pyodide/pyodide-lock.json

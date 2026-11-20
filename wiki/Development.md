@@ -44,7 +44,9 @@ A real cluster is not a local Compose mode. Staging uses `sandbox.isolation=k8s`
 
 ## Running the app in Docker
 
-Copy `.env.example` to `.env` once and put secrets and machine settings there (session key, image name, data volume, mail). Isolation and HTTP/2 are flags, not `.env` values.
+Most local work runs through `scripts/preview.sh`, described below: it starts a stack built from the checkout with staging's settings and sample chats, beside any other stacks. It runs `./run-compose.sh`, which can also be used directly.
+
+Copy `.env.example` to `.env` once and put machine settings there (session key, image name, data volume). Every stack reads this one file; in a git worktree, the main checkout's. Isolation and HTTP/2 are flags, not `.env` values.
 
 `--testing` starts Caddy so the browser uses HTTP/2 at `https://localhost:3443` (or `CADDY_HTTPS_PORT`). Use `https://`, not `http://`, on that port. `http://localhost` redirects there. Live chat on that port needs the Caddy local certificate in the system keychain (Always Trust); otherwise the page can load and the websocket cannot. Without `--testing`, open the app on port 3000 (or `OPEN_WEBUI_PORT`).
 
@@ -64,25 +66,58 @@ docker rm -f weather-skills-chat weather-skills-h2
 | `--isolation=landlock` | Skills on the chat server with Landlock |
 | `--isolation=emulator` | k8s tool-runner path plus the local emulator |
 | `--build` | Builds the image from the checkout before starting |
+| `--name=NAME` | Runs a separate stack named `NAME`, beside the main one and other named stacks. Its containers, image, and volumes are named `wsc-NAME`. Only this computer can reach it, not other machines on the network, and only its own pages can read its responses, not pages of other sites. It takes the first free ports from 3100 for the app, 4443 for Caddy's HTTPS, and 8100 for Caddy's HTTP; a running stack keeps its ports. When another stack starting at the same time takes a port first, it picks free ports again, up to five tries. With `--drop`, its data and image are removed too |
+| `--drop` | Stops and removes the stack's containers |
 | `--webui[port=PORT]` | Serves the app on `PORT` in place of `OPEN_WEBUI_PORT` |
 | `--ollama` | Also starts an Ollama container, connects the app to it, and turns the Ollama API on |
 | `--enable-gpu[count=COUNT]` | Gives the Ollama container `COUNT` GPUs, or `all`; the default is 1. Needs `--ollama` |
 | `--enable-api[port=PORT]` | Makes the Ollama API reachable on the host at `PORT`; the default is 11435. Needs `--ollama` |
 | `--data[folder=PATH]` | Keeps Ollama's data in the folder `PATH`, `./ollama-data` by default, in place of a Docker volume. Needs `--ollama` |
 
-The app needs a model provider: an OpenAI-compatible provider set with `OPENAI_API_BASE_URL` and `OPENAI_API_KEY`, or Ollama with `--ollama`. With neither, the app keeps its default OpenAI connection to `https://api.openai.com/v1` with no key, which an admin replaces in the admin settings.
+The app needs a model provider: an OpenAI-compatible provider set in the admin settings or with `OPENAI_API_BASE_URL` and `OPENAI_API_KEY`, or Ollama with `--ollama`. With none, the app keeps its default OpenAI connection to `https://api.openai.com/v1` with no key.
 
-`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, the built-in email variables, and the settings on [[Tracing]] when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
+`--isolation` and `--testing` export the isolation and URL variables for that run. Compose also passes `ENABLE_OPENAI_API`, `OPENAI_API_BASE_URL`, `OPENAI_API_KEY`, `WEBUI_SECRET_KEY`, `WEBUI_URL`, `CORS_ALLOW_ORIGIN`, the first-admin, catalog model, and skill pack settings on [[Deployment]] and [[Skill Packs]], the built-in email variables, and the settings on [[Tracing]] when they are set in `.env` or the shell. Otherwise the value saved in the admin settings, or the default, applies, as described under how settings are read on [[Deployment]].
 
 | Env var | Default | Effect |
 |-|-|-|
 | `WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui` | Name of the image the stack builds and runs |
 | `WEBUI_DOCKER_TAG` | `main` | Tag of that image |
 | `WEBUI_CONTAINER_NAME` | `open-webui` | Name of the app's container |
+| `CADDY_CONTAINER_NAME` | `weather-skills-h2` | Name of Caddy's container |
+| `EMULATOR_CONTAINER_NAME` | `weather-skills-emulator` | Name of the emulator's container |
 | `WEBUI_DATA_VOLUME` | `weather-skills-chat-data` | Docker volume mounted at the app's data directory |
-| `CADDY_HTTPS_PORT` | `3443` | Host port for Caddy when `--testing` is on |
+| `CADDY_DATA_VOLUME` | `weather-skills-caddy-data` | Docker volume for Caddy's certificates |
+| `CADDY_HTTPS_PORT` | `3443` | Host port for Caddy's HTTPS when `--testing` is on |
+| `CADDY_HTTP_PORT` | `80` | Host port for Caddy's HTTP when `--testing` is on |
 
-`.env.example` sets these to names of their own, so a local build does not replace an image or collide with a container of another stack on the same Docker host.
+`.env.example` sets the image, container, and volume names of the main stack to names of their own, so a local build does not replace an image or collide with a container of another stack on the same Docker host. `--name` replaces all of these for its stack.
+
+## Stacks with staging data
+
+`scripts/preview.sh` starts a stack built from the checkout, with staging's settings and a few of its chats, so several branches or worktrees can run side by side, for example one per agent checking a change. It needs `gcloud` signed in to an account that can read secrets in GCP project `sheerwater`, and Tailscale connected to reach staging.
+
+```bash
+scripts/preview.sh up
+```
+
+| Command | Effect |
+|-|-|
+| `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
+| `scripts/preview.sh down [NAME]` | Remove the stack, its data, and its image |
+| `scripts/preview.sh ls` | List running stacks and their ports |
+
+`NAME` defaults to the current branch. Running `up` again rebuilds the stack and keeps its ports and data.
+
+`up` reads the staging admin's API key from the secret `weather-skills-chat-staging-api-key`, then:
+
+1. Reads staging's platform models and platform skill packs and passes them to the stack as `CATALOG_MODELS` and `SKILL_PACKS`.
+2. Runs `./run-compose.sh --name=NAME --build -q` and waits until the app answers. Skills run on the emulated Kubernetes runners, as on staging, unless the options give another `--isolation`. The first start takes longer while it installs the skill packs.
+3. On a new stack, adds three accounts, all with the password `preview`: `admin@example.com`, the platform admin; `researcher@example.com`, a user; and `pending@example.com`, waiting for access. It also adds a workspace, Demo Org, with the admin as owner and the researcher as a member.
+4. On a new stack, copies staging's saved admin settings, including its model provider and web search connections and their keys, except its webhook. It then copies the staging admin's chats tagged `preview-seed`, with their files, into the local admin's chats. Tag a chat on staging to add it to new stacks.
+
+`up` ends by printing the address, the accounts, and how to sign in: a line to run in an agent's browser tool that signs in through the API and reloads, and the sign-in page with the email filled in (`/auth?email=EMAIL`).
+
+A stack takes no tracing keys, email settings, or users from staging. When there is no `.env`, `up` makes one from `.env.example` with a new session key.
 
 ## Tests
 

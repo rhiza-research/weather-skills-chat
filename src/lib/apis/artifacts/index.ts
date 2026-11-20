@@ -1,18 +1,36 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { parseApiError } from '$lib/apis/response';
+import { get } from 'svelte/store';
+import { sharedChatId } from '$lib/stores';
+
+/** Where a chat's files are read from: a share link's from the public share API. */
+export const artifactsBase = (chatId: string) =>
+	`${WEBUI_API_BASE_URL}/${chatId === get(sharedChatId) ? 'shares' : 'chats'}/${chatId}/artifacts`;
 
 export const getChatArtifacts = async (token: string, chatId: string) => {
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts`, {
+	const res = await fetch(artifactsBase(chatId), {
 		headers: { authorization: `Bearer ${token}` }
 	});
 	if (!res.ok) throw await parseApiError(res);
 	return res.json();
 };
 
+/** Whether the chat's files are still being copied in from another chat. */
+export const getArtifactCopyState = async (
+	token: string,
+	chatId: string
+): Promise<'copying' | 'failed' | 'done'> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/copy`, {
+		headers: { authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) throw await parseApiError(res);
+	return (await res.json()).state;
+};
+
 /** Full provenance branches for one entry. Listings carry only its crumbs. */
 export const getArtifactProvenance = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/provenance?path=${encodeURIComponent(path)}`,
+		`${artifactsBase(chatId)}/provenance?path=${encodeURIComponent(path)}`,
 		{ headers: { authorization: `Bearer ${token}` } }
 	);
 	if (!res.ok) throw await parseApiError(res);
@@ -20,12 +38,12 @@ export const getArtifactProvenance = async (token: string, chatId: string, path:
 };
 
 export const getArtifactContentUrl = (chatId: string, path: string) =>
-	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/content?path=${encodeURIComponent(path)}`;
+	`${artifactsBase(chatId)}/content?path=${encodeURIComponent(path)}`;
 
 /** HTML artifacts (for example Plotly figures) rendered inline by the server,
  * which sandboxes them. Load only in a sandboxed iframe (HtmlArtifactFrame). */
 export const getArtifactViewUrl = (chatId: string, path: string) =>
-	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/view/${path
+	`${artifactsBase(chatId)}/view/${path
 		.split('/')
 		.map(encodeURIComponent)
 		.join('/')}`;
@@ -65,11 +83,11 @@ export const artifactPathForChat = (href: string, chatId: string | null | undefi
 };
 
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
-	`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?path=${encodeURIComponent(path)}&format=zip`;
+	`${artifactsBase(chatId)}/archive?path=${encodeURIComponent(path)}&format=zip`;
 
 export const getZarrMeta = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/zarr/meta?path=${encodeURIComponent(path)}`,
+		`${artifactsBase(chatId)}/zarr/meta?path=${encodeURIComponent(path)}`,
 		{ headers: { authorization: `Bearer ${token}` } }
 	);
 	if (!res.ok) throw await parseApiError(res);
@@ -117,7 +135,7 @@ export const getArtifactArchive = async (token: string, chatId: string, paths: s
 	for (const path of paths) {
 		qs.append('path', path);
 	}
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${chatId}/artifacts/archive?${qs}`, {
+	const res = await fetch(`${artifactsBase(chatId)}/archive?${qs}`, {
 		headers: { authorization: `Bearer ${token}` }
 	});
 	if (!res.ok) throw await parseApiError(res);

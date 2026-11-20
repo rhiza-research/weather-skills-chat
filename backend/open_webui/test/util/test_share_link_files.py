@@ -67,6 +67,19 @@ class ShareLinkFilesTest(unittest.TestCase):
         self.assertTrue(Chats.is_live_share(live.id))
         self.assertFalse(Chats.is_live_share(self.chat.id))
 
+    def test_listing_shows_only_live_links_with_their_dates(self):
+        legacy = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        expires_at = int(time.time()) + 3600
+        live = Chats.insert_shared_chat_by_chat_id(self.chat.id, expires_at)
+        Chats.insert_shared_chat_by_chat_id(self.chat.id, int(time.time()) - 1)
+
+        links = {l["id"]: l for l in Chats.get_live_shares_by_chat_id(self.chat.id)}
+
+        self.assertEqual(set(links), {legacy.id, live.id})
+        self.assertIsNone(links[legacy.id]["expires_at"])
+        self.assertEqual(links[live.id]["expires_at"], expires_at)
+        self.assertAlmostEqual(links[live.id]["created_at"], time.time(), delta=60)
+
     def test_cleanup_deletes_only_expired_links_and_their_files(self):
         legacy = Chats.insert_shared_chat_by_chat_id(self.chat.id)
         live = Chats.insert_shared_chat_by_chat_id(self.chat.id, int(time.time()) + 3600)
@@ -142,9 +155,15 @@ class ShareLinkFilesTest(unittest.TestCase):
         (self.files / "private.csv").write_bytes(b"later")
         viewer = SimpleNamespace(id=f"viewer-{uuid.uuid4()}", role="user")
 
-        clone = asyncio.run(
-            chats_router.clone_shared_chat_by_id(shared.id, viewer, organization_id=viewer.id)
-        )
+        async def clone_and_wait():
+            clone = await chats_router.clone_shared_chat_by_id(
+                shared.id, viewer, organization_id=viewer.id
+            )
+            # The files are copied in the background after the clone returns.
+            await asyncio.gather(*chats_router._artifact_copies)
+            return clone
+
+        clone = asyncio.run(clone_and_wait())
         self.addCleanup(Chats.delete_chat_by_id, clone.id)
 
         cloned = self.artifacts / clone.id
@@ -176,6 +195,42 @@ class ShareRouteTest(unittest.TestCase):
     def test_lengths_outside_the_range_are_refused(self):
         for days in (0, 366):
             self.assertEqual(self.share(expires_in_days=days).status_code, 422)
+
+    def test_deleting_one_link_keeps_the_others(self):
+        gone = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        kept = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        res = self.client.delete(f"/chats/{self.chat.id}/shares/{gone.id}")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(Chats.get_chat_by_id(gone.id))
+        self.assertFalse((self.artifacts / gone.id).exists())
+        self.assertTrue(Chats.is_live_share(kept.id))
+        self.assertTrue((self.artifacts / kept.id / "map.png").exists())
+
+    def test_a_link_whose_files_remain_waits_for_the_cleanup(self):
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        with patch("open_webui.utils.artifacts.delete_sandbox", return_value=False):
+            Chats.delete_shared_chat_by_chat_id(self.chat.id, shared.id)
+
+        self.assertFalse(Chats.is_live_share(shared.id))
+        self.assertIsNotNone(Chats.get_chat_by_id(shared.id))
+        Chats.delete_expired_shared_chats()
+        self.assertIsNone(Chats.get_chat_by_id(shared.id))
+        self.assertFalse((self.artifacts / shared.id).exists())
+
+    def test_a_link_to_another_chat_is_not_deleted(self):
+        other = Chats.insert_new_chat(
+            self.chat.user_id,
+            ChatForm(chat={"title": "Wind", "history": {"currentId": None, "messages": {}}}),
+        )
+        self.addCleanup(Chats.delete_chat_by_id, other.id)
+        theirs = Chats.insert_shared_chat_by_chat_id(other.id)
+
+        self.client.delete(f"/chats/{self.chat.id}/shares/{theirs.id}")
+
+        self.assertTrue(Chats.is_live_share(theirs.id))
 
 
 class ShareLinkFileRoutesTest(unittest.TestCase):

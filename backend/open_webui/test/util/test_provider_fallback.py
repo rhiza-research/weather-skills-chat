@@ -539,3 +539,60 @@ def test_an_unreachable_provider_is_named():
     assert openai_router.provider_error_detail(None, None, "Requesty") == (
         "The model provider (Requesty) could not be reached. Try again in a moment."
     )
+
+
+SECRET_KEY = "sk-or-v1-" + "0123456789abcdef" * 4
+
+
+def test_provider_call_repr_shows_only_the_last_four_key_characters():
+    call = openai_router.ProviderCall(PRIMARY, SECRET_KEY, "{}", "chat-1", 0, None)
+    assert SECRET_KEY not in repr(call)
+    assert "key='...cdef'" in repr(call)
+    assert "key='***'" in repr(call._replace(key="short"))
+
+
+class ProviderKeyNotLoggedTest(unittest.IsolatedAsyncioTestCase):
+    """loguru's traceback dump (diagnose) must not print the provider key."""
+
+    async def _logged_output(self, reply):
+        from loguru import logger
+
+        from open_webui.utils.logger import InterceptHandler
+
+        lines = []
+        sink = logger.add(lines.append, diagnose=True, backtrace=True)
+        # Route the router's stdlib logger into loguru, as start_logger does in prod.
+        handler = InterceptHandler()
+        openai_router.log.addHandler(handler)
+        call = openai_router.ProviderCall(
+            PRIMARY,
+            SECRET_KEY,
+            json.dumps({"model": "m"}),
+            "chat-1",
+            0,
+            None,
+            "OpenRouter",
+        )
+        user = SimpleNamespace(name="n", id="u", email="e", role="user")
+        try:
+            with patch.object(
+                openai_router.aiohttp,
+                "ClientSession",
+                lambda **_: _FakeSession({PRIMARY: [reply]}, []),
+            ):
+                with self.assertRaises(HTTPException):
+                    await openai_router._send_provider_call(call, user)
+        finally:
+            openai_router.log.removeHandler(handler)
+            logger.remove(sink)
+        return "".join(lines)
+
+    async def test_an_error_reply_does_not_log_the_key(self):
+        output = await self._logged_output(_error(400))
+        self.assertIn("key='...cdef'", output)
+        self.assertNotIn(SECRET_KEY[:24], output)
+
+    async def test_an_unreachable_provider_does_not_log_the_key(self):
+        output = await self._logged_output(aiohttp.ClientConnectionError("down"))
+        self.assertIn("key='...cdef'", output)
+        self.assertNotIn(SECRET_KEY[:24], output)

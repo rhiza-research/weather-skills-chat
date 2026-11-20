@@ -9,7 +9,8 @@
 		settings,
 		showArtifacts,
 		showControls,
-		chatArtifactLists
+		chatArtifactLists,
+		artifactCopy
 	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
@@ -29,6 +30,11 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
+	import { goto } from '$app/navigation';
+	import ArrowUpTray from '../icons/ArrowUpTray.svelte';
+	import PencilSquare from '../icons/PencilSquare.svelte';
+	import { newChatWithArtifacts } from '$lib/apis/chats';
+	import Spinner from '../common/Spinner.svelte';
 
 	export let history;
 	// A share link's frozen files: browse and download only.
@@ -58,6 +64,21 @@
 	const htmlPreviewUrl = (path: string, modified: number | null) =>
 		modified ? `${getArtifactViewUrl($chatId, path)}?v=${modified}` : getArtifactViewUrl($chatId, path);
 	let modalAlt = '';
+
+	// Set by Chat.svelte while this chat's files are copied in from another chat.
+	$: copyState = $artifactCopy?.chatId === $chatId ? $artifactCopy.state : null;
+	let startingChat = false;
+	const startChatWithArtifacts = async () => {
+		startingChat = true;
+		try {
+			const created = await newChatWithArtifacts(localStorage.token, $chatId);
+			await goto(`/c/${created.id}`);
+		} catch (error) {
+			toast.error(`${error}`);
+		} finally {
+			startingChat = false;
+		}
+	};
 	let uploading = false;
 	let fileInput: HTMLInputElement;
 	let loadingFiles = false;
@@ -71,34 +92,61 @@
 		}
 	};
 
-	const loadPreview = async (url: string) => {
-		revokePreview();
-		const res = await fetch(url, {
+	// The current image stays up until the new one has loaded, so switching does not flash.
+	const loadPreview = async (path: string) => {
+		const res = await fetch(getArtifactContentUrl($chatId, path), {
 			headers: { authorization: `Bearer ${localStorage.token}` }
 		});
+		if (path !== selectedImage) return null; // another file was opened meanwhile
 		if (!res.ok) {
+			revokePreview();
 			toast.error($i18n.t('Could not load preview'));
 			return null;
 		}
-		previewUrl = URL.createObjectURL(await res.blob());
+		const blob = await res.blob();
+		if (path !== selectedImage) return null;
+		revokePreview();
+		previewUrl = URL.createObjectURL(blob);
 		return previewUrl;
 	};
 
+	// Opening a file while full screen keeps it full screen.
 	const openImage = async (path: string) => {
 		selectedImage = path;
-		showImageModal = false;
-		showHtmlModal = false;
-		previewHtmlUrl = '';
+		modalAlt = path;
 		previewModified = fileModified(path);
 		if (isHtmlArtifact(path)) {
 			revokePreview();
 			previewHtmlUrl = htmlPreviewUrl(path, previewModified);
-			modalAlt = path;
+			showHtmlModal ||= showImageModal;
+			showImageModal = false;
 			return;
 		}
-		const url = await loadPreview(getArtifactContentUrl($chatId, path));
-		if (!url) return;
-		modalAlt = path;
+		const url = await loadPreview(path);
+		if (path !== selectedImage) return;
+		previewHtmlUrl = '';
+		showImageModal ||= showHtmlModal;
+		showHtmlModal = false;
+		if (!url) showImageModal = false;
+	};
+
+	// Left / right step through the open file's folder of images and plots, in list order.
+	const stepPreview = async (event: KeyboardEvent) => {
+		const current = selectedImage;
+		if (!current || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+		if ((event.target as HTMLElement)?.closest?.('input, textarea, [contenteditable]')) return;
+		const dir = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
+		const media = files
+			.filter(
+				(file) =>
+					(file?.kind === 'image' || file?.kind === 'html') && dir(file.path) === dir(current)
+			)
+			.sort((a, b) => a.path.localeCompare(b.path));
+		const i = media.findIndex((file) => file.path === current);
+		const next = media[i + (event.key === 'ArrowRight' ? 1 : -1)];
+		if (!next) return;
+		event.preventDefault();
+		openImage(next.path);
 	};
 
 	const clearPreview = () => {
@@ -131,7 +179,7 @@
 			if (isHtmlArtifact(selectedImage)) {
 				previewHtmlUrl = htmlPreviewUrl(selectedImage, modified);
 			} else {
-				loadPreview(getArtifactContentUrl($chatId, selectedImage));
+				loadPreview(selectedImage);
 			}
 		}
 	}
@@ -156,7 +204,8 @@
 		try {
 			const id = $chatId;
 			const listed = await refreshArtifacts(localStorage.token, id);
-			files = Array.isArray(listed) ? listed : [];
+			// The user may have switched chats while this was in flight.
+			if (id === $chatId) files = Array.isArray(listed) ? listed : [];
 		} catch (e) {
 			files = [];
 			loadedArtifactKey = '';
@@ -206,6 +255,8 @@
 				loadedArtifactKey = $chatId;
 			} else if (shouldLoadArtifactList(listed) && loadedArtifactKey !== $chatId) {
 				loadedArtifactKey = $chatId;
+				// Drop the previous chat's list so it doesn't show while this one loads.
+				files = [];
 				loadFiles();
 			}
 		} else {
@@ -357,6 +408,8 @@
 	});
 </script>
 
+<svelte:window on:keydown={stepPreview} />
+
 <ImagePreview
 	bind:show={showImageModal}
 	src={previewUrl || ''}
@@ -433,19 +486,43 @@
 		</div>
 	{/if}
 
-	<div class="flex flex-col min-h-0 flex-1 overflow-hidden">
-		<div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-			<div class="text-xs font-medium">{$i18n.t('Artifacts')}</div>
-			<div class="flex items-center gap-2">
-				{#if !readOnly}
-					<button
-						type="button"
-						class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
-						disabled={uploading || !$chatId || $chatId === 'local'}
-						on:click={() => fileInput?.click()}
+	<div class="flex flex-col min-h-0 flex-1 overflow-hidden @container">
+		<!-- mt-2 h-9 centres the row on the chat navbar's 36px buttons, which start 8px down. -->
+		<div class="flex items-center justify-between gap-2 px-3 mt-2 h-9 shrink-0">
+			<div class="text-sm font-medium">{$i18n.t('Artifacts')}</div>
+			<!-- The full row measures about 392px; narrower than 400px, the new-chat button drops its label. -->
+			<div class="flex items-center gap-3 whitespace-nowrap">
+				{#if !readOnly && !copyState && files.length > 0 && $chatId && $chatId !== 'local'}
+					<Tooltip content={$i18n.t('Start a new chat with a copy of these artifacts')} placement="bottom">
+						<button
+							type="button"
+							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							disabled={startingChat}
+							on:click={startChatWithArtifacts}
+							aria-label={$i18n.t('New chat with these artifacts')}
+						>
+							<PencilSquare className="size-4" strokeWidth="2" />
+							<span class="hidden @min-[400px]:inline">{$i18n.t('New chat with these artifacts')}</span>
+						</button>
+					</Tooltip>
+				{/if}
+				{#if !readOnly && copyState !== 'copying'}
+					<Tooltip
+						placement="bottom"
+						content={uploading
+							? $i18n.t('Uploading...')
+							: $i18n.t("Upload a file to this chat's artifacts")}
 					>
-						{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
-					</button>
+						<button
+							type="button"
+							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							disabled={uploading || !$chatId || $chatId === 'local'}
+							on:click={() => fileInput?.click()}
+						>
+							<ArrowUpTray className="size-4" strokeWidth="2" />
+							{uploading ? $i18n.t('Uploading...') : $i18n.t('Upload')}
+						</button>
+					</Tooltip>
 					<input
 						bind:this={fileInput}
 						type="file"
@@ -453,23 +530,38 @@
 						on:change={onUpload}
 					/>
 				{/if}
-				<button
-					type="button"
-					class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-					on:click={closePanel}
-					aria-label="Close artifacts"
-				>
-					<XMark className="size-3.5" />
-				</button>
+				<Tooltip content={$i18n.t('Close artifacts')} placement="bottom">
+					<button
+						type="button"
+						class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+						on:click={closePanel}
+						aria-label="Close artifacts"
+					>
+						<XMark className="size-3.5" />
+					</button>
+				</Tooltip>
 			</div>
 		</div>
 
 		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
-			<ArtifactBrowser
-				{files}
-				{selectedImage}
-				on:openImage={(e) => openImage(e.detail.path)}
-			/>
+			{#if copyState === 'copying'}
+				<div class="flex items-center gap-2 text-xs text-gray-500" role="status">
+					<Spinner className="size-3.5" />
+					{$i18n.t('Artifact copy in progress...')}
+				</div>
+			{:else if copyState === 'failed'}
+				<div class="text-xs text-red-600 dark:text-red-400" role="alert">
+					{$i18n.t('Artifact copy failed, please try again')}
+				</div>
+			{/if}
+			{#if copyState !== 'copying'}
+				<ArtifactBrowser
+					{files}
+					{selectedImage}
+					loading={loadingFiles && !Array.isArray($chatArtifactLists[$chatId])}
+					on:openImage={(e) => openImage(e.detail.path)}
+				/>
+			{/if}
 		</div>
 
 		{#if contents.length > 0}

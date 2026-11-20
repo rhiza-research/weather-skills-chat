@@ -130,15 +130,16 @@ def prepend_to_first_user_message_content(
     return messages
 
 
-def add_or_update_system_message(content: str, messages: list[dict]):
+def add_or_update_system_message(content: str, messages: list[dict], append: bool = False):
     """
-    Adds a new system message at the beginning of the messages list
-    or prepends onto the existing system message at the beginning.
+    Adds a new system message at the beginning of the messages list, or adds
+    ``content`` to the existing one: in front of it, or after it with ``append``.
 
-    Idempotent: if ``content`` is already the system message or a leading
-    prefix (as produced by a prior prepend), this is a no-op. That prevents
-    tool-loop follow-ups from stacking the model system prompt N times when
-    ``apply_model_system_prompt_to_body`` mutates a shared messages list.
+    Idempotent: if ``content`` is already anywhere in the system message, this is
+    a no-op. The model system prompt is applied by the chat middleware and again
+    by the router on every model call, after other text has been added around it;
+    re-adding it there would duplicate it and change the prompt between calls,
+    which defeats prompt caching.
     """
     content = (content or "").strip()
     if not content:
@@ -146,13 +147,9 @@ def add_or_update_system_message(content: str, messages: list[dict]):
 
     if messages and messages[0].get("role") == "system":
         existing = messages[0].get("content") or ""
-        if (
-            existing == content
-            or existing.startswith(content + "\n")
-            or existing.startswith(content)
-        ):
+        if isinstance(existing, str) and content in existing:
             return messages
-        messages[0]["content"] = f"{content}\n{existing}"
+        messages[0]["content"] = f"{existing}\n{content}" if append else f"{content}\n{existing}"
     else:
         messages.insert(0, {"role": "system", "content": content})
 

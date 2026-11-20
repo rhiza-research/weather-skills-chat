@@ -138,11 +138,7 @@ def openai_o1_o3_handler(payload):
 
 def _is_openrouter_anthropic_model(model: Optional[str]) -> bool:
     mid = (model or "").lower()
-    return (
-        mid.startswith("anthropic/")
-        or mid.startswith("claude")
-        or "/claude" in mid
-    )
+    return mid.startswith("anthropic/") or mid.startswith("claude") or "/claude" in mid
 
 
 def upstream_model_id_for(model_id: str, prefix_id: Optional[str]) -> str:
@@ -787,6 +783,30 @@ def base_model_id_for(model_info, model_id: str) -> str:
     return model_id
 
 
+_CONTEXT_WINDOW_TTL = 3600
+_context_windows: dict = {"at": float("-inf"), "by_id": {}}
+
+
+async def context_window_for(request: Request, user, model_id: str) -> Optional[int]:
+    """The model's context window in tokens from the provider's model list.
+
+    The list is fetched at most once an hour per process; a failed fetch keeps
+    the previous list.
+    """
+    if time.monotonic() - _context_windows["at"] > _CONTEXT_WINDOW_TTL:
+        _context_windows["at"] = time.monotonic()
+        try:
+            models = (await get_all_models(request, user=user))["data"]
+        except Exception:
+            log.warning("Could not fetch model list for context windows", exc_info=True)
+            models = []
+        by_id = {m["id"]: m["context_length"] for m in models if m.get("context_length")}
+        if by_id:
+            _context_windows["by_id"] = by_id
+    base_model_id = base_model_id_for(Models.get_model_by_id(model_id), model_id)
+    return _context_windows["by_id"].get(base_model_id)
+
+
 def api_config_for_index(request: Request, idx: int) -> dict:
     configs = request.app.state.config.OPENAI_API_CONFIGS or {}
     if str(idx) in configs:
@@ -857,6 +877,12 @@ class ProviderCall(NamedTuple):
     # The connection's name as users see it in errors.
     provider: str = ""
 
+    # loguru's exception tracebacks print this repr, so it must not show the key.
+    def __repr__(self) -> str:
+        fields = self._asdict()
+        fields["key"] = f"...{self.key[-4:]}" if len(self.key) > 8 else "***"
+        return f"ProviderCall({', '.join(f'{k}={v!r}' for k, v in fields.items())})"
+
 
 def prepare_provider_call(
     request: Request,
@@ -914,9 +940,7 @@ def prepare_provider_call(
             from open_webui.utils.catalog import is_usable
 
             org_ids = Organizations.user_organization_ids(user.id)
-            if not any(
-                is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids
-            ):
+            if not any(is_usable(oid, RESOURCE_MODEL, model_info) for oid in org_ids):
                 raise HTTPException(
                     status_code=403,
                     detail="Model not found",
@@ -1247,7 +1271,8 @@ async def _send_provider_call(call: ProviderCall, user):
     Raises HTTPException with the provider's status, or 500 when it could
     not be reached.
     """
-    url, key, payload, chat_id = call.url, call.key, call.payload, call.chat_id
+    # No local for the key: loguru tracebacks print local values, but not call.key.
+    url, payload, chat_id = call.url, call.payload, call.chat_id
 
     r = None
     session = None
@@ -1268,7 +1293,7 @@ async def _send_provider_call(call: ProviderCall, user):
             url=f"{url}/chat/completions",
             data=payload,
             headers={
-                "Authorization": f"Bearer {key}",
+                "Authorization": f"Bearer {call.key}",
                 "Content-Type": "application/json",
                 **(
                     {

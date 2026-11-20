@@ -59,7 +59,9 @@
 			if (userConfig) config.update((current) => mergeConfig(current, userConfig));
 
 			const redirectPath = querystringValue('redirect') || '/';
-			goto(redirectPath);
+			// A file link is served by the API, not by a page of the app.
+			if (redirectPath.startsWith('/api/')) window.location.assign(redirectPath);
+			else goto(redirectPath);
 		}
 	};
 
@@ -180,8 +182,10 @@
 			toast.error($i18n.t('That email or domain name is not registered. Please request access.'));
 		}
 
-		if ($user !== undefined) {
-			const redirectPath = querystringValue('redirect') || '/';
+		const redirectPath = querystringValue('redirect') || '/';
+		// A file link sent here while signed in lacked the sign-in cookie, so
+		// going straight back would loop. Signing in again sets it.
+		if ($user !== undefined && !redirectPath.startsWith('/api/')) {
 			goto(redirectPath);
 		}
 		await checkOauthCallback();

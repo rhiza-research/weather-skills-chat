@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getArtifactViewUrl, isHtmlArtifact } from './index';
+import { sharedChatId } from '$lib/stores';
+import { getArtifactContentUrl, getArtifactViewUrl, isHtmlArtifact } from './index';
 
 describe('getArtifactViewUrl', () => {
 	it('keeps folders as path segments and encodes each one', () => {
@@ -37,5 +38,15 @@ describe('artifactPathForChat', () => {
 		expect(artifactHrefForChat('data.csv', 'chat-1')).toMatch(
 			/\/chats\/chat-1\/artifacts\/content\?path=data\.csv$/
 		);
+	});
+});
+
+describe('share links', () => {
+	it('read the shown share from the public share API and other chats from /chats', () => {
+		sharedChatId.set('share-1');
+		expect(getArtifactContentUrl('share-1', 'a.png')).toContain('/shares/share-1/artifacts/content');
+		expect(getArtifactContentUrl('chat-1', 'a.png')).toContain('/chats/chat-1/artifacts/content');
+		sharedChatId.set(null);
+		expect(getArtifactContentUrl('share-1', 'a.png')).toContain('/chats/share-1/artifacts/content');
 	});
 });

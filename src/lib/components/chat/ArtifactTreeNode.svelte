@@ -6,9 +6,12 @@
 	import {
 		getArtifactArchiveUrl,
 		getArtifactContentUrl,
-		getArtifactProvenance
+		getArtifactProvenance,
+		getArtifactViewUrl
 	} from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
+	import { copyToClipboard } from '$lib/utils';
+	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
@@ -61,6 +64,14 @@
 		} catch (e) {
 			console.error(e);
 		}
+	};
+
+	// HTML: the full-screen viewer's "Open in new tab" link. Images: the file itself.
+	const copyLink = async (path: string, kind: string) => {
+		const href =
+			kind === 'html' ? getArtifactViewUrl($chatId, path) : getArtifactContentUrl($chatId, path);
+		const url = new URL(href, window.location.origin).href;
+		if (await copyToClipboard(url)) toast.success($i18n.t('Copied link to clipboard'));
 	};
 
 	$: file = node.file;
@@ -159,6 +170,9 @@
 						on:click={() => downloadFile(file.path, node.name)}
 					>
 						{$i18n.t('Download')}
+					</button>
+					<button type="button" class="underline" on:click={() => copyLink(file.path, file.kind)}>
+						{$i18n.t('Copy link')}
 					</button>
 				{:else if file.kind === 'zarr'}
 					<button

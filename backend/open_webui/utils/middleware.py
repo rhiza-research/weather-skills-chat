@@ -75,7 +75,7 @@ from open_webui.utils.misc import (
 from open_webui.utils.payload import (
     FEEDBACK_LINK_PROMPT,
     inject_headless_context,
-    inject_rendering_prompt,
+    append_system_prompt,
 )
 from open_webui.utils.tools import get_tools
 from open_webui.utils.chat_timing import StageClock, log_timing
@@ -273,6 +273,21 @@ def model_call_error_message(e: Exception) -> str:
     if isinstance(e, UsageLimitExceeded):
         return e.detail
     return str(e)
+
+
+async def context_usage(request, user, model: Optional[dict], usage: dict) -> dict:
+    """How full the model's context was on this call, for the message input's ring.
+
+    Key names avoid "token" and "cost" so summing usage across a tool loop keeps
+    the latest call's values instead of adding them.
+    """
+    from open_webui.routers.openai import context_window_for
+
+    used = usage.get("prompt_tokens")
+    if not isinstance(used, (int, float)) or not (model or {}).get("id"):
+        return {}
+    window = await context_window_for(request, user, model["id"])
+    return {"context_used": used, "context_window": window} if window else {}
 
 
 def tool_call_files_for_display(
@@ -845,7 +860,9 @@ async def chat_completion_tools_handler(
                         )
                     else:
                         lf_tool = start_tool_observation(
-                            tool_function_name, tool_function_params
+                            tool_function_name,
+                            tool_function_params,
+                            version=tool.get("version"),
                         )
                         try:
                             tool_function = tool["callable"]
@@ -1510,11 +1527,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 if context.secret_hint:
                     hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
-                tool_names = [
+                # Sorted so the system message, and the provider's prompt cache,
+                # do not depend on the order the client sends tool_ids in.
+                tool_names = sorted(
                     (tool.get("spec") or {}).get("name")
                     for tool in tools_dict.values()
                     if (tool.get("spec") or {}).get("name")
-                ]
+                )
                 if tool_names:
                     shown = ", ".join(f"`{n}`" for n in tool_names)
                     hints.append(
@@ -1524,23 +1543,17 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
                     )
-                    hints.append(
-                        "Tool calls issued in the same turn run in parallel. "
-                        "If a call needs another call's output, set its "
-                        "`depends_on` argument to that sibling's function name "
-                        "or tool_call id, or wait and call it in a later turn. "
-                        "Omit `depends_on` for independent work."
-                    )
-                    hints.append(
-                        "When you call a tool, set its optional `display` argument "
-                        "to a short phrase the user will see instead of the function "
-                        'name, such as "Checking the most recent available date for '
-                        'IMERG" or "Grouping the data into weekly bins". Omit '
-                        "`display` to show the function name. When you call several "
-                        "tools in one turn, also set optional `activity` on one of "
-                        "those calls to a short phrase for the whole batch, such as "
-                        '"Fetching IMERG and clipping to Kenya".'
-                    )
+                    # The per-tool parameter descriptions are short; these explain them once.
+                    from open_webui.utils.tool_parallel import TOOL_CALL_GUIDANCE
+
+                    hints.append(TOOL_CALL_GUIDANCE)
+                    if any(
+                        "argv" in (((tool.get("spec") or {}).get("parameters") or {}).get("properties") or {})
+                        for tool in tools_dict.values()
+                    ):
+                        from open_webui.utils.skills import skill_argument_guidance
+
+                        hints.append(skill_argument_guidance())
                     from open_webui.env import tool_runner_enabled
 
                     if tool_runner_enabled():
@@ -1672,13 +1685,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Universal rendering rules for every chat (Markdown escape guidance, etc.).
     try:
-        form_data = inject_rendering_prompt(
+        form_data = append_system_prompt(
             form_data, request.app.state.config.RENDERING_PROMPT
         )
         if not metadata.get("headless"):
-            form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
+            form_data = append_system_prompt(form_data, FEEDBACK_LINK_PROMPT)
     except Exception:
-        log.debug("Rendering prompt inject skipped", exc_info=True)
+        log.debug("Rendering/feedback prompt append skipped", exc_info=True)
 
     try:
         from open_webui.utils.preferences import inject_preferences
@@ -2593,6 +2606,18 @@ async def process_chat_response(
                         bump_revision=False,
                     )
 
+                async def emit_usage(data):
+                    usage = data.get("usage")
+                    if not usage:
+                        return
+                    usage = {
+                        **usage,
+                        **await context_usage(request, user, model, usage),
+                    }
+                    await event_emitter(
+                        {"type": "chat:completion", "data": {"usage": usage}}
+                    )
+
                 async def stream_body_handler(response):
                     nonlocal content
                     nonlocal content_blocks
@@ -2691,6 +2716,9 @@ async def process_chat_response(
                                         )
                                     else:
                                         choices = data.get("choices", [])
+                                        # Some providers send usage on the last
+                                        # chunk that still carries choices.
+                                        await emit_usage(data)
                                         if not choices:
                                             error = data.get("error", {})
                                             if error:
@@ -2702,16 +2730,6 @@ async def process_chat_response(
                                                         "type": "chat:completion",
                                                         "data": {
                                                             "error": error,
-                                                        },
-                                                    }
-                                                )
-                                            usage = data.get("usage", {})
-                                            if usage:
-                                                await event_emitter(
-                                                    {
-                                                        "type": "chat:completion",
-                                                        "data": {
-                                                            "usage": usage,
                                                         },
                                                     }
                                                 )
@@ -3135,7 +3153,9 @@ async def process_chat_response(
 
                                 else:
                                     lf_tool = start_tool_observation(
-                                        tool_name, tool_function_params
+                                        tool_name,
+                                        tool_function_params,
+                                        version=tool.get("version"),
                                     )
                                     try:
                                         tool_function = tool["callable"]

@@ -19,11 +19,10 @@
 		showSidebar,
 		models,
 		config,
-		showCallOverlay,
 		tools,
 		user as _user,
-		showControls,
-		TTSWorker
+		chatId,
+		artifactCopy
 	} from '$lib/stores';
 
 	import {
@@ -53,10 +52,10 @@
 
 	import XMark from '../icons/XMark.svelte';
 	import GarbageBin from '../icons/GarbageBin.svelte';
-	import Headphone from '../icons/Headphone.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import CommandLine from '../icons/CommandLine.svelte';
 	import Eye from '../icons/Eye.svelte';
+	import EyeSlash from '../icons/EyeSlash.svelte';
 	import PhotoSolid from '../icons/PhotoSolid.svelte';
 	import Photo from '../icons/Photo.svelte';
 	import { whenAppIdle } from '$lib/utils/idle';
@@ -120,6 +119,8 @@
 	let recording = false;
 
 	let isComposing = false;
+	// The chat's files are still being copied in from another chat; sending waits.
+	$: copyingArtifacts = $artifactCopy?.chatId === $chatId && $artifactCopy?.state === 'copying';
 
 	let chatInputContainerElement;
 	let chatInputElement;
@@ -827,7 +828,7 @@
 
 															if (enterPressed) {
 																e.preventDefault();
-																if (prompt !== '' || files.length > 0) {
+																if ((prompt !== '' || files.length > 0) && !copyingArtifacts) {
 																	dispatch('submit', prompt);
 																}
 															}
@@ -989,7 +990,7 @@
 														}
 
 														// Submit the prompt when Enter key is pressed
-														if ((prompt !== '' || files.length > 0) && enterPressed) {
+														if ((prompt !== '' || files.length > 0) && enterPressed && !copyingArtifacts) {
 															dispatch('submit', prompt);
 														}
 													}
@@ -1170,8 +1171,8 @@
 														webSearchEnabled || ($settings?.webSearch ?? false) === 'always'}
 													<Tooltip
 														content={webSearchOn
-															? $i18n.t('Agent allowed to search the web')
-															: $i18n.t('Agent not allowed to search the web')}
+															? $i18n.t('The agent can search the web to answer this chat. Click to turn web search off.')
+															: $i18n.t('The agent will not search the web. Click to allow it to search the web.')}
 														placement="top"
 													>
 														<button
@@ -1181,11 +1182,9 @@
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
-															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" />
+															<GlobeAlt className="size-5 shrink-0" strokeWidth="1.75" slashed={!webSearchOn} />
 															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]">
-																{webSearchOn
-																	? $i18n.t('Agent allowed to search the web')
-																	: $i18n.t('Agent not allowed to search the web')}
+																{webSearchOn ? $i18n.t('Web search enabled') : $i18n.t('Web search disabled')}
 															</span>
 														</button>
 													</Tooltip>
@@ -1211,7 +1210,12 @@
 												{/if}
 
 												{#if $config?.features?.enable_code_interpreter && ($_user.role === 'admin' || $_user?.permissions?.features?.code_interpreter)}
-													<Tooltip content={$i18n.t('Execute code for analysis')} placement="top">
+													<Tooltip
+														content={codeInterpreterEnabled
+															? $i18n.t('The agent can write and run its own code for analysis. Click to turn it off.')
+															: $i18n.t('The agent will not write or run its own code. Click to allow it.')}
+														placement="top"
+													>
 														<button
 															on:click|preventDefault={() =>
 																(codeInterpreterEnabled = !codeInterpreterEnabled)}
@@ -1221,11 +1225,11 @@
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 														>
-															<CommandLine className="size-5" strokeWidth="1.75" />
-															<span class="whitespace-nowrap translate-y-[0.5px]"
+															<CommandLine className="size-5" strokeWidth="1.75" slashed={!codeInterpreterEnabled} />
+															<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
 																>{codeInterpreterEnabled
-																	? $i18n.t('Agent allowed to write/execute its own code')
-																	: $i18n.t('Agent not allowed to write/execute its own code')}</span
+																? $i18n.t('Code execution enabled')
+																: $i18n.t('Code execution disabled')}</span
 															>
 														</button>
 													</Tooltip>
@@ -1233,8 +1237,8 @@
 
 												<Tooltip
 													content={readArtifactsEnabled
-														? $i18n.t('Agent allowed to read files')
-														: $i18n.t('Agent asks before reading files')}
+														? $i18n.t('The agent can read your uploaded and generated files without asking. Click to make it ask first.')
+														: $i18n.t('The agent asks before reading your files. Click to let it read files without asking.')}
 													placement="top"
 												>
 													<button
@@ -1246,11 +1250,15 @@
 															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 															: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
 													>
-														<Eye className="size-5" strokeWidth="1.75" />
+														{#if readArtifactsEnabled}
+															<Eye className="size-5" strokeWidth="1.75" />
+														{:else}
+															<EyeSlash className="size-5" strokeWidth="1.75" />
+														{/if}
 														<span class="hidden @sm:block whitespace-nowrap translate-y-[0.5px]"
 															>{readArtifactsEnabled
-																? $i18n.t('Agent allowed to read files')
-																: $i18n.t('Agent asks before reading files')}</span
+															? $i18n.t('File reading enabled')
+															: $i18n.t('File reading disabled')}</span
 														>
 													</button>
 												</Tooltip>
@@ -1357,79 +1365,20 @@
 													</button>
 												</Tooltip>
 											</div>
-										{:else if prompt === '' && files.length === 0 && ($_user?.role === 'admin' || ($_user?.permissions?.chat?.call ?? true))}
-											<div class=" flex items-center">
-												<Tooltip content={$i18n.t('Call')}>
-													<button
-														class=" bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full p-1.5 self-center"
-														type="button"
-														on:click={async () => {
-															if (selectedModels.length > 1) {
-																toast.error($i18n.t('Select only one model to call'));
-
-																return;
-															}
-
-															if ($config.audio.stt.engine === 'web') {
-																toast.error(
-																	$i18n.t('Call feature is not supported when using Web STT engine')
-																);
-
-																return;
-															}
-															// check if user has access to getUserMedia
-															try {
-																let stream = await navigator.mediaDevices.getUserMedia({
-																	audio: true
-																});
-																// If the user grants the permission, proceed to show the call overlay
-
-																if (stream) {
-																	const tracks = stream.getTracks();
-																	tracks.forEach((track) => track.stop());
-																}
-
-																stream = null;
-
-																if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-																	// If the user has not initialized the TTS worker, initialize it
-																	if (!$TTSWorker) {
-																		const { KokoroWorker } = await import('$lib/workers/KokoroWorker');
-																		await TTSWorker.set(
-																			new KokoroWorker({
-																				dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-																			})
-																		);
-
-																		await $TTSWorker.init();
-																	}
-																}
-
-																showCallOverlay.set(true);
-																showControls.set(true);
-															} catch (err) {
-																// If the user denies the permission or an error occurs, show an error message
-																toast.error(
-																	$i18n.t('Permission denied when accessing media devices')
-																);
-															}
-														}}
-														aria-label="Call"
-													>
-														<Headphone className="size-5" />
-													</button>
-												</Tooltip>
-											</div>
 										{:else}
 											<div class=" flex items-center">
-												<Tooltip content={$i18n.t('Send message')}>
+												<Tooltip
+													content={copyingArtifacts
+														? $i18n.t('Artifact copy in progress...')
+														: $i18n.t('Send message')}
+												>
 													<button
 														id="send-message-button"
-														class="{!(prompt === '' && files.length === 0)
+														class="{!(prompt === '' && files.length === 0) && !copyingArtifacts
 															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
 															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
 														type="submit"
-														disabled={prompt === '' && files.length === 0}
+														disabled={(prompt === '' && files.length === 0) || copyingArtifacts}
 													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"

@@ -14,6 +14,8 @@ The file list shows every file and folder in the chat. Some kinds of entries are
 - HTML pages, such as interactive Plotly figures, which open in the side panel and full screen, where the user can zoom and hover. They run in a sandbox: the page cannot read the user's login or act in the chat as them. A Plotly figure saved with `include_plotlyjs='cdn'` is a few kilobytes and loads plotly.js from Plotly's CDN in the user's browser. In a reply, a markdown link to an HTML file, such as `[SST](plots/sst.html)`, opens it full screen, and image syntax, such as `![SST](plots/sst.html)`, shows it in the message.
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
 
+Images and HTML pages in the file list can be opened, downloaded, or linked to. Copy link copies an address that opens the file in a browser tab for anyone signed in who can read the chat's files. Opening a copied link that is malformed, whose file, chat, or share link no longer exists, or that the signed-in person cannot read, shows a message saying the item does not exist and goes to the home page. A dead link copied from a share link does the same for someone not signed in, ending on the sign-in page. Opening a copied chat link without being signed in asks the person to sign in and then opens the file.
+
 A long name is cut short in the list; hovering over it shows the full name. The name of the open file is shown in full above the list.
 
 Images, Zarr stores, and HTML pages (such as Plotly figures) made by skills carry their provenance: the chain of skills, versions, and arguments that produced them. The file list shows the chain of skill names under each entry; opening it shows each step's version, arguments, and inputs, so a user can see how a result was made.
@@ -31,7 +33,13 @@ Anyone who can read a chat can list and download its files. Only the chat's owne
 
 ## Copying, sharing, and deleting chats
 
-Cloning a chat copies its files into the new chat. Deleting a chat deletes its files.
+Cloning a chat, from the chat or from a share link, copies its files into the new chat. The new chat opens at once while its files are copied in. Until the copy is done, its file list shows **Artifact copy in progress...**, and sending a message and uploading files are blocked. When it is done, all the copied files show at once. Deleting a chat deletes its files.
+
+Files are copied with JuiceFS's copy-on-write clone when `ARTIFACTS_DIR` is on a JuiceFS mount, which the Helm chart sets when its JuiceFS volume (`sandbox.juicefs`) is on. A chat with tens of thousands of files, such as large zarr stores, takes up to about half a minute. Where that clone is not available or fails, a small chat is copied the ordinary way and a larger chat's copy fails. A copy that runs too long also fails. A chat whose copy failed shows **Artifact copy failed, please try again** at the top of its file list.
+
+Deleting a chat or a share link moves its files out of use at once, into the `.trash` folder in `ARTIFACTS_DIR`, where an operator can restore them for a week. After that the hourly cleanup deletes them, with JuiceFS where it is available; without it, only a small chat's or link's files are deleted and a larger one's stay in the trash.
+
+**New chat with these artifacts**, next to **Upload** at the top of the file list, opens an empty chat that gets a copy of the chat's files and uses the same model. Anyone who can read the chat can use it; the new chat is private to them, in the same organization, like a clone, and its files are copied in the same way. With every message, the model in the new chat is told how many files it starts with, the name of the chat they came from, and every file and folder, with the skills that made the first files, and is asked to explore them before downloading anything again. When the chat has no files, the note names the chat it came from and says there are no files. The new chat opens as a chat, with the message box at the bottom and no welcome screen. Its top shows the same note, collapsed under **The chat was started with the following notes as context:**. Changes in either chat do not affect the other's files.
 
 Each share link keeps its own copy of the chat's files as they were when the link was made. Anyone who can open the link can browse, preview, and download that copy, but no one can add to or change it, and cloning from the link copies it. See [[Share Links]].
 
