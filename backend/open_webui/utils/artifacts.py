@@ -518,6 +518,19 @@ def provenance_for_png(path: Path) -> dict | None:
     return _provenance_payload(_parse_history_chains_from_text_map(texts))
 
 
+def provenance_for_gif(path: Path) -> dict | None:
+    """A GIF's comment block holds the bare JSON chain, with no key name."""
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            comment = img.info.get("comment")
+        texts = {"weather_skills_history": comment.decode("utf-8")} if comment else {}
+    except Exception:
+        return None
+    return _provenance_payload(_parse_history_chains_from_text_map(texts))
+
+
 # Provenance <meta> tags sit in the page head; an embedded Plotly page can be
 # many MB after it, so only the start of the file is read.
 HTML_HEAD_MAX_BYTES = 1024 * 1024
@@ -635,6 +648,8 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
 def _provenance_for_entry(path: Path, kind: str) -> dict | None:
     if kind == "image" and path.suffix.lower() == ".png":
         return provenance_for_png(path)
+    if kind == "image" and path.suffix.lower() == ".gif":
+        return provenance_for_gif(path)
     if kind == "html":
         return provenance_for_html(path)
     if kind == "zarr":
