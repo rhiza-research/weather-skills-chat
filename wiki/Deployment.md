@@ -135,6 +135,18 @@ In one reply, the model can call tools, read their results, and call more, round
 |-|-|-|
 | `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |
 
+## Prompt cache keep-alive
+
+For an Anthropic model served through OpenRouter, the provider keeps a chat's conversation in its prompt cache for five minutes from the start of each model call, and a call that reads the cache costs much less than one that writes it. When 4.5 minutes pass after a chat's last model call started and no new call has started, the app re-sends that call and asks for no reply, which keeps the cache for another five minutes.
+
+While the chat's tools are running, the app keeps doing this for as long as they run. Otherwise, such as while the user reads the reply or after they stop it, it does this at most a set number of times. The chat's next model call takes over from there. A [[Scheduled Tasks]] run gets no keep-alives once it ends.
+
+A keep-alive's reply is never shown or saved in the chat. Keep-alives are recorded and count toward [[Usage and Spending Caps]], and appear in traces as described on [[Tracing]].
+
+| Env var | Default | Effect |
+|-|-|-|
+| `CACHE_KEEPALIVE_IDLE_COUNT` | `3` | Keep-alives sent while none of a chat's tools are running. The default keeps the cache for about 18 minutes after the last model call started. `0` sends none. |
+
 ## Other admin settings
 
 | Env var | Default | Effect |

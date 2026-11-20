@@ -1,5 +1,5 @@
-"""While a tool batch runs, the turn's last model request is re-sent with no
-output so the provider's prompt cache is read and outlives the batch."""
+"""A chat's last model request is re-sent with no output so the provider's
+prompt cache is read and outlives tool runs and the wait for the user."""
 
 import asyncio
 import copy
@@ -22,7 +22,6 @@ from open_webui.utils import langfuse_tracing as lf
 
 INTERVAL_S = mw.CACHE_KEEPALIVE_INTERVAL_S
 TTL_S = mw.PROMPT_CACHE_TTL_S
-FINISH_WAIT_S = mw.CACHE_KEEPALIVE_FINISH_WAIT_S
 
 
 async def _until(condition, what):
@@ -100,15 +99,18 @@ def _text_stream(text="Done."):
     return _sse({"choices": [{"delta": {"content": text}}]})
 
 
-class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
-    """process_chat_response with a tool that runs until the test releases it."""
+class KeepAliveTimerTest(unittest.IsolatedAsyncioTestCase):
+    """process_chat_response with a tool that runs until the test releases it.
+
+    Each chat's keep-alive outlives the reply, so tests advance the virtual
+    clock after a run finishes to see what it sends while the user is away.
+    """
 
     async def asyncSetUp(self):
         self.events = []
         self.release = asyncio.Queue()
         self.tool_cancelled = False
         self.clock = FakeClock()
-        self.order = []
 
         async def emit(event):
             self.events.append(event)
@@ -144,13 +146,9 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
             id="u1", email="u@example.com", name="U", role="user"
         )
         self.followup_at = []
-        self.followup_streams = []
 
         async def followup(request, body, user):
             self.followup_at.append(self.clock.now())
-            self.order.append("followup")
-            if self.followup_streams:
-                return self.followup_streams.pop(0)
             return _text_stream()
 
         self.followup = AsyncMock(side_effect=followup)
@@ -194,6 +192,8 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
             patch.object(mw, "CacheKeepAlive", RecordingKeepAlive),
             patch.object(mw, "keepalive_clock", self.clock.now),
             patch.object(mw, "keepalive_sleep", self.clock.sleep),
+            patch.object(mw, "CACHE_KEEPALIVE_IDLE_COUNT", 3),
+            patch.dict(mw._cache_keepalives, clear=True),
             patch(
                 "open_webui.utils.chat_realtime.save_final_reply",
                 AsyncMock(return_value=1),
@@ -220,14 +220,14 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
         if tasks:
             await asyncio.wait(tasks, timeout=5)
 
-    def _start(self, started_ago=0.0):
+    def _start(self, started_ago=0.0, response=None):
         """Run process_chat_response as a task; S is the first call's start."""
         heartbeat = mw.WaitingResponseHeartbeat(mw.get_event_emitter(self.metadata))
         self.S = self.clock.now() - started_ago
         run = asyncio.create_task(
             mw.process_chat_response(
                 MagicMock(),
-                _tool_call_stream(),
+                response or _tool_call_stream(),
                 self.form_data,
                 self.user,
                 self.metadata,
@@ -247,6 +247,27 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(run, done)
         run.result()
 
+    async def _reply(self):
+        """A turn with no tools, finished."""
+        await self._finish(self._start(response=_text_stream()))
+
+    async def _send_at(self, when):
+        """Let the keep-alive sleeping until ``when`` wake and send."""
+        sent = len(self.keepalive_at)
+        await self.clock.wait_for_wake(when)
+        self.clock.advance_to(when)
+        await _until(lambda: len(self.keepalive_at) == sent + 1, f"a keep-alive at {when}")
+
+    async def _ends_at(self, when, keepalive=None):
+        """Let the keep-alive wake at ``when``; it ends without sending."""
+        keepalive = keepalive or self.instances[-1]
+        await self.clock.wait_for_wake(when)
+        sent = len(self.keepalive_at)
+        self.clock.advance_to(when)
+        await _until(lambda: keepalive._task.done(), "the keep-alive to end")
+        self.assertEqual(len(self.keepalive_at), sent)
+        self.assertEqual(self.clock.wakes(), [])
+
     def _final(self):
         return [
             e["data"]
@@ -254,101 +275,150 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
             if e.get("type") == "chat:completion" and e["data"].get("done")
         ][-1]
 
-    async def _keepalive_task_ends(self):
-        await _until(lambda: self.instances, "a keep-alive")
-        done, _ = await asyncio.wait({self.instances[-1]._task}, timeout=5)
-        self.assertEqual(len(done), 1)
-
-    async def test_long_batch_sends_one_keepalive_then_the_followup(self):
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await self.clock.wait_for_wake(self.S + 2 * INTERVAL_S)
-        self.release.put_nowait(None)
-        await self._finish(run)
-
-        self.assertEqual(self.keepalive_at, [self.S + INTERVAL_S])
-        # The turn's first request, as it was sent.
-        self.assertIs(self.keepalive.await_args.args[1], self.form_data)
-        self.assertEqual(self.followup.await_count, 1)
-        self.assertNotIn("error", self._final())
-        self.assertTrue(self.instances[0]._task.done())
-
-    async def test_short_batch_sends_none(self):
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.release.put_nowait(None)
-        await self._finish(run)
-
-        self.keepalive.assert_not_awaited()
-        self.assertEqual(self.followup.await_count, 1)
-        self.assertEqual(self.clock.wakes(), [])
-
-    async def test_very_long_batch_sends_one_per_interval(self):
-        run = self._start()
-        for n in (1, 2):
-            await self.clock.wait_for_wake(self.S + n * INTERVAL_S)
-            self.clock.advance_to(self.S + n * INTERVAL_S)
-        await self.clock.wait_for_wake(self.S + 3 * INTERVAL_S)
-        self.release.put_nowait(None)
-        await self._finish(run)
+    async def test_after_a_reply_sends_the_idle_count_then_stops(self):
+        await self._reply()
+        for n in (1, 2, 3):
+            await self._send_at(self.S + n * INTERVAL_S)
+        await self._ends_at(self.S + 4 * INTERVAL_S)
 
         self.assertEqual(
-            self.keepalive_at, [self.S + INTERVAL_S, self.S + 2 * INTERVAL_S]
+            self.keepalive_at, [self.S + n * INTERVAL_S for n in (1, 2, 3)]
         )
+        # The turn's request, as it was sent.
+        self.assertIs(self.keepalive.await_args.args[1], self.form_data)
+        self.assertNotIn("chat-1", mw._cache_keepalives)
+
+    async def test_while_tools_run_keepalives_go_past_the_idle_count(self):
+        run = self._start()
+        for n in (1, 2, 3, 4):
+            await self._send_at(self.S + n * INTERVAL_S)
+        self.followup.assert_not_awaited()
+        self.release.put_nowait(None)
+        await self._finish(run)
+
+        self.assertEqual(len(self.keepalive_at), 4)
+        self.assertEqual(self.followup_at, [self.S + 4 * INTERVAL_S])
+        self.assertNotIn("error", self._final())
+
+    async def test_the_followup_is_kept_alive_after_the_reply(self):
+        run = self._start()
+        await self.clock.wait_for_wake(self.S + INTERVAL_S)
+        self.release.put_nowait(None)
+        await self._finish(run)
+        F = self.followup_at[0]
+        for n in (1, 2, 3):
+            await self._send_at(F + n * INTERVAL_S)
+        await self._ends_at(F + 4 * INTERVAL_S)
+
+        self.assertEqual(self.keepalive_at, [F + n * INTERVAL_S for n in (1, 2, 3)])
+        self.assertIs(
+            self.keepalive.await_args.args[1], self.followup.await_args.args[1]
+        )
+        # The first request's keep-alive was replaced before it sent anything.
+        self.assertTrue(self.instances[0]._task.done())
+
+    async def test_the_chats_next_request_replaces_its_keepalive(self):
+        await self._reply()
+        await self._send_at(self.S + INTERVAL_S)
+        first = self.instances[0]
+        self.clock.advance_to(self.S + INTERVAL_S + 60)
+        await self._reply()
+
+        await _until(lambda: first._task.done(), "the first keep-alive to end")
+        self.assertEqual(len(self.instances), 2)
+        self.assertIs(mw._cache_keepalives["chat-1"], self.instances[1])
+        self.assertEqual(self.clock.wakes(), [self.S + INTERVAL_S])
+
+    async def test_a_keepalive_in_flight_completes_when_replaced(self):
+        await self._reply()
+        gate = asyncio.Event()
+        done = []
+
+        async def keepalive(request, body, user):
+            self.keepalive_at.append(self.clock.now())
+            await gate.wait()
+            done.append(body)
+
+        self.keepalive.side_effect = keepalive
+        first = self.instances[0]
+        await self._send_at(self.S + INTERVAL_S)
+        mw.stop_cache_keepalive("chat-1")
+        gate.set()
+        await _until(lambda: first._task.done(), "the first keep-alive to end")
+
+        self.assertEqual(done, [self.form_data])
+        self.assertFalse(first._task.cancelled())
+        self.assertEqual(self.clock.wakes(), [])
+
+    async def test_stop_during_tools_leaves_only_the_idle_count(self):
+        run = self._start()
+        await self._send_at(self.S + INTERVAL_S)
+        run.cancel()
+        await asyncio.wait({run}, timeout=5)
+        self.assertTrue(self.tool_cancelled)
+        self.assertTrue(self.metadata["cancelled"])
+        for n in (2, 3, 4):
+            await self._send_at(self.S + n * INTERVAL_S)
+        await self._ends_at(self.S + 5 * INTERVAL_S)
+
+        self.assertEqual(len(self.keepalive_at), 4)
+        self.followup.assert_not_awaited()
+
+    async def test_a_tool_batch_that_raises_leaves_only_the_idle_count(self):
+        with patch.object(mw, "execution_waves", side_effect=RuntimeError("boom")):
+            await self._finish(self._start())
+        self.assertIn("error", self._final())
+        for n in (1, 2, 3):
+            await self._send_at(self.S + n * INTERVAL_S)
+        await self._ends_at(self.S + 4 * INTERVAL_S)
+
+    async def test_an_idle_count_of_zero_sends_none_after_the_reply(self):
+        with patch.object(mw, "CACHE_KEEPALIVE_IDLE_COUNT", 0):
+            await self._reply()
+            await self._ends_at(self.S + INTERVAL_S)
+        self.keepalive.assert_not_awaited()
 
     async def test_late_start_sends_none(self):
-        self.release.put_nowait(None)
-        run = self._start(started_ago=TTL_S + 1)
-        await self._finish(run)
+        await self._finish(
+            self._start(started_ago=TTL_S + 1, response=_text_stream())
+        )
 
-        self.keepalive.assert_not_awaited()
         self.applies.assert_not_called()
         self.assertEqual(self.instances, [])
-        self.assertEqual(self.followup.await_count, 1)
 
     async def test_request_past_the_interval_within_the_lifetime_is_kept_alive_at_once(self):
-        run = self._start(started_ago=INTERVAL_S + 10)
         now = self.clock.now()
-        await self.clock.wait_for_wake(now + INTERVAL_S)
-        self.release.put_nowait(None)
-        await self._finish(run)
+        await self._finish(
+            self._start(started_ago=INTERVAL_S + 10, response=_text_stream())
+        )
+        await _until(lambda: self.keepalive_at, "the keep-alive")
 
         self.assertEqual(self.keepalive_at, [now])
 
     async def test_no_keepalive_once_the_lifetime_has_passed(self):
-        run = self._start()
+        await self._reply()
         await self.clock.wait_for_wake(self.S + INTERVAL_S)
         # The keep-alive wakes late, when the cache is already gone.
         self.clock.advance_to(self.S + TTL_S)
-        await self._keepalive_task_ends()
-        self.release.put_nowait(None)
-        await self._finish(run)
+        await _until(lambda: self.instances[0]._task.done(), "the keep-alive to end")
 
         self.keepalive.assert_not_awaited()
 
     async def test_uncached_connection_sends_none(self):
         self.applies.return_value = False
-        self.release.put_nowait(None)
-        await self._finish(self._start())
+        await self._reply()
 
-        self.keepalive.assert_not_awaited()
         self.assertEqual(self.instances, [])
         self.assertEqual(self.applies.call_args.args[1], self.form_data["model"])
 
-    async def test_without_native_function_calling_sends_none(self):
+    async def test_without_native_function_calling_the_reply_is_kept_alive(self):
         del self.metadata["function_calling"]
-        self.release.put_nowait(None)
-        await self._finish(self._start())
-
-        self.keepalive.assert_not_awaited()
-        self.applies.assert_not_called()
+        await self._reply()
+        await self._send_at(self.S + INTERVAL_S)
 
     async def test_reply_holds_nothing_from_the_keepalive(self):
         run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await _until(lambda: self.keepalive.await_count, "the keep-alive")
+        await self._send_at(self.S + INTERVAL_S)
         self.release.put_nowait(None)
         await self._finish(run)
 
@@ -356,173 +426,49 @@ class ToolBatchKeepAliveTest(unittest.IsolatedAsyncioTestCase):
         followup_body = self.followup.await_args.args[1]
         self.assertNotIn("KEEPALIVE REPLY", json.dumps(followup_body, default=str))
 
-    async def _failing_batch(self):
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await self._keepalive_task_ends()
-        self.assertEqual(self.clock.wakes(), [])
-        self.release.put_nowait(None)
-        await self._finish(run)
-
-        self.assertEqual(self.keepalive.await_count, 1)
-        self.assertEqual(self.followup.await_count, 1)
-        self.assertEqual(self._final()["content"].count("Done."), 1)
-        self.assertNotIn("error", self._final())
-
-    async def test_a_usage_limit_stops_keepalives_for_the_batch_at_info(self):
+    async def test_a_usage_limit_ends_the_keepalive_at_info(self):
         self.keepalive.side_effect = HTTPException(429, detail=ORG_LIMIT_MESSAGE)
         with self.assertLogs(mw.log, level="INFO") as logs:
-            await self._failing_batch()
+            await self._reply()
+            await self.clock.wait_for_wake(self.S + INTERVAL_S)
+            self.clock.advance_to(self.S + INTERVAL_S)
+            await _until(lambda: self.instances[0]._task.done(), "the keep-alive to end")
 
         records = [r for r in logs.records if "Cache keep-alive" in r.getMessage()]
         self.assertEqual([r.levelno for r in records], [logging.INFO])
         self.assertIsNone(records[0].exc_info)
+        self.assertEqual(self.clock.wakes(), [])
 
-    async def test_other_failures_stop_keepalives_for_the_batch_with_a_warning(self):
+    async def test_other_failures_end_the_keepalive_with_a_warning(self):
         self.keepalive.side_effect = HTTPException(503, detail="provider down")
         with self.assertLogs(mw.log, level="WARNING") as logs:
-            await self._failing_batch()
+            await self._reply()
+            await self.clock.wait_for_wake(self.S + INTERVAL_S)
+            self.clock.advance_to(self.S + INTERVAL_S)
+            await _until(lambda: self.instances[0]._task.done(), "the keep-alive to end")
 
         self.assertTrue(any("Cache keep-alive failed" in line for line in logs.output))
+        self.assertEqual(self.keepalive.await_count, 1)
+        self.assertEqual(self.clock.wakes(), [])
 
-    async def test_an_error_reply_stops_keepalives_for_the_batch(self):
+    async def test_an_error_reply_ends_the_keepalive(self):
         send = AsyncMock(return_value={"error": {"message": "overloaded"}})
         with patch.object(mw, "generate_cache_keepalive", chat.generate_cache_keepalive), patch.object(
             chat, "authorize_model_call", return_value=lf.MODEL_CALL_TRACING_APP
         ), patch.object(chat, "send_cache_keepalive", send), patch.object(
             chat, "bind_usage_to_response", AsyncMock()
         ):
-            run = self._start()
+            await self._reply()
             await self.clock.wait_for_wake(self.S + INTERVAL_S)
             self.clock.advance_to(self.S + INTERVAL_S)
-            await self._keepalive_task_ends()
-            self.assertEqual(self.clock.wakes(), [])
-            self.release.put_nowait(None)
-            await self._finish(run)
+            await _until(lambda: self.instances[0]._task.done(), "the keep-alive to end")
 
         send.assert_awaited_once()
-        self.assertEqual(self.followup.await_count, 1)
-        self.assertNotIn("error", self._final())
-
-    async def test_tool_completion_waits_for_a_keepalive_in_flight(self):
-        gate = asyncio.Event()
-
-        async def keepalive(request, body, user):
-            self.keepalive_at.append(self.clock.now())
-            await gate.wait()
-            self.order.append("keepalive")
-
-        self.keepalive.side_effect = keepalive
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await _until(lambda: self.keepalive_at, "the keep-alive")
-        self.release.put_nowait(None)
-        # finish() is waiting, bounded by its timer.
-        await self.clock.wait_for_wake(self.S + INTERVAL_S + FINISH_WAIT_S)
-        self.followup.assert_not_awaited()
-        gate.set()
-        await self._finish(run)
-
-        self.assertEqual(self.order, ["keepalive", "followup"])
         self.assertEqual(self.clock.wakes(), [])
 
-    async def test_a_stalled_keepalive_is_cancelled_after_the_finish_wait(self):
-        cancelled = asyncio.Event()
 
-        async def keepalive(request, body, user):
-            self.keepalive_at.append(self.clock.now())
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                cancelled.set()
-                raise
-
-        self.keepalive.side_effect = keepalive
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await _until(lambda: self.keepalive_at, "the keep-alive")
-        self.release.put_nowait(None)
-        deadline = self.S + INTERVAL_S + FINISH_WAIT_S
-        await self.clock.wait_for_wake(deadline)
-        self.followup.assert_not_awaited()
-        self.clock.advance_to(deadline)
-        await self._finish(run)
-
-        self.assertTrue(cancelled.is_set())
-        self.assertEqual(self.followup_at, [deadline])
-
-    async def test_next_batch_keeps_the_followup_request_alive(self):
-        self.followup_streams = [_tool_call_stream("call_2")]
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await _until(lambda: self.keepalive.await_count == 1, "the first keep-alive")
-        self.release.put_nowait(None)
-        # The first keep-alive's next sleep also wakes at S + 2 * INTERVAL_S, so
-        # wait for the second batch's own keep-alive before looking for it.
-        await _until(lambda: len(self.instances) == 2, "the second batch's keep-alive")
-        self.assertTrue(self.instances[0]._task.done())
-        # The follow-up is sent at S + INTERVAL_S and starts the second batch.
-        followup_start = self.S + INTERVAL_S
-        await self.clock.wait_for_wake(followup_start + INTERVAL_S)
-        self.clock.advance_to(followup_start + INTERVAL_S)
-        await _until(lambda: self.keepalive.await_count == 2, "the second keep-alive")
-        self.release.put_nowait(None)
-        await self._finish(run)
-
-        self.assertEqual(self.followup.await_count, 2)
-        self.assertEqual(self.followup_at[0], followup_start)
-        self.assertEqual(
-            self.keepalive_at, [self.S + INTERVAL_S, followup_start + INTERVAL_S]
-        )
-        self.assertIs(self.keepalive.await_args_list[0].args[1], self.form_data)
-        self.assertIs(
-            self.keepalive.await_args_list[1].args[1],
-            self.followup.await_args_list[0].args[1],
-        )
-        self.assertTrue(all(k._task.done() for k in self.instances))
-
-    async def test_stop_cancels_the_keepalive(self):
-        cancelled = asyncio.Event()
-
-        async def keepalive(request, body, user):
-            self.keepalive_at.append(self.clock.now())
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                cancelled.set()
-                raise
-
-        self.keepalive.side_effect = keepalive
-        run = self._start()
-        await self.clock.wait_for_wake(self.S + INTERVAL_S)
-        self.clock.advance_to(self.S + INTERVAL_S)
-        await _until(lambda: self.keepalive_at, "the keep-alive")
-        run.cancel()
-        await asyncio.wait({run}, timeout=5)
-
-        self.assertTrue(cancelled.is_set())
-        self.assertTrue(self.tool_cancelled)
-        self.assertTrue(self.metadata["cancelled"])
-        self.followup.assert_not_awaited()
-        self.assertTrue(any(e.get("type") == "task-cancelled" for e in self.events))
-
-    async def test_a_tool_batch_that_raises_leaves_no_keepalive_running(self):
-        with patch.object(mw, "execution_waves", side_effect=RuntimeError("boom")):
-            await self._finish(self._start())
-
-        self.assertEqual(len(self.instances), 1)
-        self.assertTrue(self.instances[0]._task.done())
-        self.assertEqual(self.clock.wakes(), [])
-        self.keepalive.assert_not_awaited()
-        self.assertIn("error", self._final())
-
-
-class CacheKeepAliveCancelTest(unittest.IsolatedAsyncioTestCase):
-    async def test_cancel_stops_a_waiting_keepalive(self):
+class StopCacheKeepAliveTest(unittest.IsolatedAsyncioTestCase):
+    async def test_stop_ends_a_waiting_keepalive(self):
         clock = FakeClock()
         send = AsyncMock()
         with patch.object(mw, "keepalive_clock", clock.now), patch.object(
@@ -530,10 +476,9 @@ class CacheKeepAliveCancelTest(unittest.IsolatedAsyncioTestCase):
         ):
             keepalive = mw.CacheKeepAlive(send, {}, clock.now())
             keepalive.start()
-            try:
-                await clock.wait_for_wake(clock.now() + INTERVAL_S)
-            finally:
-                await keepalive.cancel()
+            await clock.wait_for_wake(clock.now() + INTERVAL_S)
+            keepalive.stop()
+            await asyncio.wait({keepalive._task}, timeout=5)
         send.assert_not_awaited()
         self.assertTrue(keepalive._task.done())
         self.assertEqual(clock.wakes(), [])

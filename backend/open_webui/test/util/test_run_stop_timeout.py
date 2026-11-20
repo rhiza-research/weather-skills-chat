@@ -77,6 +77,23 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         await self._stream(reply)
         self.assertIsInstance(self.respond_kw["model_call_started_at"], float)
 
+    async def test_a_finished_run_stops_its_cache_keepalive(self):
+        async def reply(metadata):
+            return None
+
+        with patch.object(automation_runner, "stop_cache_keepalive") as stop:
+            await self._stream(reply)
+        stop.assert_called_once_with("chat-1")
+
+    async def test_a_run_past_the_time_limit_stops_its_cache_keepalive(self):
+        async def reply(metadata):
+            await asyncio.sleep(10)
+
+        with patch.object(automation_runner, "stop_cache_keepalive") as stop:
+            with self.assertRaises(automation_runner.RunTimedOut):
+                await self._stream(reply, timeout_s=0.05)
+        stop.assert_called_once_with("chat-1")
+
     async def test_a_reply_the_user_stopped_reports_stopped(self):
         # The reply loop catches its own cancellation and marks the metadata.
         async def reply(metadata):
