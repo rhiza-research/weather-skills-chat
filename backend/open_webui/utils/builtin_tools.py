@@ -1194,6 +1194,10 @@ def create_folder(
 
     if result.get("existed"):
         return f"Folder already exists: `{result['path']}`."
+
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(str(chat_id))
     return f"Created folder: `{result['path']}`."
 
 
