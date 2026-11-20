@@ -3,6 +3,10 @@
 	import ProvenanceTree from './ProvenanceTree.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
+	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
+	import ArrowDownTray from '../icons/ArrowDownTray.svelte';
+	import DocumentDuplicate from '../icons/DocumentDuplicate.svelte';
+	import Tooltip from '../common/Tooltip.svelte';
 	import {
 		getArtifactArchiveUrl,
 		getArtifactContentUrl,
@@ -14,6 +18,9 @@
 	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
+	// The same look as the preview pane's icon buttons.
+	const iconButton =
+		'p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
 	const dispatch = createEventDispatcher();
 
 	export let node: {
@@ -117,12 +124,15 @@
 				<span class="truncate" title={node.name}>{node.name}</span>
 				<span class="text-gray-400 shrink-0">zarr</span>
 			</div>
-			<a
-				class="underline shrink-0"
-				href={getArtifactArchiveUrl($chatId, file.path)}
-				target="_blank"
-				rel="noreferrer">{$i18n.t('Download')}</a
-			>
+			<Tooltip content={$i18n.t('Download')}>
+				<a
+					class="{iconButton} shrink-0 block"
+					href={getArtifactArchiveUrl($chatId, file.path)}
+					target="_blank"
+					rel="noreferrer"
+					aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+				>
+			</Tooltip>
 		</div>
 		{#if file.provenance_branches?.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
@@ -155,45 +165,64 @@
 					<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
 				</div>
 			{/if}
-			<div class="flex gap-1 shrink-0">
+			<div class="flex items-center gap-0.5 shrink-0">
 				{#if file.kind === 'image' || file.kind === 'html'}
-					<button
-						type="button"
-						class="underline"
-						on:click={() => dispatch('openImage', { path: file.path })}
-					>
-						{$i18n.t('Open')}
-					</button>
-					<button
-						type="button"
-						class="underline"
-						on:click={() => downloadFile(file.path, node.name)}
-					>
-						{$i18n.t('Download')}
-					</button>
-					<button type="button" class="underline" on:click={() => copyLink(file.path, file.kind)}>
-						{$i18n.t('Copy link')}
-					</button>
+					<Tooltip content={$i18n.t('Open')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Open')}
+							on:click={() => dispatch('openImage', { path: file.path })}
+						>
+							<ArrowsPointingOut className="size-3.5" />
+						</button>
+					</Tooltip>
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() => downloadFile(file.path, node.name)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
+					<Tooltip content={$i18n.t('Copy link')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Copy link')}
+							on:click={() => copyLink(file.path, file.kind)}
+						>
+							<DocumentDuplicate className="size-3.5" />
+						</button>
+					</Tooltip>
 				{:else if file.kind === 'zarr'}
-					<button
-						type="button"
-						class="underline"
-						on:click={() =>
-							downloadFile(
-								file.path,
-								node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
-							)}
-					>
-						{$i18n.t('Download')}
-					</button>
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() =>
+								downloadFile(
+									file.path,
+									node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
+								)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
 				{:else if !file.is_dir}
-					<a
-						class="underline"
-						href={getArtifactContentUrl($chatId, file.path)}
-						download={node.name}
-						target="_blank"
-						rel="noreferrer">{$i18n.t('Download')}</a
-					>
+					<Tooltip content={$i18n.t('Download')}>
+						<a
+							class="{iconButton} block"
+							href={getArtifactContentUrl($chatId, file.path)}
+							download={node.name}
+							target="_blank"
+							rel="noreferrer"
+							aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+						>
+					</Tooltip>
 				{/if}
 			</div>
 		</div>
