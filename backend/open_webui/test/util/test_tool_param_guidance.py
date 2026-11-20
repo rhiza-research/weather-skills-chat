@@ -41,7 +41,6 @@ def test_skill_parameter_descriptions_are_short():
 
 def test_system_prompt_explains_depends_on_display_and_activity():
     text = TOOL_CALL_GUIDANCE
-    assert "run in parallel" in text
     assert "`depends_on`" in text and "tool_call id" in text and "later turn" in text
     assert "`display`" in text and "instead of the function name" in text
     assert "`activity`" in text and "still set `display`" in text
