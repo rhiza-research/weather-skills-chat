@@ -14,6 +14,7 @@ from pytz import UTC
 from typing import Optional, Union, List, Dict
 
 from open_webui.models.users import Users
+from open_webui.utils.misc import parse_duration
 
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
@@ -35,6 +36,8 @@ log.setLevel(SRC_LOG_LEVELS["OAUTH"])
 
 SESSION_SECRET = WEBUI_SECRET_KEY
 ALGORITHM = "HS256"
+# No sign-in token lives longer than this, whatever JWT_EXPIRES_IN says.
+MAX_TOKEN_LIFETIME = timedelta(days=90)
 
 ##############
 # Auth Utils
@@ -115,12 +118,25 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
+def token_lifetime(setting: str) -> timedelta:
+    """JWT_EXPIRES_IN as a lifetime: no expiry (-1, 0) or anything longer than
+    MAX_TOKEN_LIFETIME becomes MAX_TOKEN_LIFETIME."""
+    lifetime = parse_duration(setting)
+    if not lifetime or lifetime <= timedelta(0):
+        return MAX_TOKEN_LIFETIME
+    return min(lifetime, MAX_TOKEN_LIFETIME)
+
+
 def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     payload = data.copy()
+    now = datetime.now(UTC)
+    payload["iat"] = now
 
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-        payload.update({"exp": expire})
+    exp = now + expires_delta if expires_delta else payload.get("exp")
+    if isinstance(exp, (int, float)):
+        exp = datetime.fromtimestamp(exp, UTC)
+    latest = now + MAX_TOKEN_LIFETIME
+    payload["exp"] = min(exp, latest) if exp else latest
 
     encoded_jwt = jwt.encode(payload, SESSION_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
@@ -132,6 +148,19 @@ def decode_token(token: str) -> Optional[dict]:
         return decoded
     except Exception:
         return None
+
+
+def get_user_from_token(token: str):
+    """The token's user, or None if the token is invalid or was issued before
+    the user's sign-out-everywhere cutoff."""
+    data = decode_token(token)
+    if not data or "id" not in data:
+        return None
+    user = Users.get_user_by_id(data["id"])
+    cutoff = user.tokens_valid_after if user else None
+    if cutoff and data.get("iat", 0) < cutoff:
+        return None
+    return user
 
 
 def extract_token_from_auth_header(auth_header: str):
@@ -198,32 +227,17 @@ def get_current_user(
         return _with_effective_role(user, request)
 
     # auth by jwt token
-    try:
-        data = decode_token(token)
-    except Exception as e:
+    user = get_user_from_token(token)
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail=ERROR_MESSAGES.INVALID_TOKEN,
         )
-
-    if data is not None and "id" in data:
-        user = Users.get_user_by_id(data["id"])
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ERROR_MESSAGES.INVALID_TOKEN,
-            )
-        else:
-            # Refresh the user's last active timestamp asynchronously
-            # to prevent blocking the request
-            if background_tasks:
-                background_tasks.add_task(Users.update_user_last_active_by_id, user.id)
-        return _with_effective_role(user, request)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
+    # Refresh the user's last active timestamp asynchronously
+    # to prevent blocking the request
+    if background_tasks:
+        background_tasks.add_task(Users.update_user_last_active_by_id, user.id)
+    return _with_effective_role(user, request)
 
 
 def _with_effective_role(user, request: Request):

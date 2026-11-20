@@ -33,14 +33,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 from open_webui.config import OPENID_PROVIDER_URL, ENABLE_OAUTH_SIGNUP, ENABLE_LDAP
 from pydantic import BaseModel
-from open_webui.utils.misc import parse_duration, validate_email_format
+from open_webui.utils.misc import validate_email_format
 from open_webui.utils.auth import (
     create_api_key,
     create_token,
+    decode_token,
     get_admin_user,
+    get_http_authorization_cred,
     get_verified_user,
     get_current_user,
     get_password_hash,
+    token_lifetime,
 )
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.access_control import get_permissions
@@ -72,20 +75,21 @@ class SessionUserResponse(Token, UserResponse):
 def get_session_user(
     request: Request, response: Response, user=Depends(get_current_user)
 ):
-    expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
-    expires_at = None
-    if expires_delta:
-        expires_at = int(time.time()) + int(expires_delta.total_seconds())
-
-    token = create_token(
-        data={"id": user.id},
-        expires_delta=expires_delta,
-    )
-
-    datetime_expires_at = (
-        datetime.datetime.fromtimestamp(expires_at, datetime.timezone.utc)
-        if expires_at
-        else None
+    # The new token keeps the presented token's expiry, so a valid token
+    # can't be renewed forever; only signing in starts a new period.
+    cred = get_http_authorization_cred(request.headers.get("Authorization"))
+    presented = cred.credentials if cred else request.cookies.get("token")
+    exp = (decode_token(presented) or {}).get("exp") if presented else None
+    if exp:
+        token = create_token(data={"id": user.id, "exp": exp})
+    else:
+        token = create_token(
+            data={"id": user.id},
+            expires_delta=token_lifetime(request.app.state.config.JWT_EXPIRES_IN),
+        )
+    expires_at = decode_token(token)["exp"]
+    datetime_expires_at = datetime.datetime.fromtimestamp(
+        expires_at, datetime.timezone.utc
     )
 
     # Set the cookie token
@@ -142,9 +146,12 @@ async def update_profile(
 ############################
 
 
-@router.post("/update/password", response_model=bool)
+@router.post("/update/password", response_model=SessionUserResponse)
 async def update_password(
-    form_data: UpdatePasswordForm, session_user=Depends(get_current_user)
+    request: Request,
+    response: Response,
+    form_data: UpdatePasswordForm,
+    session_user=Depends(get_current_user),
 ):
     if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
         raise HTTPException(400, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
@@ -153,7 +160,11 @@ async def update_password(
 
         if user:
             hashed = get_password_hash(form_data.new_password)
-            return Auths.update_user_password_by_id(user.id, hashed)
+            if not Auths.update_user_password_by_id(user.id, hashed):
+                raise HTTPException(400, detail=ERROR_MESSAGES.DEFAULT())
+            # Sign out other devices; this browser gets the new token.
+            Users.end_sessions_by_id(user.id)
+            return get_session_user(request, response, session_user)
         else:
             raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_PASSWORD)
     else:
@@ -292,7 +303,7 @@ async def ldap_auth(request: Request, response: Response, form_data: LdapForm):
             if user:
                 token = create_token(
                     data={"id": user.id},
-                    expires_delta=parse_duration(
+                    expires_delta=token_lifetime(
                         request.app.state.config.JWT_EXPIRES_IN
                     ),
                 )
@@ -375,7 +386,7 @@ async def signin(request: Request, response: Response, form_data: SigninForm):
 
     if user:
 
-        expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+        expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
         expires_at = None
         if expires_delta:
             expires_at = int(time.time()) + int(expires_delta.total_seconds())
@@ -506,7 +517,7 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
         )
 
         if user:
-            expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+            expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
             expires_at = None
             if expires_delta:
                 expires_at = int(time.time()) + int(expires_delta.total_seconds())
@@ -573,6 +584,12 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
     except Exception as err:
         log.error(f"Signup error: {str(err)}")
         raise HTTPException(500, detail="An internal error occurred during signup.")
+
+
+@router.post("/signout/all", response_model=bool)
+def signout_all(user=Depends(get_current_user)):
+    # Every token issued so far stops working, this browser's included.
+    return Users.end_sessions_by_id(user.id) is not None
 
 
 @router.get("/signout")

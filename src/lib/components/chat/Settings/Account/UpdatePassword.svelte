@@ -20,6 +20,8 @@
 			);
 
 			if (res) {
+				// Other devices are signed out; keep this one signed in.
+				localStorage.token = res.token;
 				toast.success($i18n.t('Successfully updated.'));
 			}
 

@@ -380,6 +380,7 @@ async def update_user_by_id(
             hashed = get_password_hash(form_data.password)
             log.debug(f"hashed: {hashed}")
             Auths.update_user_password_by_id(user_id, hashed)
+            Users.end_sessions_by_id(user_id)
 
         Auths.update_email_by_id(user_id, form_data.email.lower())
         updated_user = Users.update_user_by_id(

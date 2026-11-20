@@ -38,6 +38,26 @@ class TestAuths(AbstractPostgresTest):
         assert isinstance(data["token"], str) and data["token"]
         assert isinstance(data["permissions"], dict)
 
+    def test_session_refresh_keeps_expiry(self):
+        import time
+
+        import jwt
+        from open_webui.utils.auth import ALGORITHM, SESSION_SECRET, decode_token
+
+        exp = int(time.time()) + 600
+        presented = jwt.encode(
+            {"id": "1", "iat": int(time.time()), "exp": exp},
+            SESSION_SECRET,
+            algorithm=ALGORITHM,
+        )
+        with mock_webui_user():
+            response = self.fast_api_client.get(
+                self.create_url(""), headers={"Authorization": f"Bearer {presented}"}
+            )
+        assert response.status_code == 200
+        assert response.json()["expires_at"] == exp
+        assert decode_token(response.json()["token"])["exp"] == exp
+
     def test_update_profile(self):
         from open_webui.utils.auth import get_password_hash
 
@@ -76,6 +96,9 @@ class TestAuths(AbstractPostgresTest):
                 json={"password": "old_password", "new_password": "new_password"},
             )
         assert response.status_code == 200
+        # Other sessions end; the response carries this browser's new token.
+        assert response.json()["token"]
+        assert self.users.get_user_by_id(user.id).tokens_valid_after
 
         old_auth = self.auths.authenticate_user(
             "john.doe@openwebui.com", "old_password"
@@ -85,6 +108,34 @@ class TestAuths(AbstractPostgresTest):
             "john.doe@openwebui.com", "new_password"
         )
         assert new_auth is not None
+
+    def test_signout_all(self):
+        import time
+
+        import jwt
+        from open_webui.utils.auth import ALGORITHM, SESSION_SECRET
+        from open_webui.utils.auth import get_user_from_token
+
+        user = self.users.insert_new_user(
+            id="2", name="Jane", email="jane@openwebui.com", role="user"
+        )
+        old_token = jwt.encode(
+            {
+                "id": user.id,
+                "iat": int(time.time()) - 60,
+                "exp": int(time.time()) + 600,
+            },
+            SESSION_SECRET,
+            algorithm=ALGORITHM,
+        )
+        assert get_user_from_token(old_token) is not None
+
+        with mock_webui_user(id=user.id):
+            response = self.fast_api_client.post(self.create_url("/signout/all"))
+        assert response.status_code == 200
+        assert self.users.get_user_by_id(user.id).tokens_valid_after
+        assert response.json() is True
+        assert get_user_from_token(old_token) is None
 
     def test_signin(self):
         from open_webui.utils.auth import get_password_hash

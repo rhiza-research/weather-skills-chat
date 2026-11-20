@@ -29,12 +29,13 @@ from open_webui.models.users import Users
 from open_webui.utils.access_control import get_permissions
 from open_webui.utils.auth import (
     create_token,
-    decode_token,
     get_password_hash,
+    get_user_from_token,
     get_verified_user,
+    token_lifetime,
 )
 from open_webui.utils.invite_email import InviteEmailError, deliver_invite_email, smtp_is_configured
-from open_webui.utils.misc import parse_duration, validate_email_format
+from open_webui.utils.misc import validate_email_format
 from open_webui.utils.organizations import is_at_least, is_platform_admin
 
 log = logging.getLogger(__name__)
@@ -91,13 +92,7 @@ def get_optional_user(request: Request):
         token = request.cookies.get("token")
     if not token or token.startswith("sk-"):
         return None
-    try:
-        data = decode_token(token)
-    except Exception:
-        return None
-    if not data or "id" not in data:
-        return None
-    return Users.get_user_by_id(data["id"])
+    return get_user_from_token(token)
 
 
 def _response(invite: InvitationModel) -> InvitationResponse:
@@ -285,7 +280,7 @@ def _issue_organization(
 
 
 def _session_payload(request: Request, response: Response, user):
-    expires_delta = parse_duration(request.app.state.config.JWT_EXPIRES_IN)
+    expires_delta = token_lifetime(request.app.state.config.JWT_EXPIRES_IN)
     expires_at = None
     if expires_delta:
         expires_at = int(time.time()) + int(expires_delta.total_seconds())

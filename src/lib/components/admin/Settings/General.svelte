@@ -331,7 +331,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
 							{$i18n.t('Valid time units:')}
 							<span class=" text-gray-300 font-medium"
-								>{$i18n.t("'s', 'm', 'h', 'd', 'w' or '-1' for no expiration.")}</span
+								>{$i18n.t("'s', 'm', 'h', 'd', 'w'. At most 90 days; '-1' means 90 days.")}</span
 							>
 						</div>
 					</div>
