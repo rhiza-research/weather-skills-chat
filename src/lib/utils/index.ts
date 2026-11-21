@@ -20,11 +20,6 @@ export const replaceTokens = (content, sourceIds, char, user) => {
 			regex: /{{VIDEO_FILE_ID_([a-f0-9-]+)}}/gi,
 			replacement: (_, fileId) =>
 				`<video src="${WEBUI_BASE_URL}/api/v1/files/${fileId}/content" controls></video>`
-		},
-		{
-			regex: /{{HTML_FILE_ID_([a-f0-9-]+)}}/gi,
-			replacement: (_, fileId) =>
-				`<iframe src="${WEBUI_BASE_URL}/api/v1/files/${fileId}/content/html" width="100%" frameborder="0" onload="this.style.height=(this.contentWindow.document.body.scrollHeight+20)+'px';"></iframe>`
 		}
 	];
 

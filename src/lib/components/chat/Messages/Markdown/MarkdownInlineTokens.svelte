@@ -14,7 +14,7 @@
 		getArtifactViewUrl,
 		isHtmlArtifact
 	} from '$lib/apis/artifacts';
-	import { WEBUI_BASE_URL, helpEmailAddress } from '$lib/constants';
+	import { helpEmailAddress } from '$lib/constants';
 	import { chatId, config, feedbackDraft } from '$lib/stores';
 	import { copyToClipboard, unescapeHtml } from '$lib/utils';
 	import { feedbackLinkDraft } from '$lib/utils/feedback';
@@ -50,8 +50,6 @@
 		{@const html = DOMPurify.sanitize(token.text)}
 		{#if html && html.includes('<video')}
 			{@html html}
-		{:else if token.text.includes(`<iframe src="${WEBUI_BASE_URL}/api/v1/files/`)}
-			{@html `${token.text}`}
 		{:else if token.text.includes(`<source_id`)}
 			<Source {id} {token} onClick={onSourceClick} />
 		{:else}
@@ -142,14 +140,6 @@
 		{#if token.text}
 			<KatexRenderer content={token.text} displayMode={false} />
 		{/if}
-	{:else if token.type === 'iframe'}
-		<iframe
-			src="{WEBUI_BASE_URL}/api/v1/files/{token.fileId}/content"
-			title={token.fileId}
-			width="100%"
-			frameborder="0"
-			onload="this.style.height=(this.contentWindow.document.body.scrollHeight+20)+'px';"
-		></iframe>
 	{:else if token.type === 'text'}
 		{token.raw}
 	{/if}
