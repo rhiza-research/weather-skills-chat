@@ -402,6 +402,26 @@ class PrepareBackupCallTest(unittest.TestCase):
                 request, form, None, True, upstream_model_id=upstream_model_id
             )
 
+    def test_only_a_chats_own_reply_call_carries_its_usage_for_keep_alives(self):
+        for metadata, expected in [
+            ({"chat_id": "chat-1", "organization_id": "org-1", "usage_source": "chat"}, "chat"),
+            ({"chat_id": "chat-1", "organization_id": "org-1", "task": "title_generation"}, None),
+            ({"organization_id": "org-1"}, None),
+        ]:
+            with patch.object(
+                openai_router.Models,
+                "get_model_by_id",
+                return_value=self._wrapper("requesty.anthropic/claude-sonnet-4-5"),
+            ):
+                call = openai_router.prepare_provider_call(
+                    _app_request(*TWO_CONNECTIONS),
+                    {"model": "weather-agent", "messages": [], "metadata": metadata},
+                    None,
+                    True,
+                )
+            self.assertEqual((call.reply_usage or {}).get("source"), expected)
+            self.assertTrue(call.cached)
+
     def test_primary_call_carries_the_wrappers_backup(self):
         call = self._prepare()
 
@@ -420,9 +440,8 @@ class PrepareBackupCallTest(unittest.TestCase):
         self.assertEqual(call.key, "key-1")
         self.assertIsNone(call.fallback_model_id)
         self.assertEqual(payload["model"], "anthropic/claude-sonnet-4-5")
-        self.assertEqual(
-            payload["messages"][0], {"role": "system", "content": "Be brief."}
-        )
+        # The backup serves an Anthropic model, so its system prompt is marked for caching.
+        self.assertEqual(payload["messages"][0]["content"][0]["text"], "Be brief.")
 
 
 class ConnectionPrefixTest(unittest.TestCase):

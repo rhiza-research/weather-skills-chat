@@ -15,8 +15,8 @@ from open_webui.utils.model_messages import (
     strip_message_details_for_tasks,
 )
 from open_webui.routers.openai import (
-    enable_openrouter_prompt_caching,
-    _is_openrouter_anthropic_model,
+    enable_prompt_caching,
+    _is_anthropic_model,
 )
 
 
@@ -229,8 +229,8 @@ class ExpandUiToolHistoryTest(unittest.TestCase):
 
 class OpenRouterCacheTest(unittest.TestCase):
     def test_anthropic_detection(self):
-        self.assertTrue(_is_openrouter_anthropic_model("anthropic/claude-sonnet-4"))
-        self.assertFalse(_is_openrouter_anthropic_model("openai/gpt-4o"))
+        self.assertTrue(_is_anthropic_model("anthropic/claude-sonnet-4"))
+        self.assertFalse(_is_anthropic_model("openai/gpt-4o"))
 
     def test_injects_cache_control_session_and_breakpoints(self):
         payload = {
@@ -245,7 +245,7 @@ class OpenRouterCacheTest(unittest.TestCase):
             ],
         }
         original_tools = payload["tools"]
-        out = enable_openrouter_prompt_caching(
+        out = enable_prompt_caching(
             "https://openrouter.ai/api/v1",
             payload,
             {"chat_id": "abc-123", "user_id": "user-1"},
@@ -263,14 +263,14 @@ class OpenRouterCacheTest(unittest.TestCase):
         self.assertNotIn("cache_control", original_tools[-1])
         self.assertNotIn("cache_control", out["tools"][0])
 
-    def test_skips_non_openrouter(self):
+    def test_other_connections_get_only_the_cache_markers(self):
         payload = {"model": "anthropic/claude-sonnet-4", "messages": []}
-        out = enable_openrouter_prompt_caching(
-            "https://api.anthropic.com/v1",
+        out = enable_prompt_caching(
+            "https://router.example.com/v1",
             payload,
             {"chat_id": "abc-123", "user_id": "user-1"},
         )
-        self.assertNotIn("cache_control", out)
+        self.assertEqual(out["cache_control"], {"type": "ephemeral"})
         self.assertNotIn("session_id", out)
         self.assertNotIn("prompt_cache_key", out)
 
@@ -281,7 +281,7 @@ class OpenRouterCacheTest(unittest.TestCase):
             "tools": [{"type": "function", "function": {"name": "a"}}],
         }
         user = type("U", (), {"id": "user-42"})()
-        out = enable_openrouter_prompt_caching(
+        out = enable_prompt_caching(
             "https://openrouter.ai/api/v1",
             payload,
             {"chat_id": "chat-A"},
@@ -294,7 +294,7 @@ class OpenRouterCacheTest(unittest.TestCase):
             f"user-42:{datetime.now().strftime('%Y-%m-%d')}",
         )
         # Same user, different chat → same cache key
-        out2 = enable_openrouter_prompt_caching(
+        out2 = enable_prompt_caching(
             "https://openrouter.ai/api/v1",
             {
                 "model": "openai/gpt-4o",
