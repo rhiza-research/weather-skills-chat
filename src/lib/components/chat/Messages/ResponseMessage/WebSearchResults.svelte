@@ -3,6 +3,7 @@
 	import ChevronUp from '$lib/components/icons/ChevronUp.svelte';
 	import MagnifyingGlass from '$lib/components/icons/MagnifyingGlass.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
+	import { safeLinkUrl } from '$lib/utils';
 
 	export let status = { urls: [], query: '' };
 	let state = false;
@@ -60,7 +61,7 @@
 
 		{#each status.urls as url, urlIdx}
 			<a
-				href={url}
+				href={safeLinkUrl(url)}
 				target="_blank"
 				class="flex w-full items-center p-3 px-4 {urlIdx === status.urls.length - 1
 					? ''

@@ -139,9 +139,6 @@ class NativeToolLoopTest(unittest.IsolatedAsyncioTestCase):
             )
             stack.enter_context(patch.object(mw, "end_chat_trace"))
             stack.enter_context(
-                patch.object(mw, "get_active_status_by_user_id", return_value="active")
-            )
-            stack.enter_context(
                 patch.object(mw.Chats, "upsert_message_to_chat_by_id_and_message_id")
             )
             stack.enter_context(
