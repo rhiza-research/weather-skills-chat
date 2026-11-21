@@ -1,6 +1,16 @@
+<script lang="ts" context="module">
+	import { writable } from 'svelte/store';
+
+	// Provenance asked for with the stamp button, by chat, path and modification
+	// time: a list refresh re-renders every row, and this keeps what was opened.
+	const askedProvenance = writable<Record<string, any[]>>({});
+</script>
+
 <script lang="ts">
 	import { getContext, createEventDispatcher } from 'svelte';
 	import ProvenanceTree from './ProvenanceTree.svelte';
+	import ProvenanceStamp from '../icons/ProvenanceStamp.svelte';
+	import Spinner from '../common/Spinner.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
 	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
@@ -81,7 +91,41 @@
 		if (await copyToClipboard(url)) toast.success($i18n.t('Copied link to clipboard'));
 	};
 
+	// Listings carry provenance for top-level entries only; deeper PNGs, HTML
+	// pages and Zarr stores show it when their stamp button is pressed.
+	let askingProvenance = false;
+	const toggleProvenance = async () => {
+		const key = askedKey;
+		if ($askedProvenance[key]) {
+			askedProvenance.update(({ [key]: _, ...rest }) => rest);
+			return;
+		}
+		askingProvenance = true;
+		try {
+			const branches =
+				(await getArtifactProvenance(localStorage.token, $chatId, file.path))?.branches ?? [];
+			if (branches.length) askedProvenance.update((all) => ({ ...all, [key]: branches }));
+			else toast.info($i18n.t('No provenance recorded for this file.'));
+		} catch (e) {
+			console.error(e);
+			toast.error($i18n.t('Could not load provenance.'));
+		} finally {
+			askingProvenance = false;
+		}
+	};
+
 	$: file = node.file;
+	$: askedKey = file ? `${$chatId}\n${file.path}\n${file.modified ?? ''}` : '';
+	// Only the kinds the server reads provenance from (artifacts._provenance_for_entry).
+	$: canAskProvenance =
+		!!file &&
+		!file.provenance_branches?.length &&
+		(file.kind === 'html' ||
+			file.kind === 'zarr' ||
+			(file.kind === 'image' && /\.png$/i.test(file.path)));
+	$: shownBranches = file?.provenance_branches?.length
+		? file.provenance_branches
+		: ($askedProvenance[askedKey] ?? []);
 	$: navigable = isNavigableDir(node);
 	$: open = expanded.has(node.path);
 	$: pad = `padding-left: ${depth * 0.75 + 0.25}rem`;
@@ -124,21 +168,40 @@
 				<span class="truncate" title={node.name}>{node.name}</span>
 				<span class="text-gray-400 shrink-0">zarr</span>
 			</div>
-			<Tooltip content={$i18n.t('Download')}>
-				<a
-					class="{iconButton} shrink-0 block"
-					href={getArtifactArchiveUrl($chatId, file.path)}
-					target="_blank"
-					rel="noreferrer"
-					aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
-				>
-			</Tooltip>
+			<div class="flex items-center gap-0.5 shrink-0">
+				{#if canAskProvenance}
+					<Tooltip content={$i18n.t('Provenance')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Provenance')}
+							aria-pressed={shownBranches.length > 0}
+							on:click={toggleProvenance}
+						>
+							{#if askingProvenance}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ProvenanceStamp className="size-3.5" />
+							{/if}
+						</button>
+					</Tooltip>
+				{/if}
+				<Tooltip content={$i18n.t('Download')}>
+					<a
+						class="{iconButton} shrink-0 block"
+						href={getArtifactArchiveUrl($chatId, file.path)}
+						target="_blank"
+						rel="noreferrer"
+						aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+					>
+				</Tooltip>
+			</div>
 		</div>
-		{#if file.provenance_branches?.length}
+		{#if shownBranches.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
-					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
 				{/key}
 			</div>
 		{/if}
@@ -166,6 +229,23 @@
 				</div>
 			{/if}
 			<div class="flex items-center gap-0.5 shrink-0">
+				{#if canAskProvenance}
+					<Tooltip content={$i18n.t('Provenance')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Provenance')}
+							aria-pressed={shownBranches.length > 0}
+							on:click={toggleProvenance}
+						>
+							{#if askingProvenance}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ProvenanceStamp className="size-3.5" />
+							{/if}
+						</button>
+					</Tooltip>
+				{/if}
 				{#if file.kind === 'image' || file.kind === 'html'}
 					<Tooltip content={$i18n.t('Open')}>
 						<button
@@ -226,11 +306,11 @@
 				{/if}
 			</div>
 		</div>
-		{#if file.provenance_branches?.length}
+		{#if shownBranches.length}
 			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
-					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
 				{/key}
 			</div>
 		{/if}

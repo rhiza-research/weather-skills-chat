@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import functools
 import io
 import json
@@ -641,6 +642,20 @@ def _provenance_for_entry(path: Path, kind: str) -> dict | None:
     return None
 
 
+@functools.lru_cache(maxsize=500_000)
+def _provenance_names(path: str, kind: str, signature: tuple | None) -> tuple | None:
+    """Crumbs and branch names of one artifact. The signature (mtime, size of the file
+    holding the history) only keys the cache, so a rewritten artifact is read again."""
+    prov = _provenance_for_entry(Path(path), kind)
+    return prov and (
+        prov.get("crumbs") or [],
+        [
+            {"label": b.get("label"), "crumbs": b.get("crumbs") or []}
+            for b in prov.get("branches") or []
+        ],
+    )
+
+
 def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
     """Crumbs and full branches for one sandbox entry, or None. Blocks on JuiceFS."""
     path = resolve_in_sandbox(chat_id, rel_path)
@@ -654,11 +669,13 @@ def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
     return _provenance_for_entry(path, kind)
 
 
+
 def list_artifacts(
     chat_id: str,
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """List a chat's sandbox. Blocks on JuiceFS; async code uses list_artifacts_async.
 
@@ -670,9 +687,15 @@ def list_artifacts(
     set. None lists every level.
     provenance: read provenance from images, HTML pages and Zarr stores. Each
     read opens the file, so turning it off makes large listings much cheaper.
+    provenance_depth: read provenance only this many folder levels below path,
+    or below the root, counted like depth. Deeper entries are listed without
+    it; artifact_provenance reads one on request. None reads every level,
+    which parses each file's whole history: seconds on a large chat.
     """
     if depth is not None and depth < 1:
         raise ValueError("depth must be at least 1")
+    if provenance_depth is not None and provenance_depth < 1:
+        raise ValueError("provenance_depth must be at least 1")
     t0 = time.perf_counter()
     root = chat_sandbox(chat_id)
     prefix = path or ""
@@ -711,18 +734,23 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            prov = _provenance_for_entry(path, kind) if provenance else None
-            if prov:
+            level = rel.count("/") + 1 - base_levels
+            names = None
+            if provenance and (provenance_depth is None or level <= provenance_depth):
+                history = stat
+                if kind == "zarr":
+                    for name in ("zarr.json", ".zattrs"):
+                        with contextlib.suppress(OSError):
+                            history = (path / name).stat()
+                            break
+                signature = history and (history.st_mtime_ns, history.st_size)
+                names = _provenance_names(str(path), kind, signature)
+            if names:
                 # Names only: full steps grow with every step and the list is
                 # pushed to every watching tab. artifact_provenance reads them.
-                item["provenance"] = prov.get("crumbs") or []
-                item["provenance_branches"] = [
-                    {"label": branch.get("label"), "crumbs": branch.get("crumbs") or []}
-                    for branch in prov.get("branches") or []
-                ]
+                item["provenance"], item["provenance_branches"] = names
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
-            level = rel.count("/") + 1 - base_levels
             if descend and depth is not None and level >= depth:
                 item["truncated"] = True
                 descend = False
@@ -738,6 +766,7 @@ def list_artifacts(
         n=len(entries),
         depth=depth,
         provenance=provenance,
+        provenance_depth=provenance_depth,
     )
     return entries
 
@@ -747,10 +776,16 @@ async def list_artifacts_async(
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """list_artifacts on a worker thread, so the walk never blocks the event loop."""
     return await asyncio.to_thread(
-        list_artifacts, chat_id, path=path, depth=depth, provenance=provenance
+        list_artifacts,
+        chat_id,
+        path=path,
+        depth=depth,
+        provenance=provenance,
+        provenance_depth=provenance_depth,
     )
 
 
