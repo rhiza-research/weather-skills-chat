@@ -14,6 +14,8 @@ describe('safeLinkUrl', () => {
 			'JavaScript:alert(1)',
 			' javascript:alert(1)',
 			'java\tscript:alert(1)',
+			// a file item opens `${url}/content`; the suffix must not rescue the scheme
+			'javascript:alert(1)///content',
 			'data:text/html,<script>alert(1)</script>',
 			'vbscript:x'
 		]) {
