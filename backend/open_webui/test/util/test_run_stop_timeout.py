@@ -38,8 +38,7 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
         async def payload(request, form_data, user, metadata, model):
             return form_data, metadata, []
 
-        async def respond(request, response, form_data, user, metadata, *rest, **kw):
-            self.respond_kw = kw
+        async def respond(request, response, form_data, user, metadata, *rest):
             task_id, _ = task_registry.create_task(reply(metadata), id="chat-1")
             return {"task_id": task_id}
 
@@ -69,30 +68,6 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
             return None
 
         self.assertFalse(await self._stream(reply))
-
-    async def test_the_first_model_calls_start_time_reaches_the_reply(self):
-        async def reply(metadata):
-            return None
-
-        await self._stream(reply)
-        self.assertIsInstance(self.respond_kw["model_call_started_at"], float)
-
-    async def test_a_finished_run_stops_its_cache_keepalive(self):
-        async def reply(metadata):
-            return None
-
-        with patch.object(automation_runner, "stop_cache_keepalive") as stop:
-            await self._stream(reply)
-        stop.assert_called_once_with("chat-1")
-
-    async def test_a_run_past_the_time_limit_stops_its_cache_keepalive(self):
-        async def reply(metadata):
-            await asyncio.sleep(10)
-
-        with patch.object(automation_runner, "stop_cache_keepalive") as stop:
-            with self.assertRaises(automation_runner.RunTimedOut):
-                await self._stream(reply, timeout_s=0.05)
-        stop.assert_called_once_with("chat-1")
 
     async def test_a_reply_the_user_stopped_reports_stopped(self):
         # The reply loop catches its own cancellation and marks the metadata.

@@ -52,11 +52,7 @@ from open_webui.models.models import Models
 from open_webui.retrieval.utils import get_sources_from_files
 
 
-from open_webui.utils.chat import (
-    cache_keepalive_applies,
-    generate_cache_keepalive,
-    generate_chat_completion,
-)
+from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -113,11 +109,7 @@ from open_webui.env import (
     ENABLE_REALTIME_CHAT_SAVE,
 )
 from open_webui.constants import TASKS
-from open_webui.models.usage import (
-    ORG_LIMIT_MESSAGE,
-    USER_LIMIT_MESSAGE,
-    UsageLimitExceeded,
-)
+from open_webui.models.usage import UsageLimitExceeded
 
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -139,20 +131,6 @@ GENERATION_HEARTBEAT_ACTION = "generation_heartbeat"
 GENERATION_HEARTBEAT_INTERVAL_S = float(
     os.environ.get("GENERATION_HEARTBEAT_INTERVAL", "5")
 )
-
-
-# The provider's prompt cache lives this long from the start of the request
-# that wrote or last read it.
-PROMPT_CACHE_TTL_S = 300
-# A chat's last model request is re-sent this long after the previous request
-# started, inside the cache's lifetime.
-CACHE_KEEPALIVE_INTERVAL_S = 270
-# Keep-alives sent while none of the chat's tools are running, such as while
-# the user reads the reply, before the chat's next model request.
-CACHE_KEEPALIVE_IDLE_COUNT = int(os.environ.get("CACHE_KEEPALIVE_IDLE_COUNT", "3"))
-# The keep-alive's clock and sleep. Tests replace both with a virtual clock.
-keepalive_clock = time.monotonic
-keepalive_sleep = asyncio.sleep
 
 
 # A streamed reply is serialized and sent at most this often; each delta still
@@ -504,127 +482,6 @@ class GenerationHeartbeat:
         if clear and was_active and not self._cleared:
             self._cleared = True
             await self._emit(done=True)
-
-
-class CacheKeepAlive:
-    """Keeps one chat's prompt cache alive until the chat's next model request.
-
-    The chat's last model request is re-sent CACHE_KEEPALIVE_INTERVAL_S after
-    the previous request started. Each re-send reads the cache, which restarts
-    its lifetime. While the chat's tools run it keeps going; otherwise it sends
-    at most CACHE_KEEPALIVE_IDLE_COUNT. It sends nothing once the previous
-    request started PROMPT_CACHE_TTL_S ago: the cache is gone, and a keep-alive
-    would write the whole context. The first failure ends it.
-    """
-
-    def __init__(self, send, body: dict, started_at: float):
-        self._send = send  # async callable taking the request body
-        self._body = body
-        self._started_at = started_at  # keepalive_clock() of the last request
-        self.tools_running = False
-        self._task = None
-        self._sending = False
-        self._stopped = False
-
-    def start(self) -> None:
-        self._task = asyncio.create_task(self._loop())
-
-    async def _loop(self) -> None:
-        started_at = self._started_at
-        idle_sent = 0
-        while True:
-            wait = started_at + CACHE_KEEPALIVE_INTERVAL_S - keepalive_clock()
-            if wait > 0:
-                await keepalive_sleep(wait)
-            sent_at = keepalive_clock()
-            if sent_at - started_at >= PROMPT_CACHE_TTL_S:
-                return
-            if not self.tools_running:
-                if idle_sent >= CACHE_KEEPALIVE_IDLE_COUNT:
-                    return
-                idle_sent += 1
-            self._sending = True
-            try:
-                await self._send(self._body)
-            except Exception as e:
-                if (
-                    isinstance(e, HTTPException)
-                    and e.status_code == 429
-                    and e.detail in (ORG_LIMIT_MESSAGE, USER_LIMIT_MESSAGE)
-                ):
-                    # A usage limit refuses every call alike; nothing failed.
-                    log.info("Cache keep-alive refused by a usage limit: %s", e.detail)
-                else:
-                    log.warning(
-                        "Cache keep-alive failed; none more until the chat's next request",
-                        exc_info=True,
-                    )
-                return
-            finally:
-                self._sending = False
-            if self._stopped:
-                return
-            started_at = sent_at
-
-    def stop(self) -> None:
-        """Send no more. A keep-alive in flight completes, so its usage is
-        recorded; the provider bills it either way."""
-        self._stopped = True
-        if self._task is not None and not self._sending:
-            self._task.cancel()
-
-
-# Each chat's keep-alive, replaced by the chat's next model request.
-# shortcut: per process; with several replicas a chat's next request can land
-# on another one and leave this one sending up to its idle count, which costs
-# cache reads only. Move it to Redis if that cost shows up.
-_cache_keepalives: dict = {}
-
-
-def stop_cache_keepalive(chat_id) -> None:
-    """Send no more keep-alives for this chat."""
-    keepalive = _cache_keepalives.pop(chat_id, None)
-    if keepalive is not None:
-        keepalive.stop()
-
-
-def set_cache_keepalive_tools_running(chat_id, running: bool) -> None:
-    keepalive = _cache_keepalives.get(chat_id)
-    if keepalive is not None:
-        keepalive.tools_running = running
-
-
-async def restart_cache_keepalive(
-    request, user, chat_id, body: dict, started_at: Optional[float]
-) -> None:
-    """Keep the chat's prompt cache alive from this model request on.
-
-    started_at is the keepalive_clock() at which body was sent. Without it,
-    or when the model's calls are not marked for caching, the chat gets no
-    keep-alive.
-    """
-    stop_cache_keepalive(chat_id)
-    if not chat_id or started_at is None:
-        return
-    if keepalive_clock() - started_at >= PROMPT_CACHE_TTL_S:
-        return
-    if not await asyncio.to_thread(
-        cache_keepalive_applies, request, body.get("model")
-    ):
-        return
-
-    async def send(keepalive_body):
-        await generate_cache_keepalive(request, keepalive_body, user)
-
-    keepalive = CacheKeepAlive(send, body, started_at)
-    _cache_keepalives[chat_id] = keepalive
-    keepalive.start()
-
-    def forget(_task):
-        if _cache_keepalives.get(chat_id) is keepalive:
-            del _cache_keepalives[chat_id]
-
-    keepalive._task.add_done_callback(forget)
 
 
 def format_code_interpreter_result(output) -> str:
@@ -1899,12 +1756,7 @@ async def process_chat_response(
     tasks,
     detach=True,
     waiting_heartbeat=None,
-    model_call_started_at: Optional[float] = None,
 ):
-    """model_call_started_at is the time.monotonic() at which form_data was
-    sent to the model. Without it the chat's cache keep-alive starts only at
-    the turn's first tool follow-up."""
-
     async def background_tasks_handler(turn: TurnEnd):
         message_map = turn.message_map
         message = message_map.get(metadata["message_id"]) if message_map else None
@@ -2583,10 +2435,6 @@ async def process_chat_response(
             await generation_heartbeat.start()
             preparing_tool_calls = PreparingToolCallsStatus(event_emitter)
 
-            await restart_cache_keepalive(
-                request, user, metadata.get("chat_id"), form_data, model_call_started_at
-            )
-
             try:
                 for event in events:
                     await event_emitter(
@@ -3016,10 +2864,6 @@ async def process_chat_response(
                         depends_list.append(deps)
 
                     close_open_reasoning_block(content_blocks)
-                    # Covers the runner wait too: a cold runner can take
-                    # minutes. The follow-up's keep-alive replaces this one;
-                    # the finally below clears the flag on Stop and errors.
-                    set_cache_keepalive_tools_running(metadata.get("chat_id"), True)
                     hide_runner_wait = None
                     try:
                         from open_webui.utils.skill_k8s_sandbox import (
@@ -3284,31 +3128,25 @@ async def process_chat_response(
                             message_id=metadata.get("message_id"),
                             followup="tools",
                         )
-                        followup_body = {
-                            "model": model_id,
-                            "stream": True,
-                            "tools": form_data["tools"],
-                            "messages": followup_messages,
-                            "metadata": {
-                                "chat_id": metadata.get("chat_id"),
-                                "message_id": metadata.get("message_id"),
-                                "session_id": metadata.get("session_id"),
-                                "user_id": metadata.get("user_id")
-                                or getattr(user, "id", None),
-                                "organization_id": metadata.get("organization_id"),
-                                "usage_source": metadata.get("usage_source")
-                                or "chat",
-                            },
-                        }
-                        await restart_cache_keepalive(
-                            request,
-                            user,
-                            metadata.get("chat_id"),
-                            followup_body,
-                            keepalive_clock(),
-                        )
                         res = await generate_chat_completion(
-                            request, followup_body, user
+                            request,
+                            {
+                                "model": model_id,
+                                "stream": True,
+                                "tools": form_data["tools"],
+                                "messages": followup_messages,
+                                "metadata": {
+                                    "chat_id": metadata.get("chat_id"),
+                                    "message_id": metadata.get("message_id"),
+                                    "session_id": metadata.get("session_id"),
+                                    "user_id": metadata.get("user_id")
+                                    or getattr(user, "id", None),
+                                    "organization_id": metadata.get("organization_id"),
+                                    "usage_source": metadata.get("usage_source")
+                                    or "chat",
+                                },
+                            },
+                            user,
                         )
 
                         if isinstance(res, StreamingResponse):
@@ -3757,7 +3595,6 @@ async def process_chat_response(
                     log.debug("Failed to emit generation error event", exc_info=True)
                 end_chat_trace(error=str(e))
             finally:
-                set_cache_keepalive_tools_running(metadata.get("chat_id"), False)
                 await waiting_heartbeat.stop(clear=True)
                 await preparing_tool_calls.clear()
                 await generation_heartbeat.stop(clear=True)

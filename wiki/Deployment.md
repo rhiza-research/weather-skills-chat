@@ -82,6 +82,18 @@ The app reaches models through OpenAI-compatible providers and Ollama servers, w
 
 The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` by default. In a chart deployment the chart therefore decides whether the Ollama API is on, and turning it on or off in the admin settings has no effect.
 
+## Prompt caching
+
+Calls to an Anthropic model on any OpenAI-compatible connection ask the provider to cache the conversation. A later call that starts with the same conversation reads it from the cache, which costs much less than sending it again. The provider keeps a cached conversation for five minutes from the start of the last call that wrote or read it.
+
+To keep a chat's cache from expiring, the app re-sends the chat's last model call and asks for no reply when 4.5 minutes pass without a new call. While the chat's reply is running, such as during a long tool run, it keeps doing this. After the reply has ended or been stopped, it does this at most a set number of times, while the user reads and answers. The chat's next model call starts the count again. A [[Scheduled Tasks]] run gets none after it ends.
+
+These keep-alive calls are never shown or saved in the chat. They are recorded as usage and count toward [[Usage and Spending Caps]].
+
+| Env var | Default | Effect |
+|-|-|-|
+| `CACHE_KEEPALIVE_IDLE_COUNT` | `3` | Keep-alive calls after a chat's reply ends. The default keeps the cache for about 18 minutes after the reply's last model call started. `0` sends none. |
+
 ## First admin
 
 When the app starts with no users and both `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` are set, it creates one account and makes it the owner of the platform organization. That account is the first platform admin, described on [[Organizations]]. Signup settings are not changed.
@@ -134,18 +146,6 @@ In one reply, the model can call tools, read their results, and call more, round
 | Env var | Default | Effect |
 |-|-|-|
 | `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |
-
-## Prompt cache keep-alive
-
-For an Anthropic model served through OpenRouter, the provider keeps a chat's conversation in its prompt cache for five minutes from the start of each model call, and a call that reads the cache costs much less than one that writes it. When 4.5 minutes pass after a chat's last model call started and no new call has started, the app re-sends that call and asks for no reply, which keeps the cache for another five minutes.
-
-While the chat's tools are running, the app keeps doing this for as long as they run. Otherwise, such as while the user reads the reply or after they stop it, it does this at most a set number of times. The chat's next model call takes over from there. A [[Scheduled Tasks]] run gets no keep-alives once it ends.
-
-A keep-alive's reply is never shown or saved in the chat. Keep-alives are recorded and count toward [[Usage and Spending Caps]], and appear in traces as described on [[Tracing]].
-
-| Env var | Default | Effect |
-|-|-|-|
-| `CACHE_KEEPALIVE_IDLE_COUNT` | `3` | Keep-alives sent while none of a chat's tools are running. The default keeps the cache for about 18 minutes after the last model call started. `0` sends none. |
 
 ## Other admin settings
 

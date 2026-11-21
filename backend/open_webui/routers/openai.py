@@ -43,6 +43,7 @@ from open_webui.utils.payload import (
 from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
 )
+from open_webui.utils import cache_keepalive
 from open_webui.utils.chat_timing import log_timing
 from open_webui.utils.langfuse_tracing import (
     MODEL_CALL_TRACING_APP,
@@ -53,6 +54,7 @@ from open_webui.utils.langfuse_tracing import (
 )
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.usage import bind_usage_to_response, resolve_usage_context
 from open_webui.utils.access_control import has_access
 
 
@@ -134,26 +136,9 @@ def openai_o1_o3_handler(payload):
     return payload
 
 
-def _is_openrouter_anthropic_model(model: Optional[str]) -> bool:
+def _is_anthropic_model(model: Optional[str]) -> bool:
     mid = (model or "").lower()
     return mid.startswith("anthropic/") or mid.startswith("claude") or "/claude" in mid
-
-
-def upstream_model_id_for(model_id: str, prefix_id: Optional[str]) -> str:
-    """The model id a connection's provider knows: its prefix removed."""
-    return model_id.replace(f"{prefix_id}.", "") if prefix_id else model_id
-
-
-def marks_anthropic_prompt_cache(
-    url: Optional[str], upstream_model_id: Optional[str]
-) -> bool:
-    """Whether enable_openrouter_prompt_caching adds cache_control markers to
-    a call to this upstream model on this connection URL."""
-    return (
-        bool(url)
-        and "openrouter.ai" in url
-        and _is_openrouter_anthropic_model(upstream_model_id)
-    )
 
 
 def _openrouter_prompt_cache_key(
@@ -178,40 +163,38 @@ def _openrouter_prompt_cache_key(
     return f"{user_id}:{day}"[:256]
 
 
-def enable_openrouter_prompt_caching(
+def enable_prompt_caching(
     url: Optional[str],
     payload: dict,
     metadata: Optional[dict] = None,
     user=None,
 ) -> dict:
-    """Enable OpenRouter prompt caching when applicable.
+    """Enable prompt caching when applicable.
 
-    Common:
+    OpenRouter connections:
     - ``session_id`` from chat_id for sticky provider routing within a chat
     - ``prompt_cache_key`` = ``{user_id}:{YYYY-MM-DD}`` so tools/system can
       be reused across that user's chats for the day (OpenAI cache routing)
 
-    Anthropic / Claude additionally:
+    Anthropic / Claude models, on any connection:
     - Top-level ``cache_control``
     - Explicit ``cache_control`` on the last tool and on the system message
 
     Copies tools/messages before mutating so shared ``form_data`` lists are
     not permanently altered mid-loop.
     """
-    if not url or "openrouter.ai" not in url:
-        return payload
+    if url and "openrouter.ai" in url:
+        chat_id = None
+        if isinstance(metadata, dict):
+            chat_id = metadata.get("chat_id") or metadata.get("session_id")
+        if chat_id:
+            payload["session_id"] = str(chat_id)[:256]
 
-    chat_id = None
-    if isinstance(metadata, dict):
-        chat_id = metadata.get("chat_id") or metadata.get("session_id")
-    if chat_id:
-        payload["session_id"] = str(chat_id)[:256]
+        cache_key = _openrouter_prompt_cache_key(metadata, user)
+        if cache_key:
+            payload["prompt_cache_key"] = cache_key
 
-    cache_key = _openrouter_prompt_cache_key(metadata, user)
-    if cache_key:
-        payload["prompt_cache_key"] = cache_key
-
-    if not marks_anthropic_prompt_cache(url, payload.get("model")):
+    if not _is_anthropic_model(payload.get("model")):
         return payload
 
     payload["cache_control"] = {"type": "ephemeral"}
@@ -874,6 +857,11 @@ class ProviderCall(NamedTuple):
     fallback_model_id: Optional[str]
     # The connection's name as users see it in errors.
     provider: str = ""
+    # When this is a chat's own reply call, not a task such as titling: its
+    # usage context, which its cache keep-alives are recorded with.
+    reply_usage: Optional[dict] = None
+    # Whether the call carries prompt cache markers.
+    cached: bool = False
 
     # loguru's exception tracebacks print this repr, so it must not show the key.
     def __repr__(self) -> str:
@@ -888,16 +876,12 @@ def prepare_provider_call(
     user,
     bypass_filter: bool,
     upstream_model_id: Optional[str] = None,
-    max_tokens: Optional[int] = None,
 ) -> ProviderCall:
     """Check the model and build the provider request for one model call.
 
     With ``upstream_model_id`` the call is built for that model instead of
     the model's base model, keeping the model's own prompt and parameters.
     That is how a call is resent to the model's backup.
-
-    With ``max_tokens`` the call's output budget is that, whatever the
-    model's parameters say.
 
     Synchronous: it reads the model row and the user's organizations, and
     serializes the whole conversation. Callers on the event loop run it in a
@@ -977,7 +961,7 @@ def prepare_provider_call(
 
     prefix_id = api_config.get("prefix_id", None)
     if prefix_id:
-        payload["model"] = upstream_model_id_for(payload["model"], prefix_id)
+        payload["model"] = payload["model"].replace(f"{prefix_id}.", "")
 
     # Add user info to the payload if the model is a pipeline
     if "pipeline" in model and model.get("pipeline"):
@@ -1004,17 +988,14 @@ def prepare_provider_call(
     if "max_tokens" in payload and "max_completion_tokens" in payload:
         del payload["max_tokens"]
 
-    if max_tokens is not None:
-        payload.pop("max_completion_tokens", None)
-        payload["max_tokens"] = max_tokens
-
     # Convert the modified body back to JSON
     if "logit_bias" in payload:
         payload["logit_bias"] = json.loads(
             convert_logit_bias_input_to_json(payload["logit_bias"])
         )
 
-    payload = enable_openrouter_prompt_caching(url, payload, metadata, user)
+    payload = enable_prompt_caching(url, payload, metadata, user)
+    cached = "cache_control" in payload
     payload = apply_provider_trace_fields(
         payload,
         provider_trace_style(metadata, api_config),
@@ -1039,6 +1020,12 @@ def prepare_provider_call(
         idx,
         fallback_model_id,
         connection_name(request, idx),
+        (
+            resolve_usage_context(request, form_data, user)
+            if chat_id and not metadata.get("task")
+            else None
+        ),
+        cached,
     )
 
 
@@ -1109,39 +1096,6 @@ def _reply_backups(request) -> Optional[set]:
         backups = set()
         state.provider_backups = backups
     return backups
-
-
-def prompt_caching_applies(request: Request, model_id: Optional[str]) -> bool:
-    """Whether this model's next call goes where it is marked for prompt caching.
-
-    True when the model's own connection is OpenRouter and its upstream model
-    is an Anthropic model, the calls enable_openrouter_prompt_caching marks.
-    False while the model's calls in this reply go to its backup, or would
-    because its provider is down: that is another connection's cache.
-
-    Synchronous: reads the model row.
-    """
-    if not model_id:
-        return False
-    model_info = Models.get_model_by_id(model_id)
-    base_model_id = base_model_id_for(model_info, model_id)
-    idx = connection_index_for_model(request, base_model_id)
-    if idx is None:
-        return False
-    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
-    prefix_id = api_config_for_index(request, idx).get("prefix_id")
-    if not marks_anthropic_prompt_cache(
-        url, upstream_model_id_for(base_model_id, prefix_id)
-    ):
-        return False
-    meta = getattr(model_info, "meta", None) if model_info else None
-    if getattr(meta, "fallback_model_id", None):
-        backups = getattr(getattr(request, "state", None), "provider_backups", None)
-        if backups and model_id in backups:
-            return False
-        if time.monotonic() < _provider_down_until.get(url, 0):
-            return False
-    return True
 
 
 @router.post("/chat/completions")
@@ -1232,31 +1186,25 @@ async def generate_chat_completion(
     raise primary_error or backup_error
 
 
-async def send_cache_keepalive(
-    request: Request, form_data: dict, user, bypass_filter: bool = False
-):
-    """Send a keep-alive call to the model's own provider once, with no output.
+def _cache_keepalive_sender(call: ProviderCall, user):
+    """Re-sends the call with no output, which reads its prompt cache, and
+    records the usage under the source ``cache_keepalive``."""
 
-    bypass_filter is handled as generate_chat_completion handles it, so the
-    request is built as the call being kept alive was.
+    async def send():
+        body = json.loads(call.payload)
+        body.pop("stream_options", None)
+        body.pop("max_completion_tokens", None)
+        body.update(stream=False, max_tokens=0)
+        if isinstance(body.get("trace"), dict):
+            body["trace"]["generation_name"] = "cache-keepalive"
+        response = await _send_provider_call(
+            call._replace(payload=json.dumps(body), reply_usage=None), user
+        )
+        await bind_usage_to_response(
+            response, {**call.reply_usage, "source": "cache_keepalive"}
+        )
 
-    Unlike generate_chat_completion it has no backup model, no retry, and its
-    failure never marks the provider down: a failed keep-alive only means the
-    next model call writes the cache instead of reading it.
-
-    Raises HTTPException when the call fails.
-    """
-    if BYPASS_MODEL_ACCESS_CONTROL:
-        bypass_filter = True
-    call = await asyncio.to_thread(
-        prepare_provider_call,
-        request,
-        form_data,
-        user,
-        bypass_filter,
-        max_tokens=0,
-    )
-    return await _send_provider_call(call, user)
+    return send
 
 
 async def _send_provider_call(call: ProviderCall, user):
@@ -1265,6 +1213,13 @@ async def _send_provider_call(call: ProviderCall, user):
     Raises HTTPException with the provider's status, or 500 when it could
     not be reached.
     """
+    if call.reply_usage is not None:
+        cache_keepalive.restart(
+            call.chat_id,
+            _cache_keepalive_sender(call, user) if call.cached else None,
+            call.reply_usage["source"],
+        )
+
     # No local for the key: loguru tracebacks print local values, but not call.key.
     url, payload, chat_id = call.url, call.payload, call.chat_id
 

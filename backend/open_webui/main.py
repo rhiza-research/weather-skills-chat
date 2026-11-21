@@ -1441,7 +1441,6 @@ async def chat_completion(
             )
             clock.mark("waiting_response_start")
 
-            model_call_started_at = time.monotonic()
             response = await chat_completion_handler(request, job_form_data, user)
             clock.mark("chat_completion_handler")
             log_timing(
@@ -1461,7 +1460,6 @@ async def chat_completion(
                 tasks,
                 detach=False,
                 waiting_heartbeat=waiting_heartbeat,
-                model_call_started_at=model_call_started_at,
             )
         except asyncio.CancelledError:
             log.warning(

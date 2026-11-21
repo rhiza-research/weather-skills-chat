@@ -25,11 +25,7 @@ from open_webui.utils.langfuse_tracing import (
     end_chat_trace,
     message_from_completion,
 )
-from open_webui.utils.middleware import (
-    process_chat_payload,
-    process_chat_response,
-    stop_cache_keepalive,
-)
+from open_webui.utils.middleware import process_chat_payload, process_chat_response
 from open_webui.utils.models import check_model_access, remember_catalog_model
 from open_webui.utils.usage import check_usage_caps
 
@@ -284,18 +280,9 @@ async def _stream_automation_chat(
                 request, form_data, user, metadata, model
             )
 
-            model_call_started_at = time.monotonic()
             response = await chat_completion_handler(request, form_data, user)
             result = await process_chat_response(
-                request,
-                response,
-                form_data,
-                user,
-                metadata,
-                model,
-                events,
-                None,
-                model_call_started_at=model_call_started_at,
+                request, response, form_data, user, metadata, model, events, None
             )
 
             # Streaming path schedules the tool loop as a background task — wait for it.
@@ -323,9 +310,6 @@ async def _stream_automation_chat(
         if isinstance(e, RunTimedOut):
             raise e
         raise
-    finally:
-        # Nobody answers a run, so its cache is not kept alive past the reply.
-        stop_cache_keepalive(chat_id)
     # The tool loop task ends the root span with its reply, and this call only
     # clears the trace from this context. With no task awaited it ends the
     # root unless something already did: on the non-streaming path with the

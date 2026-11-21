@@ -428,21 +428,6 @@ MODEL_CALL_TRACING_KEY = "model_call_tracing"
 MODEL_CALL_TRACING_APP = "app"
 MODEL_CALL_TRACING_OPENROUTER = "openrouter"
 
-# usage_source of a call that only keeps the provider's prompt cache alive.
-# Defined here, not in usage, because usage imports this module.
-CACHE_KEEPALIVE_USAGE_SOURCE = "cache_keepalive"
-
-
-def _generation_name(metadata: Optional[dict]) -> str:
-    """A model call's name in a trace; keep-alives are named apart from the
-    calls whose cache they keep."""
-    if (
-        isinstance(metadata, dict)
-        and metadata.get("usage_source") == CACHE_KEEPALIVE_USAGE_SOURCE
-    ):
-        return "cache-keepalive"
-    return "llm"
-
 _warned_tracing_styles: set = set()
 _warned_tracing_styles_lock = threading.Lock()
 
@@ -474,7 +459,7 @@ def _openrouter_trace_fields(
         "parent_span_id": parent_span_id if trace_id and parent_span_id else None,
         "environment": LANGFUSE_TRACING_ENVIRONMENT,
         "release": WEBUI_IMAGE_TAG or None,
-        "generation_name": _generation_name(metadata),
+        "generation_name": "llm",
         "chat_id": source.get("chat_id"),
         "message_id": source.get("message_id"),
         "model": source.get("model"),
@@ -555,22 +540,6 @@ def _generation_stack() -> list:
     return stack
 
 
-def own_generation_stack() -> None:
-    """Give the current context its own empty generation stack.
-
-    A task copies its parent's context, and with it the parent's stack list.
-    A task whose model call runs alongside the parent's work calls this
-    first, so the two never end each other's generations.
-    """
-    _generation_stack_var.set([])
-
-
-def end_open_generations(error: Any) -> None:
-    """End every generation still open in this context with an error."""
-    while _generation_stack():
-        end_generation(error=error)
-
-
 def start_generation(form_data: Optional[dict]) -> Any:
     trace = current_trace()
     if not trace:
@@ -608,7 +577,7 @@ def start_generation(form_data: Optional[dict]) -> Any:
         metadata["tool_count"] = len(tool_names)
     generation = _safe_call(
         trace.start_observation,
-        name=_generation_name(form_data.get("metadata")),
+        name="llm",
         as_type="generation",
         model=form_data.get("model"),
         input=truncate_payload(
@@ -906,7 +875,7 @@ def _provider_response_failure(response: Any) -> Optional[str]:
     return None
 
 
-def record_provider_call_error(style: str, error: str, name: str) -> None:
+def record_provider_call_error(style: str, error: str) -> None:
     """Record a failed provider-traced call as an ERROR span under the root.
 
     The provider may never see or record a call that fails here, so without
@@ -918,7 +887,7 @@ def record_provider_call_error(style: str, error: str, name: str) -> None:
         return
     span = _safe_call(
         trace.start_observation,
-        name=name,
+        name="llm",
         as_type="span",
         level="ERROR",
         status_message=error,
@@ -937,15 +906,14 @@ async def observe_generation(
     a generation here.
     """
     if style != MODEL_CALL_TRACING_APP:
-        name = _generation_name((form_data or {}).get("metadata"))
         try:
             response = await coro
         except Exception as e:
-            record_provider_call_error(style, _error_text(e), name=name)
+            record_provider_call_error(style, _error_text(e))
             raise
         failure = _provider_response_failure(response)
         if failure is not None:
-            record_provider_call_error(style, failure, name=name)
+            record_provider_call_error(style, failure)
         return response
     start_generation(form_data)
     try:
