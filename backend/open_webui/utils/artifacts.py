@@ -642,7 +642,7 @@ def _provenance_for_entry(path: Path, kind: str) -> dict | None:
     return None
 
 
-@functools.lru_cache(maxsize=50_000)
+@functools.lru_cache(maxsize=500_000)
 def _provenance_names(path: str, kind: str, signature: tuple | None) -> tuple | None:
     """Crumbs and branch names of one artifact. The signature (mtime, size of the file
     holding the history) only keys the cache, so a rewritten artifact is read again."""
