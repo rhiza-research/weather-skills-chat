@@ -122,7 +122,7 @@
 		!file.provenance_branches?.length &&
 		(file.kind === 'html' ||
 			file.kind === 'zarr' ||
-			(file.kind === 'image' && /\.png$/i.test(file.path)));
+			(file.kind === 'image' && /\.(png|gif)$/i.test(file.path)));
 	$: shownBranches = file?.provenance_branches?.length
 		? file.provenance_branches
 		: ($askedProvenance[askedKey] ?? []);
