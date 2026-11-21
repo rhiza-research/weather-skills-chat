@@ -699,6 +699,18 @@ export const convertOpenAIChats = (_chats) => {
 	return chats;
 };
 
+const SAFE_LINK_PROTOCOLS = ['http:', 'https:', 'mailto:'];
+
+/** The URL if following it cannot run script: http(s), mailto, or a relative path. */
+export const safeLinkUrl = (url: string | null | undefined): string | undefined => {
+	try {
+		return SAFE_LINK_PROTOCOLS.includes(new URL(url ?? '').protocol) ? (url ?? undefined) : undefined;
+	} catch {
+		// No scheme, so the browser resolves it against this app's own origin.
+		return url ?? undefined;
+	}
+};
+
 export const isValidHttpUrl = (string: string) => {
 	let url;
 

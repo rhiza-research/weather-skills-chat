@@ -721,7 +721,6 @@ async def get_admin_config(request: Request, user=Depends(get_admin_user)):
         "ENABLE_COMMUNITY_SHARING": request.app.state.config.ENABLE_COMMUNITY_SHARING,
         "ENABLE_MESSAGE_RATING": request.app.state.config.ENABLE_MESSAGE_RATING,
         "ENABLE_CHANNELS": request.app.state.config.ENABLE_CHANNELS,
-        "ENABLE_USER_WEBHOOKS": request.app.state.config.ENABLE_USER_WEBHOOKS,
         "ENABLE_OAUTH_SIGNUP": request.app.state.config.ENABLE_OAUTH_SIGNUP,
         "OAUTH_MERGE_ACCOUNTS_BY_EMAIL": request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
         "OAUTH_ALLOWED_DOMAINS": _oauth_allowed_domains_csv(
@@ -742,7 +741,6 @@ class AdminConfig(BaseModel):
     ENABLE_COMMUNITY_SHARING: bool
     ENABLE_MESSAGE_RATING: bool
     ENABLE_CHANNELS: bool
-    ENABLE_USER_WEBHOOKS: bool
     ENABLE_OAUTH_SIGNUP: bool = False
     OAUTH_MERGE_ACCOUNTS_BY_EMAIL: bool = False
     OAUTH_ALLOWED_DOMAINS: str = "*"
@@ -780,8 +778,6 @@ async def update_admin_config(
     )
     request.app.state.config.ENABLE_MESSAGE_RATING = form_data.ENABLE_MESSAGE_RATING
 
-    request.app.state.config.ENABLE_USER_WEBHOOKS = form_data.ENABLE_USER_WEBHOOKS
-
     request.app.state.config.ENABLE_OAUTH_SIGNUP = form_data.ENABLE_OAUTH_SIGNUP
     request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL = (
         form_data.OAUTH_MERGE_ACCOUNTS_BY_EMAIL
@@ -802,7 +798,6 @@ async def update_admin_config(
         "JWT_EXPIRES_IN": request.app.state.config.JWT_EXPIRES_IN,
         "ENABLE_COMMUNITY_SHARING": request.app.state.config.ENABLE_COMMUNITY_SHARING,
         "ENABLE_MESSAGE_RATING": request.app.state.config.ENABLE_MESSAGE_RATING,
-        "ENABLE_USER_WEBHOOKS": request.app.state.config.ENABLE_USER_WEBHOOKS,
         "ENABLE_OAUTH_SIGNUP": request.app.state.config.ENABLE_OAUTH_SIGNUP,
         "OAUTH_MERGE_ACCOUNTS_BY_EMAIL": request.app.state.config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
         "OAUTH_ALLOWED_DOMAINS": _oauth_allowed_domains_csv(
