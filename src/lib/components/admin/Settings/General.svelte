@@ -639,14 +639,6 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						<Switch bind:state={adminConfig.ENABLE_MESSAGE_RATING} />
 					</div>
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center text-xs font-medium">
-							{$i18n.t('User Webhooks')}
-						</div>
-
-						<Switch bind:state={adminConfig.ENABLE_USER_WEBHOOKS} />
-					</div>
-
 					<div class="mb-2.5 w-full justify-between">
 						<div class="mb-1 text-xs font-medium">{$i18n.t('Rendering Prompt')}</div>
 						<div class="text-xs text-gray-500 mb-2">

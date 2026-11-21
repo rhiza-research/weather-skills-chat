@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createEventDispatcher, getContext } from 'svelte';
-	import { formatFileSize } from '$lib/utils';
+	import { formatFileSize, safeLinkUrl } from '$lib/utils';
 
 	import FileItemModal from './FileItemModal.svelte';
 	import GarbageBin from '../icons/GarbageBin.svelte';
@@ -51,12 +51,9 @@
 		if (item?.file?.data?.content) {
 			showModal = !showModal;
 		} else {
-			if (url) {
-				if (type === 'file') {
-					window.open(`${url}/content`, '_blank').focus();
-				} else {
-					window.open(`${url}`, '_blank').focus();
-				}
+			const target = url ? safeLinkUrl(type === 'file' ? `${url}/content` : url) : undefined;
+			if (target) {
+				window.open(target, '_blank')?.focus();
 			}
 		}
 

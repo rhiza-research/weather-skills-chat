@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
 	import Fuse from 'fuse.js';
 
 	import dayjs from 'dayjs';
@@ -7,7 +6,7 @@
 	dayjs.extend(relativeTime);
 
 	import { createEventDispatcher, tick, getContext, onMount } from 'svelte';
-	import { removeLastWordFromString, isValidHttpUrl } from '$lib/utils';
+	import { removeLastWordFromString } from '$lib/utils';
 	import { knowledge } from '$lib/stores';
 	import { isCatalogEnabled } from '$lib/utils/catalog';
 
@@ -45,28 +44,6 @@
 
 	const confirmSelect = async (item) => {
 		dispatch('select', item);
-
-		prompt = removeLastWordFromString(prompt, command);
-		const chatInputElement = document.getElementById('chat-input');
-
-		await tick();
-		chatInputElement?.focus();
-		await tick();
-	};
-
-	const confirmSelectWeb = async (url) => {
-		dispatch('url', url);
-
-		prompt = removeLastWordFromString(prompt, command);
-		const chatInputElement = document.getElementById('chat-input');
-
-		await tick();
-		chatInputElement?.focus();
-		await tick();
-	};
-
-	const confirmSelectYoutube = async (url) => {
-		dispatch('youtube', url);
 
 		prompt = removeLastWordFromString(prompt, command);
 		const chatInputElement = document.getElementById('chat-input');
@@ -166,7 +143,7 @@
 	};
 </script>
 
-{#if filteredItems.length > 0 || prompt.split(' ')?.at(0)?.substring(1).startsWith('http')}
+{#if filteredItems.length > 0}
 	<div
 		id="commands-container"
 		class="px-2 mb-2 text-left w-full absolute bottom-0 left-0 right-0 z-10"
@@ -273,57 +250,6 @@
 							</div> -->
 					{/each}
 
-					{#if prompt
-						.split(' ')
-						.some((s) => s.substring(1).startsWith('https://www.youtube.com') || s
-									.substring(1)
-									.startsWith('https://youtu.be'))}
-						<button
-							class="px-3 py-1.5 rounded-xl w-full text-left bg-gray-50 dark:bg-gray-850 dark:text-gray-100 selected-command-option-button"
-							type="button"
-							on:click={() => {
-								const url = prompt.split(' ')?.at(0)?.substring(1);
-								if (isValidHttpUrl(url)) {
-									confirmSelectYoutube(url);
-								} else {
-									toast.error(
-										$i18n.t(
-											'Oops! Looks like the URL is invalid. Please double-check and try again.'
-										)
-									);
-								}
-							}}
-						>
-							<div class=" font-medium text-black dark:text-gray-100 line-clamp-1">
-								{prompt.split(' ')?.at(0)?.substring(1)}
-							</div>
-
-							<div class=" text-xs text-gray-600 line-clamp-1">{$i18n.t('Youtube')}</div>
-						</button>
-					{:else if prompt.split(' ')?.at(0)?.substring(1).startsWith('http')}
-						<button
-							class="px-3 py-1.5 rounded-xl w-full text-left bg-gray-50 dark:bg-gray-850 dark:text-gray-100 selected-command-option-button"
-							type="button"
-							on:click={() => {
-								const url = prompt.split(' ')?.at(0)?.substring(1);
-								if (isValidHttpUrl(url)) {
-									confirmSelectWeb(url);
-								} else {
-									toast.error(
-										$i18n.t(
-											'Oops! Looks like the URL is invalid. Please double-check and try again.'
-										)
-									);
-								}
-							}}
-						>
-							<div class=" font-medium text-black dark:text-gray-100 line-clamp-1">
-								{prompt.split(' ')?.at(0)?.substring(1)}
-							</div>
-
-							<div class=" text-xs text-gray-600 line-clamp-1">{$i18n.t('Web')}</div>
-						</button>
-					{/if}
 				</div>
 			</div>
 		</div>

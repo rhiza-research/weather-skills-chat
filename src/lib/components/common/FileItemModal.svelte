@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getContext, onMount } from 'svelte';
-	import { formatFileSize, getLineCount } from '$lib/utils';
+	import { formatFileSize, getLineCount, safeLinkUrl } from '$lib/utils';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
@@ -38,11 +38,12 @@
 							href="#"
 							class="hover:underline line-clamp-1"
 							on:click|preventDefault={() => {
-								if (!isPDF && item.url) {
-									window.open(
-										item.type === 'file' ? `${item.url}/content` : `${item.url}`,
-										'_blank'
-									);
+								const target =
+									!isPDF && item.url
+										? safeLinkUrl(item.type === 'file' ? `${item.url}/content` : item.url)
+										: undefined;
+								if (target) {
+									window.open(target, '_blank');
 								}
 							}}
 						>
