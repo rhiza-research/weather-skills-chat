@@ -33,17 +33,24 @@ ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# The browser's Python packages change only with the script or the lockfile, so they are fetched
+# in a layer of their own, not on every frontend change. They are set aside so the static copy
+# below does not replace them.
+COPY scripts/prepare-pyodide.js ./scripts/
+RUN mkdir -p static/pyodide && npm run pyodide:fetch && mv static/pyodide /pyodide && rm -rf static
+
 # Only the files npm run build reads, so a change elsewhere does not rerun the build. The base
 # stage takes CHANGELOG.md from this stage.
 COPY svelte.config.js vite.config.ts tsconfig.json postcss.config.js tailwind.config.js CHANGELOG.md .gitignore ./
-COPY scripts/prepare-pyodide.js scripts/boot-manifest.mjs scripts/precompress.mjs ./scripts/
+COPY scripts/boot-manifest.mjs scripts/precompress.mjs ./scripts/
 COPY src ./src
 COPY static ./static
+RUN mkdir -p static/pyodide && cp -a /pyodide/. static/pyodide/
 # Tailwind scans the repository, and generates rules for class names it finds in swagger-ui's files,
 # so they are copied at the same path to keep the built CSS the same.
 COPY backend/open_webui/static/swagger-ui ./backend/open_webui/static/swagger-ui
 ENV NODE_OPTIONS=--max-old-space-size=4096
-RUN npm run build
+RUN npm run build:app
 
 ######## WebUI backend ########
 FROM python:3.11-slim-bookworm AS base
@@ -174,7 +181,7 @@ RUN export UV_PYTHON_DOWNLOADS=never && \
     mkdir -p /app/backend/cache /app/backend/data && \
     pip3 install --no-cache-dir uv && \
     uv venv --python /usr/local/bin/python3 "$VIRTUAL_ENV" && \
-    uv sync --frozen --no-dev --no-install-project --project /app \
+    uv sync --frozen --no-dev --no-install-project --no-cache --project /app \
       --no-install-package torch \
       --no-install-package torchvision \
       --no-install-package torchaudio && \

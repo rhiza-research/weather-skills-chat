@@ -2,6 +2,9 @@
 	import { getContext } from 'svelte';
 	import Collapsible from '../common/Collapsible.svelte';
 	import Spinner from '../common/Spinner.svelte';
+	import ChevronDown from '../icons/ChevronDown.svelte';
+	import ChevronRight from '../icons/ChevronRight.svelte';
+	import ProvenanceSteps from './ProvenanceSteps.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -51,32 +54,6 @@
 		opened = { ...opened, [branchIdx]: true };
 	};
 
-	const formatArgValue = (value: any): string => {
-		if (value === null || value === undefined) return 'null';
-		if (typeof value === 'string') {
-			if (value === '') return '""';
-			return value;
-		}
-		if (typeof value === 'number' || typeof value === 'boolean') {
-			return String(value);
-		}
-		try {
-			return JSON.stringify(value, null, 2);
-		} catch {
-			return String(value);
-		}
-	};
-
-	const argEntries = (args: any): Array<[string, any]> => {
-		if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
-		return Object.entries(args);
-	};
-
-	const inputList = (input: any): any[] => {
-		if (!input) return [];
-		return Array.isArray(input) ? input : [input];
-	};
-
 	const crumbLabel = (
 		branch: (typeof branches)[number],
 		branchIdx: number,
@@ -104,11 +81,18 @@
 				<Collapsible
 					title={null}
 					open={opened[branchIdx] ?? false}
-					chevron={true}
 					buttonClassName="w-full min-w-0 text-[10px] leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
 					className="w-full min-w-0"
-					on:change={(e) => e.detail && failed && load()}
+					on:change={(e) => {
+						opened[branchIdx] = e.detail;
+						e.detail && failed && load();
+					}}
 				>
+					{#if opened[branchIdx]}
+						<ChevronDown className="size-3 shrink-0 self-center mr-1 text-gray-400" />
+					{:else}
+						<ChevronRight className="size-3 shrink-0 self-center mr-1 text-gray-400" />
+					{/if}
 					<span class="min-w-0 flex-1 truncate text-left" title={branchTitle}>{branchTitle}</span>
 					{#if pressed === branchIdx}
 						<div class="shrink-0 self-start translate-y-0.5 mx-1">
@@ -121,69 +105,7 @@
 						{:else if steps.length === 0}
 							<div class="text-[10px] text-gray-400">{$i18n.t('No steps recorded.')}</div>
 						{:else}
-							{#each steps as step, stepIdx}
-								<Collapsible
-									title="{stepIdx + 1}. {step.skill}{step.version ? ` · ${step.version}` : ''}"
-									open={false}
-									chevron={true}
-									buttonClassName="w-full text-[10px] text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition"
-									className="w-full"
-								>
-									<div class="mb-1.5 ml-1 space-y-1.5" slot="content">
-										{#if argEntries(step.args).length}
-											<div>
-												<div class="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
-													{$i18n.t('Arguments')}
-												</div>
-												<dl class="space-y-0.5">
-													{#each argEntries(step.args) as [key, value]}
-														<div class="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-x-2 text-[10px]">
-															<dt class="truncate text-gray-500 dark:text-gray-400" title={key}>
-																{key}
-															</dt>
-															<dd
-																class="m-0 whitespace-pre-wrap break-words text-gray-700 dark:text-gray-200 font-mono"
-															>
-																{formatArgValue(value)}
-															</dd>
-														</div>
-													{/each}
-												</dl>
-											</div>
-										{:else}
-											<div class="text-[10px] text-gray-400">{$i18n.t('No arguments.')}</div>
-										{/if}
-
-										{#if inputList(step.input).length}
-											<div>
-												<div class="text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">
-													{$i18n.t('Inputs')}
-												</div>
-												<ul class="space-y-1">
-													{#each inputList(step.input) as inp}
-														<li class="text-[10px] text-gray-700 dark:text-gray-200">
-															<span class="font-mono break-all">{inp?.basename || '—'}</span>
-															{#if inp?.history?.length}
-																<div class="mt-0.5 pl-2 border-l border-gray-200 dark:border-gray-700">
-																	<svelte:self
-																		branches={[
-																			{
-																				label: inp.basename || null,
-																				steps: inp.history,
-																				crumbs: inp.history.map((s) => s?.skill).filter(Boolean)
-																			}
-																		]}
-																	/>
-																</div>
-															{/if}
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-									</div>
-								</Collapsible>
-							{/each}
+							<ProvenanceSteps {steps} />
 						{/if}
 					</div>
 				</Collapsible>

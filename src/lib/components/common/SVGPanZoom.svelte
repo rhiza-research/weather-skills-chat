@@ -49,7 +49,7 @@
 
 <div bind:this={sceneParentElement} class="relative {className}">
 	<div bind:this={sceneElement} class="flex h-full max-h-full justify-center items-center">
-		{@html svg}
+		{@html DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })}
 	</div>
 
 	{#if content}

@@ -8,36 +8,42 @@ DEPENDS_ON_PARAM = "depends_on"
 DISPLAY_PARAM = "display"
 ACTIVITY_PARAM = "activity"
 
+# These parameters are added to every tool, so every model call carries one copy per
+# tool. Their descriptions stay short; TOOL_CALL_GUIDANCE explains them once in the
+# system prompt.
 DEPENDS_ON_SCHEMA = {
     "type": "array",
     "items": {"type": "string"},
-    "description": (
-        "Optional. Function names or tool_call ids in this same turn that must "
-        "finish before this call starts. Omit to run in parallel with sibling calls. "
-        "If this call needs another call's output, either set depends_on or wait "
-        "and invoke it in a later turn."
-    ),
+    "description": "Optional. Calls in this turn that must finish first.",
 }
 
 
 DISPLAY_SCHEMA = {
     "type": "string",
-    "description": (
-        "Optional. A short phrase shown to the user instead of the function name "
-        'while this call runs, such as "Checking the most recent available date '
-        'for IMERG" or "Grouping the data into weekly bins". Omit to show the '
-        "function name."
-    ),
+    "description": "Optional. Short phrase shown to the user while this call runs.",
 }
 
 ACTIVITY_SCHEMA = {
     "type": "string",
-    "description": (
-        "Optional. When several tools run in the same turn, a short phrase for "
-        'the whole batch, such as "Fetching IMERG and clipping to Kenya". '
-        "Set it on one of the calls. Each call should still set `display`."
-    ),
+    "description": "Optional. Short phrase for this turn's whole batch of calls.",
 }
+
+TOOL_CALL_GUIDANCE = (
+    "Tool calls in the same turn start at the same moment, regardless of the order "
+    "you list them. Before sending several calls together, check each call's input "
+    "paths: if any of them is the `-o` output of another call in the same turn, that "
+    "call must set `depends_on` to the writer's tool_call id, or go in a later turn. "
+    "This applies to every reader, including inspect_zarr, verify, concat and plot. "
+    "Two calls must never write the same `-o` path in one turn. Omit `depends_on` "
+    "only for calls that read files that already existed before this turn.\n\n"
+    "When you call a tool, set its optional `display` argument to a short phrase the "
+    "user will see instead of the function name while the call runs, such as "
+    '"Checking the most recent available date for IMERG" or "Grouping the data into '
+    'weekly bins". Omit `display` to show the function name. When you call several '
+    "tools in one turn, also set optional `activity` on one of those calls to a short "
+    'phrase for the whole batch, such as "Fetching IMERG and clipping to Kenya"; '
+    "each call should still set `display`."
+)
 
 # These tools read files other same-turn calls may still be writing.
 SERIAL_AFTER_SIBLINGS = frozenset({"display_image", "read_artifact"})

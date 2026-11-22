@@ -408,7 +408,7 @@ export const getAllTags = async (token: string) => {
 			return res.json();
 		})
 		.then((json) => {
-			return json;
+			return json.sort((a, b) => a.name.localeCompare(b.name));
 		})
 		.catch((err) => {
 			error = err;
@@ -533,7 +533,7 @@ export const getChatById = async (token: string, id: string, priority?: 'high' |
 export const getChatByShareId = async (token: string, share_id: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/share/${share_id}`, {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/shares/${share_id}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -774,6 +774,19 @@ export type ShareLink = { id: string; created_at: number; expires_at: number | n
 
 export const getChatShareLinks = async (token: string, id: string): Promise<ShareLink[]> => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/shares`, {
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) throw (await parseApiError(res)).detail;
+	return res.json();
+};
+
+export const deleteChatShareLink = async (token: string, id: string, shareId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/shares/${shareId}`, {
+		method: 'DELETE',
 		headers: {
 			Accept: 'application/json',
 			...organizationHeaders(),

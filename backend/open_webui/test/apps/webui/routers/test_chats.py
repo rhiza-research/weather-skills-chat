@@ -83,7 +83,7 @@ class TestChats(AbstractPostgresTest):
         self.test_get_session_user_chat_list()
 
     def test_get_user_archived_chats(self):
-        self.chats.archive_all_chats_by_user_id("2")
+        self.chats.archive_all_chats_by_user_id("2", "2")
         from open_webui.internal.db import Session
 
         Session.commit()

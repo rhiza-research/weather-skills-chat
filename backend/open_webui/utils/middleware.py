@@ -28,7 +28,6 @@ from open_webui.models.users import Users
 from open_webui.socket.main import (
     get_event_call,
     get_event_emitter,
-    get_active_status_by_user_id,
 )
 from open_webui.routers.tasks import (
     generate_queries,
@@ -41,9 +40,6 @@ from open_webui.routers.pipelines import (
     process_pipeline_inlet_filter,
     process_pipeline_outlet_filter,
 )
-
-from open_webui.utils.webhook import post_webhook
-
 
 from open_webui.models.users import UserModel
 from open_webui.models.functions import Functions
@@ -71,7 +67,7 @@ from open_webui.utils.misc import (
 from open_webui.utils.payload import (
     FEEDBACK_LINK_PROMPT,
     inject_headless_context,
-    inject_rendering_prompt,
+    append_system_prompt,
 )
 from open_webui.utils.tools import get_tools
 from open_webui.utils.chat_timing import StageClock, log_timing
@@ -717,7 +713,9 @@ async def chat_completion_tools_handler(
                         )
                     else:
                         lf_tool = start_tool_observation(
-                            tool_function_name, tool_function_params
+                            tool_function_name,
+                            tool_function_params,
+                            version=tool.get("version"),
                         )
                         try:
                             tool_function = tool["callable"]
@@ -1382,11 +1380,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 if context.secret_hint:
                     hints.append(context.secret_hint)
                 # Help the model answer "what tools do you have?" without guessing.
-                tool_names = [
+                # Sorted so the system message, and the provider's prompt cache,
+                # do not depend on the order the client sends tool_ids in.
+                tool_names = sorted(
                     (tool.get("spec") or {}).get("name")
                     for tool in tools_dict.values()
                     if (tool.get("spec") or {}).get("name")
-                ]
+                )
                 if tool_names:
                     shown = ", ".join(f"`{n}`" for n in tool_names)
                     hints.append(
@@ -1396,23 +1396,17 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                         "`list_available_tools` (scope=`chat` for this chat, "
                         "scope=`all` for everything they can access)."
                     )
-                    hints.append(
-                        "Tool calls issued in the same turn run in parallel. "
-                        "If a call needs another call's output, set its "
-                        "`depends_on` argument to that sibling's function name "
-                        "or tool_call id, or wait and call it in a later turn. "
-                        "Omit `depends_on` for independent work."
-                    )
-                    hints.append(
-                        "When you call a tool, set its optional `display` argument "
-                        "to a short phrase the user will see instead of the function "
-                        'name, such as "Checking the most recent available date for '
-                        'IMERG" or "Grouping the data into weekly bins". Omit '
-                        "`display` to show the function name. When you call several "
-                        "tools in one turn, also set optional `activity` on one of "
-                        "those calls to a short phrase for the whole batch, such as "
-                        '"Fetching IMERG and clipping to Kenya".'
-                    )
+                    # The per-tool parameter descriptions are short; these explain them once.
+                    from open_webui.utils.tool_parallel import TOOL_CALL_GUIDANCE
+
+                    hints.append(TOOL_CALL_GUIDANCE)
+                    if any(
+                        "argv" in (((tool.get("spec") or {}).get("parameters") or {}).get("properties") or {})
+                        for tool in tools_dict.values()
+                    ):
+                        from open_webui.utils.skills import skill_argument_guidance
+
+                        hints.append(skill_argument_guidance())
                     from open_webui.env import tool_runner_enabled
 
                     if tool_runner_enabled():
@@ -1544,13 +1538,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Universal rendering rules for every chat (Markdown escape guidance, etc.).
     try:
-        form_data = inject_rendering_prompt(
+        form_data = append_system_prompt(
             form_data, request.app.state.config.RENDERING_PROMPT
         )
         if not metadata.get("headless"):
-            form_data = inject_rendering_prompt(form_data, FEEDBACK_LINK_PROMPT)
+            form_data = append_system_prompt(form_data, FEEDBACK_LINK_PROMPT)
     except Exception:
-        log.debug("Rendering prompt inject skipped", exc_info=True)
+        log.debug("Rendering/feedback prompt append skipped", exc_info=True)
 
     try:
         from open_webui.utils.preferences import inject_preferences
@@ -1902,22 +1896,6 @@ async def process_chat_response(
                             },
                         }
                     )
-
-                    # Send a webhook notification if the user is not active
-                    if get_active_status_by_user_id(user.id) is None:
-                        webhook_url = Users.get_user_webhook_url_by_id(user.id)
-                        if webhook_url:
-                            post_webhook(
-                                request.app.state.WEBUI_NAME,
-                                webhook_url,
-                                f"{title} - {request.app.state.config.WEBUI_URL}/c/{metadata['chat_id']}\n\n{content}",
-                                {
-                                    "action": "chat",
-                                    "message": content,
-                                    "title": title,
-                                    "url": f"{request.app.state.config.WEBUI_URL}/c/{metadata['chat_id']}",
-                                },
-                            )
 
                     await background_tasks_handler(turn)
 
@@ -2999,7 +2977,9 @@ async def process_chat_response(
 
                                 else:
                                     lf_tool = start_tool_observation(
-                                        tool_name, tool_function_params
+                                        tool_name,
+                                        tool_function_params,
+                                        version=tool.get("version"),
                                     )
                                     try:
                                         tool_function = tool["callable"]
@@ -3483,22 +3463,6 @@ async def process_chat_response(
                     data["error"] = {"content": followup_error}
                 elif not saved:
                     data["error"] = {"content": REPLY_SAVE_FAILED_MESSAGE}
-
-                # Send a webhook notification if the user is not active
-                if get_active_status_by_user_id(user.id) is None:
-                    webhook_url = Users.get_user_webhook_url_by_id(user.id)
-                    if webhook_url:
-                        post_webhook(
-                            request.app.state.WEBUI_NAME,
-                            webhook_url,
-                            f"{title} - {request.app.state.config.WEBUI_URL}/c/{metadata['chat_id']}\n\n{content}",
-                            {
-                                "action": "chat",
-                                "message": content,
-                                "title": title,
-                                "url": f"{request.app.state.config.WEBUI_URL}/c/{metadata['chat_id']}",
-                            },
-                        )
 
                 await event_emitter(
                     {

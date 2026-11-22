@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import functools
 import io
 import json
@@ -517,6 +518,19 @@ def provenance_for_png(path: Path) -> dict | None:
     return _provenance_payload(_parse_history_chains_from_text_map(texts))
 
 
+def provenance_for_gif(path: Path) -> dict | None:
+    """A GIF's comment block holds the bare JSON chain, with no key name."""
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            comment = img.info.get("comment")
+        texts = {"weather_skills_history": comment.decode("utf-8")} if comment else {}
+    except Exception:
+        return None
+    return _provenance_payload(_parse_history_chains_from_text_map(texts))
+
+
 # Provenance <meta> tags sit in the page head; an embedded Plotly page can be
 # many MB after it, so only the start of the file is read.
 HTML_HEAD_MAX_BYTES = 1024 * 1024
@@ -634,11 +648,27 @@ def provenance_crumbs_for_path(path: Path) -> list[str]:
 def _provenance_for_entry(path: Path, kind: str) -> dict | None:
     if kind == "image" and path.suffix.lower() == ".png":
         return provenance_for_png(path)
+    if kind == "image" and path.suffix.lower() == ".gif":
+        return provenance_for_gif(path)
     if kind == "html":
         return provenance_for_html(path)
     if kind == "zarr":
         return provenance_for_zarr(path)
     return None
+
+
+@functools.lru_cache(maxsize=500_000)
+def _provenance_names(path: str, kind: str, signature: tuple | None) -> tuple | None:
+    """Crumbs and branch names of one artifact. The signature (mtime, size of the file
+    holding the history) only keys the cache, so a rewritten artifact is read again."""
+    prov = _provenance_for_entry(Path(path), kind)
+    return prov and (
+        prov.get("crumbs") or [],
+        [
+            {"label": b.get("label"), "crumbs": b.get("crumbs") or []}
+            for b in prov.get("branches") or []
+        ],
+    )
 
 
 def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
@@ -654,11 +684,13 @@ def artifact_provenance(chat_id: str, rel_path: str) -> dict | None:
     return _provenance_for_entry(path, kind)
 
 
+
 def list_artifacts(
     chat_id: str,
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """List a chat's sandbox. Blocks on JuiceFS; async code uses list_artifacts_async.
 
@@ -670,9 +702,15 @@ def list_artifacts(
     set. None lists every level.
     provenance: read provenance from images, HTML pages and Zarr stores. Each
     read opens the file, so turning it off makes large listings much cheaper.
+    provenance_depth: read provenance only this many folder levels below path,
+    or below the root, counted like depth. Deeper entries are listed without
+    it; artifact_provenance reads one on request. None reads every level,
+    which parses each file's whole history: seconds on a large chat.
     """
     if depth is not None and depth < 1:
         raise ValueError("depth must be at least 1")
+    if provenance_depth is not None and provenance_depth < 1:
+        raise ValueError("provenance_depth must be at least 1")
     t0 = time.perf_counter()
     root = chat_sandbox(chat_id)
     prefix = path or ""
@@ -711,18 +749,23 @@ def list_artifacts(
                 # Lets an open preview notice the file was rewritten.
                 "modified": int(stat.st_mtime * 1000) if stat else None,
             }
-            prov = _provenance_for_entry(path, kind) if provenance else None
-            if prov:
+            level = rel.count("/") + 1 - base_levels
+            names = None
+            if provenance and (provenance_depth is None or level <= provenance_depth):
+                history = stat
+                if kind == "zarr":
+                    for name in ("zarr.json", ".zattrs"):
+                        with contextlib.suppress(OSError):
+                            history = (path / name).stat()
+                            break
+                signature = history and (history.st_mtime_ns, history.st_size)
+                names = _provenance_names(str(path), kind, signature)
+            if names:
                 # Names only: full steps grow with every step and the list is
                 # pushed to every watching tab. artifact_provenance reads them.
-                item["provenance"] = prov.get("crumbs") or []
-                item["provenance_branches"] = [
-                    {"label": branch.get("label"), "crumbs": branch.get("crumbs") or []}
-                    for branch in prov.get("branches") or []
-                ]
+                item["provenance"], item["provenance_branches"] = names
             # Walk directories, but do not descend into zarr stores.
             descend = path.is_dir() and kind != "zarr"
-            level = rel.count("/") + 1 - base_levels
             if descend and depth is not None and level >= depth:
                 item["truncated"] = True
                 descend = False
@@ -738,6 +781,7 @@ def list_artifacts(
         n=len(entries),
         depth=depth,
         provenance=provenance,
+        provenance_depth=provenance_depth,
     )
     return entries
 
@@ -747,10 +791,16 @@ async def list_artifacts_async(
     path: str | None = None,
     depth: int | None = None,
     provenance: bool = True,
+    provenance_depth: int | None = 1,
 ) -> list[dict]:
     """list_artifacts on a worker thread, so the walk never blocks the event loop."""
     return await asyncio.to_thread(
-        list_artifacts, chat_id, path=path, depth=depth, provenance=provenance
+        list_artifacts,
+        chat_id,
+        path=path,
+        depth=depth,
+        provenance=provenance,
+        provenance_depth=provenance_depth,
     )
 
 
@@ -765,6 +815,11 @@ COPY_MARKER_SLACK_SECONDS = 30
 # both limits: the plain copy managed about 20 files a second on staging.
 PLAIN_COPY_MAX_FILES = 500
 PLAIN_COPY_MAX_BYTES = 500 * 1024 * 1024
+# Passed to juicefs rmr; the same as its default.
+REMOVE_THREADS = 50
+# Deleted files wait here this long, so a wrong delete can be undone by hand.
+TRASH_DIRNAME = ".trash"
+TRASH_DAYS = 7
 COPY_MARKER = ".artifact-copy"
 COPY_STAGING_DIRNAME = ".artifact-copy-staging"
 
@@ -811,18 +866,30 @@ def _remove_path(path: Path) -> None:
 
 
 def _remove_tree(path: Path) -> None:
-    """``juicefs rmr`` deletes on the metadata server, much faster than a walk
-    for a large clone; whatever it leaves is removed the slow way."""
+    """``juicefs rmr`` deletes on the metadata server, much faster than a walk.
+    Without it, or for what it leaves, the walk only deletes a folder below the
+    plain-copy limits; a larger one is left for a later try."""
     if shutil.which("juicefs"):
-        subprocess.run(["juicefs", "rmr", str(path)], capture_output=True)
-    shutil.rmtree(path, ignore_errors=True)
+        result = subprocess.run(
+            ["juicefs", "rmr", "--threads", str(REMOVE_THREADS), str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            log.warning("juicefs rmr of %s failed: %s", path, result.stderr.strip())
+    if not path.exists():
+        return
+    if _small_enough_for_plain_copy(path, skip_hidden=False):
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        log.warning("%s is too large to delete without juicefs rmr", path)
 
 
-def _small_enough_for_plain_copy(src: Path) -> bool:
-    """Count visible files and bytes, stopping as soon as either limit is passed."""
+def _small_enough_for_plain_copy(src: Path, skip_hidden: bool = True) -> bool:
+    """Count files and bytes, stopping as soon as either limit is passed."""
     files = size = 0
     for entry in src.iterdir():
-        if entry.name.startswith("."):
+        if skip_hidden and entry.name.startswith("."):
             continue
         if entry.is_dir() and not entry.is_symlink():
             paths = (Path(root) / name for root, _, names in os.walk(entry) for name in names)
@@ -1003,10 +1070,30 @@ def artifact_carryover_note(chat_id: str, source_title: str) -> str:
     return "\n".join(lines)
 
 
-def delete_sandbox(chat_id: str) -> None:
+def delete_sandbox(chat_id: str) -> bool:
+    """Move a chat's files to the trash at once; True when they are gone.
+    empty_trash deletes them for good after TRASH_DAYS."""
     root = (ARTIFACTS_DIR / chat_id).resolve()
     if root.exists() and ARTIFACTS_DIR.resolve() in root.parents:
-        shutil.rmtree(root, ignore_errors=True)
+        trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+        trash.mkdir(exist_ok=True)
+        os.rename(root, trash / root.name)
+    return not root.exists()
+
+
+def empty_trash() -> int:
+    """Delete what has been in the trash for TRASH_DAYS; how many went."""
+    trash = ARTIFACTS_DIR.resolve() / TRASH_DIRNAME
+    if not trash.is_dir():
+        return 0
+    cutoff = time.time() - TRASH_DAYS * 86400
+    deleted = 0
+    for entry in trash.iterdir():
+        # A move keeps mtime but sets ctime, so ctime is when it was deleted.
+        if entry.lstat().st_ctime <= cutoff:
+            _remove_tree(entry)
+            deleted += not entry.exists()
+    return deleted
 
 
 def write_bytes(chat_id: str, relpath: str, data: bytes) -> Path:

@@ -232,7 +232,8 @@ def secret_usage_hint(
         "the server substitutes the value before the tool runs. "
         "For skill tools that read credentials from the environment, pass "
         'env_secrets=["NAME"] so the secret is injected as an env var with the '
-        "same name (preferred over putting placeholders in argv). "
+        "same name (preferred over putting placeholders in argv). Only request the "
+        "secrets that skill needs. "
         "A private secret overrides an organization-shared secret with the same name."
     )
     if names:

@@ -10,7 +10,8 @@ from typing import Any, Optional
 from uuid import uuid4
 
 # Skill / tool result fields that are useful for the UI but not the model.
-_INFRA_KEYS = frozenset({"cwd", "sandlock", "landlock_backend"})
+# ``argv`` repeats the arguments of the model's own tool call, which it already has.
+_INFRA_KEYS = frozenset({"cwd", "sandlock", "landlock_backend", "argv"})
 
 # Cap noisy skill stdout/stderr so one tool cannot blow the context window.
 _MAX_STREAM_CHARS = 12_000

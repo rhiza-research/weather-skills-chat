@@ -445,9 +445,14 @@ async def get_all_user_chats_in_db(user=Depends(get_admin_user)):
 
 @router.get("/archived", response_model=list[ChatTitleIdResponse])
 async def get_archived_session_user_chat_list(
-    user=Depends(get_verified_user), skip: int = 0, limit: int = 50
+    user=Depends(get_verified_user),
+    skip: int = 0,
+    limit: int = 50,
+    organization_id: str = Depends(get_active_organization_id),
 ):
-    return Chats.get_archived_chat_list_by_user_id(user.id, skip, limit)
+    return Chats.get_archived_chat_list_by_user_id(
+        user.id, organization_id, skip, limit
+    )
 
 
 ############################
@@ -456,8 +461,13 @@ async def get_archived_session_user_chat_list(
 
 
 @router.post("/archive/all", response_model=bool)
-async def archive_all_chats(user=Depends(get_verified_user)):
-    return await asyncio.to_thread(Chats.archive_all_chats_by_user_id, user.id)
+async def archive_all_chats(
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    return await asyncio.to_thread(
+        Chats.archive_all_chats_by_user_id, user.id, organization_id
+    )
 
 
 ############################
@@ -995,6 +1005,14 @@ class ShareLinkResponse(BaseModel):
 async def get_share_links_by_chat_id(id: str, user=Depends(get_verified_user)):
     await asyncio.to_thread(require_chat_write, id, user)
     return await asyncio.to_thread(Chats.get_live_shares_by_chat_id, id)
+
+
+@router.delete("/{id}/shares/{share_id}", response_model=bool)
+async def delete_share_link_by_id(
+    id: str, share_id: str, user=Depends(get_verified_user)
+):
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await asyncio.to_thread(Chats.delete_shared_chat_by_chat_id, id, share_id)
 
 
 ############################

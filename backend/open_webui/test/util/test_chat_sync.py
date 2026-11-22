@@ -806,6 +806,50 @@ class TestStreamedPartsAreSaved(AbstractPostgresTest):
         assert (chat.id, "a1") not in chat_realtime._pending_updates
 
 
+class TestArtifactPushTriggers(AbstractPostgresTest):
+    """Only writes to a chat's files re-list them for watchers."""
+
+    def test_a_finished_status_does_not_relist_artifacts(self):
+        from unittest.mock import patch
+
+        from open_webui.models.chats import ChatForm, Chats
+        from open_webui.socket.main import get_event_emitter
+
+        chat = Chats.insert_new_chat("2", ChatForm(chat=_tree()))
+        emit = get_event_emitter(
+            {"user_id": "2", "chat_id": chat.id, "message_id": "a1"}, update_db=True
+        )
+        with patch("open_webui.utils.chat_realtime.schedule_artifacts") as schedule:
+            for action in ("preparing_tool_calls", "web_search", "knowledge_search", None):
+                asyncio.run(
+                    emit({"type": "status", "data": {"action": action, "done": True}})
+                )
+        schedule.assert_not_called()
+
+    def test_create_folder_relists_artifacts_only_when_it_creates_one(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        from open_webui.models.chats import ChatAccessRow
+        from open_webui.utils import builtin_tools
+
+        row = ChatAccessRow(id="chat-1", user_id="u1", organization_id="u1", visibility="private")
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "open_webui.utils.artifacts.ARTIFACTS_DIR", Path(tmp)
+        ), patch.object(builtin_tools, "Users") as users, patch.object(
+            builtin_tools, "Chats"
+        ) as chats, patch(
+            "open_webui.utils.chat_realtime.schedule_artifacts"
+        ) as schedule:
+            users.get_user_by_id.return_value = MagicMock(id="u1")
+            chats.get_chat_access_row.return_value = row
+            args = {"path": "plots", "__user__": {"id": "u1"}, "__metadata__": {"chat_id": "chat-1"}}
+            builtin_tools.create_folder(**args)
+            builtin_tools.create_folder(**args)
+        schedule.assert_called_once_with("chat-1")
+
+
 class TestChatWriteLocking(AbstractPostgresTest):
     def setup_method(self):
         super().setup_method()

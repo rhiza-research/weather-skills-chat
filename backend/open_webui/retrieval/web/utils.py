@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import logging
 import socket
 import ssl
@@ -42,23 +43,34 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
 
 
+MAX_REDIRECTS = 5
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+_NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
+def is_public_ip(ip: str) -> bool:
+    """True if the address is publicly routable, judging IPv4 carried inside IPv6 as that IPv4."""
+    addr = ipaddress.ip_address(ip.split("%", 1)[0])
+    if isinstance(addr, ipaddress.IPv6Address):
+        embedded = addr.ipv4_mapped or addr.sixtofour or (addr.teredo or (None, None))[1]
+        if embedded is None and addr in _NAT64_PREFIX:
+            embedded = ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF)
+        if embedded is not None:
+            addr = embedded
+    return addr.is_global and not addr.is_multicast
+
+
 def validate_url(url: Union[str, Sequence[str]]):
     if isinstance(url, str):
         if isinstance(validators.url(url), validators.ValidationError):
             raise ValueError(ERROR_MESSAGES.INVALID_URL)
         if not ENABLE_RAG_LOCAL_WEB_FETCH:
-            # Local web fetch is disabled, filter out any URLs that resolve to private IP addresses
+            # Refuse URLs whose host resolves to any non-public address. The fetch
+            # checks again when it connects (PublicResolver) and on every redirect.
             parsed_url = urllib.parse.urlparse(url)
-            # Get IPv4 and IPv6 addresses
             ipv4_addresses, ipv6_addresses = resolve_hostname(parsed_url.hostname)
-            # Check if any of the resolved addresses are private
-            # This is technically still vulnerable to DNS rebinding attacks, as we don't control WebBaseLoader
-            for ip in ipv4_addresses:
-                if validators.ipv4(ip, private=True):
-                    raise ValueError(ERROR_MESSAGES.INVALID_URL)
-            for ip in ipv6_addresses:
-                if validators.ipv6(ip, private=True):
-                    raise ValueError(ERROR_MESSAGES.INVALID_URL)
+            if not all(is_public_ip(ip) for ip in ipv4_addresses + ipv6_addresses):
+                raise ValueError(ERROR_MESSAGES.INVALID_URL)
         return True
     elif isinstance(url, Sequence):
         return all(validate_url(u) for u in url)
@@ -481,6 +493,27 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
             await browser.close()
 
 
+class PublicResolver(aiohttp.abc.AbstractResolver):
+    """aiohttp's default resolver, refusing hosts that resolve to a non-public address.
+
+    The connection goes to an address checked here, so a host cannot pass
+    validate_url and then resolve somewhere internal when the fetch connects.
+    aiohttp does not resolve IP literals; validate_url covers those.
+    """
+
+    def __init__(self):
+        self._resolver = aiohttp.DefaultResolver()
+
+    async def resolve(self, host: str, port: int = 0, family=socket.AF_INET):
+        hosts = await self._resolver.resolve(host, port, family)
+        if not all(is_public_ip(h["host"]) for h in hosts):
+            raise ValueError(f"{host} resolves to a non-public address")
+        return hosts
+
+    async def close(self):
+        await self._resolver.close()
+
+
 class SafeWebBaseLoader(WebBaseLoader):
     """WebBaseLoader with enhanced error handling for URLs."""
 
@@ -496,22 +529,41 @@ class SafeWebBaseLoader(WebBaseLoader):
     async def _fetch(
         self, url: str, retries: int = 3, cooldown: int = 2, backoff: float = 1.5
     ) -> str:
-        async with aiohttp.ClientSession(trust_env=self.trust_env) as session:
+        # Through a proxy (trust_env) the proxy resolves the target, so only check
+        # addresses at connect time when connecting directly.
+        connector = (
+            None
+            if ENABLE_RAG_LOCAL_WEB_FETCH or self.trust_env
+            else aiohttp.TCPConnector(resolver=PublicResolver())
+        )
+        async with aiohttp.ClientSession(
+            trust_env=self.trust_env, connector=connector
+        ) as session:
             for i in range(retries):
                 try:
                     kwargs: Dict = dict(
                         headers=self.session.headers,
                         cookies=self.session.cookies.get_dict(),
+                        allow_redirects=False,
                     )
                     if not self.session.verify:
                         kwargs["ssl"] = False
 
-                    async with session.get(
-                        url, **(self.requests_kwargs | kwargs)
-                    ) as response:
-                        if self.raise_for_status:
-                            response.raise_for_status()
-                        return await response.text()
+                    target = url
+                    for _ in range(MAX_REDIRECTS + 1):
+                        async with session.get(
+                            target, **(self.requests_kwargs | kwargs)
+                        ) as response:
+                            location = response.headers.get("Location")
+                            if response.status in _REDIRECT_STATUSES and location:
+                                target = urllib.parse.urljoin(str(response.url), location)
+                                # Each hop gets the same check as the URL asked for.
+                                validate_url(target)
+                                continue
+                            if self.raise_for_status:
+                                response.raise_for_status()
+                            return await response.text()
+                    raise ValueError(f"More than {MAX_REDIRECTS} redirects: {url}")
                 except aiohttp.ClientConnectionError as e:
                     if i == retries - 1:
                         raise
@@ -549,19 +601,8 @@ class SafeWebBaseLoader(WebBaseLoader):
         return self._unpack_fetch_results(results, urls, parser=parser)
 
     def lazy_load(self) -> Iterator[Document]:
-        """Lazy load text from the url(s) in web_path with error handling."""
-        for path in self.web_paths:
-            try:
-                soup = self._scrape(path, bs_kwargs=self.bs_kwargs)
-                text = soup.get_text(**self.bs_get_text_kwargs)
-
-                # Build metadata
-                metadata = extract_metadata(soup, path)
-
-                yield Document(page_content=text, metadata=metadata)
-            except Exception as e:
-                # Log the error and continue with the next URL
-                log.exception(f"Error loading {path}: {e}")
+        # The sync path fetches with requests, which follows redirects unchecked.
+        raise NotImplementedError("Use aload(): only the async fetch checks redirects")
 
     async def alazy_load(self) -> AsyncIterator[Document]:
         """Async lazy load text from the url(s) in web_path."""

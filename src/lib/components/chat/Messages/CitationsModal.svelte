@@ -3,6 +3,7 @@
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { isValidHttpUrl } from '$lib/utils';
 
 	const i18n = getContext('i18n');
 
@@ -102,7 +103,7 @@
 										class="hover:text-gray-500 dark:hover:text-gray-100 underline grow"
 										href={document?.metadata?.file_id
 											? `${WEBUI_API_BASE_URL}/files/${document?.metadata?.file_id}/content${document?.metadata?.page !== undefined ? `#page=${document.metadata.page + 1}` : ''}`
-											: document.source?.url?.includes('http')
+											: isValidHttpUrl(document.source?.url)
 												? document.source.url
 												: `#`}
 										target="_blank"
@@ -165,18 +166,9 @@
 						<div class=" text-sm font-medium dark:text-gray-300 mt-2">
 							{$i18n.t('Content')}
 						</div>
-						{#if document.metadata?.html}
-							<iframe
-								class="w-full border-0 h-auto rounded-none"
-								sandbox="allow-scripts allow-forms allow-same-origin"
-								srcdoc={document.document}
-								title={$i18n.t('Content')}
-							></iframe>
-						{:else}
-							<pre class="text-sm dark:text-gray-400 whitespace-pre-line">
+						<pre class="text-sm dark:text-gray-400 whitespace-pre-line">
                 {document.document}
               </pre>
-						{/if}
 					</div>
 
 					{#if documentIdx !== mergedDocuments.length - 1}

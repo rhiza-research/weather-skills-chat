@@ -27,3 +27,20 @@ Page rules:
 - When a page is removed, fix every `[[...]]` link that pointed to it.
 - Current behavior only. No history.
 - Each fact lives on one page; other pages link to it.
+
+## Local development stack
+
+`scripts/preview.sh` builds a local stack from the current checkout, with staging's settings, models, skill packs, and sample chats. Each branch or worktree gets its own stack, so several can run side by side. It needs `gcloud` signed in with access to secrets in GCP project `sheerwater`, Tailscale connected, and Docker running.
+
+```bash
+scripts/preview.sh up      # build and start a stack named after the current branch
+scripts/preview.sh ls      # list running stacks and their ports
+scripts/preview.sh down    # remove the stack, its data, and its image
+```
+
+`up` ends by printing the stack's address, its test accounts and their password, and two ways to sign in: a line to run in a browser tool's page, which signs in as the admin and reloads, and a sign-in page link with the email filled in. Sign in with what it prints. The stack is removed after 60 minutes without a request; `up --idle=MINUTES` changes that. `wiki/Development.md` has the full options.
+
+## Contributing
+
+- Open every PR against `dev`, not `main`.
+- Include screenshots from a local stack (above) when a PR changes the UI, where possible.

@@ -3,7 +3,6 @@ import logging
 import mimetypes
 import os
 import shutil
-import asyncio
 
 import uuid
 from datetime import datetime
@@ -22,7 +21,6 @@ from fastapi import (
     APIRouter,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 import tiktoken
 
@@ -39,11 +37,9 @@ from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
 
 # Document loaders
 from open_webui.retrieval.loaders.main import Loader
-from open_webui.retrieval.loaders.youtube import YoutubeLoader
 
 # Web search engines
 from open_webui.retrieval.web.main import SearchResult
-from open_webui.retrieval.web.utils import get_web_loader
 from open_webui.retrieval.web.brave import search_brave
 from open_webui.retrieval.web.kagi import search_kagi
 from open_webui.retrieval.web.mojeek import search_mojeek
@@ -170,14 +166,6 @@ router = APIRouter()
 
 class CollectionNameForm(BaseModel):
     collection_name: Optional[str] = None
-
-
-class ProcessUrlForm(CollectionNameForm):
-    url: str
-
-
-class SearchForm(BaseModel):
-    query: str
 
 
 @router.get("/")
@@ -1181,98 +1169,6 @@ def process_text(
         )
 
 
-@router.post("/process/youtube")
-def process_youtube_video(
-    request: Request, form_data: ProcessUrlForm, user=Depends(get_verified_user)
-):
-    try:
-        collection_name = form_data.collection_name
-        if not collection_name:
-            collection_name = calculate_sha256_string(form_data.url)[:63]
-
-        loader = YoutubeLoader(
-            form_data.url,
-            language=request.app.state.config.YOUTUBE_LOADER_LANGUAGE,
-            proxy_url=request.app.state.config.YOUTUBE_LOADER_PROXY_URL,
-        )
-
-        docs = loader.load()
-        content = " ".join([doc.page_content for doc in docs])
-        log.debug(f"text_content: {content}")
-
-        save_docs_to_vector_db(
-            request, docs, collection_name, overwrite=True, user=user
-        )
-
-        return {
-            "status": True,
-            "collection_name": collection_name,
-            "filename": form_data.url,
-            "file": {
-                "data": {
-                    "content": content,
-                },
-                "meta": {
-                    "name": form_data.url,
-                },
-            },
-        }
-    except Exception as e:
-        log.exception(e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
-
-
-@router.post("/process/web")
-def process_web(
-    request: Request, form_data: ProcessUrlForm, user=Depends(get_verified_user)
-):
-    try:
-        collection_name = form_data.collection_name
-        if not collection_name:
-            collection_name = calculate_sha256_string(form_data.url)[:63]
-
-        loader = get_web_loader(
-            form_data.url,
-            verify_ssl=request.app.state.config.ENABLE_WEB_LOADER_SSL_VERIFICATION,
-            requests_per_second=request.app.state.config.WEB_SEARCH_CONCURRENT_REQUESTS,
-        )
-        docs = loader.load()
-        content = " ".join([doc.page_content for doc in docs])
-
-        log.debug(f"text_content: {content}")
-
-        if not request.app.state.config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL:
-            save_docs_to_vector_db(
-                request, docs, collection_name, overwrite=True, user=user
-            )
-        else:
-            collection_name = None
-
-        return {
-            "status": True,
-            "collection_name": collection_name,
-            "filename": form_data.url,
-            "file": {
-                "data": {
-                    "content": content,
-                },
-                "meta": {
-                    "name": form_data.url,
-                    "source": form_data.url,
-                },
-            },
-        }
-    except Exception as e:
-        log.exception(e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
-
-
 def search_web(request: Request, engine: str, query: str) -> list[SearchResult]:
     """Search the web using a search engine and return the results as a list of SearchResult objects.
     Will look for a search engine API key in environment variables in the following order:
@@ -1478,95 +1374,6 @@ def search_web(request: Request, engine: str, query: str) -> list[SearchResult]:
             )
     else:
         raise Exception("No search engine API key found in environment variables")
-
-
-@router.post("/process/web/search")
-async def process_web_search(
-    request: Request, form_data: SearchForm, user=Depends(get_verified_user)
-):
-    try:
-        logging.info(
-            f"trying to web search with {request.app.state.config.WEB_SEARCH_ENGINE, form_data.query}"
-        )
-        # Run sync engine I/O off the event loop so task cancellation can interrupt
-        # at the await boundary (Stop during web search).
-        web_results = await run_in_threadpool(
-            search_web,
-            request,
-            request.app.state.config.WEB_SEARCH_ENGINE,
-            form_data.query,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        log.exception(e)
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.WEB_SEARCH_ERROR(e),
-        )
-
-    log.debug(f"web_results: {web_results}")
-
-    try:
-        urls = [result.link for result in web_results]
-        loader = get_web_loader(
-            urls,
-            verify_ssl=request.app.state.config.ENABLE_WEB_LOADER_SSL_VERIFICATION,
-            requests_per_second=request.app.state.config.WEB_SEARCH_CONCURRENT_REQUESTS,
-            trust_env=request.app.state.config.WEB_SEARCH_TRUST_ENV,
-        )
-        docs = await loader.aload()
-        urls = [
-            doc.metadata["source"] for doc in docs
-        ]  # only keep URLs which could be retrieved
-
-        if request.app.state.config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL:
-            return {
-                "status": True,
-                "collection_name": None,
-                "filenames": urls,
-                "docs": [
-                    {
-                        "content": doc.page_content,
-                        "metadata": doc.metadata,
-                    }
-                    for doc in docs
-                ],
-                "loaded_count": len(docs),
-            }
-        else:
-            collection_names = []
-            for doc_idx, doc in enumerate(docs):
-                if doc and doc.page_content:
-                    collection_name = f"web-search-{calculate_sha256_string(form_data.query + '-' + urls[doc_idx])}"[
-                        :63
-                    ]
-
-                    collection_names.append(collection_name)
-                    await run_in_threadpool(
-                        save_docs_to_vector_db,
-                        request,
-                        [doc],
-                        collection_name,
-                        overwrite=True,
-                        user=user,
-                    )
-
-            return {
-                "status": True,
-                "collection_names": collection_names,
-                "filenames": urls,
-                "loaded_count": len(docs),
-            }
-    except asyncio.CancelledError:
-        raise
-    except Exception as e:
-        log.exception(e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ERROR_MESSAGES.DEFAULT(e),
-        )
 
 
 class QueryDocForm(BaseModel):

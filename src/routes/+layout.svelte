@@ -583,6 +583,18 @@
 
 		initI18n(localStorage?.locale);
 
+		// The server sends a tab opened on an artifact link that failed here.
+		const bootUrl = new URL(window.location.href);
+		for (const [flag, message] of [
+			['shared-missing', $i18n.t('This shared item does not exist or is no longer available.')],
+			['sign-in-required', $i18n.t('Sign in to open this item.')]
+		]) {
+			if (!bootUrl.searchParams.has(flag)) continue;
+			toast.error(message);
+			bootUrl.searchParams.delete(flag);
+			history.replaceState(history.state, '', bootUrl);
+		}
+
 		const token = localStorage.token;
 		const encodedUrl = encodeURIComponent(
 			`${window.location.pathname}${window.location.search}`
@@ -647,7 +659,8 @@
 				await goto('/error');
 			} else {
 				const path = $page.url.pathname;
-				if (path !== '/auth' && !path.startsWith('/auth/')) {
+				// Share links are public; everything else needs a sign-in.
+				if (path !== '/auth' && !path.startsWith('/auth/') && !/^\/s(\/|$)/.test(path)) {
 					await goto(`/auth?redirect=${encodedUrl}`);
 				}
 			}

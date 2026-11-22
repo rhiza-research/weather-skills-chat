@@ -22,7 +22,7 @@ The others are always on, apart from those that need a chat feature such as web 
 | `secrets_page` | Give the user a link to the page where they enter a secret. The model never receives the value. See [[Secrets]]. |
 | `list_preferences` | Read the user's saved [[Preferences]]. |
 | `create_preference` | Save a new preference. The model is told to ask the user first. |
-| `list_artifacts` | List the chat's files, or one folder of them. The model can limit how many folder levels are listed, and can ask which skills produced each image, HTML page, and Zarr store. |
+| `list_artifacts` | List the chat's files, or one folder of them. The model can limit how many folder levels are listed, and can ask which skills produced each image, HTML page, and Zarr store directly in the folder it lists. |
 | `read_artifact` | Send a file from the chat's files to the model. The user approves each read in a popup, unless the user has allowed it to read files (see below). Images are sent as images; other files are searched and matching text is added to the model's context. Folders and Zarr stores cannot be read this way. |
 | `create_folder` | Create a folder in the chat's files. |
 | `get_tool_runner_info` | Show the chat's [[Tool Runner]]: its size and CPU and memory limits, whether it is running, the memory it uses now, how many skills are running on it, the peak memory and CPU of the most recent skill, and the other sizes the chat can use. It does not start a runner. Offered when `request_tool_runner` is. |
@@ -38,7 +38,7 @@ The scheduled task tools act as the user, so the model can change or delete only
 
 ## Reading chat files
 
-A button in the chat bar decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default and reads **Agent asks before reading files**: each read waits for the user to answer a popup. Turned on, it reads **Agent allowed to read files**, and the model reads files without asking.
+The **File reading** button in the chat bar, labelled **enabled** or **disabled**, decides whether the model may read the chat's files with `read_artifact` without asking. It is off by default, with a crossed-out eye: each read waits for the user to answer a popup. Turned on, it shows an open eye and the model reads files without asking. Hovering the button explains the current setting.
 
 The popup names the file and offers:
 

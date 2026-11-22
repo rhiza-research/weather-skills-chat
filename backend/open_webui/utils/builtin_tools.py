@@ -1194,6 +1194,10 @@ def create_folder(
 
     if result.get("existed"):
         return f"Folder already exists: `{result['path']}`."
+
+    from open_webui.utils.chat_realtime import schedule_artifacts
+
+    schedule_artifacts(str(chat_id))
     return f"Created folder: `{result['path']}`."
 
 
@@ -1310,7 +1314,7 @@ LIST_ARTIFACTS_SPEC = {
         "or plotting/attaching them. "
         "Optionally pass a relative folder path to list only that subtree, a depth "
         "to limit how many folder levels are listed, and provenance to show which "
-        "skills produced each image, HTML page and Zarr store."
+        "skills produced each image, HTML page and Zarr store directly in that folder."
     ),
     "parameters": {
         "type": "object",
@@ -1334,7 +1338,9 @@ LIST_ARTIFACTS_SPEC = {
                 "type": "boolean",
                 "description": (
                     "Show the chain of skills that produced each image, HTML page "
-                    "and Zarr store. Slower on large sandboxes. Defaults to false."
+                    "and Zarr store directly in `path` (or at the top level when "
+                    "`path` is omitted). Deeper entries are listed without it; pass "
+                    "their folder as `path` to see theirs. Defaults to false."
                 ),
             },
         },

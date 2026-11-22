@@ -1,16 +1,36 @@
+<script lang="ts" context="module">
+	import { writable } from 'svelte/store';
+
+	// Provenance asked for with the stamp button, by chat, path and modification
+	// time: a list refresh re-renders every row, and this keeps what was opened.
+	const askedProvenance = writable<Record<string, any[]>>({});
+</script>
+
 <script lang="ts">
 	import { getContext, createEventDispatcher } from 'svelte';
 	import ProvenanceTree from './ProvenanceTree.svelte';
+	import ProvenanceStamp from '../icons/ProvenanceStamp.svelte';
+	import Spinner from '../common/Spinner.svelte';
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import ChevronRight from '../icons/ChevronRight.svelte';
+	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
+	import ArrowDownTray from '../icons/ArrowDownTray.svelte';
+	import DocumentDuplicate from '../icons/DocumentDuplicate.svelte';
+	import Tooltip from '../common/Tooltip.svelte';
 	import {
 		getArtifactArchiveUrl,
 		getArtifactContentUrl,
-		getArtifactProvenance
+		getArtifactProvenance,
+		getArtifactViewUrl
 	} from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
+	import { copyToClipboard } from '$lib/utils';
+	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
+	// The same look as the preview pane's icon buttons.
+	const iconButton =
+		'p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
 	const dispatch = createEventDispatcher();
 
 	export let node: {
@@ -63,7 +83,49 @@
 		}
 	};
 
+	// HTML: the full-screen viewer's "Open in new tab" link. Images: the file itself.
+	const copyLink = async (path: string, kind: string) => {
+		const href =
+			kind === 'html' ? getArtifactViewUrl($chatId, path) : getArtifactContentUrl($chatId, path);
+		const url = new URL(href, window.location.origin).href;
+		if (await copyToClipboard(url)) toast.success($i18n.t('Copied link to clipboard'));
+	};
+
+	// Listings carry provenance for top-level entries only; deeper PNGs, HTML
+	// pages and Zarr stores show it when their stamp button is pressed.
+	let askingProvenance = false;
+	const toggleProvenance = async () => {
+		const key = askedKey;
+		if ($askedProvenance[key]) {
+			askedProvenance.update(({ [key]: _, ...rest }) => rest);
+			return;
+		}
+		askingProvenance = true;
+		try {
+			const branches =
+				(await getArtifactProvenance(localStorage.token, $chatId, file.path))?.branches ?? [];
+			if (branches.length) askedProvenance.update((all) => ({ ...all, [key]: branches }));
+			else toast.info($i18n.t('No provenance recorded for this file.'));
+		} catch (e) {
+			console.error(e);
+			toast.error($i18n.t('Could not load provenance.'));
+		} finally {
+			askingProvenance = false;
+		}
+	};
+
 	$: file = node.file;
+	$: askedKey = file ? `${$chatId}\n${file.path}\n${file.modified ?? ''}` : '';
+	// Only the kinds the server reads provenance from (artifacts._provenance_for_entry).
+	$: canAskProvenance =
+		!!file &&
+		!file.provenance_branches?.length &&
+		(file.kind === 'html' ||
+			file.kind === 'zarr' ||
+			(file.kind === 'image' && /\.(png|gif)$/i.test(file.path)));
+	$: shownBranches = file?.provenance_branches?.length
+		? file.provenance_branches
+		: ($askedProvenance[askedKey] ?? []);
 	$: navigable = isNavigableDir(node);
 	$: open = expanded.has(node.path);
 	$: pad = `padding-left: ${depth * 0.75 + 0.25}rem`;
@@ -106,18 +168,40 @@
 				<span class="truncate" title={node.name}>{node.name}</span>
 				<span class="text-gray-400 shrink-0">zarr</span>
 			</div>
-			<a
-				class="underline shrink-0"
-				href={getArtifactArchiveUrl($chatId, file.path)}
-				target="_blank"
-				rel="noreferrer">{$i18n.t('Download')}</a
-			>
+			<div class="flex items-center gap-0.5 shrink-0">
+				{#if canAskProvenance}
+					<Tooltip content={$i18n.t('Provenance')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Provenance')}
+							aria-pressed={shownBranches.length > 0}
+							on:click={toggleProvenance}
+						>
+							{#if askingProvenance}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ProvenanceStamp className="size-3.5" />
+							{/if}
+						</button>
+					</Tooltip>
+				{/if}
+				<Tooltip content={$i18n.t('Download')}>
+					<a
+						class="{iconButton} shrink-0 block"
+						href={getArtifactArchiveUrl($chatId, file.path)}
+						target="_blank"
+						rel="noreferrer"
+						aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+					>
+				</Tooltip>
+			</div>
 		</div>
-		{#if file.provenance_branches?.length}
-			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
+		{#if shownBranches.length}
+			<div style={pad}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
-					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
 				{/key}
 			</div>
 		{/if}
@@ -144,50 +228,89 @@
 					<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
 				</div>
 			{/if}
-			<div class="flex gap-1 shrink-0">
+			<div class="flex items-center gap-0.5 shrink-0">
+				{#if canAskProvenance}
+					<Tooltip content={$i18n.t('Provenance')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Provenance')}
+							aria-pressed={shownBranches.length > 0}
+							on:click={toggleProvenance}
+						>
+							{#if askingProvenance}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ProvenanceStamp className="size-3.5" />
+							{/if}
+						</button>
+					</Tooltip>
+				{/if}
 				{#if file.kind === 'image' || file.kind === 'html'}
-					<button
-						type="button"
-						class="underline"
-						on:click={() => dispatch('openImage', { path: file.path })}
-					>
-						{$i18n.t('Open')}
-					</button>
-					<button
-						type="button"
-						class="underline"
-						on:click={() => downloadFile(file.path, node.name)}
-					>
-						{$i18n.t('Download')}
-					</button>
+					<Tooltip content={$i18n.t('Open')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Open')}
+							on:click={() => dispatch('openImage', { path: file.path })}
+						>
+							<ArrowsPointingOut className="size-3.5" />
+						</button>
+					</Tooltip>
+					<Tooltip content={$i18n.t('Copy link')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Copy link')}
+							on:click={() => copyLink(file.path, file.kind)}
+						>
+							<DocumentDuplicate className="size-3.5" />
+						</button>
+					</Tooltip>
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() => downloadFile(file.path, node.name)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
 				{:else if file.kind === 'zarr'}
-					<button
-						type="button"
-						class="underline"
-						on:click={() =>
-							downloadFile(
-								file.path,
-								node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
-							)}
-					>
-						{$i18n.t('Download')}
-					</button>
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() =>
+								downloadFile(
+									file.path,
+									node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
+								)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
 				{:else if !file.is_dir}
-					<a
-						class="underline"
-						href={getArtifactContentUrl($chatId, file.path)}
-						download={node.name}
-						target="_blank"
-						rel="noreferrer">{$i18n.t('Download')}</a
-					>
+					<Tooltip content={$i18n.t('Download')}>
+						<a
+							class="{iconButton} block"
+							href={getArtifactContentUrl($chatId, file.path)}
+							download={node.name}
+							target="_blank"
+							rel="noreferrer"
+							aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+						>
+					</Tooltip>
 				{/if}
 			</div>
 		</div>
-		{#if file.provenance_branches?.length}
-			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
+		{#if shownBranches.length}
+			<div style={pad}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
-					<ProvenanceTree branches={file.provenance_branches} loadSteps={loadProvenanceSteps} />
+					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
 				{/key}
 			</div>
 		{/if}

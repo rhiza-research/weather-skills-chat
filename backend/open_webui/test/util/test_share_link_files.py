@@ -196,6 +196,42 @@ class ShareRouteTest(unittest.TestCase):
         for days in (0, 366):
             self.assertEqual(self.share(expires_in_days=days).status_code, 422)
 
+    def test_deleting_one_link_keeps_the_others(self):
+        gone = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+        kept = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        res = self.client.delete(f"/chats/{self.chat.id}/shares/{gone.id}")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(Chats.get_chat_by_id(gone.id))
+        self.assertFalse((self.artifacts / gone.id).exists())
+        self.assertTrue(Chats.is_live_share(kept.id))
+        self.assertTrue((self.artifacts / kept.id / "map.png").exists())
+
+    def test_a_link_whose_files_remain_waits_for_the_cleanup(self):
+        shared = Chats.insert_shared_chat_by_chat_id(self.chat.id)
+
+        with patch("open_webui.utils.artifacts.delete_sandbox", return_value=False):
+            Chats.delete_shared_chat_by_chat_id(self.chat.id, shared.id)
+
+        self.assertFalse(Chats.is_live_share(shared.id))
+        self.assertIsNotNone(Chats.get_chat_by_id(shared.id))
+        Chats.delete_expired_shared_chats()
+        self.assertIsNone(Chats.get_chat_by_id(shared.id))
+        self.assertFalse((self.artifacts / shared.id).exists())
+
+    def test_a_link_to_another_chat_is_not_deleted(self):
+        other = Chats.insert_new_chat(
+            self.chat.user_id,
+            ChatForm(chat={"title": "Wind", "history": {"currentId": None, "messages": {}}}),
+        )
+        self.addCleanup(Chats.delete_chat_by_id, other.id)
+        theirs = Chats.insert_shared_chat_by_chat_id(other.id)
+
+        self.client.delete(f"/chats/{self.chat.id}/shares/{theirs.id}")
+
+        self.assertTrue(Chats.is_live_share(theirs.id))
+
 
 class ShareLinkFileRoutesTest(unittest.TestCase):
     """Anyone who can open the link reads the snapshot's files; no one writes them."""

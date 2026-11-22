@@ -79,7 +79,6 @@ class FollowupRefusedTest(unittest.IsolatedAsyncioTestCase):
                 "get_message_by_id_and_message_id.return_value": {},
             })),
             patch.object(mw, "get_sorted_filter_ids", return_value=[]),
-            patch.object(mw, "get_active_status_by_user_id", return_value=True),
             patch.object(
                 mw,
                 "generate_chat_completion",

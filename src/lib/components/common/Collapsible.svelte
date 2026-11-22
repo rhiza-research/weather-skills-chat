@@ -38,7 +38,14 @@
 	import HtmlArtifactInline from './HtmlArtifactInline.svelte';
 	import ToolCallDetails from './ToolCallDetails.svelte';
 	import { toolArgRows, toolCallHead } from '$lib/chat/toolArgs';
-	import { getArtifactContentUrl, getArtifactViewUrl, isHtmlArtifact } from '$lib/apis/artifacts';
+	import ProvenanceTree from '../chat/ProvenanceTree.svelte';
+	import ProvenanceSteps from '../chat/ProvenanceSteps.svelte';
+	import {
+		getArtifactContentUrl,
+		getArtifactProvenance,
+		getArtifactViewUrl,
+		isHtmlArtifact
+	} from '$lib/apis/artifacts';
 	import { chatId } from '$lib/stores';
 
 	export let open = false;
@@ -295,13 +302,19 @@
 		displayImageLoadedKey = '';
 	}
 
+	// The transcript remounts for each chat, so the first chat a card sees is its own.
+	// $chatId switches before the old chat's cards unmount; they must not load from the new one.
+	let cardChatId = '';
+	$: if (!cardChatId && $chatId) cardChatId = $chatId;
+	$: onCardChat = Boolean(cardChatId) && $chatId === cardChatId;
+
 	$: displayImageRequestKey =
 		showResultMedia &&
 		displayImagePath &&
 		!displayHtmlPath &&
-		$chatId &&
+		onCardChat &&
 		attributes?.done === 'true'
-			? `${$chatId}::${displayImagePath}`
+			? `${cardChatId}::${displayImagePath}`
 			: '';
 
 	$: if (displayImageRequestKey) {
@@ -314,6 +327,31 @@
 		}
 	} else if (displayImageLoadedKey) {
 		clearDisplayImage();
+	}
+
+	// Provenance of the shown image or page, fetched once it is on screen.
+	let displayProvenance: Array<any> = [];
+	let displayProvenanceCrumbs: string[] = [];
+	let displayProvenanceOpen = false;
+	let displayProvenanceKey = '';
+	$: displayProvenanceWant =
+		$chatId && displayImagePath && (displayImageSrc || displayHtmlShown)
+			? `${$chatId}::${displayImagePath}`
+			: '';
+	$: if (displayProvenanceWant !== displayProvenanceKey) {
+		displayProvenanceKey = displayProvenanceWant;
+		displayProvenance = [];
+		displayProvenanceCrumbs = [];
+		if (displayProvenanceWant) {
+			const key = displayProvenanceWant;
+			getArtifactProvenance(localStorage.token, $chatId, displayImagePath)
+				.then((res) => {
+					if (key !== displayProvenanceKey) return;
+					displayProvenance = res?.branches ?? [];
+					displayProvenanceCrumbs = res?.crumbs ?? [];
+				})
+				.catch(() => {});
+		}
 	}
 
 	const secretNamesFromValue = (value: any): string[] => {
@@ -542,10 +580,10 @@
 			{/if}
 
 			{#if showResultMedia && attributes?.done === 'true'}
-				{#if displayHtmlPath && displayHtmlShown && $chatId}
+				{#if displayHtmlPath && displayHtmlShown && onCardChat}
 					<HtmlArtifactInline
-						src={getArtifactViewUrl($chatId, displayHtmlPath)}
-						downloadUrl={getArtifactContentUrl($chatId, displayHtmlPath)}
+						src={getArtifactViewUrl(cardChatId, displayHtmlPath)}
+						downloadUrl={getArtifactContentUrl(cardChatId, displayHtmlPath)}
 						title={displayHtmlPath}
 					/>
 				{:else if displayImageSrc}
@@ -564,6 +602,53 @@
 							/>
 						{/if}
 					{/each}
+				{/if}
+				{#if displayProvenance.length}
+					<div class="w-full mt-1 mb-4">
+						<button
+							type="button"
+							class="w-fit max-w-full flex items-center gap-2 font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+							aria-expanded={displayProvenanceOpen}
+							on:click={() => (displayProvenanceOpen = !displayProvenanceOpen)}
+						>
+							<!-- The provenance mark the plot skill draws on its figures. -->
+							<svg
+								class="size-4 shrink-0 text-[#A80F2D]"
+								viewBox="0 0 24 24"
+								fill="none"
+								aria-hidden="true"
+							>
+								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
+								<path
+									fill="currentColor"
+									d="M12 6.5l1.5 3.6 3.9.3-3 2.6.9 3.8L12 14.8l-3.3 2 .9-3.8-3-2.6 3.9-.3z"
+								/>
+							</svg>
+							<span class="min-w-0 text-base truncate text-left"
+								>{$i18n.t('Provenance')}:
+								<span class="text-sm">{displayProvenanceCrumbs.join(' → ')}</span></span
+							>
+							<span class="flex self-center translate-y-[1px]">
+								{#if displayProvenanceOpen}
+									<ChevronUp strokeWidth="3.5" className="size-3.5" />
+								{:else}
+									<ChevronDown strokeWidth="3.5" className="size-3.5" />
+								{/if}
+							</span>
+						</button>
+						{#if displayProvenanceOpen}
+							<div
+								class="mt-1.5 max-h-80 overflow-y-auto rounded-lg border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-900 px-3 py-2"
+								transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
+							>
+								{#if displayProvenance.length === 1}
+									<ProvenanceSteps steps={displayProvenance[0]?.steps ?? []} />
+								{:else}
+									<ProvenanceTree branches={displayProvenance} />
+								{/if}
+							</div>
+						{/if}
+					</div>
 				{/if}
 			{/if}
 		{/if}

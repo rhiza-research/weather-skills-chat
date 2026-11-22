@@ -331,7 +331,10 @@
 			mermaid.initialize({
 				startOnLoad: false,
 				theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-				securityLevel: 'loose'
+				securityLevel: 'strict',
+				// SVG text labels survive the SVG-only sanitizing in SvgPanZoom; HTML labels do not.
+				htmlLabels: false,
+				flowchart: { htmlLabels: false }
 			});
 			if (await mermaid.parse(code)) {
 				const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);

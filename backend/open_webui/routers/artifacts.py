@@ -2,10 +2,12 @@ import asyncio
 import hashlib
 import io
 import logging
+import re
 import zlib
 from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 import brotli
 from fastapi import (
@@ -20,11 +22,17 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.utils.artifacts import (
     HTML_SUFFIXES,
+    IMAGE_SUFFIXES,
     artifact_copy_state,
     artifact_provenance,
     extract_sandbox_archive,
@@ -43,6 +51,34 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 router = APIRouter()
+
+# A copied artifact link opened in a tab, whether a chat's or a share link's.
+_ARTIFACT_LINK = re.compile(r"^/api/v1/(chats|shares)/[^/]+/artifacts/(content$|view/)")
+MISSING_ARTIFACT_REDIRECT = "/?shared-missing=1"
+
+
+async def artifact_link_exception_handler(request: Request, exc):
+    """Send a tab opened on an artifact link that fails to the app instead of
+    showing raw JSON. A dead or malformed link goes to the app, which says so
+    and goes home or to sign-in. A missing or expired sign-in goes to sign-in,
+    which comes back to the link. Chats answer a chat the user cannot read
+    with 401 NOT_FOUND, the same as a missing one."""
+    status_code = getattr(exc, "status_code", 422)
+    if (
+        request.headers.get("sec-fetch-dest") == "document"
+        and _ARTIFACT_LINK.match(request.url.path)
+        and 400 <= status_code < 500
+    ):
+        if status_code in (401, 403) and exc.detail != ERROR_MESSAGES.NOT_FOUND:
+            link = request.url.path + (
+                f"?{request.url.query}" if request.url.query else ""
+            )
+            query = urlencode({"redirect": link, "sign-in-required": 1})
+            return RedirectResponse(f"/auth?{query}", status_code=303)
+        return RedirectResponse(MISSING_ARTIFACT_REDIRECT, status_code=303)
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
+    return await http_exception_handler(request, exc)
 
 
 @router.get("/{chat_id}/artifacts")
@@ -120,10 +156,16 @@ def get_artifact_content(
     }
     if _not_modified(request, etag, last_modified):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    # Images open in a tab from a copied link; the sandbox keeps an SVG's
+    # scripts from running as the user.
+    inline = target.suffix.lower() in IMAGE_SUFFIXES
+    if inline:
+        headers["Content-Security-Policy"] = "sandbox"
+        headers["X-Content-Type-Options"] = "nosniff"
     return FileResponse(
         target,
         filename=target.name,
-        content_disposition_type="attachment",
+        content_disposition_type="inline" if inline else "attachment",
         headers=headers,
         stat_result=st,
     )
