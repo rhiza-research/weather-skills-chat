@@ -2,8 +2,8 @@
 
 The provider keeps a cached prompt for five minutes from the start of the
 call that wrote or last read it. When INTERVAL_S pass after a chat's last
-model call started and no new call has, the call is re-sent with no output,
-which reads the cache and restarts its five minutes. While the chat's reply
+model call started and no new call has, the call is re-sent capped at one
+output token, which reads the cache and restarts its five minutes. While the chat's reply
 is running this goes on; once the reply has ended it happens at most
 IDLE_COUNT times, while the user reads and answers.
 """
@@ -30,7 +30,7 @@ _timers: dict[str, asyncio.Task] = {}
 def restart(chat_id: str, send, source: str) -> None:
     """A chat's model call is starting: replace the chat's timer.
 
-    ``send`` re-sends the call with no output; without it the chat gets no
+    ``send`` re-sends the call capped at one token; without it the chat gets no
     timer. A scheduled task's run (``source`` "automation") gets no
     keep-alives once it ends, since nobody answers it.
     """
