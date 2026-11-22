@@ -134,7 +134,7 @@ class SendHookTest(unittest.IsolatedAsyncioTestCase):
                 await openai_router._send_provider_call(call, USER)
         return restart
 
-    async def test_a_reply_call_is_kept_alive_with_the_same_request_and_no_output(self):
+    async def test_a_reply_call_is_kept_alive_with_the_same_request_and_one_output_token(self):
         restart = await self._send(_call())
         chat_id, send, source = restart.call_args.args
         self.assertEqual((chat_id, source), ("chat-1", "chat"))
@@ -149,7 +149,7 @@ class SendHookTest(unittest.IsolatedAsyncioTestCase):
         sent = provider.await_args.args[0]
         body = json.loads(sent.payload)
         self.assertEqual(body["messages"], [{"role": "user", "content": "Rain in Nairobi?"}])
-        self.assertEqual((body["stream"], body["max_tokens"]), (False, 0))
+        self.assertEqual((body["stream"], body["max_tokens"]), (False, 1))
         self.assertNotIn("stream_options", body)
         self.assertNotIn("max_completion_tokens", body)
         self.assertEqual(body["trace"]["generation_name"], "cache-keepalive")

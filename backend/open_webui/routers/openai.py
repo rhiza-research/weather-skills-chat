@@ -1187,14 +1187,15 @@ async def generate_chat_completion(
 
 
 def _cache_keepalive_sender(call: ProviderCall, user):
-    """Re-sends the call with no output, which reads its prompt cache, and
-    records the usage under the source ``cache_keepalive``."""
+    """Re-sends the call capped at one output token, which reads its prompt
+    cache, and records the usage under the source ``cache_keepalive``."""
 
     async def send():
         body = json.loads(call.payload)
         body.pop("stream_options", None)
         body.pop("max_completion_tokens", None)
-        body.update(stream=False, max_tokens=0)
+        # 1, not 0: OpenRouter drops a cap of 0 and generates the whole reply.
+        body.update(stream=False, max_tokens=1)
         if isinstance(body.get("trace"), dict):
             body["trace"]["generation_name"] = "cache-keepalive"
         response = await _send_provider_call(
