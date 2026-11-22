@@ -38,7 +38,7 @@ scripts/preview.sh ls      # list running stacks and their ports
 scripts/preview.sh down    # remove the stack, its data, and its image
 ```
 
-`up` ends by printing the stack's address, its test accounts and their password, and two ways to sign in: a line to run in a browser tool's page, which signs in as the admin and reloads, and a sign-in page link with the email filled in. Sign in with what it prints. `wiki/Development.md` has the full options.
+`up` ends by printing the stack's address, its test accounts and their password, and two ways to sign in: a line to run in a browser tool's page, which signs in as the admin and reloads, and a sign-in page link with the email filled in. Sign in with what it prints. The stack is removed after 60 minutes without a request; `up --idle=MINUTES` changes that. `wiki/Development.md` has the full options.
 
 ## Contributing
 
