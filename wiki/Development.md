@@ -102,11 +102,13 @@ scripts/preview.sh up
 
 | Command | Effect |
 |-|-|
-| `scripts/preview.sh up [NAME] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
+| `scripts/preview.sh up [NAME] [--idle=MINUTES] [OPTIONS]` | Build and start a stack, add staging data to a new one, and print its address. `OPTIONS` are passed to `./run-compose.sh`, such as `--testing` or `--isolation=off` |
 | `scripts/preview.sh down [NAME]` | Remove the stack, its data, and its image |
 | `scripts/preview.sh ls` | List running stacks and their ports |
 
 `NAME` defaults to the current branch. Running `up` again rebuilds the stack and keeps its ports and data.
+
+A stack is removed, with its data and image, once it has served no request for `--idle` minutes. The default is 60, and `--idle=0` keeps the stack until `down`. Running `up` again starts the count over with the `--idle` it is given.
 
 `up` reads the staging admin's API key from the secret `weather-skills-chat-staging-api-key`, then:
 

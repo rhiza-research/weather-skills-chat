@@ -3,11 +3,12 @@
 # settings, models, skill packs, and sample chats. ./run-compose.sh --name runs it
 # with Docker Compose; this script adds the staging data. See wiki/Development.md.
 #
-#   scripts/preview.sh up [NAME] [run-compose options]   e.g. --testing, --isolation=off
+#   scripts/preview.sh up [NAME] [--idle=MINUTES] [run-compose options]   e.g. --testing, --isolation=off
 #   scripts/preview.sh down [NAME]                       remove the stack, its data and image
 #   scripts/preview.sh ls                                list running stacks
 #
 # NAME defaults to the current branch. up needs gcloud signed in and Tailscale up.
+# A stack is removed once it has served no request for --idle minutes (default 60; 0 keeps it).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -52,12 +53,36 @@ case "$cmd" in
     down)
         exec ./run-compose.sh -q --drop --name="$name"
         ;;
+    watch)
+        # Internal: up leaves this running to remove the stack once it is idle for $1 minutes.
+        # It uses docker alone, so it still works after its worktree is deleted.
+        idle="$1"
+        cd /
+        while sleep 60; do
+            docker inspect "$stack" >/dev/null 2>&1 || exit 0
+            ((SECONDS < idle * 60)) && continue
+            # No grep -q: it would end docker logs early and fail the pipe on a busy stack.
+            docker logs --since "${idle}m" "$stack" 2>&1 | grep ' HTTP/[0-9.]*" ' >/dev/null && continue
+            docker compose -p "$stack" down --remove-orphans --volumes
+            docker image rm "weather-skills-chat:$stack" || true
+            exit
+        done
+        ;;
     up) ;;
     *)
-        sed -n 2,10p "$0"
+        sed -n 2,11p "$0"
         exit 1
         ;;
 esac
+
+idle=60
+for arg in "$@"; do
+    shift
+    if [[ $arg == --idle=* ]]; then idle="${arg#--idle=}"; else set -- "$@" "$arg"; fi
+done
+[[ $idle =~ ^[0-9]+$ ]] || { echo "--idle takes whole minutes, 0 to keep the stack" >&2; exit 1; }
+# The watcher of an earlier up must not remove the stack while it rebuilds.
+pkill -f -- "preview.sh watch $name " || true
 
 # One .env for every stack: this checkout's, or the main checkout's in a worktree.
 env_file="$ROOT/.env"
@@ -96,3 +121,7 @@ if [[ $new == true ]]; then
     python3 scripts/preview-seed/staging.py import "$url" "$stack"
 fi
 sign_in_help "$url"
+if ((idle > 0)); then
+    nohup "$ROOT/scripts/preview.sh" watch "$name" "$idle" >/dev/null 2>&1 &
+    echo "Removed, with its data, after $idle minutes without a request. --idle=MINUTES changes that; --idle=0 keeps it."
+fi
