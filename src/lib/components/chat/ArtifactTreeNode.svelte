@@ -198,7 +198,7 @@
 			</div>
 		</div>
 		{#if shownBranches.length}
-			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
+			<div style={pad}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
 					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
@@ -257,16 +257,6 @@
 							<ArrowsPointingOut className="size-3.5" />
 						</button>
 					</Tooltip>
-					<Tooltip content={$i18n.t('Download')}>
-						<button
-							type="button"
-							class={iconButton}
-							aria-label={$i18n.t('Download')}
-							on:click={() => downloadFile(file.path, node.name)}
-						>
-							<ArrowDownTray className="size-3.5" />
-						</button>
-					</Tooltip>
 					<Tooltip content={$i18n.t('Copy link')}>
 						<button
 							type="button"
@@ -275,6 +265,16 @@
 							on:click={() => copyLink(file.path, file.kind)}
 						>
 							<DocumentDuplicate className="size-3.5" />
+						</button>
+					</Tooltip>
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() => downloadFile(file.path, node.name)}
+						>
+							<ArrowDownTray className="size-3.5" />
 						</button>
 					</Tooltip>
 				{:else if file.kind === 'zarr'}
@@ -307,7 +307,7 @@
 			</div>
 		</div>
 		{#if shownBranches.length}
-			<div style={`padding-left: ${(depth + 1) * 0.75 + 0.25}rem`}>
+			<div style={pad}>
 				<!-- A rewritten file loads its steps again. -->
 				{#key `${file.path}:${file.modified}`}
 					<ProvenanceTree branches={shownBranches} loadSteps={loadProvenanceSteps} />
