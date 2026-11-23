@@ -524,6 +524,8 @@ export function dropOrganization(organizationId: string) {
 export function setOpenChat(id: string) {
 	openId = id && id !== 'local' ? id : '';
 	if (openId) subscribed.add(openId);
+	const token = typeof localStorage !== 'undefined' ? localStorage.token : '';
+	if (openId && token && staleArtifacts.delete(openId)) void refreshArtifacts(token, openId);
 	const entry = openId ? entries.get(openId) : undefined;
 	if (entry) entry.touched = Date.now();
 	syncWatch();
@@ -831,6 +833,8 @@ export function onChatUpdated(id: string, revision: number, token: string) {
 }
 
 const artifactInflight = new Map<string, Promise<any[] | null>>();
+/** Cached lists that may have missed chat:artifacts while the socket was down. */
+const staleArtifacts = new Set<string>();
 
 async function fetchArtifactList(
 	token: string,
@@ -960,18 +964,16 @@ export async function refreshRecent(token: string) {
 	await preloadRecent(token, recentOrganizationId);
 }
 
-/** Re-list artifacts after a disconnect so files written while offline appear. */
+/**
+ * After a disconnect, re-list the open chat now. The other cached lists may have
+ * missed changes; each keeps painting and re-lists when its chat is opened.
+ */
 export async function refreshCachedArtifacts(token: string) {
 	if (!token) return;
-	for (const id of [...entries.keys()]) {
-		const entry = entries.get(id);
-		if (entry) entry.artifacts = null;
-		try {
-			await fetchArtifacts(token, id, true);
-		} catch (error) {
-			console.error(error);
-		}
-	}
+	for (const id of entries.keys()) staleArtifacts.add(id);
+	if (!openId) return;
+	staleArtifacts.delete(openId);
+	await refreshArtifacts(token, openId);
 }
 
 export function cachedArtifacts(id: string) {
