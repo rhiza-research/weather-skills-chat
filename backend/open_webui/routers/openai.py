@@ -163,6 +163,32 @@ def _openrouter_prompt_cache_key(
     return f"{user_id}:{day}"[:256]
 
 
+# metadata key: how far from the end of a call's messages the last message
+# before the current turn sits. Set by chat_compaction.previous_turn_marker.
+PREVIOUS_TURN_KEY = "cache_previous_turn_from_end"
+
+
+def _with_cache_marker(msg: dict) -> dict:
+    """The message with a cache marker on its last text block."""
+    content = msg.get("content")
+    if isinstance(content, str):
+        return {
+            **msg,
+            "content": [
+                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+            ],
+        }
+    if isinstance(content, list) and content:
+        blocks = [dict(block) if isinstance(block, dict) else block for block in content]
+        for block_idx in range(len(blocks) - 1, -1, -1):
+            block = blocks[block_idx]
+            if isinstance(block, dict) and block.get("type") == "text":
+                blocks[block_idx] = {**block, "cache_control": {"type": "ephemeral"}}
+                break
+        return {**msg, "content": blocks}
+    return msg
+
+
 def enable_prompt_caching(
     url: Optional[str],
     payload: dict,
@@ -179,6 +205,8 @@ def enable_prompt_caching(
     Anthropic / Claude models, on any connection:
     - Top-level ``cache_control``
     - Explicit ``cache_control`` on the last tool and on the system message
+    - Explicit ``cache_control`` on the last message before the current turn,
+      when metadata says where it is (``PREVIOUS_TURN_KEY``)
 
     Copies tools/messages before mutating so shared ``form_data`` lists are
     not permanently altered mid-loop.
@@ -215,33 +243,20 @@ def enable_prompt_caching(
         for idx, msg in enumerate(messages):
             if not isinstance(msg, dict) or msg.get("role") != "system":
                 continue
-            content = msg.get("content")
-            if isinstance(content, str):
-                messages[idx] = {
-                    **msg,
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": content,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                }
-            elif isinstance(content, list) and content:
-                blocks = [
-                    dict(block) if isinstance(block, dict) else block
-                    for block in content
-                ]
-                for block_idx in range(len(blocks) - 1, -1, -1):
-                    block = blocks[block_idx]
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        blocks[block_idx] = {
-                            **block,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                        break
-                messages[idx] = {**msg, "content": blocks}
+            messages[idx] = _with_cache_marker(msg)
             break
+        # The end of the turns before this one: every call in the turn reads
+        # it, so it stays cached for a compaction during the turn.
+        from_end = metadata.get(PREVIOUS_TURN_KEY) if isinstance(metadata, dict) else None
+        if isinstance(from_end, int) and 0 < from_end <= len(messages):
+            idx = len(messages) - from_end
+            msg = messages[idx]
+            if (
+                isinstance(msg, dict)
+                and msg.get("role") in ("user", "assistant")
+                and msg.get("content")
+            ):
+                messages[idx] = _with_cache_marker(msg)
         payload["messages"] = messages
 
     return payload
@@ -1201,11 +1216,34 @@ def _cache_keepalive_sender(call: ProviderCall, user):
         response = await _send_provider_call(
             call._replace(payload=json.dumps(body), reply_usage=None), user
         )
+        cache_keepalive.touch(call.chat_id)
         await bind_usage_to_response(
             response, {**call.reply_usage, "source": "cache_keepalive"}
         )
 
     return send
+
+
+async def send_after_call(call: ProviderCall, user, payload: str, source: str):
+    """Send payload on the connection of a chat's earlier call and return the reply.
+
+    For a request that extends that call, so it reads the call's prompt
+    cache. It does not restart the chat's cache keep-alive. The usage is
+    recorded with the call's usage context under ``source``, and a spending
+    limit stops it like any model call.
+    """
+    from open_webui.utils.usage import check_usage_caps
+
+    await asyncio.to_thread(
+        check_usage_caps,
+        call.reply_usage.get("organization_id"),
+        call.reply_usage.get("user_id"),
+    )
+    response = await _send_provider_call(
+        call._replace(payload=payload, reply_usage=None), user
+    )
+    cache_keepalive.touch(call.chat_id)
+    return await bind_usage_to_response(response, {**call.reply_usage, "source": source})
 
 
 async def _send_provider_call(call: ProviderCall, user):
@@ -1219,6 +1257,7 @@ async def _send_provider_call(call: ProviderCall, user):
             call.chat_id,
             _cache_keepalive_sender(call, user) if call.cached else None,
             call.reply_usage["source"],
+            last_call=(call, user) if call.cached else None,
         )
 
     # No local for the key: loguru tracebacks print local values, but not call.key.

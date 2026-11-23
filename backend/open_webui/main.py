@@ -1434,11 +1434,25 @@ async def chat_completion(
             )
             clock.mark("process_chat_payload")
 
-            from open_webui.utils.chat_compaction import fit_first_call
+            from open_webui.utils.chat_compaction import (
+                fit_first_call,
+                previous_turn_marker,
+            )
 
             job_form_data["messages"] = await fit_first_call(
-                request, user, model, job_metadata, job_form_data["messages"]
+                request,
+                user,
+                model,
+                job_metadata,
+                job_form_data["messages"],
+                job_form_data.get("tools"),
             )
+            job_form_data["metadata"] = {
+                **(job_form_data.get("metadata") or {}),
+                **previous_turn_marker(
+                    job_form_data["messages"], job_form_data["messages"]
+                ),
+            }
 
             await waiting_heartbeat.start()
             log_timing(

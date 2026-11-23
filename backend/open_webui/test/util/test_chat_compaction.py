@@ -238,7 +238,7 @@ class CompactChatTest(unittest.IsolatedAsyncioTestCase):
         chat = MagicMock(chat=_chat(usage={"context_used": 900, "context_window": 1000}))
         with patch.object(cc.Chats, "get_chat_by_id", return_value=chat), patch.object(
             cc.Chats, "set_message_compaction", side_effect=set_compaction
-        ), patch.object(cc, "_summarize", new=summarize), patch.object(cc, "_emit", new=AsyncMock()) as emit:
+        ), patch.object(cc, "_call_model", new=summarize), patch.object(cc, "_emit", new=AsyncMock()) as emit:
             result = await cc.compact_chat(
                 MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
             )
@@ -290,14 +290,14 @@ class CompactChatThreadTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(cc.asyncio, "to_thread", side_effect=to_thread), patch.object(
             cc.Chats, "get_chat_by_id", return_value=chat
         ), patch.object(cc.Chats, "set_message_compaction", return_value=True), patch.object(
-            cc, "_summarize", new=summarize
+            cc, "_call_model", new=summarize
         ), patch.object(cc, "_emit", new=AsyncMock()):
             result = await cc.compact_chat(
                 MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
             )
         self.assertEqual(result["status"], "done")
         self.assertEqual(threaded[0], "_start_compaction")
-        self.assertIn("first answer", summarize.await_args.args[3])
+        self.assertIn("first answer", summarize.await_args.args[3]["messages"][0]["content"])
 
     async def test_a_failed_start_writes_nothing_and_reports_failure(self):
         with patch.object(cc.Chats, "get_chat_by_id", side_effect=RuntimeError("db down")), patch.object(

@@ -3,13 +3,18 @@
 The summary is saved on the assistant message where the chat was compacted,
 as ``compaction``. ``chat_turns.messages_for_model`` leaves out everything up
 to it. The person still sees every message.
+
+The summary call reads the chat's prompt cache when that is cheaper than
+sending the conversation fresh: it extends the chat's last cached request, or
+during a reply the turn's own request. Otherwise it sends the conversation as
+one text, without the system prompt and tools.
 """
 
 import asyncio
 import json
 import logging
 import time
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.chats import Chats
@@ -28,6 +33,7 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 COMPACTION_TIMEOUT_S = 90
 END_OF_TURN_RATIO = 0.9
 CHARS_PER_TOKEN = 4
+SUMMARY_MAX_TOKENS = 16000
 
 
 def compaction_running(compaction, now: Optional[float] = None) -> bool:
@@ -39,7 +45,7 @@ def compaction_running(compaction, now: Optional[float] = None) -> bool:
         return False
     return (now if now is not None else time.time()) - started < COMPACTION_TIMEOUT_S
 
-SUMMARY_INSTRUCTIONS = """Summarize the conversation below. The summary replaces it: the assistant will continue the conversation with only the summary as context, so keep everything needed to carry on.
+SUMMARY_INSTRUCTIONS = """Summarize this conversation. The summary replaces it: the assistant will continue the conversation with only the summary as context, so keep everything needed to carry on.
 
 Include:
 - What the user wants and asked for, and any preferences they stated.
@@ -54,10 +60,27 @@ Write plain notes. No preamble.
 
 Many parts of the chat can likely be made concise by describing the final result of a set of analysis and/or tool calls. Please be as concise as reasonably possible without preventing continued analysis."""
 
+# For a summary call that keeps the chat's tools so it can read the cache.
+CACHED_INSTRUCTIONS = (
+    f"{SUMMARY_INSTRUCTIONS}\n\nAnswer with the summary as text. Do not call any tools."
+)
+
 TOOL_RESULT_REMOVED = (
     "[This tool result was removed to fit the model's context window. "
     "Run the tool again if you need it.]"
 )
+
+
+def cache_read_rate(model: Optional[str]) -> float:
+    """What a cached input token costs relative to an uncached one."""
+    # shortcut: Anthropic's prices by model name; add a model here when its
+    # cache price differs, or read prices from the provider if they change often.
+    name = (model or "").lower().replace(".", "-")
+    if "fable" in name or "mythos" in name:
+        return 0.025
+    if "opus-5-5" in name or "sonnet-5-5" in name:
+        return 0.05
+    return 0.1
 
 
 def _text(content) -> str:
@@ -86,6 +109,10 @@ def message_chars(messages: list[dict]) -> int:
     return total
 
 
+def _json_chars(messages: list[dict]) -> int:
+    return sum(len(json.dumps(m)) for m in messages if m.get("role") != "system")
+
+
 def transcript_text(messages: list[dict]) -> str:
     """The conversation as one text, so the summary call sends no tool turns."""
     lines = []
@@ -112,21 +139,26 @@ def summary_request(messages: list[dict]) -> str:
     )
 
 
-def compaction_estimate(usage, summary_usage) -> dict:
+def compaction_estimate(usage, summary_usage, removed_share=None) -> dict:
     """Context use after compacting, from the reply's usage and the summary call's.
 
-    The summary call's prompt is the removed transcript plus the instructions;
-    its completion is the summary that replaces it.
+    The summary's tokens replace the removed conversation. A summary call
+    sent fresh reads only the conversation and the instructions. One that
+    reads the cache also reads the system prompt and tools, so
+    ``removed_share`` gives the conversation's share of its prompt.
     """
     usage = usage if isinstance(usage, dict) else {}
     summary_usage = summary_usage if isinstance(summary_usage, dict) else {}
     used = usage.get("context_used")
     window = usage.get("context_window")
-    removed = summary_usage.get("prompt_tokens")
+    prompt = summary_usage.get("prompt_tokens")
     added = summary_usage.get("completion_tokens")
-    if not all(isinstance(v, (int, float)) for v in (used, window, removed, added)):
+    if not all(isinstance(v, (int, float)) for v in (used, window, prompt, added)):
         return {}
-    removed -= len(SUMMARY_INSTRUCTIONS) // CHARS_PER_TOKEN
+    if removed_share is None:
+        removed = prompt - len(SUMMARY_INSTRUCTIONS) // CHARS_PER_TOKEN
+    else:
+        removed = prompt * removed_share
     estimate = max(int(used - max(0, removed) + added), int(added))
     return {"context_estimate": estimate, "context_window": window}
 
@@ -144,38 +176,112 @@ async def _emit(emitter_meta: dict, chat_id: str, message_id: str, data: dict):
         log.debug("compaction event failed chat_id=%s", chat_id, exc_info=True)
 
 
-async def _summarize(request, user, model_id: str, prompt: str, metadata: dict):
+def _summary_text(response) -> tuple[str, Optional[dict]]:
+    if not isinstance(response, dict):
+        raise ValueError("The summary call returned no reply")
+    choices = response.get("choices") or []
+    message = (choices[0] if choices else {}).get("message") or {}
+    summary = message.get("content")
+    if message.get("tool_calls") or not isinstance(summary, str) or not summary.strip():
+        raise ValueError("The summary call returned no text")
+    return summary.strip(), response.get("usage")
+
+
+async def _call_model(request, user, model_id: str, form: dict):
     from open_webui.utils.chat import generate_chat_completion
     from open_webui.utils.models import remember_catalog_model
 
     # A server that has not served this model since it started has not loaded it.
     await asyncio.to_thread(remember_catalog_model, request, model_id)
     response = await generate_chat_completion(
-        request,
-        {
-            "model": model_id,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-            "metadata": metadata,
-        },
-        user,
+        request, {"model": model_id, "stream": False, **form}, user
     )
-    if not isinstance(response, dict):
-        raise ValueError("The summary call returned no reply")
-    choices = response.get("choices") or []
-    summary = ((choices[0] if choices else {}).get("message") or {}).get("content")
-    if not isinstance(summary, str) or not summary.strip():
-        raise ValueError("The summary call returned no text")
-    return summary.strip(), response.get("usage")
+    return _summary_text(response)
 
 
-def _start_compaction(chat_id: str, message_id: str, message_map: Optional[dict]):
-    """Read the chat, build the summary prompt, and save the running state.
+def final_reply_text(chain: list[dict]) -> Optional[str]:
+    """The text of the reply's last model call, which its cached request lacks."""
+    last = chain[-1] if chain else None
+    if not last or last.get("role") != "assistant":
+        return None
+    expanded = expand_ui_tool_history_messages([last])
+    final = expanded[-1] if expanded else None
+    if not final or final.get("role") != "assistant" or final.get("tool_calls"):
+        return None
+    return _text(final.get("content")).strip() or None
 
-    Synchronous: a database read, the transcript build (which grows with the
-    chat) and a write, so compact_chat runs it in one thread. Returns None
-    when the message is gone, else (its replies, its usage, the running
-    state, the prompt). Nothing is written when the prompt cannot be built.
+
+class CachedPlan(NamedTuple):
+    """A summary call that reads the chat's prompt cache."""
+
+    payload: Optional[str]  # the stored request extended, sent as is
+    messages: Optional[list]  # the turn's messages, sent as a model call
+    removed_share: float  # the conversation's share of the request
+
+
+class Started(NamedTuple):
+    children: list
+    usage: Optional[dict]
+    running: dict
+    prompt: str
+    plan: Optional[CachedPlan]
+
+
+def _cached_plan(chain, message_id, warm, turn_messages, tools, context_tokens, fresh_chars):
+    """A CachedPlan when reading the cache costs less than the fresh summary call.
+
+    Reading costs the whole context at the cache price; the fresh call costs
+    the conversation at full price.
+    """
+    if warm is None or not isinstance(context_tokens, (int, float)):
+        return None
+    call, _ = warm
+    body = json.loads(call.payload)
+    if cache_read_rate(body.get("model")) * context_tokens >= fresh_chars / CHARS_PER_TOKEN:
+        return None
+    instructions = {"role": "user", "content": CACHED_INSTRUCTIONS}
+
+    if turn_messages is not None:
+        messages = [*turn_messages, instructions]
+        total = len(json.dumps(messages)) + len(json.dumps(tools or []))
+        return CachedPlan(None, messages, _json_chars(turn_messages) / max(total, 1))
+
+    if (call.reply_usage or {}).get("message_id") != message_id:
+        return None
+    final = final_reply_text(chain)
+    if not final:
+        return None
+    body["messages"] = [
+        *body.get("messages", []),
+        {"role": "assistant", "content": final},
+        instructions,
+    ]
+    removed = _json_chars(body["messages"][:-1])
+    body.pop("stream_options", None)
+    body.pop("max_completion_tokens", None)
+    body.update(stream=False, max_tokens=SUMMARY_MAX_TOKENS)
+    if isinstance(body.get("trace"), dict):
+        body["trace"]["generation_name"] = "chat-compaction"
+    payload = json.dumps(body)
+    return CachedPlan(payload, None, removed / max(len(payload), 1))
+
+
+def _start_compaction(
+    chat_id: str,
+    message_id: str,
+    message_map: Optional[dict],
+    usage: Optional[dict],
+    warm,
+    turn_messages: Optional[list],
+    tools: Optional[list],
+    context_tokens: Optional[int],
+) -> Optional[Started]:
+    """Read the chat, build the summary request, and save the running state.
+
+    Synchronous: a database read, the transcript build and the cached request
+    (both grow with the chat) and a write, so compact_chat runs it in one
+    thread. None when the message is gone. Nothing is written when the
+    request cannot be built.
     """
     chat = Chats.get_chat_by_id(chat_id)
     document = dict(chat.chat) if chat else {}
@@ -185,10 +291,57 @@ def _start_compaction(chat_id: str, message_id: str, message_map: Optional[dict]
         return None
     if message_map:
         document["history"] = {**history, "messages": message_map}
-    prompt = summary_request(messages_for_model(document, message_id))
+    chain = messages_for_model(document, message_id)
+    prompt = summary_request(chain)
+    usage = usage or message.get("usage") or {}
+    if context_tokens is None:
+        context_tokens = usage.get("context_used")
+    plan = _cached_plan(
+        chain, message_id, warm, turn_messages, tools, context_tokens, len(prompt)
+    )
     running = {"status": "running", "started_at": int(time.time())}
     Chats.set_message_compaction(chat_id, message_id, running, bump_revision=False)
-    return list(message.get("childrenIds") or []), message.get("usage"), running, prompt
+    return Started(
+        list(message.get("childrenIds") or []), usage, running, prompt, plan
+    )
+
+
+async def _summarize(request, user, model_id, started: Started, metadata, warm, tools):
+    """The summary and its context estimate: from the cache when planned, else fresh."""
+    plan = started.plan
+    if plan is not None:
+        try:
+            if plan.payload is not None:
+                from open_webui.routers.openai import send_after_call
+
+                response = await send_after_call(warm[0], warm[1], plan.payload, "task")
+                summary, summary_usage = _summary_text(response)
+            else:
+                from open_webui.routers.openai import PREVIOUS_TURN_KEY
+
+                summary, summary_usage = await _call_model(
+                    request,
+                    user,
+                    model_id,
+                    {
+                        "messages": plan.messages,
+                        **({"tools": tools} if tools else {}),
+                        # The turn's calls keep the conversation before it cached here.
+                        "metadata": {**metadata, PREVIOUS_TURN_KEY: 2},
+                    },
+                )
+            return summary, compaction_estimate(
+                started.usage, summary_usage, plan.removed_share
+            )
+        except Exception:
+            log.info("Cached summary call failed; sending it fresh", exc_info=True)
+    summary, summary_usage = await _call_model(
+        request,
+        user,
+        model_id,
+        {"messages": [{"role": "user", "content": started.prompt}], "metadata": metadata},
+    )
+    return summary, compaction_estimate(started.usage, summary_usage)
 
 
 async def compact_chat(
@@ -202,18 +355,35 @@ async def compact_chat(
     organization_id: Optional[str] = None,
     usage: Optional[dict] = None,
     message_map: Optional[dict] = None,
-) -> Optional[dict]:
+    turn_messages: Optional[list] = None,
+    tools: Optional[list] = None,
+    context_tokens: Optional[int] = None,
+) -> dict:
     """Summarize the chat up to and including message_id and save it there.
 
     Returns the saved compaction, or ``{"status": "failed"}`` or
     ``{"status": "cancelled"}`` when a new turn was added to that message
-    meanwhile. At the end of a turn the reply's final
-    text and usage may not be saved yet, so the caller passes them as
-    message_map and usage.
+    meanwhile. At the end of a turn the reply's final text and usage may not
+    be saved yet, so the caller passes them as message_map and usage. During
+    a reply, turn_messages and tools are the turn's request up to that
+    message and context_tokens the turn's last prompt size.
     """
+    from open_webui.utils import cache_keepalive
+
+    warm = cache_keepalive.warm_call(chat_id)
+    if warm is not None and getattr(warm[1], "id", None) != user.id:
+        warm = None  # its usage and model access belong to another user
     try:
         started = await asyncio.to_thread(
-            _start_compaction, chat_id, message_id, message_map
+            _start_compaction,
+            chat_id,
+            message_id,
+            message_map,
+            usage,
+            warm,
+            turn_messages,
+            tools,
+            context_tokens,
         )
     except Exception:
         log.warning("Chat compaction failed chat_id=%s", chat_id, exc_info=True)
@@ -221,24 +391,25 @@ async def compact_chat(
     if started is None:
         await _emit(emitter_meta, chat_id, message_id, {"status": "failed"})
         return {"status": "failed"}
-    children, saved_usage, running, prompt = started
-    await _emit(emitter_meta, chat_id, message_id, running)
+    await _emit(emitter_meta, chat_id, message_id, started.running)
 
     compaction = None
     outcome = "failed"
     try:
-        summary, summary_usage = await asyncio.wait_for(
+        summary, estimate = await asyncio.wait_for(
             _summarize(
                 request,
                 user,
                 model_id,
-                prompt,
+                started,
                 {
                     "task": "chat_compaction",
                     "chat_id": chat_id,
                     "user_id": user.id,
                     "organization_id": organization_id,
                 },
+                warm,
+                tools,
             ),
             COMPACTION_TIMEOUT_S,
         )
@@ -247,14 +418,14 @@ async def compact_chat(
             "summary": summary,
             "model": model_id,
             "created_at": int(time.time()),
-            **compaction_estimate(usage or saved_usage, summary_usage),
+            **estimate,
         }
         if await asyncio.to_thread(
             Chats.set_message_compaction,
             chat_id,
             message_id,
             done,
-            children=children,
+            children=started.children,
         ):
             compaction = done
         else:
@@ -274,15 +445,32 @@ async def compact_chat(
     return result
 
 
+def _last_user_index(messages: list[dict]) -> Optional[int]:
+    return max(
+        (i for i, m in enumerate(messages) if m.get("role") == "user"), default=None
+    )
+
+
+def previous_turn_marker(base: list[dict], call: list[dict]) -> dict:
+    """Metadata telling the model call where the turns before this one end.
+
+    base is the turn's messages up to its user message; call is what is sent.
+    """
+    from open_webui.routers.openai import PREVIOUS_TURN_KEY
+
+    last_user = _last_user_index(base)
+    if not last_user:
+        return {}
+    return {PREVIOUS_TURN_KEY: len(call) - (last_user - 1)}
+
+
 def compacted_messages(messages: list[dict], summary: str, notes: str) -> list[dict]:
     """The call's messages after compacting everything before this turn.
 
     Keeps the leading system messages and the turn from its user message on;
     the summary and the chat's notes move onto that user message.
     """
-    last_user = max(
-        (i for i, m in enumerate(messages) if m.get("role") == "user"), default=None
-    )
+    last_user = _last_user_index(messages)
     if last_user is None:
         return messages
     head = [m for m in messages[:last_user] if m.get("role") == "system"]
@@ -321,20 +509,22 @@ async def fit_model_call(
     call: list[dict],
     used_before: Optional[int],
     chars_before: int,
+    tools: Optional[list] = None,
 ) -> tuple[list[dict], list[dict]]:
     """Before a model call, make it fit the model's context window.
 
     base is the turn's messages before this turn's tool calls; call is what
-    the model gets. used_before is the prompt tokens of the turn's previous
-    call (or the context the previous reply ended at) and chars_before the
-    characters it was counted for; None estimates the whole call from its
-    characters. Over the window, the chat is compacted up to the reply this
-    turn follows, once per turn; then the oldest tool results are dropped
-    from the call. Returns the new base and call.
+    the model gets, and tools the turn's tools. used_before is the prompt
+    tokens of the turn's previous call (or the context the previous reply
+    ended at) and chars_before the characters it was counted for; None
+    estimates the whole call from its characters. Over the window, the chat
+    is compacted up to the reply this turn follows, once per turn; then the
+    oldest tool results are dropped from the call. Returns the new base and
+    call.
     """
     try:
         return await _fit_model_call(
-            request, user, model, metadata, base, call, used_before, chars_before
+            request, user, model, metadata, base, call, used_before, chars_before, tools
         )
     except Exception:
         # Sending the call as it was is no worse than before this check.
@@ -343,7 +533,7 @@ async def fit_model_call(
 
 
 async def _fit_model_call(
-    request, user, model, metadata, base, call, used_before, chars_before
+    request, user, model, metadata, base, call, used_before, chars_before, tools
 ):
     from open_webui.routers.openai import context_window_for
 
@@ -355,10 +545,12 @@ async def _fit_model_call(
 
     state = metadata.get("compaction")
     parent = (state or {}).get("parent") or {}
+    last_user = _last_user_index(base)
     if (
         state
         and not state.get("done")
         and parent.get("id")
+        and last_user
         and (parent.get("compaction") or {}).get("status") != "done"
         and not compaction_running(parent.get("compaction"))
     ):
@@ -371,6 +563,9 @@ async def _fit_model_call(
             model_id=model["id"],
             emitter_meta=metadata,
             organization_id=metadata.get("organization_id"),
+            turn_messages=base[:last_user],
+            tools=tools,
+            context_tokens=used_before,
         )
         if compaction["status"] == "done":
             chat = await asyncio.to_thread(Chats.get_chat_by_id, metadata["chat_id"])
@@ -386,7 +581,7 @@ async def _fit_model_call(
 
 
 async def fit_first_call(
-    request, user, model: dict, metadata: dict, messages: list[dict]
+    request, user, model: dict, metadata: dict, messages: list[dict], tools=None
 ) -> list[dict]:
     """fit_model_call for a turn's first call, estimated from the previous reply.
 
@@ -397,7 +592,7 @@ async def fit_first_call(
     last_user = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     chars_before = message_chars(messages) - message_chars([last_user] if last_user else [])
     _, call = await fit_model_call(
-        request, user, model, metadata, messages, messages, used, chars_before
+        request, user, model, metadata, messages, messages, used, chars_before, tools
     )
     return call
 
