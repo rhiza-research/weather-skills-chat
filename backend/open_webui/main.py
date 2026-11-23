@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import inspect
 import json
 import logging
@@ -553,6 +554,20 @@ def _resync_skill_packs(app_ref: FastAPI) -> None:
         log.exception("Skill pack tool resync on startup failed")
 
 
+async def _freeze_after(loads) -> None:
+    """Freeze what startup built, so full GC passes stop rescanning it.
+
+    Frozen objects are still freed by reference counting; only the cycle
+    collector skips them. Collect first so no garbage gets frozen.
+    """
+    for result in await asyncio.gather(*loads, return_exceptions=True):
+        if isinstance(result, BaseException):
+            log.error("Startup load failed", exc_info=result)
+    gc.collect()
+    gc.freeze()
+    log.info("gc froze %d startup objects", gc.get_freeze_count())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_logger()
@@ -584,8 +599,14 @@ async def lifespan(app: FastAPI):
 
     start_scheduler(app)
     # Don't block HTTP listen on HF/model load or skill module imports.
-    asyncio.create_task(asyncio.to_thread(ensure_retrieval_models, app))
-    asyncio.create_task(asyncio.to_thread(_resync_skill_packs, app))
+    asyncio.create_task(
+        _freeze_after(
+            [
+                asyncio.to_thread(ensure_retrieval_models, app),
+                asyncio.to_thread(_resync_skill_packs, app),
+            ]
+        )
+    )
     # Importing the Langfuse SDK and building its client takes about half a
     # second. Do it here, off the loop and before serving, not in the first
     # chat turn.

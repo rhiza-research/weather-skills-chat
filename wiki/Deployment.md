@@ -50,8 +50,10 @@ The chat server answers every request, socket, and health check from one event l
 - Each stall: a hold at least as long as the stall threshold, with how long it lasted.
 - The code holding the loop, as a stack trace taken while the stall is still happening.
 - Once a minute, a summary: the longest hold and the share of that minute the loop was held.
+- Each slow garbage-collection pass, with how long it took and which thread ran it. A full pass holds the whole server, whichever thread runs it.
+- Once an hour, a heap summary: how many objects the garbage collector scans, how many it skips because they were frozen at startup, and the most common object types.
 
-It costs about 0.2% of one CPU core when the server is idle, and adds no delay that could be measured under load, so it is meant to stay on in production.
+It costs about 0.2% of one CPU core when the server is idle, and adds no delay that could be measured under load, so it is meant to stay on in production. The hourly heap summary holds the server for about a quarter as long as one full garbage-collection pass.
 
 | Env var | Default | Effect |
 |-|-|-|
