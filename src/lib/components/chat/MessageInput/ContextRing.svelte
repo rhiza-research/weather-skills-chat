@@ -84,7 +84,7 @@
 				{#if onCompact}
 					<button
 						type="button"
-						class="mt-2 w-full rounded-lg px-2 py-1 text-left font-medium transition hover:bg-gray-100 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+						class="mt-2 w-full px-2.5 py-1.5 text-sm font-medium rounded-full border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:bg-transparent"
 						disabled={!canCompact}
 						on:click={() => onCompact?.()}
 					>
