@@ -1,4 +1,4 @@
-"""Compaction's summary call reads the chat's prompt cache when that is cheaper."""
+"""Compaction's summary call re-sends the reply's warm last call to read its cache."""
 
 import asyncio
 import json
@@ -37,10 +37,10 @@ CHAIN = [
 ]
 
 
-class CachedPlanTest(unittest.TestCase):
-    def test_a_large_conversation_reuses_the_last_request(self):
-        plan = cc._cached_plan(CHAIN, "a1", (_call(), None), None, None, 100_000, 4_000_000)
-        body = json.loads(plan.payload)
+class ReusePayloadTest(unittest.TestCase):
+    def test_the_last_call_gets_the_final_reply_and_the_instructions(self):
+        payload, share = cc._reuse_payload(CHAIN, "a1", (_call(), None))
+        body = json.loads(payload)
         self.assertEqual(body["messages"][1], {"role": "user", "content": "plot rain"})
         self.assertEqual(body["messages"][2], {"role": "assistant", "content": FINAL})
         self.assertEqual(body["messages"][3]["content"], cc.CACHED_INSTRUCTIONS)
@@ -48,43 +48,21 @@ class CachedPlanTest(unittest.TestCase):
         self.assertIs(body["stream"], False)
         self.assertEqual(body["max_tokens"], cc.SUMMARY_MAX_TOKENS)
         self.assertNotIn("stream_options", body)
-        self.assertTrue(0 < plan.removed_share < 1)
+        self.assertTrue(0 < share < 1)
 
-    def test_a_small_conversation_is_sent_fresh(self):
-        # 0.05 x 160k = 8k cached tokens costs more than a 5k-token conversation.
-        self.assertIsNone(
-            cc._cached_plan(CHAIN, "a1", (_call(), None), None, None, 160_000, 20_000)
-        )
-
-    def test_the_price_follows_the_model(self):
-        self.assertEqual(cc.cache_read_rate("anthropic/claude-fable-5.2"), 0.025)
-        self.assertEqual(cc.cache_read_rate("requesty/anthropic/claude-opus-5-5"), 0.05)
-        self.assertEqual(cc.cache_read_rate("anthropic/claude-opus-4-8"), 0.1)
-
-    def test_another_reply_or_no_warm_cache_is_sent_fresh(self):
-        self.assertIsNone(
-            cc._cached_plan(CHAIN, "a1", (_call("other"), None), None, None, 1000, 4_000_000)
-        )
-        self.assertIsNone(cc._cached_plan(CHAIN, "a1", None, None, None, 1000, 4_000_000))
+    def test_another_reply_or_no_warm_call_is_sent_fresh(self):
+        self.assertIsNone(cc._reuse_payload(CHAIN, "a1", (_call("other"), None))[0])
+        self.assertIsNone(cc._reuse_payload(CHAIN, "a1", None)[0])
 
     def test_a_reply_that_ended_in_a_tool_call_is_sent_fresh(self):
         chain = [CHAIN[0], {"role": "assistant", "content": "", "tool_calls": [{"id": "t"}]}]
-        self.assertIsNone(
-            cc._cached_plan(chain, "a1", (_call(), None), None, None, 1000, 4_000_000)
-        )
-
-    def test_during_a_reply_the_turns_messages_are_extended(self):
-        turn = [{"role": "system", "content": "SYSTEM"}, *CHAIN]
-        plan = cc._cached_plan([], "a1", (_call("a2"), None), turn, [], 100_000, 4_000_000)
-        self.assertIsNone(plan.payload)
-        self.assertEqual(plan.messages[:3], turn)
-        self.assertEqual(plan.messages[3]["content"], cc.CACHED_INSTRUCTIONS)
+        self.assertIsNone(cc._reuse_payload(chain, "a1", (_call(), None))[0])
 
 
 class SummarizeTest(unittest.IsolatedAsyncioTestCase):
-    def _started(self, plan):
+    def _started(self, payload):
         usage = {"context_used": 900_000, "context_window": 1_000_000}
-        return cc.Started([], usage, {}, "FRESH", plan)
+        return cc.Started([], usage, {}, "FRESH", payload, 0.8)
 
     async def test_the_reused_request_is_sent_on_the_calls_connection(self):
         reply = {
@@ -92,12 +70,11 @@ class SummarizeTest(unittest.IsolatedAsyncioTestCase):
             "usage": {"prompt_tokens": 900_000, "completion_tokens": 2_000},
         }
         send = AsyncMock(return_value=reply)
-        warm = (_call(), MagicMock())
         with patch.object(openai_router, "send_after_call", new=send), patch.object(
             cc, "_call_model", new=AsyncMock()
         ) as fresh:
             summary, estimate = await cc._summarize(
-                MagicMock(), MagicMock(), "m", self._started(cc.CachedPlan("P", None, 0.8)), {}, warm, None
+                MagicMock(), MagicMock(), "m", self._started("P"), {}, (_call(), MagicMock())
             )
         self.assertEqual(summary, "S")
         self.assertEqual(send.await_args.args[2], "P")
@@ -112,23 +89,16 @@ class SummarizeTest(unittest.IsolatedAsyncioTestCase):
             cc, "_call_model", new=fresh
         ):
             summary, _ = await cc._summarize(
-                MagicMock(), MagicMock(), "m", self._started(cc.CachedPlan("P", None, 0.8)), {}, (_call(), MagicMock()), None
+                MagicMock(), MagicMock(), "m", self._started("P"), {}, (_call(), MagicMock())
             )
         self.assertEqual(summary, "S")
         self.assertEqual(fresh.await_args.args[3]["messages"][0]["content"], "FRESH")
 
-    async def test_during_a_reply_the_call_marks_the_previous_turn(self):
+    async def test_without_a_warm_call_it_is_sent_fresh(self):
         fresh = AsyncMock(return_value=("S", {"prompt_tokens": 10, "completion_tokens": 1}))
-        messages = [*CHAIN, {"role": "user", "content": cc.CACHED_INSTRUCTIONS}]
-        tools = [{"type": "function"}]
         with patch.object(cc, "_call_model", new=fresh):
-            await cc._summarize(
-                MagicMock(), MagicMock(), "m", self._started(cc.CachedPlan(None, messages, 0.5)), {"task": "t"}, None, tools
-            )
-        form = fresh.await_args.args[3]
-        self.assertEqual(form["messages"], messages)
-        self.assertEqual(form["tools"], tools)
-        self.assertEqual(form["metadata"][openai_router.PREVIOUS_TURN_KEY], 2)
+            await cc._summarize(MagicMock(), MagicMock(), "m", self._started(None), {"task": "t"}, None)
+        self.assertEqual(fresh.await_args.args[3]["metadata"], {"task": "t"})
 
 
 class CompactChatWarmCallTest(unittest.IsolatedAsyncioTestCase):
@@ -142,47 +112,6 @@ class CompactChatWarmCallTest(unittest.IsolatedAsyncioTestCase):
                 MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
             )
         self.assertIsNone(start.call_args.args[4])
-
-
-class PreviousTurnMarkerTest(unittest.TestCase):
-    def test_position_counts_from_the_end_of_the_call(self):
-        base = [{"role": "system"}, {"role": "user"}, {"role": "assistant"}, {"role": "user"}]
-        key = openai_router.PREVIOUS_TURN_KEY
-        self.assertEqual(cc.previous_turn_marker(base, base), {key: 2})
-        call = [*base, {"role": "assistant"}, {"role": "tool"}]
-        self.assertEqual(cc.previous_turn_marker(base, call), {key: 4})
-
-    def test_a_first_turn_has_none(self):
-        self.assertEqual(cc.previous_turn_marker([{"role": "user"}], [{"role": "user"}]), {})
-
-
-class RouterMarkerTest(unittest.TestCase):
-    def _cache(self, messages, from_end):
-        payload = {"model": "anthropic/claude-opus-5-5", "messages": messages}
-        return openai_router.enable_prompt_caching(
-            "https://example.test", payload, {openai_router.PREVIOUS_TURN_KEY: from_end}
-        )["messages"]
-
-    def test_the_end_of_the_previous_turn_gets_a_marker(self):
-        messages = [
-            {"role": "system", "content": "S"},
-            {"role": "user", "content": "old"},
-            {"role": "assistant", "content": "old answer"},
-            {"role": "user", "content": "now"},
-        ]
-        out = self._cache(messages, 2)
-        self.assertEqual(out[2]["content"][0]["cache_control"], {"type": "ephemeral"})
-        self.assertEqual(out[2]["content"][0]["text"], "old answer")
-        self.assertEqual(out[3]["content"], "now")
-        self.assertEqual(messages[2]["content"], "old answer")
-
-    def test_an_empty_tool_call_message_is_left_alone(self):
-        messages = [
-            {"role": "user", "content": "old"},
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "t"}]},
-            {"role": "user", "content": "now"},
-        ]
-        self.assertEqual(self._cache(messages, 2)[1]["content"], "")
 
 
 class WarmCallTest(unittest.TestCase):

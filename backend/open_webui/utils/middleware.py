@@ -59,7 +59,6 @@ from open_webui.utils.chat_compaction import (
     compact_at_turn_end,
     fit_model_call,
     message_chars,
-    previous_turn_marker,
 )
 from open_webui.utils.misc import (
     deep_update,
@@ -3129,7 +3128,6 @@ async def process_chat_response(
                             followup_messages,
                             previous.get("prompt_tokens"),
                             last_call["chars"],
-                            form_data.get("tools"),
                         )
                         last_call["chars"] = message_chars(followup_messages)
 
@@ -3157,9 +3155,6 @@ async def process_chat_response(
                                     "organization_id": metadata.get("organization_id"),
                                     "usage_source": metadata.get("usage_source")
                                     or "chat",
-                                    **previous_turn_marker(
-                                        form_data["messages"], followup_messages
-                                    ),
                                 },
                             },
                             user,

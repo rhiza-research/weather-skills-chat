@@ -163,32 +163,6 @@ def _openrouter_prompt_cache_key(
     return f"{user_id}:{day}"[:256]
 
 
-# metadata key: how far from the end of a call's messages the last message
-# before the current turn sits. Set by chat_compaction.previous_turn_marker.
-PREVIOUS_TURN_KEY = "cache_previous_turn_from_end"
-
-
-def _with_cache_marker(msg: dict) -> dict:
-    """The message with a cache marker on its last text block."""
-    content = msg.get("content")
-    if isinstance(content, str):
-        return {
-            **msg,
-            "content": [
-                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
-            ],
-        }
-    if isinstance(content, list) and content:
-        blocks = [dict(block) if isinstance(block, dict) else block for block in content]
-        for block_idx in range(len(blocks) - 1, -1, -1):
-            block = blocks[block_idx]
-            if isinstance(block, dict) and block.get("type") == "text":
-                blocks[block_idx] = {**block, "cache_control": {"type": "ephemeral"}}
-                break
-        return {**msg, "content": blocks}
-    return msg
-
-
 def enable_prompt_caching(
     url: Optional[str],
     payload: dict,
@@ -205,8 +179,6 @@ def enable_prompt_caching(
     Anthropic / Claude models, on any connection:
     - Top-level ``cache_control``
     - Explicit ``cache_control`` on the last tool and on the system message
-    - Explicit ``cache_control`` on the last message before the current turn,
-      when metadata says where it is (``PREVIOUS_TURN_KEY``)
 
     Copies tools/messages before mutating so shared ``form_data`` lists are
     not permanently altered mid-loop.
@@ -243,20 +215,33 @@ def enable_prompt_caching(
         for idx, msg in enumerate(messages):
             if not isinstance(msg, dict) or msg.get("role") != "system":
                 continue
-            messages[idx] = _with_cache_marker(msg)
+            content = msg.get("content")
+            if isinstance(content, str):
+                messages[idx] = {
+                    **msg,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": content,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                }
+            elif isinstance(content, list) and content:
+                blocks = [
+                    dict(block) if isinstance(block, dict) else block
+                    for block in content
+                ]
+                for block_idx in range(len(blocks) - 1, -1, -1):
+                    block = blocks[block_idx]
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        blocks[block_idx] = {
+                            **block,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                        break
+                messages[idx] = {**msg, "content": blocks}
             break
-        # The end of the turns before this one: every call in the turn reads
-        # it, so it stays cached for a compaction during the turn.
-        from_end = metadata.get(PREVIOUS_TURN_KEY) if isinstance(metadata, dict) else None
-        if isinstance(from_end, int) and 0 < from_end <= len(messages):
-            idx = len(messages) - from_end
-            msg = messages[idx]
-            if (
-                isinstance(msg, dict)
-                and msg.get("role") in ("user", "assistant")
-                and msg.get("content")
-            ):
-                messages[idx] = _with_cache_marker(msg)
         payload["messages"] = messages
 
     return payload

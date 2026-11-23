@@ -55,16 +55,19 @@ class MessagesForModelCutTest(unittest.TestCase):
 
 
 class EstimateTest(unittest.TestCase):
-    def test_estimate_removes_the_transcript_and_adds_the_summary(self):
-        instructions = len(cc.SUMMARY_INSTRUCTIONS) // cc.CHARS_PER_TOKEN
+    def test_estimate_removes_the_conversation_and_adds_the_summary(self):
+        # The conversation is 3/4 of a 200k-token summary prompt.
         result = cc.compaction_estimate(
             {"context_used": 180_000, "context_window": 200_000},
-            {"prompt_tokens": 150_000 + instructions, "completion_tokens": 2_000},
+            {"prompt_tokens": 200_000, "completion_tokens": 2_000},
+            0.75,
         )
         self.assertEqual(result, {"context_estimate": 32_000, "context_window": 200_000})
 
     def test_no_usage_gives_no_estimate(self):
-        self.assertEqual(cc.compaction_estimate(None, {"prompt_tokens": 1, "completion_tokens": 1}), {})
+        self.assertEqual(
+            cc.compaction_estimate(None, {"prompt_tokens": 1, "completion_tokens": 1}, 1.0), {}
+        )
 
     def test_running_goes_stale_after_the_timeout(self):
         now = time.time()
