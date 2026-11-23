@@ -13,6 +13,7 @@ from open_webui.utils.model_messages import (
     expand_ui_tool_history_messages,
     serialize_content_blocks_for_model,
     strip_message_details_for_tasks,
+    tool_result_for_chat,
 )
 from open_webui.routers.openai import (
     enable_prompt_caching,
@@ -305,6 +306,35 @@ class OpenRouterCacheTest(unittest.TestCase):
         )
         self.assertEqual(out["prompt_cache_key"], out2["prompt_cache_key"])
         self.assertNotEqual(out["session_id"], out2["session_id"])
+
+
+class ToolResultForChatTest(unittest.TestCase):
+    def test_small_results_are_serialized_unchanged(self):
+        skill = {"ok": True, "exit_code": 0, "stdout": "done", "stderr": "", "argv": ["-i", "a.zarr"]}
+        self.assertEqual(tool_result_for_chat(skill), json.dumps(skill, indent=2))
+        self.assertEqual(tool_result_for_chat([{"a": 1}]), json.dumps([{"a": 1}], indent=2))
+        self.assertEqual(tool_result_for_chat("plain"), "plain")
+        self.assertIsNone(tool_result_for_chat(None))
+
+    def test_huge_skill_stdout_is_cut_and_the_rest_kept(self):
+        skill = {
+            "ok": False,
+            "exit_code": 1,
+            "stdout": "x" * 5_000_000,
+            "stderr": "Traceback: boom",
+            "argv": ["--max-values", "0"],
+        }
+        saved = json.loads(tool_result_for_chat(skill))
+        self.assertLess(len(saved["stdout"]), 26_000)
+        self.assertIn("truncated 4975000 chars", saved["stdout"])
+        self.assertEqual(saved["stderr"], "Traceback: boom")
+        self.assertEqual(saved["exit_code"], 1)
+        self.assertEqual(saved["argv"], ["--max-values", "0"])
+
+    def test_other_huge_results_are_cut(self):
+        self.assertLess(len(tool_result_for_chat("y" * 5_000_000)), 51_000)
+        self.assertLess(len(tool_result_for_chat(["z" * 100] * 50_000)), 51_000)
+        self.assertLess(len(tool_result_for_chat({"rows": ["z" * 100] * 50_000})), 51_000)
 
 
 if __name__ == "__main__":

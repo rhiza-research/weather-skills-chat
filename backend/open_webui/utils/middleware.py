@@ -54,6 +54,7 @@ from open_webui.utils.task import (
     rag_template,
     tools_function_calling_generation_template,
 )
+from open_webui.utils.model_messages import tool_result_for_chat
 from open_webui.utils.misc import (
     deep_update,
     get_message_list,
@@ -744,8 +745,7 @@ async def chat_completion_tools_handler(
                             tool_result_files.append(item)
                             tool_result.remove(item)
 
-                if isinstance(tool_result, dict) or isinstance(tool_result, list):
-                    tool_result = json.dumps(tool_result, indent=2)
+                tool_result = tool_result_for_chat(tool_result)
 
                 if isinstance(tool_result, str):
                     tool = tools[tool_function_name]
@@ -3022,10 +3022,7 @@ async def process_chat_response(
                                     tool_result_files.append(item)
                                     tool_result.remove(item)
 
-                        if isinstance(tool_result, dict) or isinstance(
-                            tool_result, list
-                        ):
-                            tool_result = json.dumps(tool_result, indent=2)
+                        tool_result = tool_result_for_chat(tool_result)
 
                         tool_duration = max(
                             0, int(round(time.time() - tool_started_at))

@@ -130,6 +130,24 @@ def compact_tool_result_for_model(content: Any) -> str:
     return _truncate_stream(text, limit=_MAX_STREAM_CHARS * 2)
 
 
+# What one tool call may add to the saved chat. The model's copy is cut much shorter above; this
+# one is only read by a person opening the tool call. A skill once printed 45 MB.
+_MAX_SAVED_STREAM_CHARS = 25_000
+
+
+def tool_result_for_chat(result: Any) -> Any:
+    """Serialize a tool result as it is saved in the chat, cutting text too long to read.
+
+    A skill result keeps its shape, so stderr and exit_code survive a huge stdout.
+    """
+    if isinstance(result, dict) and _looks_like_skill_result(result):
+        result = {k: _truncate_stream(v, _MAX_SAVED_STREAM_CHARS) for k, v in result.items()}
+        return json.dumps(result, indent=2)
+    if isinstance(result, (dict, list)):
+        result = json.dumps(result, indent=2)
+    return _truncate_stream(result, _MAX_SAVED_STREAM_CHARS * 2)
+
+
 def deepcopy_messages(messages: list[dict]) -> list[dict]:
     """Deep-copy chat messages so upstream transforms cannot mutate the loop."""
     return deepcopy(messages or [])
