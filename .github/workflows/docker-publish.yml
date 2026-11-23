@@ -44,7 +44,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         env:
-          # On PRs, the revision label and sha- tag use the head commit, not the merge commit.
+          # On PRs, the revision label and pr-sha- tag use the head commit, not the merge commit.
           DOCKER_METADATA_PR_HEAD_SHA: true
         with:
           images: ghcr.io/rhiza-research/weather-skills-chat
@@ -55,7 +55,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{raw}}
             type=semver,pattern={{version}}
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=short,enable=${{ github.event_name != 'pull_request' }}
+            type=sha,prefix=pr-sha-,format=short,enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
