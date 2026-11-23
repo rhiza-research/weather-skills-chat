@@ -43,6 +43,8 @@
 
 	export let chat;
 	export let history;
+	export let compacting = false;
+	export let onCompact: (() => void) | null = null;
 	export let selectedModels;
 	export let showModelSelector = true;
 
@@ -109,7 +111,7 @@
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
 					<div class="self-center flex">
-						<ContextRing {history} />
+						<ContextRing {history} {compacting} {onCompact} />
 					</div>
 					<div class="self-center">
 						<ToolRunnerBand />

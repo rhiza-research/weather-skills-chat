@@ -55,6 +55,11 @@ from open_webui.utils.task import (
     tools_function_calling_generation_template,
 )
 from open_webui.utils.model_messages import tool_result_for_chat
+from open_webui.utils.chat_compaction import (
+    compact_at_turn_end,
+    fit_model_call,
+    message_chars,
+)
 from open_webui.utils.misc import (
     deep_update,
     get_message_list,
@@ -251,7 +256,7 @@ def model_call_error_message(e: Exception) -> str:
 
 
 async def context_usage(request, user, model: Optional[dict], usage: dict) -> dict:
-    """How full the model's context was on this call, for the message input's ring.
+    """How full the model's context is after this call: its prompt and its reply.
 
     Key names avoid "token" and "cost" so summing usage across a tool loop keeps
     the latest call's values instead of adding them.
@@ -261,6 +266,9 @@ async def context_usage(request, user, model: Optional[dict], usage: dict) -> di
     used = usage.get("prompt_tokens")
     if not isinstance(used, (int, float)) or not (model or {}).get("id"):
         return {}
+    reply = usage.get("completion_tokens")
+    if isinstance(reply, (int, float)):
+        used += reply
     window = await context_window_for(request, user, model["id"])
     return {"context_used": used, "context_window": window} if window else {}
 
@@ -1753,11 +1761,20 @@ async def process_chat_response(
     detach=True,
     waiting_heartbeat=None,
 ):
+    # The latest model call's usage, and the characters of what it was sent.
+    last_call = {"usage": None, "chars": message_chars(form_data.get("messages"))}
+
     async def background_tasks_handler(turn: TurnEnd):
         message_map = turn.message_map
         message = message_map.get(metadata["message_id"]) if message_map else None
 
         if message:
+            try:
+                await compact_at_turn_end(
+                    request, user, model, metadata, last_call["usage"], message_map
+                )
+            except Exception:
+                log.warning("End-of-turn compaction failed", exc_info=True)
             messages = get_message_list(message_map, message.get("id"))
 
             if messages:
@@ -1859,6 +1876,10 @@ async def process_chat_response(
                             "data": response,
                         }
                     )
+                    if isinstance(response.get("usage"), dict):
+                        last_call["usage"] = await context_usage(
+                            request, user, model, response["usage"]
+                        )
 
                     turn = await asyncio.to_thread(load_turn_end, metadata["chat_id"])
                     title = turn.title
@@ -2442,6 +2463,7 @@ async def process_chat_response(
                         **usage,
                         **await context_usage(request, user, model, usage),
                     }
+                    last_call["usage"] = usage
                     await event_emitter(
                         {"type": "chat:completion", "data": {"usage": usage}}
                     )
@@ -3096,6 +3118,18 @@ async def process_chat_response(
                             ],
                             content_blocks,
                         )
+                        previous = last_call["usage"] or {}
+                        form_data["messages"], followup_messages = await fit_model_call(
+                            request,
+                            user,
+                            model,
+                            metadata,
+                            form_data["messages"],
+                            followup_messages,
+                            previous.get("prompt_tokens"),
+                            last_call["chars"],
+                        )
+                        last_call["chars"] = message_chars(followup_messages)
 
                         await waiting_heartbeat.start()
                         log_timing(

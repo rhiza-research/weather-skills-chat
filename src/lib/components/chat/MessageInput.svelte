@@ -80,6 +80,7 @@
 
 	export let history;
 	export let taskIds = null;
+	export let compacting = false;
 
 	export let prompt = '';
 	export let files = [];
@@ -121,6 +122,7 @@
 	let isComposing = false;
 	// The chat's files are still being copied in from another chat; sending waits.
 	$: copyingArtifacts = $artifactCopy?.chatId === $chatId && $artifactCopy?.state === 'copying';
+	$: sendBlocked = copyingArtifacts || compacting;
 
 	let chatInputContainerElement;
 	let chatInputElement;
@@ -828,7 +830,7 @@
 
 															if (enterPressed) {
 																e.preventDefault();
-																if ((prompt !== '' || files.length > 0) && !copyingArtifacts) {
+																if ((prompt !== '' || files.length > 0) && !sendBlocked) {
 																	dispatch('submit', prompt);
 																}
 															}
@@ -990,7 +992,7 @@
 														}
 
 														// Submit the prompt when Enter key is pressed
-														if ((prompt !== '' || files.length > 0) && enterPressed && !copyingArtifacts) {
+														if ((prompt !== '' || files.length > 0) && enterPressed && !sendBlocked) {
 															dispatch('submit', prompt);
 														}
 													}
@@ -1370,15 +1372,17 @@
 												<Tooltip
 													content={copyingArtifacts
 														? $i18n.t('Artifact copy in progress...')
-														: $i18n.t('Send message')}
+														: compacting
+															? $i18n.t('Wait for compaction to finish')
+															: $i18n.t('Send message')}
 												>
 													<button
 														id="send-message-button"
-														class="{!(prompt === '' && files.length === 0) && !copyingArtifacts
+														class="{!(prompt === '' && files.length === 0) && !sendBlocked
 															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
 															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
 														type="submit"
-														disabled={(prompt === '' && files.length === 0) || copyingArtifacts}
+														disabled={(prompt === '' && files.length === 0) || sendBlocked}
 													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"

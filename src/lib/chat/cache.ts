@@ -608,7 +608,8 @@ const TURN_ACTIVITY_TYPES = new Set([
 	'chat:message:files',
 	'files',
 	'source',
-	'citation'
+	'citation',
+	'chat:compaction'
 ]);
 
 export function isTranscriptEvent(type: string | null) {
@@ -756,6 +757,12 @@ function writeCachedStream(event: any, token: string) {
 		// download the document to discover it.
 		if (!subscribed.has(id)) noteStreamGap(id, token);
 		return false;
+	}
+	if (type === 'chat:compaction') {
+		// The finished state also comes with the chat's next revision; this shows it now.
+		if (data?.status === 'running' || data?.status === 'done') message.compaction = data;
+		else delete message.compaction;
+		return true;
 	}
 	if (type === 'status') {
 		if (message.done === true) return false;

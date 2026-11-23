@@ -567,6 +567,39 @@ class ChatTable:
         )
         return None if state == "missing" else result
 
+    def set_message_compaction(
+        self,
+        id: str,
+        message_id: str,
+        compaction: Optional[dict],
+        *,
+        children: Optional[list] = None,
+        bump_revision: bool = True,
+    ) -> bool:
+        """Set or clear (None) a message's ``compaction``; True when written.
+
+        With ``children``, writes only while the message still has exactly
+        those replies, so a turn sent meanwhile wins over the compaction.
+        """
+        written = False
+
+        def apply(chat, _item):
+            nonlocal written
+            message = (chat.get("history") or {}).get("messages", {}).get(message_id)
+            if not isinstance(message, dict):
+                return None
+            if children is not None and list(message.get("childrenIds") or []) != children:
+                return None
+            if compaction is None:
+                message.pop("compaction", None)
+            else:
+                message["compaction"] = compaction
+            written = True
+            return chat, True
+
+        self._write_locked_chat(id, apply, bump_revision=bump_revision)
+        return written
+
     def append_message_content(
         self, id: str, message_id: str, text: str
     ) -> Optional[ChatModel]:

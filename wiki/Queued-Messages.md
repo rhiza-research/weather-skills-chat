@@ -12,7 +12,7 @@ While a reply is running, pressing Enter, or the send button next to **Stop**, p
 
 ## When they are sent
 
-The oldest queued message is sent as soon as the reply before it is done, including when the user stops that reply. It becomes the next message in the chat, as if the user had sent it then. The next one waits for that message's reply, and so on until the queue is empty.
+The oldest queued message is sent as soon as the reply before it is done, including when the user stops that reply. If that reply started a [[Chat Compaction]], the message waits for it to finish. It becomes the next message in the chat, as if the user had sent it then. The next one waits for that message's reply, and so on until the queue is empty.
 
 If a reply fails, nothing more is sent. The queued messages go back into the chat bar, in order, so the user can decide what to send.
 

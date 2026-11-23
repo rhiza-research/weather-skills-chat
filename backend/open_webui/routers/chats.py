@@ -650,6 +650,60 @@ async def update_chat_message_by_id(
 
 
 ############################
+# CompactChatAtMessage
+############################
+
+
+class CompactForm(BaseModel):
+    session_id: Optional[str] = None
+
+
+@router.post("/{id}/messages/{message_id}/compact")
+async def compact_chat_at_message(
+    request: Request,
+    id: str,
+    message_id: str,
+    form_data: CompactForm,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    """Summarize the chat up to this reply; the model gets the summary from then on."""
+    from open_webui.utils.chat_compaction import compact_chat, compaction_running
+
+    chat = await asyncio.to_thread(_require_writable_chat, id, user)
+    message = (chat.chat.get("history") or {}).get("messages", {}).get(message_id)
+    if not isinstance(message, dict) or message.get("role") != "assistant":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Only a reply can be compacted.")
+    if message.get("done") is False:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="Wait for the reply to finish."
+        )
+    compaction = message.get("compaction") or {}
+    if compaction.get("status") == "done":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="The chat is already compacted here."
+        )
+    if compaction_running(compaction):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="The chat is already being compacted."
+        )
+    if not message.get("model"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="This reply has no model to compact with."
+        )
+
+    return await compact_chat(
+        request,
+        user,
+        chat_id=id,
+        message_id=message_id,
+        model_id=message["model"],
+        emitter_meta={"user_id": user.id, "session_id": form_data.session_id},
+        organization_id=organization_id,
+    )
+
+
+############################
 # SendChatMessageEventById
 ############################
 class EventForm(BaseModel):

@@ -323,3 +323,30 @@ test('the live copy keeps only the latest status and appends files without repea
 	expect(message.files).toEqual([{ url: '/a.png' }, { url: '/b.png' }]);
 	expect(mergeFiles(undefined, [{ id: 'f' }, { id: 'f' }])).toEqual([{ id: 'f' }]);
 });
+
+test('compaction events set and clear the compaction on a finished reply', () => {
+	const doc = {
+		id: 'chat-compact',
+		meta: { revision: 1 },
+		chat: {
+			history: {
+				currentId: 'a1',
+				messages: { a1: { id: 'a1', role: 'assistant', content: 'hi', done: true } }
+			}
+		}
+	};
+	putChat(doc);
+	const send = (data: any) =>
+		applyCachedStreamEvent(
+			{ chat_id: 'chat-compact', message_id: 'a1', data: { type: 'chat:compaction', data } },
+			'token'
+		);
+	const reply = () => doc.chat.history.messages.a1 as any;
+
+	send({ status: 'running', started_at: 1 });
+	expect(reply().compaction.status).toBe('running');
+	send({ status: 'done', summary: 'S' });
+	expect(reply().compaction.summary).toBe('S');
+	send({ status: 'failed' });
+	expect(reply().compaction).toBeUndefined();
+});

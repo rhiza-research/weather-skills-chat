@@ -1342,6 +1342,11 @@ def prepare_chat_completion(
                 form_data["messages"] = prepare_completion_messages(
                     chat_id, turn, user
                 )
+                # Shared by the copies of metadata made during the turn.
+                metadata["compaction"] = {
+                    "parent": turn.get("compaction_parent"),
+                    "done": False,
+                }
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -1428,6 +1433,12 @@ async def chat_completion(
                 request, job_form_data, user, job_metadata, model
             )
             clock.mark("process_chat_payload")
+
+            from open_webui.utils.chat_compaction import fit_first_call
+
+            job_form_data["messages"] = await fit_first_call(
+                request, user, model, job_metadata, job_form_data["messages"]
+            )
 
             await waiting_heartbeat.start()
             log_timing(

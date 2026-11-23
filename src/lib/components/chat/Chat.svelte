@@ -62,6 +62,7 @@
 		isReplyRunning
 	} from '$lib/utils/generationLiveness';
 	import { isUsageLimitMessage } from '$lib/utils/usage';
+	import { compactionExpiresAt, runningCompaction } from '$lib/utils/compaction';
 	import {
 		CHAT_CONFLICT_MESSAGE,
 		isChatBusy,
@@ -75,6 +76,7 @@
 	import {
 		addTagById,
 		cloneChatById,
+		compactChat,
 		createNewChat,
 		deleteTagById,
 		deleteTagsById,
@@ -261,6 +263,35 @@
 	let history = {
 		messages: {},
 		currentId: null
+	};
+
+	// A compaction running on this branch pauses sending until it finishes or
+	// times out; the timer re-checks at the timeout.
+	let compactionNow = Date.now();
+	let compactionTimer: ReturnType<typeof setTimeout> | null = null;
+	const recheckCompactionAt = (compaction) => {
+		if (compactionTimer) clearTimeout(compactionTimer);
+		compactionTimer = compaction
+			? setTimeout(
+					() => (compactionNow = Date.now()),
+					compactionExpiresAt(compaction) - Date.now() + 50
+				)
+			: null;
+	};
+	$: compactionShown = runningCompaction(history, compactionNow);
+	$: compacting = compactionShown !== null;
+	$: recheckCompactionAt(compactionShown);
+
+	const compactCurrentChat = async () => {
+		const id = $chatId;
+		const messageId = history.currentId;
+		if (!id || id === 'local' || !messageId) return;
+		try {
+			// Progress and the outcome arrive as chat:compaction events.
+			await compactChat(localStorage.token, id, messageId, $socket?.id);
+		} catch (error) {
+			toast.error(typeof error === 'string' ? error : $i18n.t('Compaction failed.'));
+		}
 	};
 
 	let taskIds = null;
@@ -755,6 +786,7 @@
 		stopEventPromptWatch();
 		chatIdUnsubscriber?.();
 		if (artifactsBumpTimer) clearTimeout(artifactsBumpTimer);
+		if (compactionTimer) clearTimeout(compactionTimer);
 		window.removeEventListener('message', onMessageHandler);
 		window.clearTimeout(scrollStopTimer);
 		cancelAnimationFrame(tailWatch);
@@ -1871,6 +1903,10 @@
 		history.messages = { ...history.messages };
 		history = history;
 		if (!message) return;
+		if (type === 'chat:compaction') {
+			if (data?.status === 'failed') toast.error($i18n.t('Compaction failed.'));
+			return;
+		}
 		if (type === 'status') {
 			if (data?.action === GENERATION_HEARTBEAT_ACTION) return;
 			if (data?.done) bumpArtifactsSoon();
@@ -1906,6 +1942,10 @@
 		}
 		if ($artifactCopy?.chatId === $chatId && $artifactCopy?.state === 'copying') {
 			toast.error($i18n.t('Wait for the artifact copy to finish before sending.'));
+			return false;
+		}
+		if (compacting) {
+			toast.error($i18n.t('Wait for compaction to finish before sending.'));
 			return false;
 		}
 		const messages = createMessagesList(history, history.currentId);
@@ -2098,6 +2138,7 @@
 		!loading &&
 		$chatId &&
 		!replyRunning &&
+		!compacting &&
 		history.currentId !== queueWaitsAfter
 	) {
 		sendQueued();
@@ -2930,6 +2971,8 @@
 					bind:selectedModels
 					shareEnabled={!!history.currentId}
 					{initNewChat}
+					{compacting}
+					onCompact={chatWritable ? compactCurrentChat : null}
 				/>
 
 				<div class="flex flex-col flex-auto z-10 w-full @container">
@@ -3084,6 +3127,7 @@
 							<MessageInput
 								{history}
 								{taskIds}
+								{compacting}
 								{selectedModels}
 								bind:files
 								bind:prompt
