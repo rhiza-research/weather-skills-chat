@@ -156,7 +156,9 @@ class SetMessageCompactionTest(unittest.TestCase):
 class CompactTest(unittest.IsolatedAsyncioTestCase):
     """compact: one thread starts it, then the summary, then the save."""
 
-    async def _run(self, chat_doc=None, fresh=None, resent=None, written=True, **kwargs):
+    async def _run(
+        self, chat_doc=None, fresh=None, resent=None, written=True, authorize=None, **kwargs
+    ):
         writes = []
 
         def set_compaction(chat_id, reply_id, compaction, **kw):
@@ -175,14 +177,17 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         ), patch("open_webui.utils.chat.generate_chat_completion", new=fresh), patch(
             "open_webui.utils.models.remember_catalog_model"
         ), patch(
+            "open_webui.utils.chat.authorize_model_call", side_effect=authorize
+        ), patch(
             "open_webui.routers.openai.resend_last_call", new=AsyncMock(return_value=resent)
-        ), patch.object(cc, "_notify", new=AsyncMock()) as notify:
+        ) as resend, patch.object(cc, "_notify", new=AsyncMock()) as notify:
             try:
                 result = await cc.compact(
                     MagicMock(), MagicMock(id="u"), "c", "a1", notify={}, **kwargs
                 )
             except HTTPException as error:
                 result = error
+        self.resend = resend
         return result, writes, notify, fresh, read
 
     async def test_saves_running_then_the_summary_written_by_the_replys_model(self):
@@ -208,6 +213,10 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         result, _, _, fresh, _ = await self._run(resent=(reply, 1000))
         self.assertEqual(result["summary"], "R")
         fresh.assert_not_called()
+        # Its usage goes to the person compacting, as a task.
+        usage_context = self.resend.await_args.args[5]
+        self.assertEqual(usage_context["user_id"], "u")
+        self.assertEqual(usage_context["source"], "task")
 
     async def test_a_cached_call_that_answers_with_a_tool_call_falls_back_to_fresh(self):
         reply = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "t"}]}}]}
@@ -233,6 +242,20 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(cc, "COMPACTION_TIMEOUT_S", 0.01):
             result, _, _, _, _ = await self._run(fresh=slow)
         self.assertEqual(result, {"status": "failed"})
+
+    async def test_a_spending_limit_or_model_access_refuses_before_anything_starts(self):
+        for error in (HTTPException(429, "limit"), Exception("Model not found")):
+            result, writes, notify, fresh, _ = await self._run(authorize=error, check_reply=True)
+            self.assertIn(result.status_code, (429, 403))
+            self.assertEqual(writes, [])
+            notify.assert_not_called()
+            fresh.assert_not_called()
+
+    async def test_an_automatic_compaction_that_is_refused_just_fails(self):
+        result, writes, _, fresh, _ = await self._run(authorize=HTTPException(429, "limit"))
+        self.assertEqual(result, {"status": "failed"})
+        self.assertEqual(writes, [])
+        fresh.assert_not_called()
 
     async def test_checked_replies_are_refused_before_anything_is_saved_or_sent(self):
         cases = [

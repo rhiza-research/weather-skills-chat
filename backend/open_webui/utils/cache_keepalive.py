@@ -28,8 +28,8 @@ IDLE_COUNT = int(os.environ.get("CACHE_KEEPALIVE_IDLE_COUNT", "3"))
 _timers: dict[str, asyncio.Task] = {}
 # The provider keeps a cached prompt this long from the start of its last read.
 CACHE_TTL_S = 300
-# chat id -> (its last cached reply call, that call's user, time.monotonic()
-# the cache was last written or read). Kept while the chat has a timer.
+# chat id -> [its last cached reply call, time.monotonic() the cache was last
+# written or read]. Kept while the chat has a timer.
 _last_calls: dict[str, list] = {}
 
 
@@ -39,14 +39,14 @@ def restart(chat_id: str, send, source: str, last_call=None) -> None:
     ``send`` re-sends the call capped at one token; without it the chat gets no
     timer. A scheduled task's run (``source`` "automation") gets no
     keep-alives once it ends, since nobody answers it. ``last_call`` is the
-    (call, user) being sent, kept for warm_call.
+    call being sent, kept for warm_call.
     """
     old = _timers.pop(chat_id, None)
     if old is not None:
         old.cancel()
     _last_calls.pop(chat_id, None)
     if last_call is not None:
-        _last_calls[chat_id] = [*last_call, time.monotonic()]
+        _last_calls[chat_id] = [last_call, time.monotonic()]
     if send is not None:
         idle_count = 0 if source == "automation" else IDLE_COUNT
         _timers[chat_id] = asyncio.create_task(_run(chat_id, send, idle_count))
@@ -56,18 +56,18 @@ def touch(chat_id: str) -> None:
     """A request just read the chat's cached prompt, which restarts its lifetime."""
     entry = _last_calls.get(chat_id)
     if entry is not None:
-        entry[2] = time.monotonic()
+        entry[1] = time.monotonic()
 
 
 def warm_call(chat_id: str, margin_s: float = 15):
-    """(call, user) of the chat's last cached reply call while its cache is alive.
+    """The chat's last cached reply call while its cache is alive.
 
     margin_s leaves time for a request to start before the cache expires.
     """
     entry = _last_calls.get(chat_id)
-    if entry is None or time.monotonic() - entry[2] > CACHE_TTL_S - margin_s:
+    if entry is None or time.monotonic() - entry[1] > CACHE_TTL_S - margin_s:
         return None
-    return entry[0], entry[1]
+    return entry[0]
 
 
 async def _run(chat_id: str, send, idle_count: int) -> None:

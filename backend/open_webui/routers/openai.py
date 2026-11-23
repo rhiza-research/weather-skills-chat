@@ -1224,39 +1224,31 @@ def _cache_keepalive_sender(call: ProviderCall, user):
 
 
 async def resend_last_call(
-    chat_id: str, user, message_id: str, extra_messages: list, max_tokens: int
+    chat_id: str,
+    user,
+    message_id: str,
+    extra_messages: list,
+    max_tokens: int,
+    usage_context: dict,
 ) -> Optional[tuple[dict, int]]:
     """Re-send the chat's last reply call with messages added after it.
 
-    Only while that call is the user's own, for message_id, and its prompt
-    cache is alive; otherwise None. Returns the reply and the size of the
-    request sent. A spending limit stops it like any model call, and its
-    usage is recorded as a task.
+    Only while that call is for message_id and its prompt cache is alive;
+    otherwise None. The caller has checked that user may make the call; its
+    usage is recorded with usage_context. Returns the reply and the size of
+    the request sent.
     """
-    from open_webui.utils.usage import check_usage_caps
-
-    warm = cache_keepalive.warm_call(chat_id)
-    if warm is None:
-        return None
-    call, call_user = warm
-    if call_user.id != user.id or (call.reply_usage or {}).get("message_id") != message_id:
+    call = cache_keepalive.warm_call(chat_id)
+    if call is None or (call.reply_usage or {}).get("message_id") != message_id:
         return None
     payload = await asyncio.to_thread(
         resent_payload, call, max_tokens, "chat-compaction", extra_messages
-    )
-    await asyncio.to_thread(
-        check_usage_caps,
-        call.reply_usage.get("organization_id"),
-        call.reply_usage.get("user_id"),
     )
     response = await _send_provider_call(
         call._replace(payload=payload, reply_usage=None), user
     )
     cache_keepalive.touch(chat_id)
-    response = await bind_usage_to_response(
-        response, {**call.reply_usage, "source": "task"}
-    )
-    return response, len(payload)
+    return await bind_usage_to_response(response, usage_context), len(payload)
 
 
 async def _send_provider_call(call: ProviderCall, user):
@@ -1270,7 +1262,7 @@ async def _send_provider_call(call: ProviderCall, user):
             call.chat_id,
             _cache_keepalive_sender(call, user) if call.cached else None,
             call.reply_usage["source"],
-            last_call=(call, user) if call.cached else None,
+            last_call=call if call.cached else None,
         )
 
     # No local for the key: loguru tracebacks print local values, but not call.key.

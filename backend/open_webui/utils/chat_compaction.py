@@ -152,12 +152,32 @@ def _check_reply(message) -> None:
         )
 
 
-def _begin(chat_id, reply_id, reply_map, usage, check_reply) -> Optional[_Job]:
-    """Read the chat, build the transcript, and save the running state.
+def _authorize(request, user, model_id, metadata) -> None:
+    """The checks every model call gets: spending limits, then access to the model."""
+    from open_webui.utils.chat import authorize_model_call
+    from open_webui.utils.models import remember_catalog_model
 
-    Synchronous: a database read, the transcript (which grows with the chat)
+    # A server that has not served this model since it started has not loaded it.
+    remember_catalog_model(request, model_id)
+    try:
+        authorize_model_call(request, {"model": model_id, "metadata": metadata}, user, False)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+
+
+def _begin(
+    request, user, chat_id, reply_id, reply_map, usage, check_reply, metadata
+) -> Optional[_Job]:
+    """Read the chat, check the summary call may run, build the transcript, and
+    save the running state.
+
+    Synchronous: database reads, the transcript (which grows with the chat)
     and a write, so compact runs it in one thread. None when the reply is
-    gone; nothing is saved when the transcript cannot be built.
+    gone. Raises HTTPException when the person compacting may not call the
+    reply's model, or (with check_reply) cannot compact this reply. Nothing
+    is saved unless it starts.
     """
     chat = Chats.get_chat_by_id(chat_id)
     document = dict(chat.chat) if chat else {}
@@ -167,6 +187,7 @@ def _begin(chat_id, reply_id, reply_map, usage, check_reply) -> Optional[_Job]:
         _check_reply(message)
     if not isinstance(message, dict):
         return None
+    _authorize(request, user, message.get("model"), metadata)
     if reply_map:
         document["history"] = {**history, "messages": reply_map}
     chain = messages_for_model(document, reply_id)
@@ -192,9 +213,13 @@ def _summary_text(response) -> tuple[str, dict]:
     return summary.strip(), response.get("usage") or {}
 
 
-async def _resend(user, chat_id, reply_id, job) -> Optional[tuple[str, dict, int]]:
-    """The summary from the reply's own last call, re-sent while it is cached."""
+async def _resend(request, user, chat_id, reply_id, job, metadata):
+    """The summary from the reply's own last call, re-sent while it is cached.
+
+    Its usage is recorded for the person compacting, as the fresh call's is.
+    """
     from open_webui.routers.openai import resend_last_call
+    from open_webui.utils.usage import resolve_usage_context
 
     if not job.final:
         return None
@@ -208,6 +233,7 @@ async def _resend(user, chat_id, reply_id, job) -> Optional[tuple[str, dict, int
                 {"role": "user", "content": SUMMARY_INSTRUCTIONS},
             ],
             SUMMARY_MAX_TOKENS,
+            resolve_usage_context(request, {"model": job.model_id, "metadata": metadata}, user),
         )
         if sent is None:
             return None
@@ -220,14 +246,11 @@ async def _resend(user, chat_id, reply_id, job) -> Optional[tuple[str, dict, int
 async def _summarize(request, user, chat_id, reply_id, job, metadata):
     """The summary, its call's usage, and the characters that call was sent."""
     from open_webui.utils.chat import generate_chat_completion
-    from open_webui.utils.models import remember_catalog_model
 
-    resent = await _resend(user, chat_id, reply_id, job)
+    resent = await _resend(request, user, chat_id, reply_id, job, metadata)
     if resent is not None:
         return resent
     prompt = f"{SUMMARY_INSTRUCTIONS}\n\n<conversation>\n{job.transcript}\n</conversation>"
-    # A server that has not served this model since it started has not loaded it.
-    await asyncio.to_thread(remember_catalog_model, request, job.model_id)
     response = await generate_chat_completion(
         request,
         {
@@ -290,15 +313,25 @@ async def compact(
     or {"status": "failed"}, or {"status": "cancelled"} when a message was
     added after the reply meanwhile. At the end of a turn the reply's final
     text and usage may not be saved yet, so the caller passes reply_map and
-    usage. check_reply refuses a reply a person picked that cannot be
-    compacted, with HTTPException; notify addresses the page's events.
+    usage. check_reply is for a person who asked: a reply they cannot compact
+    there, or a model call they may not make, raises HTTPException instead of
+    returning failed. notify addresses the page's events.
     """
+    metadata = {
+        "task": "chat_compaction",
+        "chat_id": chat_id,
+        "user_id": user.id,
+        "organization_id": organization_id,
+    }
     try:
         job = await asyncio.to_thread(
-            _begin, chat_id, reply_id, reply_map, usage, check_reply
+            _begin, request, user, chat_id, reply_id, reply_map, usage, check_reply, metadata
         )
     except HTTPException:
-        raise
+        if check_reply:
+            raise
+        log.warning("Chat compaction refused chat_id=%s", chat_id, exc_info=True)
+        job = None
     except Exception:
         log.warning("Chat compaction failed chat_id=%s", chat_id, exc_info=True)
         job = None
@@ -310,19 +343,7 @@ async def compact(
     result = {"status": "failed"}
     try:
         summary, summary_usage, sent_chars = await asyncio.wait_for(
-            _summarize(
-                request,
-                user,
-                chat_id,
-                reply_id,
-                job,
-                {
-                    "task": "chat_compaction",
-                    "chat_id": chat_id,
-                    "user_id": user.id,
-                    "organization_id": organization_id,
-                },
-            ),
+            _summarize(request, user, chat_id, reply_id, job, metadata),
             COMPACTION_TIMEOUT_S,
         )
         done = {
