@@ -16,6 +16,8 @@ import logging
 import time
 from typing import NamedTuple, Optional
 
+from fastapi import HTTPException, status
+
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.chats import Chats
 from open_webui.utils.chat_turns import (
@@ -202,6 +204,7 @@ class Started(NamedTuple):
     prompt: str  # the fresh summary call's
     payload: Optional[str]  # the reply's last call extended, when it is warm
     reuse_share: float  # the conversation's share of payload
+    model_id: Optional[str] = None  # the model the summary is written with
 
 
 def _reuse_payload(chain, message_id, warm) -> tuple[Optional[str], float]:
@@ -226,23 +229,56 @@ def _reuse_payload(chain, message_id, warm) -> tuple[Optional[str], float]:
     return payload, _json_chars(body["messages"][:-1]) / max(len(payload), 1)
 
 
+def _check_requested(user, chat, message) -> None:
+    """Refuse a compaction a person asked for that cannot run; raises HTTPException."""
+    from open_webui.constants import ERROR_MESSAGES
+    from open_webui.utils.organizations import can_write_chat
+
+    if not can_write_chat(user, chat):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.ACCESS_PROHIBITED
+        )
+    if not isinstance(message, dict) or message.get("role") != "assistant":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Only a reply can be compacted.")
+    if message.get("done") is False:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Wait for the reply to finish.")
+    compaction = message.get("compaction") or {}
+    if compaction.get("status") == "done":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="The chat is already compacted here."
+        )
+    if compaction_running(compaction):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="The chat is already being compacted."
+        )
+    if not message.get("model"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="This reply has no model to compact with."
+        )
+
+
 def _start_compaction(
     chat_id: str,
     message_id: str,
     message_map: Optional[dict],
     usage: Optional[dict],
     warm,
+    requested_by=None,
 ) -> Optional[Started]:
     """Read the chat, build the summary requests, and save the running state.
 
     Synchronous: a database read, building the requests (which grows with the
-    chat) and a write, so compact_chat runs it in one thread. None when the
-    message is gone. Nothing is written when a request cannot be built.
+    chat) and a write, so compact_chat runs it in one thread. With
+    requested_by, the person who asked, it first checks the compaction can
+    run and raises HTTPException when not. None when the message is gone.
+    Nothing is written when a request cannot be built.
     """
     chat = Chats.get_chat_by_id(chat_id)
     document = dict(chat.chat) if chat else {}
     history = document.get("history") or {}
     message = (history.get("messages") or {}).get(message_id)
+    if requested_by is not None:
+        _check_requested(requested_by, chat, message)
     if not isinstance(message, dict):
         return None
     if message_map:
@@ -259,6 +295,7 @@ def _start_compaction(
         prompt,
         payload,
         reuse_share,
+        message.get("model"),
     )
 
 
@@ -291,18 +328,21 @@ async def compact_chat(
     *,
     chat_id: str,
     message_id: str,
-    model_id: str,
     emitter_meta: dict,
+    model_id: Optional[str] = None,
     organization_id: Optional[str] = None,
     usage: Optional[dict] = None,
     message_map: Optional[dict] = None,
+    requested: bool = False,
 ) -> dict:
     """Summarize the chat up to and including message_id and save it there.
 
     Returns the saved compaction, or ``{"status": "failed"}`` or
     ``{"status": "cancelled"}`` when a new turn was added to that message
-    meanwhile. At the end of a turn the reply's final text and usage may not
-    be saved yet, so the caller passes them as message_map and usage.
+    meanwhile. Without model_id the reply's own model writes the summary. At
+    the end of a turn the reply's final text and usage may not be saved yet,
+    so the caller passes them as message_map and usage. ``requested`` is for
+    a person asking: it raises HTTPException when they cannot compact there.
     """
     from open_webui.utils import cache_keepalive
 
@@ -317,7 +357,10 @@ async def compact_chat(
             message_map,
             usage,
             warm,
+            user if requested else None,
         )
+    except HTTPException:
+        raise
     except Exception:
         log.warning("Chat compaction failed chat_id=%s", chat_id, exc_info=True)
         started = None
@@ -325,6 +368,7 @@ async def compact_chat(
         await _emit(emitter_meta, chat_id, message_id, {"status": "failed"})
         return {"status": "failed"}
     await _emit(emitter_meta, chat_id, message_id, started.running)
+    model_id = model_id or started.model_id
 
     compaction = None
     outcome = "failed"

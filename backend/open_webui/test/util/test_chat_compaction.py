@@ -312,3 +312,44 @@ class CompactChatThreadTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"status": "failed"})
         write.assert_not_called()
         self.assertEqual(emit.await_args.args[3], {"status": "failed"})
+
+
+class RequestedCompactionTest(unittest.IsolatedAsyncioTestCase):
+    """Compact now: one thread checks the request, reads the chat and starts."""
+
+    async def _run(self, chat_doc, can_write=True):
+        from fastapi import HTTPException
+
+        chat = MagicMock(chat=chat_doc)
+        with patch("open_webui.utils.organizations.can_write_chat", return_value=can_write), patch.object(
+            cc.Chats, "get_chat_by_id", return_value=chat
+        ) as read, patch.object(cc.Chats, "set_message_compaction", return_value=True) as write, patch.object(
+            cc, "_call_model", new=AsyncMock(return_value=("S", {}))
+        ) as model, patch.object(cc, "_emit", new=AsyncMock()) as emit:
+            try:
+                result = await cc.compact_chat(
+                    MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", emitter_meta={}, requested=True
+                )
+            except HTTPException as error:
+                result = error
+        return result, read, write, model, emit
+
+    async def test_the_chat_is_read_once_and_the_replys_model_writes_the_summary(self):
+        result, read, _, model, _ = await self._run(_chat(model="weather-agent"))
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(model.await_args.args[2], "weather-agent")
+
+    async def test_refusals_raise_before_anything_is_saved_or_sent(self):
+        cases = [
+            (_chat(model="m"), False, 401),
+            (_chat(model="m", done=False), True, 409),
+            (_chat(model="m", compaction={"status": "done", "summary": "S"}), True, 409),
+            (_chat(model="m", compaction={"status": "running", "started_at": time.time()}), True, 409),
+            (_chat(), True, 400),
+        ]
+        for doc, can_write, code in cases:
+            result, _, write, _, emit = await self._run(doc, can_write)
+            self.assertEqual(getattr(result, "status_code", None), code)
+            write.assert_not_called()
+            emit.assert_not_called()
