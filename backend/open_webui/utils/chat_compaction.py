@@ -50,7 +50,9 @@ Include:
 - Errors met and how they were resolved.
 - Open questions and what was about to happen next.
 
-Write plain notes. No preamble."""
+Write plain notes. No preamble.
+
+Many parts of the chat can likely be made concise by describing the final result of a set of analysis and/or tool calls. Please be as concise as reasonably possible without preventing continued analysis."""
 
 TOOL_RESULT_REMOVED = (
     "[This tool result was removed to fit the model's context window. "
@@ -167,6 +169,28 @@ async def _summarize(request, user, model_id: str, prompt: str, metadata: dict):
     return summary.strip(), response.get("usage")
 
 
+def _start_compaction(chat_id: str, message_id: str, message_map: Optional[dict]):
+    """Read the chat, build the summary prompt, and save the running state.
+
+    Synchronous: a database read, the transcript build (which grows with the
+    chat) and a write, so compact_chat runs it in one thread. Returns None
+    when the message is gone, else (its replies, its usage, the running
+    state, the prompt). Nothing is written when the prompt cannot be built.
+    """
+    chat = Chats.get_chat_by_id(chat_id)
+    document = dict(chat.chat) if chat else {}
+    history = document.get("history") or {}
+    message = (history.get("messages") or {}).get(message_id)
+    if not isinstance(message, dict):
+        return None
+    if message_map:
+        document["history"] = {**history, "messages": message_map}
+    prompt = summary_request(messages_for_model(document, message_id))
+    running = {"status": "running", "started_at": int(time.time())}
+    Chats.set_message_compaction(chat_id, message_id, running, bump_revision=False)
+    return list(message.get("childrenIds") or []), message.get("usage"), running, prompt
+
+
 async def compact_chat(
     request,
     user,
@@ -187,30 +211,22 @@ async def compact_chat(
     text and usage may not be saved yet, so the caller passes them as
     message_map and usage.
     """
-    chat = await asyncio.to_thread(Chats.get_chat_by_id, chat_id)
-    document = dict(chat.chat) if chat else {}
-    history = document.get("history") or {}
-    message = (history.get("messages") or {}).get(message_id)
-    if not isinstance(message, dict):
+    try:
+        started = await asyncio.to_thread(
+            _start_compaction, chat_id, message_id, message_map
+        )
+    except Exception:
+        log.warning("Chat compaction failed chat_id=%s", chat_id, exc_info=True)
+        started = None
+    if started is None:
+        await _emit(emitter_meta, chat_id, message_id, {"status": "failed"})
         return {"status": "failed"}
-    children = list(message.get("childrenIds") or [])
-    if message_map:
-        document["history"] = {**history, "messages": message_map}
-
-    running = {"status": "running", "started_at": int(time.time())}
-    await asyncio.to_thread(
-        Chats.set_message_compaction,
-        chat_id,
-        message_id,
-        running,
-        bump_revision=False,
-    )
+    children, saved_usage, running, prompt = started
     await _emit(emitter_meta, chat_id, message_id, running)
 
     compaction = None
     outcome = "failed"
     try:
-        prompt = summary_request(messages_for_model(document, message_id))
         summary, summary_usage = await asyncio.wait_for(
             _summarize(
                 request,
@@ -231,7 +247,7 @@ async def compact_chat(
             "summary": summary,
             "model": model_id,
             "created_at": int(time.time()),
-            **compaction_estimate(usage or message.get("usage"), summary_usage),
+            **compaction_estimate(usage or saved_usage, summary_usage),
         }
         if await asyncio.to_thread(
             Chats.set_message_compaction,

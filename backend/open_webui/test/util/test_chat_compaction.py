@@ -274,3 +274,38 @@ class CompactChatTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(cc, "COMPACTION_TIMEOUT_S", 0.01):
             result, _, _ = await self._run(slow)
         self.assertEqual(result, {"status": "failed"})
+
+
+class CompactChatThreadTest(unittest.IsolatedAsyncioTestCase):
+    async def test_the_read_prompt_and_running_save_run_in_one_thread(self):
+        threaded = []
+        real_to_thread = asyncio.to_thread
+
+        async def to_thread(fn, *args, **kwargs):
+            threaded.append(getattr(fn, "__name__", repr(fn)))
+            return await real_to_thread(fn, *args, **kwargs)
+
+        chat = MagicMock(chat=_chat())
+        summarize = AsyncMock(return_value=("S", {}))
+        with patch.object(cc.asyncio, "to_thread", side_effect=to_thread), patch.object(
+            cc.Chats, "get_chat_by_id", return_value=chat
+        ), patch.object(cc.Chats, "set_message_compaction", return_value=True), patch.object(
+            cc, "_summarize", new=summarize
+        ), patch.object(cc, "_emit", new=AsyncMock()):
+            result = await cc.compact_chat(
+                MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
+            )
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(threaded[0], "_start_compaction")
+        self.assertIn("first answer", summarize.await_args.args[3])
+
+    async def test_a_failed_start_writes_nothing_and_reports_failure(self):
+        with patch.object(cc.Chats, "get_chat_by_id", side_effect=RuntimeError("db down")), patch.object(
+            cc.Chats, "set_message_compaction"
+        ) as write, patch.object(cc, "_emit", new=AsyncMock()) as emit:
+            result = await cc.compact_chat(
+                MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
+            )
+        self.assertEqual(result, {"status": "failed"})
+        write.assert_not_called()
+        self.assertEqual(emit.await_args.args[3], {"status": "failed"})
