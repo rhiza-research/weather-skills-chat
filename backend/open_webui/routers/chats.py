@@ -654,16 +654,11 @@ async def update_chat_message_by_id(
 ############################
 
 
-class CompactForm(BaseModel):
-    session_id: Optional[str] = None
-
-
 @router.post("/{id}/messages/{message_id}/compact")
 async def compact_chat_at_message(
     request: Request,
     id: str,
     message_id: str,
-    form_data: CompactForm,
     user=Depends(get_verified_user),
     organization_id: str = Depends(get_active_organization_id),
 ):
@@ -676,7 +671,7 @@ async def compact_chat_at_message(
         user,
         id,
         message_id,
-        notify={"user_id": user.id, "session_id": form_data.session_id},
+        notify={"user_id": user.id},
         organization_id=organization_id,
         check_reply=True,
     )

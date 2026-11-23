@@ -4,7 +4,7 @@ A model can only read so much of a chat at once: its context window. Compaction 
 
 ## Context usage
 
-The ring in the top bar of a chat shows how full the model's context is. Clicking it shows the number of tokens used out of the model's window and the percentage. The count comes from the model provider after each reply, so a chat shows no ring until its first reply, and none for a model whose window the app does not know.
+The ring in the top bar of a chat shows how full the model's context is. Clicking it shows the number of tokens used out of the model's window and the percentage. The count comes from the model provider after each reply: the tokens the model read on the reply's last model call plus the tokens it wrote. When a reply runs skills, that is its last call, not the sum of all its calls. The window size comes from the model provider's model list. A chat shows no ring until its first reply, and none for a model whose provider does not list a context window.
 
 Right after a compaction, the count is an estimate marked **(estimate)**. The app works it out from the summary's size, before the model has read the chat again. The next reply replaces it with the provider's count.
 

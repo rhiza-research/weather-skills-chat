@@ -288,7 +288,7 @@
 		if (!id || id === 'local' || !messageId) return;
 		try {
 			// Progress and the outcome arrive as chat:compaction events.
-			await compactChat(localStorage.token, id, messageId, $socket?.id);
+			await compactChat(localStorage.token, id, messageId);
 		} catch (error) {
 			toast.error(typeof error === 'string' ? error : $i18n.t('Compaction failed.'));
 		}

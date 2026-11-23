@@ -19,6 +19,7 @@ from fastapi import HTTPException, status
 
 from open_webui.env import SRC_LOG_LEVELS
 from open_webui.models.chats import Chats
+from open_webui.utils import cache_keepalive
 from open_webui.utils.chat_turns import (
     _append_note,
     compaction_note,
@@ -357,15 +358,20 @@ async def compact(
             Chats.set_message_compaction, chat_id, reply_id, done, children=job.children
         )
         result = done if saved else {"status": "cancelled"}
+        if saved:
+            # The next call sends the summary, so nothing reads the old prompt
+            # cache again: stop the keep-alives that would keep paying for it.
+            cache_keepalive.restart(chat_id, None, "")
     except Exception:
         log.warning("Chat compaction failed chat_id=%s", chat_id, exc_info=True)
-
-    if result["status"] != "done":
-        try:
-            await asyncio.to_thread(Chats.set_message_compaction, chat_id, reply_id, None)
-        except Exception:
-            log.warning("Could not clear compaction chat_id=%s", chat_id, exc_info=True)
-    await _notify(notify, chat_id, reply_id, result)
+    finally:
+        # Also when Stop cancels the turn, so the running state never outlives it.
+        if result["status"] != "done":
+            try:
+                await asyncio.to_thread(Chats.set_message_compaction, chat_id, reply_id, None)
+            except Exception:
+                log.warning("Could not clear compaction chat_id=%s", chat_id, exc_info=True)
+        await _notify(notify, chat_id, reply_id, result)
     return result
 
 
@@ -408,7 +414,7 @@ class ContextBudget:
     """One turn's context use, kept within the model's context window.
 
     fit() runs before each model call of the turn and record() after it;
-    finish() runs once the reply is done. The chat is compacted at most once
+    announce() runs just before the reply's done event and finish() after it. The chat is compacted at most once
     per turn. Without chat_id (no saved turn) it only drops old tool results.
     """
 
@@ -486,13 +492,24 @@ class ContextBudget:
         excess = (self._estimate(call) - window) * CHARS_PER_TOKEN
         return base, drop_old_tool_results(call, excess)
 
-    async def finish(self, request, user, metadata, reply_map) -> None:
-        """After the reply: compact at it when the context is over 90% full."""
+    def _due(self) -> bool:
+        """The reply left the context over 90% full and the turn has not compacted."""
         used = self.usage.get("context_used")
         window = self.usage.get("context_window")
         if self.compacted or not self.chat_id or not used or not window:
-            return
-        if used <= END_OF_TURN_RATIO * window:
+            return False
+        return used > END_OF_TURN_RATIO * window
+
+    async def announce(self, metadata) -> None:
+        """Before the reply's done event: tell the page finish() will compact,
+        so a queued message waits for it instead of being sent on done."""
+        if self._due():
+            running = {"status": "running", "started_at": int(time.time())}
+            await _notify(metadata, self.chat_id, self.reply_id, running)
+
+    async def finish(self, request, user, metadata, reply_map) -> None:
+        """After the reply: compact at it when the context is over 90% full."""
+        if not self._due():
             return
         self.compacted = True
         await compact(

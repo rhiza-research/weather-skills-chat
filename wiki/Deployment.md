@@ -86,7 +86,7 @@ The Helm chart sets `ENABLE_OLLAMA_API` from `ollama.enabled`, which is `false` 
 
 Calls to an Anthropic model on any OpenAI-compatible connection ask the provider to cache the conversation. A later call that starts with the same conversation reads it from the cache, which costs much less than sending it again. The provider keeps a cached conversation for five minutes from the start of the last call that wrote or read it.
 
-To keep a chat's cache from expiring, the app re-sends the chat's last model call with the reply cut to one token when 4.5 minutes pass without a new call. While the chat's reply is running, such as during a long tool run, it keeps doing this. After the reply has ended or been stopped, it does this at most a set number of times, while the user reads and answers. The chat's next model call starts the count again. A [[Scheduled Tasks]] run gets none after it ends.
+To keep a chat's cache from expiring, the app re-sends the chat's last model call with the reply cut to one token when 4.5 minutes pass without a new call. While the chat's reply is running, such as during a long tool run, it keeps doing this. After the reply has ended or been stopped, it does this at most a set number of times, while the user reads and answers. The chat's next model call starts the count again. A [[Scheduled Tasks]] run gets none after it ends. A chat gets no more once it is compacted, until its next model call, because that call sends the summary and not the cached conversation (see [[Chat Compaction]]).
 
 These keep-alive calls are never shown or saved in the chat. They are recorded as usage and count toward [[Usage and Spending Caps]].
 

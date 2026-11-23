@@ -159,7 +159,7 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
     async def _run(
         self, chat_doc=None, fresh=None, resent=None, written=True, authorize=None, **kwargs
     ):
-        writes = []
+        writes = self.writes = []
 
         def set_compaction(chat_id, reply_id, compaction, **kw):
             writes.append((compaction, kw))
@@ -242,6 +242,29 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(cc, "COMPACTION_TIMEOUT_S", 0.01):
             result, _, _, _, _ = await self._run(fresh=slow)
         self.assertEqual(result, {"status": "failed"})
+
+    async def test_only_a_saved_compaction_stops_the_cache_keepalive(self):
+        for written, stops in ((True, 1), (False, 0)):
+            with patch.object(cc.cache_keepalive, "restart") as restart:
+                await self._run(written=written)
+            self.assertEqual(restart.call_count, stops)
+            if stops:
+                self.assertEqual(restart.call_args.args[:2], ("c", None))
+
+    async def test_a_stopped_turn_clears_the_running_state(self):
+        started = asyncio.Event()
+
+        async def slow(*_args):
+            started.set()
+            await asyncio.sleep(60)
+
+        task = asyncio.create_task(self._run(fresh=slow))
+        await started.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual(self.writes[0][0]["status"], "running")
+        self.assertIsNone(self.writes[-1][0])
 
     async def test_a_spending_limit_or_model_access_refuses_before_anything_starts(self):
         for error in (HTTPException(429, "limit"), Exception("Model not found")):
@@ -329,6 +352,17 @@ class ContextBudgetTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(compact.await_count, expected)
             if expected:
                 self.assertEqual(compact.await_args.args[3], "a2")
+
+    async def test_announce_tells_the_page_only_when_finish_will_compact(self):
+        for used, expected in ((901, 1), (900, 0)):
+            context_budget = cc.ContextBudget("c", "a2", _parent())
+            context_budget.record({"context_used": used, "context_window": 1000})
+            with patch.object(cc, "_notify", new=AsyncMock()) as notify:
+                await context_budget.announce({})
+            self.assertEqual(notify.await_count, expected)
+            if expected:
+                self.assertEqual(notify.await_args.args[2], "a2")
+                self.assertEqual(notify.await_args.args[3]["status"], "running")
 
     async def test_finish_does_nothing_after_a_compaction_this_turn(self):
         context_budget = cc.ContextBudget("c", "a2", _parent())

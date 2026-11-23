@@ -1890,6 +1890,7 @@ async def process_chat_response(
                         {"content": content, "done": True},
                     )
                     saved = revision is not None
+                    await context_budget.announce(metadata)
 
                     await event_emitter(
                         {
@@ -3485,6 +3486,7 @@ async def process_chat_response(
                 elif not saved:
                     data["error"] = {"content": REPLY_SAVE_FAILED_MESSAGE}
 
+                await context_budget.announce(metadata)
                 await event_emitter(
                     {
                         "type": "chat:completion",
