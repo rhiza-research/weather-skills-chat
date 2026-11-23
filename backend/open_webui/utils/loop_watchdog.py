@@ -135,9 +135,8 @@ class LoopWatchdog:
 
     def _census(self) -> None:
         started = time.perf_counter()
-        tracked = (
-            gc.get_objects()
-        )  # frozen objects are not in it: the GC skips them too
+        # Frozen objects are not in it: the GC skips them too.
+        tracked = gc.get_objects()
         sample = collections.Counter(type(o) for o in tracked[::CENSUS_SAMPLE])
         total = len(tracked)
         del tracked
