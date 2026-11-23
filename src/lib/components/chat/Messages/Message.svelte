@@ -11,6 +11,7 @@
 	import MultiResponseMessages from './MultiResponseMessages.svelte';
 	import ResponseMessage from './ResponseMessage.svelte';
 	import UserMessage from './UserMessage.svelte';
+	import CompactionLine from './CompactionLine.svelte';
 
 	export let chatId;
 	export let idx = 0;
@@ -110,6 +111,9 @@
 				{addMessages}
 				{readOnly}
 			/>
+		{/if}
+		{#if history.messages[messageId].role === 'assistant' && history.messages[messageId].compaction}
+			<CompactionLine compaction={history.messages[messageId].compaction} />
 		{/if}
 	{/if}
 </div>

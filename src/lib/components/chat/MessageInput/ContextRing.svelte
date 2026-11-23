@@ -2,49 +2,61 @@
 	import { getContext } from 'svelte';
 	import { DropdownMenu } from 'bits-ui';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
+	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { flyAndScale } from '$lib/utils/transitions';
+	import { contextShown } from '$lib/utils/compaction';
+	import { isReplyRunning } from '$lib/utils/generationLiveness';
 
 	const i18n = getContext('i18n');
 
 	export let history;
+	export let compacting = false;
+	// Absent when the chat cannot be changed.
+	export let onCompact: (() => void) | null = null;
 
-	// The latest reply in this branch whose usage says how full the context was.
-	$: usage = (() => {
-		for (let m = history?.messages?.[history?.currentId]; m; m = history.messages[m.parentId]) {
-			if (m.usage?.context_window) return m.usage;
-		}
-		return null;
-	})();
-	$: percent = usage ? Math.min(100, (usage.context_used / usage.context_window) * 100) : 0;
+	$: shown = contextShown(history);
+	$: percent = shown ? Math.min(100, (shown.used / shown.window) * 100) : 0;
+	$: current = history?.messages?.[history?.currentId];
+	$: canCompact =
+		!compacting &&
+		current?.role === 'assistant' &&
+		!isReplyRunning(current) &&
+		current?.compaction?.status !== 'done';
 </script>
 
-{#if usage}
+{#if shown}
 	<Dropdown>
-		<!-- r = 100/2π so the circumference is 100 and the dash length is the percent -->
-		<svg
-			viewBox="0 0 36 36"
-			class="block size-[19.2px] -rotate-90 mr-3"
-			role="img"
-			aria-label={$i18n.t('Context usage')}
-		>
-			<circle
-				cx="18"
-				cy="18"
-				r="15.9155"
-				fill="none"
-				stroke-width="4"
-				class="stroke-gray-200 dark:stroke-gray-700"
-			/>
-			<circle
-				cx="18"
-				cy="18"
-				r="15.9155"
-				fill="none"
-				stroke-width="4"
-				stroke-dasharray="{percent} 100"
-				class="stroke-gray-600 dark:stroke-gray-300"
-			/>
-		</svg>
+		{#if compacting}
+			<div class="mr-3" role="img" aria-label={$i18n.t('Compacting conversation')}>
+				<Spinner className="size-[19.2px]" />
+			</div>
+		{:else}
+			<!-- r = 100/2π so the circumference is 100 and the dash length is the percent -->
+			<svg
+				viewBox="0 0 36 36"
+				class="block size-[19.2px] -rotate-90 mr-3"
+				role="img"
+				aria-label={$i18n.t('Context usage')}
+			>
+				<circle
+					cx="18"
+					cy="18"
+					r="15.9155"
+					fill="none"
+					stroke-width="4"
+					class="stroke-gray-200 dark:stroke-gray-700"
+				/>
+				<circle
+					cx="18"
+					cy="18"
+					r="15.9155"
+					fill="none"
+					stroke-width="4"
+					stroke-dasharray="{percent} 100"
+					class="stroke-gray-600 dark:stroke-gray-300"
+				/>
+			</svg>
+		{/if}
 
 		<div slot="content">
 			<DropdownMenu.Content
@@ -56,14 +68,29 @@
 			>
 				<div class="font-medium">{$i18n.t('Context usage')}</div>
 				<div class="mt-1 tabular-nums">
-					{$i18n.t('{{used}} of {{total}} tokens', {
-						used: usage.context_used.toLocaleString(),
-						total: usage.context_window.toLocaleString()
-					})}
+					{shown.estimate
+						? $i18n.t('~{{used}} of {{total}} tokens (estimate)', {
+								used: shown.used.toLocaleString(),
+								total: shown.window.toLocaleString()
+							})
+						: $i18n.t('{{used}} of {{total}} tokens', {
+								used: shown.used.toLocaleString(),
+								total: shown.window.toLocaleString()
+							})}
 				</div>
 				<div class="text-gray-500 dark:text-gray-400 tabular-nums">
 					{$i18n.t('{{percent}}% used', { percent: percent.toFixed(1) })}
 				</div>
+				{#if onCompact}
+					<button
+						type="button"
+						class="mt-2 w-full rounded-lg px-2 py-1 text-left font-medium transition hover:bg-gray-100 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+						disabled={!canCompact}
+						on:click={() => onCompact?.()}
+					>
+						{compacting ? $i18n.t('Compacting…') : $i18n.t('Compact now')}
+					</button>
+				{/if}
 			</DropdownMenu.Content>
 		</div>
 	</Dropdown>

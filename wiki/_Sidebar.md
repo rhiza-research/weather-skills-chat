@@ -14,6 +14,7 @@
 - [[Preferences]]
 - [[Live Chat Updates]]
 - [[Queued Messages]]
+- [[Chat Compaction]]
 - [[Notifications]]
 - [[Banners]]
 - [[Getting Help]]

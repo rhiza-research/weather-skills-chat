@@ -78,6 +78,32 @@ def _append_note(content, note, already=None):
     return content
 
 
+def compaction_note(summary: str) -> str:
+    return (
+        "Earlier messages in this conversation were compacted. Their summary:\n\n"
+        f"{summary}"
+    )
+
+
+def prepend_note(content, note):
+    """Put note before the text of a message."""
+    if not note:
+        return content
+    if isinstance(content, list):
+        return [{"type": "text", "text": note}, *content]
+    if isinstance(content, str) and content.strip():
+        return f"{note}\n\n{content}"
+    return note
+
+
+def compacted_at(message) -> Optional[str]:
+    """The summary when a compaction finished at this message, else None."""
+    compaction = message.get("compaction") if isinstance(message, dict) else None
+    if isinstance(compaction, dict) and compaction.get("status") == "done":
+        return compaction.get("summary") or None
+    return None
+
+
 class ChatRevisionConflict(Exception):
     def __init__(self, revision: int):
         super().__init__("Chat was updated")
@@ -88,12 +114,20 @@ def messages_for_model(chat: dict, message_id: str) -> list[dict]:
     """Linearize a stored chat the way the client used to, minus hidden details.
 
     The chat's ``chatNotes`` go after the first user message on every turn,
-    so the transcript prefix never changes.
+    so the transcript prefix never changes. Messages up to the latest
+    compaction are left out; its summary goes before the first user message
+    after it.
     """
     chat = chat or {}
     notes = "\n\n".join(note for note in chat.get("chatNotes") or [] if note)
     bag = (chat.get("history") or {}).get("messages") or {}
     chain = get_message_list(bag, message_id) or []
+    summary = None
+    for index in range(len(chain) - 1, -1, -1):
+        summary = compacted_at(chain[index])
+        if summary:
+            chain = chain[index + 1 :]
+            break
     prepared = []
     for message in chain:
         if not isinstance(message, dict):
@@ -109,6 +143,9 @@ def messages_for_model(chat: dict, message_id: str) -> list[dict]:
             content = with_artifact_upload_note(content, message.get("files"))
             content = _append_note(content, notes)
             notes = ""  # first user message only
+            if summary:
+                content = prepend_note(content, compaction_note(summary))
+                summary = None
         item = {"role": role, "content": content}
         if message.get("tool_calls"):
             item["tool_calls"] = message["tool_calls"]
@@ -186,8 +223,12 @@ def store_refused_turn(chat_id: str, turn, user, error: str) -> bool:
     return state == "ok"
 
 
-def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
+def prepare_completion_messages(
+    chat_id: str, turn: dict, user
+) -> tuple[list[dict], Optional[dict]]:
     """Store the new user and assistant messages, then build the model transcript.
+
+    Also returns the saved reply the new user message follows, if any.
 
     A mismatched ``expected_revision`` does not write. The caller turns that
     into a conflict the client refetches.
@@ -239,4 +280,8 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
             detail="The chat could not be saved. Please try again.",
         )
 
-    return messages_for_model(stored.chat, assistant_message["id"])
+    saved = (stored.chat.get("history") or {}).get("messages") or {}
+    parent = saved.get(user_message.get("parentId"))
+    if not (isinstance(parent, dict) and parent.get("role") == "assistant"):
+        parent = None
+    return messages_for_model(stored.chat, assistant_message["id"]), parent

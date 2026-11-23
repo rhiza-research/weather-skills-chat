@@ -650,6 +650,34 @@ async def update_chat_message_by_id(
 
 
 ############################
+# CompactChatAtMessage
+############################
+
+
+@router.post("/{id}/messages/{message_id}/compact")
+async def compact_chat_at_message(
+    request: Request,
+    id: str,
+    message_id: str,
+    user=Depends(get_verified_user),
+    organization_id: str = Depends(get_active_organization_id),
+):
+    """Summarize the chat up to this reply; the model gets the summary from then on."""
+    from open_webui.utils.chat_compaction import compact
+
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await compact(
+        request,
+        user,
+        id,
+        message_id,
+        notify={"user_id": user.id},
+        organization_id=organization_id,
+        check_reply=True,
+    )
+
+
+############################
 # SendChatMessageEventById
 ############################
 class EventForm(BaseModel):

@@ -32,6 +32,11 @@ def test_reports_prompt_tokens_against_the_window():
     }
 
 
+def test_the_reply_counts_toward_the_context_it_leaves():
+    out = _usage("anthropic/claude-opus-4", {"prompt_tokens": 50000, "completion_tokens": 800})
+    assert out["context_used"] == 50800
+
+
 def test_wrapper_model_uses_its_base_model_window():
     out = _usage("my-model", {"prompt_tokens": 10}, base_model_id="anthropic/claude-opus-4")
     assert out["context_window"] == 200000

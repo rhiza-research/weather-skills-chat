@@ -1281,3 +1281,20 @@ export const archiveAllChats = async (token: string) => {
 
 	return res;
 };
+
+/** Summarize the chat up to this reply. Resolves to the compaction's outcome. */
+export const compactChat = async (token: string, id: string, messageId: string) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}/messages/${messageId}/compact`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			...organizationHeaders(),
+			...(token && { authorization: `Bearer ${token}` })
+		}
+	});
+	if (!res.ok) {
+		const err = await parseApiError(res);
+		throw err?.detail ?? err;
+	}
+	return res.json();
+};

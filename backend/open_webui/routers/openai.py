@@ -1186,26 +1186,69 @@ async def generate_chat_completion(
     raise primary_error or backup_error
 
 
+def resent_payload(
+    call: ProviderCall, max_tokens: int, generation_name: str, extra_messages=()
+) -> str:
+    """The call's request again, not streamed, with messages added after it.
+
+    The request up to those messages is unchanged, so it reads the call's
+    prompt cache.
+    """
+    body = json.loads(call.payload)
+    if extra_messages:
+        body["messages"] = [*body.get("messages", []), *extra_messages]
+    body.pop("stream_options", None)
+    body.pop("max_completion_tokens", None)
+    body.update(stream=False, max_tokens=max_tokens)
+    if isinstance(body.get("trace"), dict):
+        body["trace"]["generation_name"] = generation_name
+    return json.dumps(body)
+
+
 def _cache_keepalive_sender(call: ProviderCall, user):
     """Re-sends the call capped at one output token, which reads its prompt
     cache, and records the usage under the source ``cache_keepalive``."""
 
     async def send():
-        body = json.loads(call.payload)
-        body.pop("stream_options", None)
-        body.pop("max_completion_tokens", None)
         # 1, not 0: OpenRouter drops a cap of 0 and generates the whole reply.
-        body.update(stream=False, max_tokens=1)
-        if isinstance(body.get("trace"), dict):
-            body["trace"]["generation_name"] = "cache-keepalive"
+        payload = resent_payload(call, 1, "cache-keepalive")
         response = await _send_provider_call(
-            call._replace(payload=json.dumps(body), reply_usage=None), user
+            call._replace(payload=payload, reply_usage=None), user
         )
+        cache_keepalive.touch(call.chat_id)
         await bind_usage_to_response(
             response, {**call.reply_usage, "source": "cache_keepalive"}
         )
 
     return send
+
+
+async def resend_last_call(
+    chat_id: str,
+    user,
+    message_id: str,
+    extra_messages: list,
+    max_tokens: int,
+    usage_context: dict,
+) -> Optional[tuple[dict, int]]:
+    """Re-send the chat's last reply call with messages added after it.
+
+    Only while that call is for message_id and its prompt cache is alive;
+    otherwise None. The caller has checked that user may make the call; its
+    usage is recorded with usage_context. Returns the reply and the size of
+    the request sent.
+    """
+    call = cache_keepalive.warm_call(chat_id)
+    if call is None or (call.reply_usage or {}).get("message_id") != message_id:
+        return None
+    payload = await asyncio.to_thread(
+        resent_payload, call, max_tokens, "chat-compaction", extra_messages
+    )
+    response = await _send_provider_call(
+        call._replace(payload=payload, reply_usage=None), user
+    )
+    cache_keepalive.touch(chat_id)
+    return await bind_usage_to_response(response, usage_context), len(payload)
 
 
 async def _send_provider_call(call: ProviderCall, user):
@@ -1219,6 +1262,7 @@ async def _send_provider_call(call: ProviderCall, user):
             call.chat_id,
             _cache_keepalive_sender(call, user) if call.cached else None,
             call.reply_usage["source"],
+            last_call=call if call.cached else None,
         )
 
     # No local for the key: loguru tracebacks print local values, but not call.key.
