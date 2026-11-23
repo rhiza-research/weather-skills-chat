@@ -1,117 +1,88 @@
-"""Compaction's summary call re-sends the reply's warm last call to read its cache."""
+"""Compaction re-sends the reply's last call, still cached, kept by the keep-alive."""
 
-import asyncio
 import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from open_webui.routers import openai as openai_router
 from open_webui.utils import cache_keepalive
-from open_webui.utils import chat_compaction as cc
-
-FINAL = "Here is the rainfall map."
 
 
-def _call(message_id="a1", model="anthropic/claude-opus-5-5"):
+def _call(message_id="a1"):
     payload = {
-        "model": model,
+        "model": "anthropic/claude-opus-5.5",
         "stream": True,
         "stream_options": {"include_usage": True},
-        "max_tokens": 64000,
-        "messages": [
-            {"role": "system", "content": "SYSTEM"},
-            {"role": "user", "content": "plot rain"},
-        ],
+        "max_completion_tokens": 64000,
+        "messages": [{"role": "system", "content": "SYSTEM"}, {"role": "user", "content": "plot rain"}],
         "tools": [{"type": "function", "function": {"name": "run"}}],
+        "trace": {"generation_name": "chat"},
     }
-    return MagicMock(
+    call = MagicMock(
         payload=json.dumps(payload),
         reply_usage={"message_id": message_id, "organization_id": "o", "user_id": "u"},
         chat_id="c",
     )
+    call._replace.side_effect = lambda **kw: kw
+    return call
 
 
-CHAIN = [
-    {"role": "user", "content": "plot rain"},
-    {"role": "assistant", "content": FINAL},
-]
-
-
-class ReusePayloadTest(unittest.TestCase):
-    def test_the_last_call_gets_the_final_reply_and_the_instructions(self):
-        payload, share = cc._reuse_payload(CHAIN, "a1", (_call(), None))
-        body = json.loads(payload)
-        self.assertEqual(body["messages"][1], {"role": "user", "content": "plot rain"})
-        self.assertEqual(body["messages"][2], {"role": "assistant", "content": FINAL})
-        self.assertEqual(body["messages"][3]["content"], cc.CACHED_INSTRUCTIONS)
+class ResentPayloadTest(unittest.TestCase):
+    def test_the_request_is_kept_and_the_messages_added_after_it(self):
+        extra = [{"role": "assistant", "content": "done"}, {"role": "user", "content": "summarize"}]
+        body = json.loads(openai_router.resent_payload(_call(), 16000, "chat-compaction", extra))
+        self.assertEqual(body["messages"][:2], json.loads(_call().payload)["messages"])
+        self.assertEqual(body["messages"][2:], extra)
         self.assertEqual(body["tools"][0]["function"]["name"], "run")
         self.assertIs(body["stream"], False)
-        self.assertEqual(body["max_tokens"], cc.SUMMARY_MAX_TOKENS)
+        self.assertEqual(body["max_tokens"], 16000)
         self.assertNotIn("stream_options", body)
-        self.assertTrue(0 < share < 1)
+        self.assertNotIn("max_completion_tokens", body)
+        self.assertEqual(body["trace"]["generation_name"], "chat-compaction")
 
-    def test_another_reply_or_no_warm_call_is_sent_fresh(self):
-        self.assertIsNone(cc._reuse_payload(CHAIN, "a1", (_call("other"), None))[0])
-        self.assertIsNone(cc._reuse_payload(CHAIN, "a1", None)[0])
-
-    def test_a_reply_that_ended_in_a_tool_call_is_sent_fresh(self):
-        chain = [CHAIN[0], {"role": "assistant", "content": "", "tool_calls": [{"id": "t"}]}]
-        self.assertIsNone(cc._reuse_payload(chain, "a1", (_call(), None))[0])
+    def test_the_keepalive_adds_nothing(self):
+        body = json.loads(openai_router.resent_payload(_call(), 1, "cache-keepalive"))
+        self.assertEqual(len(body["messages"]), 2)
+        self.assertEqual(body["max_tokens"], 1)
 
 
-class SummarizeTest(unittest.IsolatedAsyncioTestCase):
-    def _started(self, payload):
-        usage = {"context_used": 900_000, "context_window": 1_000_000}
-        return cc.Started([], usage, {}, "FRESH", payload, 0.8)
+class ResendLastCallTest(unittest.IsolatedAsyncioTestCase):
+    async def _resend(self, warm, user_id="u", message_id="a1", caps=None):
+        from open_webui.utils import usage as usage_utils
 
-    async def test_the_reused_request_is_sent_on_the_calls_connection(self):
-        reply = {
-            "choices": [{"message": {"content": "S"}}],
-            "usage": {"prompt_tokens": 900_000, "completion_tokens": 2_000},
-        }
-        send = AsyncMock(return_value=reply)
-        with patch.object(openai_router, "send_after_call", new=send), patch.object(
-            cc, "_call_model", new=AsyncMock()
-        ) as fresh:
-            summary, estimate = await cc._summarize(
-                MagicMock(), MagicMock(), "m", self._started("P"), {}, (_call(), MagicMock())
-            )
-        self.assertEqual(summary, "S")
-        self.assertEqual(send.await_args.args[2], "P")
-        fresh.assert_not_called()
-        # 900k - 0.8 x 900k + 2k
-        self.assertEqual(estimate["context_estimate"], 182_000)
-
-    async def test_a_tool_call_instead_of_a_summary_falls_back_to_fresh(self):
-        reply = {"choices": [{"message": {"content": "", "tool_calls": [{"id": "t"}]}}]}
-        fresh = AsyncMock(return_value=("S", {"prompt_tokens": 10, "completion_tokens": 1}))
-        with patch.object(openai_router, "send_after_call", new=AsyncMock(return_value=reply)), patch.object(
-            cc, "_call_model", new=fresh
+        send = AsyncMock(return_value={"choices": []})
+        bind = AsyncMock(side_effect=lambda response, context: response)
+        with patch.object(cache_keepalive, "warm_call", return_value=warm), patch.object(
+            usage_utils, "check_usage_caps", side_effect=caps
+        ), patch.object(openai_router, "_send_provider_call", new=send), patch.object(
+            openai_router, "bind_usage_to_response", new=bind
         ):
-            summary, _ = await cc._summarize(
-                MagicMock(), MagicMock(), "m", self._started("P"), {}, (_call(), MagicMock())
+            result = await openai_router.resend_last_call(
+                "c", MagicMock(id=user_id), message_id, [{"role": "user", "content": "x"}], 100
             )
-        self.assertEqual(summary, "S")
-        self.assertEqual(fresh.await_args.args[3]["messages"][0]["content"], "FRESH")
+        return result, send, bind
 
-    async def test_without_a_warm_call_it_is_sent_fresh(self):
-        fresh = AsyncMock(return_value=("S", {"prompt_tokens": 10, "completion_tokens": 1}))
-        with patch.object(cc, "_call_model", new=fresh):
-            await cc._summarize(MagicMock(), MagicMock(), "m", self._started(None), {"task": "t"}, None)
-        self.assertEqual(fresh.await_args.args[3]["metadata"], {"task": "t"})
+    async def test_the_warm_call_is_sent_on_its_connection_and_recorded_as_a_task(self):
+        result, send, bind = await self._resend((_call(), MagicMock(id="u")))
+        sent = send.await_args.args[0]
+        self.assertIsNone(sent["reply_usage"])
+        self.assertEqual(json.loads(sent["payload"])["messages"][-1]["content"], "x")
+        self.assertEqual(result[1], len(sent["payload"]))
+        self.assertEqual(bind.await_args.args[1]["source"], "task")
 
+    async def test_no_warm_call_another_user_or_another_reply_sends_nothing(self):
+        for warm, user_id, message_id in (
+            (None, "u", "a1"),
+            ((_call(), MagicMock(id="someone-else")), "u", "a1"),
+            ((_call("a2"), MagicMock(id="u")), "u", "a1"),
+        ):
+            result, send, _ = await self._resend(warm, user_id, message_id)
+            self.assertIsNone(result)
+            send.assert_not_called()
 
-class CompactChatWarmCallTest(unittest.IsolatedAsyncioTestCase):
-    async def test_another_users_cached_request_is_not_reused(self):
-        start = MagicMock(return_value=None)
-        other = MagicMock(id="someone-else")
-        with patch.object(cache_keepalive, "warm_call", return_value=(_call(), other)), patch.object(
-            cc, "_start_compaction", new=start
-        ), patch.object(cc, "_emit", new=AsyncMock()):
-            await cc.compact_chat(
-                MagicMock(), MagicMock(id="u"), chat_id="c", message_id="a1", model_id="m", emitter_meta={}
-            )
-        self.assertIsNone(start.call_args.args[4])
+    async def test_a_spending_limit_stops_it(self):
+        with self.assertRaises(RuntimeError):
+            await self._resend((_call(), MagicMock(id="u")), caps=RuntimeError("limit"))
 
 
 class WarmCallTest(unittest.TestCase):
@@ -133,32 +104,3 @@ class WarmCallTest(unittest.TestCase):
         cache_keepalive.restart("c", None, "chat", last_call=("CALL", "USER"))
         cache_keepalive.restart("c", None, "chat")
         self.assertIsNone(cache_keepalive.warm_call("c"))
-
-
-class SendAfterCallTest(unittest.IsolatedAsyncioTestCase):
-    async def test_a_spending_limit_stops_it(self):
-        from open_webui.utils import usage as usage_utils
-
-        send = AsyncMock()
-        with patch.object(usage_utils, "check_usage_caps", side_effect=RuntimeError("limit")), patch.object(
-            openai_router, "_send_provider_call", new=send
-        ):
-            with self.assertRaises(RuntimeError):
-                await openai_router.send_after_call(_call(), MagicMock(), "{}", "task")
-        send.assert_not_called()
-
-    async def test_usage_is_recorded_as_a_task_without_restarting_the_keepalive(self):
-        from open_webui.utils import usage as usage_utils
-
-        call = MagicMock()
-        call.reply_usage = {"organization_id": "o", "user_id": "u", "message_id": "a1"}
-        call._replace.return_value = "REPLACED"
-        send = AsyncMock(return_value={"usage": {}})
-        bind = AsyncMock(side_effect=lambda response, context: response)
-        with patch.object(usage_utils, "check_usage_caps"), patch.object(
-            openai_router, "_send_provider_call", new=send
-        ), patch.object(openai_router, "bind_usage_to_response", new=bind):
-            await openai_router.send_after_call(call, MagicMock(), "P", "task")
-        self.assertEqual(call._replace.call_args.kwargs, {"payload": "P", "reply_usage": None})
-        self.assertEqual(send.await_args.args[0], "REPLACED")
-        self.assertEqual(bind.await_args.args[1]["source"], "task")

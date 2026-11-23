@@ -55,11 +55,7 @@ from open_webui.utils.task import (
     tools_function_calling_generation_template,
 )
 from open_webui.utils.model_messages import tool_result_for_chat
-from open_webui.utils.chat_compaction import (
-    compact_at_turn_end,
-    fit_model_call,
-    message_chars,
-)
+from open_webui.utils.chat_compaction import ContextBudget
 from open_webui.utils.misc import (
     deep_update,
     get_message_list,
@@ -1760,9 +1756,9 @@ async def process_chat_response(
     tasks,
     detach=True,
     waiting_heartbeat=None,
+    context_budget: Optional[ContextBudget] = None,
 ):
-    # The latest model call's usage, and the characters of what it was sent.
-    last_call = {"usage": None, "chars": message_chars(form_data.get("messages"))}
+    context_budget = context_budget or ContextBudget()
 
     async def background_tasks_handler(turn: TurnEnd):
         message_map = turn.message_map
@@ -1770,9 +1766,7 @@ async def process_chat_response(
 
         if message:
             try:
-                await compact_at_turn_end(
-                    request, user, model, metadata, last_call["usage"], message_map
-                )
+                await context_budget.finish(request, user, metadata, message_map)
             except Exception:
                 log.warning("End-of-turn compaction failed", exc_info=True)
             messages = get_message_list(message_map, message.get("id"))
@@ -1877,8 +1871,8 @@ async def process_chat_response(
                         }
                     )
                     if isinstance(response.get("usage"), dict):
-                        last_call["usage"] = await context_usage(
-                            request, user, model, response["usage"]
+                        context_budget.record(
+                            await context_usage(request, user, model, response["usage"])
                         )
 
                     turn = await asyncio.to_thread(load_turn_end, metadata["chat_id"])
@@ -2463,7 +2457,7 @@ async def process_chat_response(
                         **usage,
                         **await context_usage(request, user, model, usage),
                     }
-                    last_call["usage"] = usage
+                    context_budget.record(usage)
                     await event_emitter(
                         {"type": "chat:completion", "data": {"usage": usage}}
                     )
@@ -3118,18 +3112,14 @@ async def process_chat_response(
                             ],
                             content_blocks,
                         )
-                        previous = last_call["usage"] or {}
-                        form_data["messages"], followup_messages = await fit_model_call(
+                        form_data["messages"], followup_messages = await context_budget.fit(
                             request,
                             user,
                             model,
                             metadata,
                             form_data["messages"],
                             followup_messages,
-                            previous.get("prompt_tokens"),
-                            last_call["chars"],
                         )
-                        last_call["chars"] = message_chars(followup_messages)
 
                         await waiting_heartbeat.start()
                         log_timing(

@@ -1239,6 +1239,8 @@ class PreparedChat:
     direct: bool
     tasks: Optional[dict]
     turn: Optional[dict]
+    # The saved reply the turn's user message follows.
+    parent: Optional[dict] = None
 
 
 def prepare_chat_completion(
@@ -1326,6 +1328,7 @@ def prepare_chat_completion(
         form_data["metadata"] = metadata
 
         turn = form_data.pop("turn", None)
+        parent = None
         if turn:
             chat_id = metadata.get("chat_id")
             if not chat_id or chat_id == "local":
@@ -1339,14 +1342,9 @@ def prepare_chat_completion(
             )
 
             try:
-                form_data["messages"] = prepare_completion_messages(
+                form_data["messages"], parent = prepare_completion_messages(
                     chat_id, turn, user
                 )
-                # Shared by the copies of metadata made during the turn.
-                metadata["compaction"] = {
-                    "parent": turn.get("compaction_parent"),
-                    "done": False,
-                }
             except ChatRevisionConflict as conflict:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -1370,7 +1368,12 @@ def prepare_chat_completion(
         raise
 
     return PreparedChat(
-        model=model, metadata=metadata, direct=direct, tasks=tasks, turn=turn
+        model=model,
+        metadata=metadata,
+        direct=direct,
+        tasks=tasks,
+        turn=turn,
+        parent=parent,
     )
 
 
@@ -1414,8 +1417,15 @@ async def chat_completion(
             log.debug("chat turn emit failed", exc_info=True)
 
     async def run_chat_job():
+        from open_webui.utils.chat_compaction import ContextBudget
+
         job_form_data = form_data
         job_metadata = metadata
+        context_budget = (
+            ContextBudget(metadata["chat_id"], metadata["message_id"], prepared.parent)
+            if prepared.turn
+            else ContextBudget()
+        )
         clock = StageClock(
             "run_chat_job",
             chat_id=job_metadata.get("chat_id"),
@@ -1434,10 +1444,9 @@ async def chat_completion(
             )
             clock.mark("process_chat_payload")
 
-            from open_webui.utils.chat_compaction import fit_first_call
-
-            job_form_data["messages"] = await fit_first_call(
-                request, user, model, job_metadata, job_form_data["messages"]
+            messages = job_form_data["messages"]
+            _, job_form_data["messages"] = await context_budget.fit(
+                request, user, model, job_metadata, messages, messages
             )
 
             await waiting_heartbeat.start()
@@ -1469,6 +1478,7 @@ async def chat_completion(
                 tasks,
                 detach=False,
                 waiting_heartbeat=waiting_heartbeat,
+                context_budget=context_budget,
             )
         except asyncio.CancelledError:
             log.warning(

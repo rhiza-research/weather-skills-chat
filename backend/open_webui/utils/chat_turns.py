@@ -223,8 +223,12 @@ def store_refused_turn(chat_id: str, turn, user, error: str) -> bool:
     return state == "ok"
 
 
-def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
+def prepare_completion_messages(
+    chat_id: str, turn: dict, user
+) -> tuple[list[dict], Optional[dict]]:
     """Store the new user and assistant messages, then build the model transcript.
+
+    Also returns the saved reply the new user message follows, if any.
 
     A mismatched ``expected_revision`` does not write. The caller turns that
     into a conflict the client refetches.
@@ -276,13 +280,8 @@ def prepare_completion_messages(chat_id: str, turn: dict, user) -> list[dict]:
             detail="The chat could not be saved. Please try again.",
         )
 
-    # For the check before the first model call: the reply this turn follows.
-    parent_id = user_message.get("parentId")
-    parent = ((stored.chat.get("history") or {}).get("messages") or {}).get(parent_id)
-    if isinstance(parent, dict) and parent.get("role") == "assistant":
-        turn["compaction_parent"] = {
-            "id": parent_id,
-            "usage": parent.get("usage"),
-            "compaction": parent.get("compaction"),
-        }
-    return messages_for_model(stored.chat, assistant_message["id"])
+    saved = (stored.chat.get("history") or {}).get("messages") or {}
+    parent = saved.get(user_message.get("parentId"))
+    if not (isinstance(parent, dict) and parent.get("role") == "assistant"):
+        parent = None
+    return messages_for_model(stored.chat, assistant_message["id"]), parent

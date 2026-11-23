@@ -668,16 +668,17 @@ async def compact_chat_at_message(
     organization_id: str = Depends(get_active_organization_id),
 ):
     """Summarize the chat up to this reply; the model gets the summary from then on."""
-    from open_webui.utils.chat_compaction import compact_chat
+    from open_webui.utils.chat_compaction import compact
 
-    return await compact_chat(
+    await asyncio.to_thread(require_chat_write, id, user)
+    return await compact(
         request,
         user,
-        chat_id=id,
-        message_id=message_id,
-        emitter_meta={"user_id": user.id, "session_id": form_data.session_id},
+        id,
+        message_id,
+        notify={"user_id": user.id, "session_id": form_data.session_id},
         organization_id=organization_id,
-        requested=True,
+        check_reply=True,
     )
 
 
