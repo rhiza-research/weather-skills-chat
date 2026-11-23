@@ -468,7 +468,8 @@ async def execute_automation(
                 log.exception("Failed to resolve organization members for chat notify")
         await _notify_chat_created(notify_ids, chat.id, title)
 
-        tool_ids = _resolve_tool_ids(automation, model, user)
+        # Builds the tool catalog and the owner's skill records: about 1 s in prod.
+        tool_ids = await asyncio.to_thread(_resolve_tool_ids, automation, model, user)
 
         timeout_minutes = automation.timeout_minutes or DEFAULT_RUN_TIMEOUT_MINUTES
 
