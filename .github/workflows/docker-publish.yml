@@ -8,6 +8,7 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  pull_request:
 
 concurrency:
   group: docker-publish-${{ github.ref }}
@@ -19,10 +20,15 @@ permissions:
 
 jobs:
   build-and-push:
+    # A fork PR's GITHUB_TOKEN cannot push, so it gets no image.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Build the PR head commit, not GitHub's temporary merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -37,10 +43,16 @@ jobs:
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
+        env:
+          # On PRs, the revision label and sha- tag use the head commit, not the merge commit.
+          DOCKER_METADATA_PR_HEAD_SHA: true
         with:
           images: ghcr.io/rhiza-research/weather-skills-chat
+          labels: |
+            ${{ github.event_name == 'pull_request' && format('weather-skills-chat.pr-number={0}', github.event.pull_request.number) || '' }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=semver,pattern={{raw}}
             type=semver,pattern={{version}}
             type=sha,prefix=sha-,format=short
@@ -58,7 +70,7 @@ jobs:
           build-args: |
             USE_CUDA=false
             USE_OLLAMA=false
-            BUILD_HASH=${{ github.sha }}
+            BUILD_HASH=${{ github.event.pull_request.head.sha || github.sha }}
           # Layer cache from the last dev build. Only dev writes it; main and tags read it.
           cache-from: type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-dev
           cache-to: ${{ github.ref == 'refs/heads/dev' && 'type=registry,ref=ghcr.io/rhiza-research/weather-skills-chat:buildcache-dev,mode=max' || '' }}
@@ -69,6 +81,7 @@ jobs:
       # update the Argo prod branch.
       - name: Deploy branch
         id: deploy
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
@@ -95,16 +108,16 @@ jobs:
           fi
 
       - name: Pin Chart.appVersion to image tag
-        if: steps.deploy.outputs.skip != 'true'
+        if: github.event_name != 'pull_request' && steps.deploy.outputs.skip != 'true'
         run: echo "IMAGE_TAG=${{ steps.deploy.outputs.image_tag }}" >> "$GITHUB_ENV"
 
       - uses: mikefarah/yq@v4
-        if: steps.deploy.outputs.skip != 'true'
+        if: github.event_name != 'pull_request' && steps.deploy.outputs.skip != 'true'
         with:
           cmd: yq -i '.appVersion = strenv(IMAGE_TAG)' charts/weather-skills-chat/Chart.yaml
 
       - name: Push pin to Argo branch
-        if: steps.deploy.outputs.skip != 'true'
+        if: github.event_name != 'pull_request' && steps.deploy.outputs.skip != 'true'
         env:
           DEPLOY_BRANCH: ${{ steps.deploy.outputs.branch }}
         run: |
@@ -121,7 +134,7 @@ jobs:
 
       # :prod is the image that the prod branch's Chart.appVersion pins.
       - name: Tag image prod
-        if: steps.deploy.outputs.branch == 'prod'
+        if: github.event_name != 'pull_request' && steps.deploy.outputs.branch == 'prod'
         env:
           IMAGE: ghcr.io/rhiza-research/weather-skills-chat
         run: docker buildx imagetools create --tag "${IMAGE}:prod" "${IMAGE}:${IMAGE_TAG}"
