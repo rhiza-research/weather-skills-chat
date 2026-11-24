@@ -70,6 +70,33 @@ class CloneDeleteThreadsTest(unittest.IsolatedAsyncioTestCase):
             self.assertIsNot(self.ran_on[name], self.loop_thread, name)
         self.assertEqual(chats_router._artifact_copies, set())
 
+    async def test_owner_clones_into_another_organization_they_belong_to(self):
+        mine = SimpleNamespace(**{**vars(CHAT), "user_id": "u1", "organization_id": "org-a"})
+        theirs = SimpleNamespace(**{**vars(CHAT), "user_id": "u2", "organization_id": "org-a"})
+        clone = MagicMock(model_dump=lambda: {"id": "chat-2", "user_id": "u1", "title": "Copy", "chat": {}, "created_at": 1, "updated_at": 1, "archived": False, "pinned": False, "meta": {}, "folder_id": None, "share_id": None})
+        clone.id = "chat-2"
+        cases = [
+            (mine, True, 200),  # owner and member: cloned
+            (mine, False, 403),  # not a member of the target
+            (theirs, True, 403),  # a teammate's chat stays in its organization
+        ]
+        for source, member, expected in cases:
+            with patch.object(chats_router, "_require_readable_chat", return_value=source), patch.object(
+                chats_router, "user_organization_ids", return_value=["org-a", "org-b"] if member else ["org-a"]
+            ), patch.object(chats_router.Chats, "insert_new_chat", return_value=clone) as insert, patch(
+                "open_webui.utils.artifacts.mark_copy_started"
+            ), patch("open_webui.utils.artifacts.copy_sandbox"):
+                response = await self.client.post(
+                    "/api/v1/chats/chat-1/clone", json={"organization_id": "org-b"}
+                )
+                await asyncio.gather(*chats_router._artifact_copies)
+            self.assertEqual(response.status_code, expected, (source.user_id, member))
+            if expected == 200:
+                form = insert.call_args.args[1]
+                self.assertEqual((form.organization_id, form.visibility), ("org-b", "private"))
+            else:
+                insert.assert_not_called()
+
     async def test_clone_from_share_link_lands_in_the_active_organization(self):
         snapshot = SimpleNamespace(
             id="share-1", user_id="shared-chat-1", title="Weekly rainfall", chat=CHAT.chat

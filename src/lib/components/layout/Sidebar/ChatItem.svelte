@@ -17,6 +17,7 @@
 		updateChatById
 	} from '$lib/apis/chats';
 	import ShareChatModal from '$lib/components/chat/ShareChatModal.svelte';
+	import CloneToOrganizationModal from '$lib/components/chat/CloneToOrganizationModal.svelte';
 	import {
 		chatId,
 		chatTitle as _chatTitle,
@@ -186,6 +187,7 @@
 
 	let showDeleteConfirm = false;
 	let showShareChatModal = false;
+	let showCloneToOrgModal = false;
 
 	const chatTitleInputKeydownHandler = (e) => {
 		if (e.key === 'Enter') {
@@ -202,6 +204,7 @@
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={id} />
+<CloneToOrganizationModal bind:show={showCloneToOrgModal} chatId={id} {title} />
 
 <DeleteConfirmDialog
 	bind:show={showDeleteConfirm}
@@ -375,6 +378,9 @@
 					}}
 					shareHandler={() => {
 						showShareChatModal = true;
+					}}
+					cloneToOrgHandler={() => {
+						showCloneToOrgModal = true;
 					}}
 					archiveChatHandler={() => {
 						archiveChatHandler(id);
