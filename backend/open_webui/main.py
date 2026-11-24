@@ -56,6 +56,7 @@ from open_webui.utils.pyodide_assets import (
     should_spa_fallback,
 )
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
+from open_webui.utils.gzip_json import GZipJSONMiddleware
 from open_webui.utils.invite_email import smtp_is_configured
 from open_webui.utils.logger import start_logger
 from open_webui.socket.main import (
@@ -1165,6 +1166,10 @@ if audit_level != AuditLevel.NONE:
         excluded_paths=AUDIT_EXCLUDED_PATHS,
         max_body_size=MAX_BODY_LOG_SIZE,
     )
+
+# Added after the audit middleware so it wraps it: the audit log keeps plain bodies.
+app.add_middleware(GZipJSONMiddleware)
+
 ##################################
 #
 # Chat Endpoints
