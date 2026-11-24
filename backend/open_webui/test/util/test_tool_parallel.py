@@ -8,6 +8,7 @@ from open_webui.utils.tool_parallel import (
     strip_depends_on,
     strip_display,
     with_implicit_depends_on,
+    with_path_depends_on,
 )
 
 
@@ -144,3 +145,38 @@ def test_display_image_alone_stays_one_wave():
     deps = with_implicit_depends_on(names, [[]])
     assert deps == [[]]
     assert execution_waves(["a"], names, deps) == [[0]]
+
+
+def _path_waves(*argvs):
+    ids = [f"c{i}" for i in range(len(argvs))]
+    deps = with_path_depends_on(ids, [{"argv": a} for a in argvs], [[] for _ in argvs])
+    return execution_waves(ids, ["skill"] * len(argvs), deps)
+
+
+def test_reader_of_a_sibling_output_waits_for_it():
+    waves = _path_waves(
+        ["--start", "2024-01-01", "-o", "chirps.zarr"],
+        ["-i", "./chirps.zarr", "--output=kenya.zarr"],
+        ["--input=kenya.zarr"],
+    )
+    assert waves == [[0], [1], [2]]
+
+
+def test_reader_listed_before_its_writer_still_waits():
+    assert _path_waves(["chirps.zarr"], ["-o", "chirps.zarr"]) == [[1], [0]]
+
+
+def test_calls_writing_the_same_path_run_in_issue_order():
+    assert _path_waves(["-o", "a.zarr", "x"], ["-o", "a.zarr", "y"]) == [[0], [1]]
+
+
+def test_unrelated_paths_stay_one_wave():
+    waves = _path_waves(["-o", "a.zarr"], ["-o", "b.zarr"], ["-i", "old.zarr"])
+    assert waves == [[0, 1, 2]]
+
+
+def test_path_dependency_keeps_explicit_depends_on():
+    deps = with_path_depends_on(
+        ["c0", "c1"], [{"argv": ["-o", "a.zarr"]}, {"path": "a.zarr"}], [[], ["fetch"]]
+    )
+    assert deps == [[], ["fetch"]]

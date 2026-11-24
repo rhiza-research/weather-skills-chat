@@ -79,6 +79,7 @@ from open_webui.utils.tool_parallel import (
     strip_depends_on,
     strip_display,
     with_implicit_depends_on,
+    with_path_depends_on,
 )
 from open_webui.utils.plugin import load_function_module_by_id
 from open_webui.utils.filter import (
@@ -3071,7 +3072,12 @@ async def process_chat_response(
                     for wave in execution_waves(
                         call_ids,
                         call_names,
-                        with_implicit_depends_on(call_names, depends_list),
+                        with_implicit_depends_on(
+                            call_names,
+                            with_path_depends_on(
+                                call_ids, [p for _, p in prepared_calls], depends_list
+                            ),
+                        ),
                     ):
                         await asyncio.gather(
                             *(

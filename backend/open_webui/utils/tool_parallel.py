@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Iterable
 
 DEPENDS_ON_PARAM = "depends_on"
@@ -118,6 +119,36 @@ def with_implicit_depends_on(
             for sib in siblings:
                 if sib not in deps:
                     deps.append(sib)
+        out.append(deps)
+    return out
+
+
+def _argv_tokens(params: Any) -> list[str]:
+    """Skill argv with ``--flag=value`` split in two and paths normalized."""
+    argv = params.get("argv") if isinstance(params, dict) else None
+    if not isinstance(argv, list):
+        return []
+    return [os.path.normpath(t) for a in argv for t in str(a).split("=", 1) if t]
+
+
+def with_path_depends_on(
+    call_ids: list[str], params: list[Any], depends_on: list[list[str]]
+) -> list[list[str]]:
+    """Make a call wait for siblings whose ``-o`` output is in its argv.
+
+    The model often omits ``depends_on`` for a call that reads another call's
+    output. Two calls writing the same path run in issue order.
+    """
+    tokens = [_argv_tokens(p) for p in params]
+    writes = [{b for a, b in zip(t, t[1:]) if a in ("-o", "--output")} for t in tokens]
+    out: list[list[str]] = []
+    for i, deps in enumerate(depends_on):
+        deps = list(deps)
+        reads = set(tokens[i]) - writes[i]
+        for j, call_id in enumerate(call_ids):
+            if j != i and call_id not in deps:
+                if writes[j] & reads or (j < i and writes[j] & writes[i]):
+                    deps.append(call_id)
         out.append(deps)
     return out
 
