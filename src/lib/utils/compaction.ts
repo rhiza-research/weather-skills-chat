@@ -20,26 +20,18 @@ export const compactionRunning = (compaction: Compaction | null | undefined, now
 	nowMs - compaction.started_at * 1000 < COMPACTION_TIMEOUT_MS;
 
 /**
- * Each step reached so far and how long it took, the last one still running.
- * Without steps (a reloaded page), one row for the whole compaction.
+ * The step running now and its seconds so far. Without steps (a reloaded
+ * page), the whole compaction's seconds.
  */
-export const compactionSteps = (
+export const compactionStep = (
 	compaction: Compaction,
 	nowMs = Date.now()
-): { step: CompactionStep | null; seconds: number; current: boolean }[] => {
-	const starts = Object.entries(compaction.steps ?? {}) as [CompactionStep, number][];
-	if (!starts.length) {
-		const seconds = Math.max(0, Math.floor(nowMs / 1000 - (compaction.started_at ?? 0)));
-		return [{ step: null, seconds, current: true }];
-	}
-	return starts.map(([step, start], i) => {
-		const end = i + 1 < starts.length ? starts[i + 1][1] : nowMs / 1000;
-		return {
-			step,
-			seconds: Math.max(0, Math.floor(end - start)),
-			current: i === starts.length - 1
-		};
-	});
+): { step: CompactionStep | null; seconds: number } => {
+	const [step, start] = (Object.entries(compaction.steps ?? {}).at(-1) ?? [
+		null,
+		compaction.started_at ?? 0
+	]) as [CompactionStep | null, number];
+	return { step, seconds: Math.max(0, Math.floor(nowMs / 1000 - start)) };
 };
 
 /** When a running compaction counts as failed, in ms since the epoch. */
