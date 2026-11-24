@@ -175,6 +175,13 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.assertEqual(res.json(), {"size": len("<html></html>") + len(PNG)})
         self.assertEqual(self.client.get(self.url("/size?path=nope")).status_code, 404)
 
+    def test_size_is_null_for_a_folder_too_large_to_size(self):
+        with patch("open_webui.utils.artifacts.shutil.which", return_value=None), patch(
+            "open_webui.utils.artifacts.SIZE_WALK_MAX_FILES", 1
+        ):
+            res = self.client.get(self.url("/size?path=plots"))
+        self.assertEqual(res.json(), {"size": None})
+
     def test_unchanged_file_answers_304_without_a_body(self):
         first = self.client.get(self.url("/content?path=plots/map.png"))
         self.assertEqual(first.status_code, 200)

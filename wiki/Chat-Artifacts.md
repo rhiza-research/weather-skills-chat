@@ -24,12 +24,12 @@ The provenance shows first as a graph, read left to right: the data each step st
 
 ## Downloading and uploading
 
-- Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A folder or Zarr store is downloaded as a zip of it. Zips have no size limit and are built while they download, at low priority, so a large one does not slow the chat. Before a download over 1 GB, the browser shows its size and asks to confirm.
+- Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A folder or Zarr store is downloaded as a zip of it. Zips have no size limit and are built while they download, at low priority, so a large one does not slow the chat. Before a download over 1 GB, the browser shows its size and asks to confirm. Folders are sized with JuiceFS where it is available; without it, a folder with many files cannot be sized, and the browser asks to confirm without a size.
 - The chat's owner can upload a single file. It replaces an existing file with the same name. Files and folders the chat server creates or uploads stay writable by skills.
 - Results that code run in the browser copies back into the chat (see [[Built-in Tools]]) can only be written inside the chat's files, and lose any provenance in their PNG images and Zarr stores.
 - Dropping a file or image onto the chat bar attaches it to the next message. It appears in the bar while it is prepared. Sending the message copies it into that chat's files. The model is told the path; that line is not shown in the chat. The model does not see the contents until it asks to read that path with `read_artifact` on [[Built-in Tools]], and the user approves, unless the chat allows the agent to read files.
 
-`tar.gz` archive downloads have a size limit, and so do the files copied into and out of code run in the browser on [[Built-in Tools]].
+`tar.gz` archive downloads have a size limit, and so do the files copied into and out of code run in the browser on [[Built-in Tools]]. Without JuiceFS, a folder with many files counts as over these limits.
 
 Anyone who can read a chat can list and download its files. Only the chat's owner can add or change them. Who can read a chat is described on [[Organizations]].
 
