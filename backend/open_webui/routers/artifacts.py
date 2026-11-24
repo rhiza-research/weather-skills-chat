@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import os
 import re
 import sys
 import zlib
@@ -87,8 +88,20 @@ async def artifact_link_exception_handler(request: Request, exc):
 ZIP_SCRIPT = Path(__file__).resolve().parent.parent / "utils" / "zip_stream.py"
 ZIP_CHUNK_BYTES = 1024 * 1024
 # Each download zips in its own process (about 20 MB plus 500 bytes per file);
-# this caps how many run at once per server process.
-ZIP_SLOTS = asyncio.Semaphore(10)
+# this caps how many run at once per server process. Running zips share one
+# set of parallel reads (zip_stream.READ_THREADS), so with 8 each still gets 4.
+ZIP_SLOTS = asyncio.Semaphore(8)
+_running_zips: set[asyncio.subprocess.Process] = set()
+
+
+def _tell_running_zips() -> None:
+    """Each zip reads its share of the parallel reads from its stdin."""
+    line = f"{len(_running_zips)}\n".encode()
+    for proc in _running_zips:
+        try:
+            proc.stdin.write(line)
+        except (BrokenPipeError, ConnectionResetError, RuntimeError):
+            pass  # Exited; its own finally removes it.
 
 
 async def _zip_stream(args: list[str]):
@@ -98,8 +111,13 @@ async def _zip_stream(args: list[str]):
             "-I",
             str(ZIP_SCRIPT),
             *args,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
+            # One malloc arena per reader thread would pass zip_stream's 1 GB cap.
+            env={**os.environ, "MALLOC_ARENA_MAX": "2"},
         )
+        _running_zips.add(proc)
+        _tell_running_zips()
         try:
             while chunk := await proc.stdout.read(ZIP_CHUNK_BYTES):
                 yield chunk
@@ -107,6 +125,8 @@ async def _zip_stream(args: list[str]):
                 # Aborts the response, so the browser marks the download failed.
                 raise RuntimeError(f"zip_stream exited with {proc.returncode}")
         finally:
+            _running_zips.discard(proc)
+            _tell_running_zips()
             if proc.returncode is None:
                 proc.kill()
                 await proc.wait()
