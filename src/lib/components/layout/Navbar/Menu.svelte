@@ -16,7 +16,9 @@
 		showCallOverlay,
 		temporaryChatEnabled,
 		theme,
-		user
+		user,
+		organizations,
+		activeOrganizationId
 	} from '$lib/stores';
 	import { flyAndScale } from '$lib/utils/transitions';
 
@@ -26,6 +28,7 @@
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
 	import Cube from '$lib/components/icons/Cube.svelte';
 	import Share from '$lib/components/icons/Share.svelte';
+	import DocumentDuplicate from '$lib/components/icons/DocumentDuplicate.svelte';
 	import { getChatById, updateChatVisibilityById } from '$lib/apis/chats';
 	import { refreshSidebar } from '$lib/chat/reconnect';
 
@@ -33,6 +36,7 @@
 
 	export let shareEnabled: boolean = false;
 	export let shareHandler: Function;
+	export let cloneToOrgHandler: Function = () => {};
 	export let downloadHandler: Function;
 	export let onVisibilityChange: (visibility: string) => void = () => {};
 
@@ -181,7 +185,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[200px] rounded-xl px-1 py-1.5  z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[280px] rounded-xl px-1 py-1.5  z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
 			sideOffset={8}
 			side="bottom"
 			align="end"
@@ -249,8 +253,18 @@
 						<div class="flex items-center">
 							{chat.visibility === 'organization'
 								? $i18n.t('Make private')
-								: $i18n.t('Share with organization')}
+								: $i18n.t('Share chat with this organization')}
 						</div>
+					</DropdownMenu.Item>
+				{/if}
+
+				{#if chat.id && ($organizations ?? []).some((org) => org.id !== $activeOrganizationId)}
+					<DropdownMenu.Item
+						class="flex gap-2 items-center px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						on:click={() => cloneToOrgHandler()}
+					>
+						<DocumentDuplicate className="size-4" strokeWidth="1.5" />
+						<div class="flex items-center">{$i18n.t('Clone chat to another organization')}</div>
 					</DropdownMenu.Item>
 				{/if}
 			{/if}

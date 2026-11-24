@@ -47,9 +47,10 @@ A platform admin can also allow an organization to use large tool runners, the r
 
 Chats, scheduled tasks, preferences, and folders are either private or shared with the organization. Everything in a personal organization is private.
 
-- A chat's owner can share it with the organization. Every member can then read it. Only the owner can change it.
+- A chat's owner can share it with the organization, with **Share chat with this organization** in the chat's **…** menu in the sidebar or at the top of the chat. Every member can then read it. Only the owner can change it.
 - If the owner makes a shared chat private, it leaves other members' chat lists. They can no longer open it.
 - Cloning a chat makes a private copy for the person who cloned it, in the same organization. Cloning from a share link puts the private copy in the organization the person is working in. Starting a new chat with a chat's files works the same way; see [[Chat Artifacts]].
+- A chat's owner who belongs to more than one organization can choose **Clone chat to another organization** from the same menu, for a private or a shared chat. They pick one of their other organizations; a private copy of the chat, with its files, is made there for them, and the app switches to that organization with the copy open. Members cannot clone someone else's chat into another organization.
 - Shared chats go in the organization's team folders, and private chats in their owner's own folders.
 
 | Env var | Default | Effect |

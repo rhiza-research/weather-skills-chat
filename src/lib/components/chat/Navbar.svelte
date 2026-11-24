@@ -24,6 +24,7 @@
 
 	import ModelSelector from '../chat/ModelSelector.svelte';
 	import ShareChatModal from '$lib/components/chat/ShareChatModal.svelte';
+	import CloneToOrganizationModal from '$lib/components/chat/CloneToOrganizationModal.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Menu from '$lib/components/layout/Navbar/Menu.svelte';
 	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
@@ -51,6 +52,7 @@
 
 	let showDownloadChatModal = false;
 	let showShareChatModal = false;
+	let showCloneToOrgModal = false;
 
 	$: artifactsPanelOpen = $showControls && $showArtifacts;
 
@@ -72,6 +74,11 @@
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
+<CloneToOrganizationModal
+	bind:show={showCloneToOrgModal}
+	chatId={$chatId}
+	title={chat?.chat?.title ?? ''}
+/>
 
 <nav class="sticky top-0 z-30 w-full py-1.5 -mb-8 flex flex-col items-center drag-region">
 	<div class="flex items-center w-full px-1.5">
@@ -125,6 +132,9 @@
 							{onVisibilityChange}
 							shareHandler={() => {
 								showShareChatModal = true;
+							}}
+							cloneToOrgHandler={() => {
+								showCloneToOrgModal = true;
 							}}
 							downloadHandler={() => {
 								showDownloadChatModal = !showDownloadChatModal;

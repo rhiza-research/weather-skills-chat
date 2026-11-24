@@ -38,6 +38,7 @@ from open_webui.utils.organizations import (
     is_personal_org,
     require_chat_write,
     resolve_visibility,
+    user_organization_ids,
 )
 
 log = logging.getLogger(__name__)
@@ -808,6 +809,8 @@ async def pin_chat_by_id(id: str, user=Depends(get_verified_user)):
 
 class CloneForm(BaseModel):
     title: Optional[str] = None
+    # Another organization of the user's to clone into; defaults to the chat's own.
+    organization_id: Optional[str] = None
 
 
 @router.post("/{id}/clone", response_model=Optional[ChatResponse])
@@ -815,6 +818,16 @@ async def clone_chat_by_id(
     form_data: CloneForm, id: str, user=Depends(get_verified_user)
 ):
     chat = await asyncio.to_thread(_require_readable_chat, id, user)
+    target_org = form_data.organization_id or chat.organization_id
+    if target_org != chat.organization_id and (
+        chat.user_id != user.id
+        or target_org not in await asyncio.to_thread(user_organization_ids, user.id)
+    ):
+        # Only the owner may take a chat out of its organization, and only into one they belong to.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
     updated_chat = {
         **chat.chat,
         "originalChatId": chat.id,
@@ -829,7 +842,7 @@ async def clone_chat_by_id(
         ChatForm(
             **{
                 "chat": updated_chat,
-                "organization_id": chat.organization_id,
+                "organization_id": target_org,
                 "visibility": "private",
             }
         ),

@@ -25,7 +25,7 @@
 		updateChatVisibilityById
 	} from '$lib/apis/chats';
 	import { goto } from '$app/navigation';
-	import { chats, theme } from '$lib/stores';
+	import { activeOrganizationId, chats, organizations, theme } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	import { createMessagesList } from '$lib/utils';
 	import { downloadChatAsPDF } from '$lib/apis/utils';
@@ -35,6 +35,7 @@
 
 	export let shareHandler: Function;
 	export let cloneChatHandler: Function;
+	export let cloneToOrgHandler: Function;
 	export let archiveChatHandler: Function;
 	export let renameHandler: Function;
 	export let deleteHandler: Function;
@@ -189,7 +190,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[200px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[280px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
@@ -285,10 +286,22 @@
 					}}
 				>
 					<Share />
-					<div class="flex items-center">{$i18n.t('Share with organization')}</div>
+					<div class="flex items-center">{$i18n.t('Share chat with this organization')}</div>
 				</DropdownMenu.Item>
 			{/if}
 
+			{/if}
+
+			{#if isMine && ($organizations ?? []).some((org) => org.id !== $activeOrganizationId)}
+				<DropdownMenu.Item
+					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					on:click={() => {
+						cloneToOrgHandler();
+					}}
+				>
+					<DocumentDuplicate strokeWidth="2" />
+					<div class="flex items-center">{$i18n.t('Clone chat to another organization')}</div>
+				</DropdownMenu.Item>
 			{/if}
 
 			<DropdownMenu.Item
