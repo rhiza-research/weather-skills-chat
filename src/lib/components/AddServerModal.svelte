@@ -179,7 +179,7 @@
 
 								<div class="flex flex-1 items-center">
 									<input
-										class="w-full bg-transparent outline-hidden flex-1 text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="field-bare flex-1 text-sm"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -210,7 +210,7 @@
 								<div class="flex-1 flex items-center">
 									<div class="text-sm">/</div>
 									<input
-										class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="field-bare text-sm"
 										type="text"
 										bind:value={path}
 										placeholder={$i18n.t('openapi.json Path')}
@@ -234,7 +234,7 @@
 								<div class="flex gap-2">
 									<div class="flex-shrink-0 self-start">
 										<select
-											class="w-full text-sm bg-transparent dark:bg-gray-900 placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden pr-5"
+											class="w-full text-sm bg-transparent dark:bg-gray-900 outline-hidden pr-5"
 											bind:value={auth_type}
 										>
 											<option value="bearer">Bearer</option>
@@ -245,7 +245,7 @@
 									<div class="flex flex-1 items-center">
 										{#if auth_type === 'bearer'}
 											<SensitiveInput
-												className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+												className="w-full text-sm bg-transparent outline-hidden"
 												bind:value={key}
 												placeholder={$i18n.t('API Key')}
 												required={false}
@@ -271,7 +271,7 @@
 						{/if}
 					</div>
 
-					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
+					<div class="modal-actions gap-1.5">
 						{#if edit}
 							<button
 								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"

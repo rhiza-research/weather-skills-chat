@@ -191,7 +191,7 @@
 						{/if}
 					</div>
 
-					<div class="flex justify-end pt-3 text-sm font-medium">
+					<div class="modal-actions">
 						<button
 							class=" px-4 py-2 bg-green-700 hover:bg-green-800 text-gray-100 transition rounded-xl"
 							type="submit"

@@ -57,7 +57,7 @@
 					<div class="shrink-0 w-full flex justify-between items-center">
 						<div class="w-full">
 							<input
-								class="w-full bg-transparent outline-hidden text-3xl font-semibold"
+								class="field-bare text-3xl font-semibold"
 								type="text"
 								bind:value={name}
 								placeholder={$i18n.t('Title')}

@@ -60,7 +60,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent outline-hidden dark:text-gray-300 placeholder:opacity-30"
+						class="field-bare dark:text-gray-300"
 						type="password"
 						bind:value={currentPassword}
 						placeholder={$i18n.t('Enter your current password')}
@@ -75,7 +75,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent outline-hidden text-sm dark:text-gray-300 placeholder:opacity-30"
+						class="field-bare text-sm dark:text-gray-300"
 						type="password"
 						bind:value={newPassword}
 						placeholder={$i18n.t('Enter your new password')}
@@ -90,7 +90,7 @@
 
 				<div class="flex-1">
 					<input
-						class="w-full bg-transparent outline-hidden text-sm dark:text-gray-300 placeholder:opacity-30"
+						class="field-bare text-sm dark:text-gray-300"
 						type="password"
 						bind:value={newPasswordConfirm}
 						placeholder={$i18n.t('Confirm your new password')}

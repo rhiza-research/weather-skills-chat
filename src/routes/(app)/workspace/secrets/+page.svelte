@@ -153,7 +153,7 @@
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Secrets')}
 				/>
@@ -169,7 +169,7 @@
 		>
 			<input
 				bind:this={nameInput}
-				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden"
+				class="flex-1 field-bare text-sm rounded-lg py-2 px-3"
 				placeholder={$i18n.t('Name (e.g. ECMWF_API_KEY)')}
 				bind:value={name}
 				autocomplete="off"

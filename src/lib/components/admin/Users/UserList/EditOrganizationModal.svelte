@@ -98,7 +98,7 @@
 					<div class="flex flex-col w-full">
 						<div class="mb-0.5 text-xs text-muted">{$i18n.t('Name')}</div>
 						<input
-							class="w-full bg-transparent outline-hidden text-sm"
+							class="field-bare text-sm"
 							type="text"
 							bind:value={name}
 							placeholder={$i18n.t('Organization name')}
@@ -128,7 +128,7 @@
 						<div class="flex items-center gap-1.5 mt-2">
 							<span class="text-sm text-muted">$</span>
 							<input
-								class="w-full bg-transparent outline-hidden text-sm"
+								class="field-bare text-sm"
 								type="number"
 								min="0"
 								step="0.01"

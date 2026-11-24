@@ -301,7 +301,7 @@
 			>
 				<div class="flex flex-col md:flex-row gap-2">
 					<input
-						class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden"
+						class="flex-1 field-bare text-sm rounded-lg py-2 px-3"
 						placeholder="https://github.com/org/weather-skills.git"
 						bind:value={gitUrl}
 						disabled={busy}

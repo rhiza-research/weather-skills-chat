@@ -169,6 +169,22 @@ textarea::placeholder {
 		@apply mb-2.5 text-base font-medium;
 	}
 
+	.field-label {
+		@apply mb-1 text-xs font-medium;
+	}
+
+	.sub-title {
+		@apply mb-2 text-sm font-medium;
+	}
+
+	.field-bare {
+		@apply w-full bg-transparent outline-hidden;
+	}
+
+	.modal-actions {
+		@apply flex justify-end pt-3 text-sm font-medium;
+	}
+
 	.page-nav {
 		@apply flex h-13 shrink-0 items-center gap-1 px-2.5 backdrop-blur-xl;
 	}

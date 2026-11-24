@@ -223,7 +223,7 @@
 
 			<div class="pt-0.5">
 				<div class="flex flex-col w-full">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Name')}</div>
+					<div class="field-label">{$i18n.t('Name')}</div>
 
 					<div class="flex-1">
 						<input
@@ -339,7 +339,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3">
+	<div class="modal-actions">
 		<button
 			class="btn-primary"
 			on:click={async () => {

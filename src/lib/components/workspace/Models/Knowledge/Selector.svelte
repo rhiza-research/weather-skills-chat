@@ -99,7 +99,7 @@
 						<MagnifyingGlassSolid className="size-4" />
 					</div>
 					<input
-						class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
+						class="field-bare text-sm pr-4 py-1 rounded-r-xl"
 						bind:value={query}
 						placeholder={$i18n.t('Search Knowledge')}
 					/>

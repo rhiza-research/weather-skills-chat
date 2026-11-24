@@ -476,7 +476,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="w-full bg-transparent outline-hidden text-3xl font-semibold"
+									class="field-bare text-3xl font-semibold"
 									placeholder={$i18n.t('Model Name')}
 									bind:value={name}
 									required
@@ -487,7 +487,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="w-full bg-transparent outline-hidden text-xs text-muted"
+									class="field-bare text-xs text-muted"
 									placeholder={$i18n.t('Model ID')}
 									bind:value={id}
 									disabled={edit}
@@ -722,7 +722,7 @@
 									{#each info.meta.suggestion_prompts as prompt, promptIdx}
 										<div class=" flex rounded-lg">
 											<input
-												class=" text-sm w-full bg-transparent outline-hidden border-r border-line"
+												class="text-sm field-bare border-r border-line"
 												placeholder={$i18n.t('Write a prompt suggestion (e.g. Who are you?)')}
 												bind:value={prompt.content}
 											/>
@@ -787,7 +787,7 @@
 						{#if showPreview}
 							<div>
 								<textarea
-									class="w-full bg-transparent outline-hidden text-sm resize-none"
+									class="field-bare text-sm resize-none"
 									rows="10"
 									value={JSON.stringify(info, null, 2)}
 									disabled

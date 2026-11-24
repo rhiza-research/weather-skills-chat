@@ -56,7 +56,7 @@
 		<div class="flex w-full">
 			<div class="flex-1 relative">
 				<input
-					class="w-full bg-transparent outline-hidden"
+					class="field-bare"
 					placeholder={$i18n.t('API Base URL')}
 					bind:value={connection.url}
 					autocomplete="off"

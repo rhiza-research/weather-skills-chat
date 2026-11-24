@@ -105,7 +105,7 @@
 				{/if}
 			</div>
 		</div>
-		<div class="flex justify-end pt-3 text-sm font-medium">
+		<div class="modal-actions">
 			<button
 				on:click={async () => {
 					localStorage.version = $config.version;

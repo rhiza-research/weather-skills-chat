@@ -200,7 +200,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="w-full bg-transparent outline-hidden flex-1"
+								class="field-bare flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={STT_OPENAI_API_BASE_URL}
 								required
@@ -213,7 +213,7 @@
 					<hr class="border-line my-2" />
 
 					<div>
-						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
+						<div class="field-label">{$i18n.t('STT Model')}</div>
 						<div class="flex w-full">
 							<div class="flex-1">
 								<input
@@ -239,7 +239,7 @@
 					<hr class="border-line my-2" />
 
 					<div>
-						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
+						<div class="field-label">{$i18n.t('STT Model')}</div>
 						<div class="flex w-full">
 							<div class="flex-1">
 								<input
@@ -279,7 +279,7 @@
 						<hr class="border-line my-2" />
 
 						<div>
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('Language Locales')}</div>
+							<div class="field-label">{$i18n.t('Language Locales')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -293,7 +293,7 @@
 					</div>
 				{:else if STT_ENGINE === ''}
 					<div>
-						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('STT Model')}</div>
+						<div class="field-label">{$i18n.t('STT Model')}</div>
 
 						<div class="flex w-full">
 							<div class="flex-1 mr-2">
@@ -402,7 +402,7 @@
 					<div>
 						<div class="mt-1 flex gap-2 mb-1">
 							<input
-								class="w-full bg-transparent outline-hidden flex-1"
+								class="field-bare flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={TTS_OPENAI_API_BASE_URL}
 								required
@@ -445,7 +445,7 @@
 
 				{#if TTS_ENGINE === ''}
 					<div>
-						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Voice')}</div>
+						<div class="field-label">{$i18n.t('TTS Voice')}</div>
 						<div class="flex w-full">
 							<div class="flex-1">
 								<select
@@ -466,7 +466,7 @@
 					</div>
 				{:else if TTS_ENGINE === 'transformers'}
 					<div>
-						<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Model')}</div>
+						<div class="field-label">{$i18n.t('TTS Model')}</div>
 						<div class="flex w-full">
 							<div class="flex-1">
 								<input
@@ -508,7 +508,7 @@
 				{:else if TTS_ENGINE === 'openai'}
 					<div class=" flex gap-2">
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Voice')}</div>
+							<div class="field-label">{$i18n.t('TTS Voice')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -527,7 +527,7 @@
 							</div>
 						</div>
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Model')}</div>
+							<div class="field-label">{$i18n.t('TTS Model')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -549,7 +549,7 @@
 				{:else if TTS_ENGINE === 'elevenlabs'}
 					<div class=" flex gap-2">
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Voice')}</div>
+							<div class="field-label">{$i18n.t('TTS Voice')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -568,7 +568,7 @@
 							</div>
 						</div>
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Model')}</div>
+							<div class="field-label">{$i18n.t('TTS Model')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -590,7 +590,7 @@
 				{:else if TTS_ENGINE === 'azure'}
 					<div class=" flex gap-2">
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">{$i18n.t('TTS Voice')}</div>
+							<div class="field-label">{$i18n.t('TTS Voice')}</div>
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
@@ -609,7 +609,7 @@
 							</div>
 						</div>
 						<div class="w-full">
-							<div class=" mb-1.5 text-sm font-medium">
+							<div class="field-label">
 								{$i18n.t('Output format')}
 								<a
 									href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech?tabs=streaming#audio-outputs"

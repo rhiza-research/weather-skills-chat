@@ -268,7 +268,7 @@
 				<input
 					type="text"
 					id="floating-message-input"
-					class="w-full bg-transparent outline-hidden ml-5 flex-1 text-sm"
+					class="field-bare ml-5 flex-1 text-sm"
 					placeholder={$i18n.t('Ask a question')}
 					bind:value={floatingInputValue}
 					on:keydown={(e) => {
@@ -309,7 +309,7 @@
 					<Markdown id={`${id}-float-response`} content={responseContent} />
 
 					{#if responseDone}
-						<div class="flex justify-end pt-3 text-sm font-medium">
+						<div class="modal-actions">
 							<button
 								class="btn-primary"
 								on:click={addHandler}

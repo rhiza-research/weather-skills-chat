@@ -181,7 +181,7 @@
 							<textarea
 								id="message-edit-{message.id}"
 								bind:this={messageEditTextAreaElement}
-								class="w-full bg-transparent outline-hidden resize-none"
+								class="field-bare resize-none"
 								bind:value={editedContent}
 								on:input={(e) => {
 									e.target.style.height = '';

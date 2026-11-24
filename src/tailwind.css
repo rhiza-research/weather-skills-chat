@@ -101,7 +101,7 @@
 
 	input::placeholder,
 	textarea::placeholder {
-		color: theme(--color-gray-400);
+		color: var(--color-muted);
 	}
 }
 

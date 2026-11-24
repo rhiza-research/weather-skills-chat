@@ -146,7 +146,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3">
+	<div class="modal-actions">
 		<button class="btn-primary" type="submit">
 			{$i18n.t('Save')}
 		</button>

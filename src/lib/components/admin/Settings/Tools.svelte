@@ -123,7 +123,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="modal-actions">
 		<button
 			class="btn-primary"
 			type="submit"

@@ -29,7 +29,7 @@
 	<div class="flex items-center gap-1 {label ? 'px-3 py-1.5' : 'px-0.5'}">
 		<input
 			bind:value={tagName}
-			class="w-full bg-transparent outline-hidden text-sm w-[6.5rem]"
+			class="field-bare text-sm w-[6.5rem]"
 			placeholder={$i18n.t('Add a tag')}
 			list="tagOptions"
 			on:keydown={(event) => {

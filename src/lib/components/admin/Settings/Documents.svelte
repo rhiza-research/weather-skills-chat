@@ -311,7 +311,7 @@
 							<div class="flex w-full mt-1">
 								<div class="flex-1 mr-2">
 									<input
-										class="w-full bg-transparent outline-hidden flex-1 text-sm"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('Enter Tika Server URL')}
 										bind:value={RAGConfig.TIKA_SERVER_URL}
 									/>
@@ -320,7 +320,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'docling'}
 							<div class="flex w-full mt-1">
 								<input
-									class="w-full bg-transparent outline-hidden flex-1 text-sm"
+									class="field-bare flex-1 text-sm"
 									placeholder={$i18n.t('Enter Docling Server URL')}
 									bind:value={RAGConfig.DOCLING_SERVER_URL}
 								/>
@@ -328,7 +328,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'document_intelligence'}
 							<div class="my-0.5 flex gap-2 pr-2">
 								<input
-									class="w-full bg-transparent outline-hidden flex-1 text-sm"
+									class="field-bare flex-1 text-sm"
 									placeholder={$i18n.t('Enter Document Intelligence Endpoint')}
 									bind:value={RAGConfig.DOCUMENT_INTELLIGENCE_ENDPOINT}
 								/>
@@ -384,7 +384,7 @@
 						<div class="  mb-2.5 flex w-full justify-between">
 							<div class=" flex gap-1.5 w-full">
 								<div class="  w-full justify-between">
-									<div class="self-center text-xs font-medium min-w-fit mb-1">
+									<div class="self-center field-label min-w-fit">
 										{$i18n.t('Chunk Size')}
 									</div>
 									<div class="self-center">
@@ -400,7 +400,7 @@
 								</div>
 
 								<div class="w-full">
-									<div class=" self-center text-xs font-medium min-w-fit mb-1">
+									<div class="self-center field-label min-w-fit">
 										{$i18n.t('Chunk Overlap')}
 									</div>
 
@@ -453,7 +453,7 @@
 							{#if embeddingEngine === 'openai'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="w-full bg-transparent outline-hidden flex-1 text-sm"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OpenAIUrl}
 										required
@@ -464,7 +464,7 @@
 							{:else if embeddingEngine === 'ollama'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="w-full bg-transparent outline-hidden flex-1 text-sm"
+										class="field-bare flex-1 text-sm"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OllamaUrl}
 										required
@@ -480,14 +480,14 @@
 						</div>
 
 						<div class="  mb-2.5 flex flex-col w-full">
-							<div class=" mb-1 text-xs font-medium">{$i18n.t('Embedding Model')}</div>
+							<div class="field-label">{$i18n.t('Embedding Model')}</div>
 
 							<div class="">
 								{#if embeddingEngine === 'ollama'}
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="w-full bg-transparent outline-hidden flex-1 text-sm"
+												class="field-bare flex-1 text-sm"
 												bind:value={embeddingModel}
 												placeholder={$i18n.t('Set embedding model')}
 												required
@@ -498,7 +498,7 @@
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="w-full bg-transparent outline-hidden flex-1 text-sm"
+												class="field-bare flex-1 text-sm"
 												placeholder={$i18n.t('Set embedding model (e.g. {{model}})', {
 													model: embeddingModel.slice(-40)
 												})}
@@ -611,13 +611,13 @@
 
 							{#if RAGConfig.ENABLE_RAG_HYBRID_SEARCH === true}
 								<div class="  mb-2.5 flex flex-col w-full">
-									<div class=" mb-1 text-xs font-medium">{$i18n.t('Reranking Model')}</div>
+									<div class="field-label">{$i18n.t('Reranking Model')}</div>
 
 									<div class="">
 										<div class="flex w-full">
 											<div class="flex-1 mr-2">
 												<input
-													class="w-full bg-transparent outline-hidden flex-1 text-sm"
+													class="field-bare flex-1 text-sm"
 													placeholder={$i18n.t('Set reranking model (e.g. {{model}})', {
 														model: 'BAAI/bge-reranker-v2-m3'
 													})}
@@ -673,7 +673,7 @@
 							<SettingRow label={$i18n.t('Top K')}>
 								<div class="flex items-center relative">
 									<input
-										class="w-full bg-transparent outline-hidden flex-1 text-sm"
+										class="field-bare flex-1 text-sm"
 										type="number"
 										placeholder={$i18n.t('Enter Top K')}
 										bind:value={RAGConfig.TOP_K}
@@ -687,7 +687,7 @@
 								<SettingRow label={$i18n.t('Top K Reranker')}>
 									<div class="flex items-center relative">
 										<input
-											class="w-full bg-transparent outline-hidden flex-1 text-sm"
+											class="field-bare flex-1 text-sm"
 											type="number"
 											placeholder={$i18n.t('Enter Top K Reranker')}
 											bind:value={RAGConfig.TOP_K_RERANKER}
@@ -703,7 +703,7 @@
 									<SettingRow label={$i18n.t('Relevance Threshold')}>
 										<div class="flex items-center relative">
 											<input
-												class="w-full bg-transparent outline-hidden flex-1 text-sm"
+												class="field-bare flex-1 text-sm"
 												type="number"
 												step="0.01"
 												placeholder={$i18n.t('Enter Score')}
@@ -726,7 +726,7 @@
 						{/if}
 
 						<div class="  mb-2.5 flex flex-col w-full justify-between">
-							<div class=" mb-1 text-xs font-medium">{$i18n.t('RAG Template')}</div>
+							<div class="field-label">{$i18n.t('RAG Template')}</div>
 							<div class="flex w-full items-center relative">
 								<Tooltip
 									content={$i18n.t(
@@ -761,7 +761,7 @@
 								placement="top-start"
 							>
 								<input
-									class="w-full bg-transparent outline-hidden flex-1 text-sm"
+									class="field-bare flex-1 text-sm"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_SIZE}
@@ -781,7 +781,7 @@
 								placement="top-start"
 							>
 								<input
-									class="w-full bg-transparent outline-hidden flex-1 text-sm"
+									class="field-bare flex-1 text-sm"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_COUNT}
@@ -856,7 +856,7 @@
 				</div>
 			</div>
 		</div>
-		<div class="flex justify-end pt-3 text-sm font-medium">
+		<div class="modal-actions">
 			<button
 				class="btn-primary"
 				type="submit"

@@ -141,7 +141,7 @@
 			>
 				<Search className="size-3.5 shrink-0 text-gray-500" />
 				<input
-					class="w-full bg-transparent outline-hidden min-w-0 text-sm"
+					class="field-bare min-w-0 text-sm"
 					type="search"
 					bind:value={query}
 					placeholder={$i18n.t('Search scheduled tasks')}

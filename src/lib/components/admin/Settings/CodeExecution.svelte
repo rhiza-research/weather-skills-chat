@@ -87,7 +87,7 @@
 							<div class="flex w-full">
 								<div class="flex-1">
 									<input
-										class="w-full bg-transparent outline-hidden text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="field-bare text-sm py-0.5"
 										type="text"
 										placeholder={$i18n.t('Enter Jupyter URL')}
 										bind:value={config.CODE_EXECUTION_JUPYTER_URL}
@@ -206,7 +206,7 @@
 								<div class="flex w-full">
 									<div class="flex-1">
 										<input
-											class="w-full bg-transparent outline-hidden text-sm py-0.5 placeholder:text-gray-300 dark:placeholder:text-gray-700"
+											class="field-bare text-sm py-0.5"
 											type="text"
 											placeholder={$i18n.t('Enter Jupyter URL')}
 											bind:value={config.CODE_INTERPRETER_JUPYTER_URL}
@@ -305,7 +305,7 @@
 			</div>
 		{/if}
 	</div>
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="modal-actions">
 		<button
 			class="btn-primary"
 			type="submit"

@@ -19,7 +19,7 @@
 <div class="flex flex-col h-full justify-between space-y-3 text-sm mb-6">
 	<div class="settings-pane space-y-3">
 		<div>
-			<div class=" mb-2.5 text-sm font-medium flex space-x-2 items-center">
+			<div class="sub-title flex space-x-2 items-center">
 				<div>
 					{$WEBUI_NAME}
 					{$i18n.t('Version')}

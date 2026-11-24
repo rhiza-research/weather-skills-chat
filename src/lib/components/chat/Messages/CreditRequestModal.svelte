@@ -72,7 +72,7 @@
 						{$i18n.t('Additional credits (optional)')}
 					</div>
 					<input
-						class="w-full bg-transparent outline-hidden text-sm"
+						class="field-bare text-sm"
 						type="number"
 						min="0"
 						step="1"

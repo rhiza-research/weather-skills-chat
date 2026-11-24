@@ -181,7 +181,7 @@
 
 								<div class="flex-1">
 									<input
-										class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+										class="field-bare text-sm"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -216,7 +216,7 @@
 
 								<div class="flex-1">
 									<SensitiveInput
-										className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										className="w-full text-sm bg-transparent outline-hidden"
 										bind:value={key}
 										placeholder={$i18n.t('API Key')}
 										required={false}
@@ -234,7 +234,7 @@
 										)}
 									>
 										<input
-											class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+											class="field-bare text-sm"
 											type="text"
 											bind:value={prefixId}
 											placeholder={$i18n.t('Prefix ID')}
@@ -257,7 +257,7 @@
 											)}
 										>
 											<input
-												class="w-full bg-transparent outline-hidden text-sm placeholder:text-gray-300 dark:placeholder:text-gray-700"
+												class="field-bare text-sm"
 												type="text"
 												bind:value={name}
 												placeholder={$i18n.t('e.g. openrouter')}
@@ -301,7 +301,7 @@
 
 									<div class="flex-1">
 										<select
-											class="w-full bg-transparent outline-hidden text-sm"
+											class="field-bare text-sm"
 											bind:value={modelCallTracing}
 										>
 											<!-- A new provider style is also added to _PROVIDER_TRACE_FIELD_BUILDERS in backend/open_webui/utils/langfuse_tracing.py. -->
@@ -367,7 +367,7 @@
 							<input
 								class="w-full py-1 text-sm rounded-lg bg-transparent {modelId
 									? ''
-									: 'text-muted'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+									: 'text-muted'} outline-hidden"
 								bind:value={modelId}
 								placeholder={$i18n.t('Add a model ID')}
 							/>
@@ -385,7 +385,7 @@
 						</div>
 					</div>
 
-					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
+					<div class="modal-actions gap-1.5">
 						{#if edit}
 							<button
 								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"

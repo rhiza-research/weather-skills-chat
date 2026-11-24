@@ -653,7 +653,7 @@
 						<div class="w-full">
 							<input
 								type="text"
-								class="w-full bg-transparent outline-hidden text-left font-semibold text-2xl font-primary"
+								class="field-bare text-left font-semibold text-2xl font-primary"
 								bind:value={knowledge.name}
 								placeholder={$i18n.t('Knowledge Name')}
 								disabled={!canWrite}
@@ -679,7 +679,7 @@
 					<div class="flex w-full px-1">
 						<input
 							type="text"
-							class="w-full bg-transparent outline-hidden text-left text-xs text-muted"
+							class="field-bare text-left text-xs text-muted"
 							bind:value={knowledge.description}
 							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}
@@ -826,7 +826,7 @@
 									<MagnifyingGlassSolid className="size-4" />
 								</div>
 								<input
-									class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
+									class="field-bare text-sm pr-4 py-1 rounded-r-xl"
 									bind:value={query}
 									placeholder={$i18n.t('Search Collection')}
 									on:focus={() => {

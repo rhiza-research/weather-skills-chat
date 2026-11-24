@@ -259,7 +259,7 @@
 				</div>
 			{:else}
 				<div>
-					<div class=" mb-2.5 text-sm font-medium flex gap-2 items-center">
+					<div class="sub-title flex gap-2 items-center">
 						<Spinner className="size-4" />
 
 						<div class=" text-sm font-medium shimmer">
@@ -325,7 +325,7 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3">
+	<div class="modal-actions">
 		<button class="btn-primary" type="submit">
 			{$i18n.t('Save')}
 		</button>
