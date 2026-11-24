@@ -156,10 +156,9 @@
 
 		if (res) {
 			toast.success(
-				$i18n.t(`Model {{name}} is now {{status}}`, {
-					name: info.id,
-					status: info.meta.hidden ? 'hidden' : 'visible'
-				})
+				info.meta.hidden
+					? $i18n.t('Model {{name}} is now hidden', { name: info.id })
+					: $i18n.t('Model {{name}} is now visible', { name: info.id })
 			);
 		}
 
