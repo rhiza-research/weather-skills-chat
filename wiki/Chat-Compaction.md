@@ -14,7 +14,7 @@ Right after a compaction, the count is an estimate marked **(estimate)**. The mo
 
 While compaction runs:
 
-- A line under the reply reads **Compacting conversation…**, and the ring shows a spinner. Under the line, each step shows how long it has taken: sending the conversation to the model, waiting for the model, and receiving the summary. A page opened while compaction runs shows only the total time.
+- A line under the reply names the step running now, with the seconds since that step began: **Sending the conversation to the model**, then **Waiting for the model**, then **Receiving the summary**. A page opened while compaction runs shows **Compacting conversation** with the total time. The ring shows a spinner.
 - Sending is paused. The send button is disabled and says why, and [[Queued Messages]] wait until compaction finishes.
 
 When it finishes, the line changes to **Chat compacted**. Clicking that line shows the summary the model now reads in place of the messages above it.
