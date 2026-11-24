@@ -1467,7 +1467,8 @@ async def chat_completion(
 
             messages = job_form_data["messages"]
             _, job_form_data["messages"] = await context_budget.fit(
-                request, user, model, job_metadata, messages, messages
+                request, user, model, job_metadata, messages, messages,
+                job_form_data.get("tools"),
             )
 
             await waiting_heartbeat.start()

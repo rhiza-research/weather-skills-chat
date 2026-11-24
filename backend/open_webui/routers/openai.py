@@ -1187,9 +1187,13 @@ async def generate_chat_completion(
 
 
 def resent_payload(
-    call: ProviderCall, max_tokens: int, generation_name: str, extra_messages=()
+    call: ProviderCall,
+    max_tokens: int,
+    generation_name: str,
+    extra_messages=(),
+    stream: bool = False,
 ) -> str:
-    """The call's request again, not streamed, with messages added after it.
+    """The call's request again, with messages added after it.
 
     The request up to those messages is unchanged, so it reads the call's
     prompt cache.
@@ -1199,7 +1203,9 @@ def resent_payload(
         body["messages"] = [*body.get("messages", []), *extra_messages]
     body.pop("stream_options", None)
     body.pop("max_completion_tokens", None)
-    body.update(stream=False, max_tokens=max_tokens)
+    body.update(stream=stream, max_tokens=max_tokens)
+    if stream:
+        body["stream_options"] = {"include_usage": True}
     if isinstance(body.get("trace"), dict):
         body["trace"]["generation_name"] = generation_name
     return json.dumps(body)
@@ -1230,19 +1236,20 @@ async def resend_last_call(
     extra_messages: list,
     max_tokens: int,
     usage_context: dict,
-) -> Optional[tuple[dict, int]]:
+    stream: bool = False,
+):
     """Re-send the chat's last reply call with messages added after it.
 
     Only while that call is for message_id and its prompt cache is alive;
     otherwise None. The caller has checked that user may make the call; its
-    usage is recorded with usage_context. Returns the reply and the size of
-    the request sent.
+    usage is recorded with usage_context. Returns the reply (a stream with
+    stream) and the size of the request sent.
     """
     call = cache_keepalive.warm_call(chat_id)
     if call is None or (call.reply_usage or {}).get("message_id") != message_id:
         return None
     payload = await asyncio.to_thread(
-        resent_payload, call, max_tokens, "chat-compaction", extra_messages
+        resent_payload, call, max_tokens, "chat-compaction", extra_messages, stream
     )
     response = await _send_provider_call(
         call._replace(payload=payload, reply_usage=None), user

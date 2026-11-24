@@ -137,19 +137,19 @@ class SetMessageCompactionTest(unittest.TestCase):
     def _write(self, document, **kwargs):
         def fake(_id, apply, **_kw):
             apply(document, None)
-            return None, "ok"
+            return MagicMock(meta={"revision": 7}), "ok"
 
         with patch.object(Chats, "_write_locked_chat", side_effect=fake):
             return Chats.set_message_compaction("c", "a1", {"status": "done"}, **kwargs)
 
     def test_writes_while_the_replies_are_unchanged(self):
         document = _chat()
-        self.assertTrue(self._write(document, children=["u2"]))
+        self.assertEqual(self._write(document, children=["u2"]), 7)
         self.assertEqual(document["history"]["messages"]["a1"]["compaction"], {"status": "done"})
 
     def test_a_new_reply_wins_over_the_compaction(self):
         document = _chat()
-        self.assertFalse(self._write(document, children=[]))
+        self.assertIsNone(self._write(document, children=[]))
         self.assertNotIn("compaction", document["history"]["messages"]["a1"])
 
 
@@ -163,7 +163,7 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
 
         def set_compaction(chat_id, reply_id, compaction, **kw):
             writes.append((compaction, kw))
-            return written
+            return 5 if written else None
 
         fresh = fresh or AsyncMock(
             return_value={
@@ -200,10 +200,41 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["model"], "weather-agent")
         self.assertIn("context_estimate", result)
         self.assertEqual(writes[1][1], {"children": ["u2"]})
-        self.assertEqual(notify.await_args.args[3], result)
+        # The page gets the revision too, so it drops older downloads.
+        self.assertEqual(notify.await_args.args[3], {**result, "revision": 5})
         form = fresh.await_args.args[1]
         self.assertEqual(form["model"], "weather-agent")
-        self.assertIn("first answer", form["messages"][0]["content"])
+        self.assertTrue(form["stream"])
+        self.assertEqual(form["max_tokens"], cc.SUMMARY_MAX_TOKENS)
+        prompt = form["messages"][0]["content"]
+        self.assertIn("first answer", prompt)
+        self.assertTrue(prompt.endswith(cc.SUMMARY_INSTRUCTIONS))
+
+    async def test_a_streamed_summary_reports_each_step(self):
+        chunks = [
+            b": OPENROUTER PROCESSING\n\n",
+            b'data: {"choices":[{"delta":{"content":"Sum"}}]}\n\n',
+            b'data: {"choices":[{"delta":{"content":"mary"}}]}\n\n',
+            b'data: {"choices":[],"usage":{"prompt_tokens":500,"completion_tokens":40}}\n\ndata: [DONE]\n\n',
+        ]
+
+        async def body():
+            for chunk in chunks:
+                yield chunk
+
+        closed = AsyncMock()
+        stream = MagicMock(body_iterator=body(), background=closed)
+        result, _, notify, _, _ = await self._run(fresh=AsyncMock(return_value=stream))
+        self.assertEqual(result["summary"], "Summary")
+        closed.assert_awaited_once()
+        steps = [
+            list(call.args[3]["steps"])
+            for call in notify.await_args_list
+            if call.args[3].get("status") == "running"
+        ]
+        self.assertEqual(steps, [["sending"], ["sending", "waiting"], ["sending", "waiting", "receiving"]])
+        # The saved running state has no steps; only the events do.
+        self.assertNotIn("steps", self.writes[0][0])
 
     async def test_a_warm_last_call_is_reused_instead_of_the_fresh_call(self):
         reply = {
@@ -234,6 +265,12 @@ class CompactTest(unittest.IsolatedAsyncioTestCase):
         result, writes, _, _, _ = await self._run(written=False)
         self.assertEqual(result, {"status": "cancelled"})
         self.assertIsNone(writes[-1][0])
+
+    async def test_the_estimate_is_what_the_call_keeps_plus_the_summary(self):
+        usage = {"context_used": 900, "context_window": 1000, "context_kept": 200}
+        result, _, _, _, _ = await self._run(chat_doc=_chat(usage=usage))
+        self.assertEqual(result["context_estimate"], 250)
+        self.assertEqual(result["context_window"], 1000)
 
     async def test_a_slow_summary_times_out(self):
         async def slow(*_args):
@@ -342,6 +379,16 @@ class ContextBudgetTest(unittest.IsolatedAsyncioTestCase):
         _, fitted = await self._fit(cc.ContextBudget(), call, compact)
         compact.assert_not_called()
         self.assertEqual(fitted[-1]["content"], cc.TOOL_RESULT_REMOVED)
+
+    async def test_record_counts_the_prompt_tokens_a_compaction_keeps(self):
+        context_budget = cc.ContextBudget("c", "a2", _parent())
+        call = [{"role": "system", "content": "s" * 100}, *self.base]
+        tools = [{"name": "t" * 86}]  # 100 characters as JSON
+        await context_budget.fit(MagicMock(), MagicMock(), {}, {}, call, call, tools)
+        usage = {"prompt_tokens": 2070}
+        context_budget.record(usage)
+        # 200 of the call's 207 characters are system message and tools.
+        self.assertEqual(usage["context_kept"], 2000)
 
     async def test_finish_compacts_the_reply_over_ninety_percent(self):
         for used, expected in ((901, 1), (900, 0)):
