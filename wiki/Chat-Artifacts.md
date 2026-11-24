@@ -14,7 +14,7 @@ The file list shows every file and folder in the chat. Some kinds of entries are
 - HTML pages, such as interactive Plotly figures, which open in the side panel and full screen, where the user can zoom and hover. They run in a sandbox: the page cannot read the user's login or act in the chat as them. A Plotly figure saved with `include_plotlyjs='cdn'` is a few kilobytes and loads plotly.js from Plotly's CDN in the user's browser. In a reply, a markdown link to an HTML file, such as `[SST](plots/sst.html)`, opens it full screen, and image syntax, such as `![SST](plots/sst.html)`, shows it in the message.
 - Zarr stores, the gridded datasets most weather skills read and write. A Zarr store is shown as one entry, not as the folders inside it.
 
-Each file in the list has icon buttons beside its name: Open and Copy link for images and HTML pages, and Download for every file and Zarr store. Hovering over an icon names it. Copy link copies an address that opens the file in a browser tab for anyone signed in who can read the chat's files. Opening a copied link that is malformed, whose file, chat, or share link no longer exists, or that the signed-in person cannot read, shows a message saying the item does not exist and goes to the home page. A dead link copied from a share link does the same for someone not signed in, ending on the sign-in page. Opening a copied chat link without being signed in asks the person to sign in and then opens the file.
+Each file in the list has icon buttons beside its name: Open and Copy link for images and HTML pages, and Download for every file, folder, and Zarr store. Hovering over an icon names it. Copy link copies an address that opens the file in a browser tab for anyone signed in who can read the chat's files. Opening a copied link that is malformed, whose file, chat, or share link no longer exists, or that the signed-in person cannot read, shows a message saying the item does not exist and goes to the home page. A dead link copied from a share link does the same for someone not signed in, ending on the sign-in page. Opening a copied chat link without being signed in asks the person to sign in and then opens the file.
 
 A long name is cut short in the list; hovering over it shows the full name. The name of the open file is shown in full above the list.
 
@@ -24,12 +24,12 @@ The provenance shows first as a graph, read left to right: the data each step st
 
 ## Downloading and uploading
 
-- Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A Zarr store is downloaded as a zip of that store.
+- Users can download one file, or select several files and folders and download them as one `tar.gz` or `zip` archive. A folder or Zarr store is downloaded as a zip of it. Zips have no size limit and are built while they download, at low priority, so a large one does not slow the chat. Before a download over 1 GB, the browser shows its size and asks to confirm.
 - The chat's owner can upload a single file. It replaces an existing file with the same name. Files and folders the chat server creates or uploads stay writable by skills.
 - Results that code run in the browser copies back into the chat (see [[Built-in Tools]]) can only be written inside the chat's files, and lose any provenance in their PNG images and Zarr stores.
 - Dropping a file or image onto the chat bar attaches it to the next message. It appears in the bar while it is prepared. Sending the message copies it into that chat's files. The model is told the path; that line is not shown in the chat. The model does not see the contents until it asks to read that path with `read_artifact` on [[Built-in Tools]], and the user approves, unless the chat allows the agent to read files.
 
-Archive downloads have a size limit, and so do the files copied into and out of code run in the browser on [[Built-in Tools]].
+`tar.gz` archive downloads have a size limit, and so do the files copied into and out of code run in the browser on [[Built-in Tools]].
 
 Anyone who can read a chat can list and download its files. Only the chat's owner can add or change them. Who can read a chat is described on [[Organizations]].
 

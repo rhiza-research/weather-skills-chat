@@ -1139,12 +1139,14 @@ def normalize_sandbox_relpath(path: str) -> str:
 def sandbox_tree_size(path: Path) -> int:
     if path.is_file():
         return path.stat().st_size
-    if not path.exists():
-        return 0
     total = 0
-    for child in path.rglob("*"):
-        if child.is_file() and not child.is_symlink():
-            total += child.stat().st_size
+    # One lstat per file: a Zarr store can hold millions of chunks on JuiceFS.
+    # os.walk does not follow symlinked folders; symlinked files are skipped.
+    for dirpath, _, filenames in os.walk(path):
+        for name in filenames:
+            st = os.lstat(os.path.join(dirpath, name))
+            if stat.S_ISREG(st.st_mode):
+                total += st.st_size
     return total
 
 

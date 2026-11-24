@@ -50,7 +50,25 @@ class ShareRoutesTest(unittest.TestCase):
         self.assertEqual(self.get("/artifacts").status_code, 200)
         self.assertEqual(self.get("/artifacts/content?path=notes.csv").content, b"a,b\n")
         self.assertEqual(self.get("/artifacts/view/plots/map.html").status_code, 200)
-        self.assertEqual(self.get("/artifacts/archive?path=plots").status_code, 200)
+
+    def test_only_signed_in_visitors_download_folders(self):
+        for url in (
+            "/artifacts/archive?path=plots",
+            "/artifacts/archive?path=notes.csv&format=zip",
+            "/artifacts/content?path=plots",
+            "/artifacts/size?path=plots",
+        ):
+            self.assertEqual(self.get(url).status_code, 401, url)
+        with patch(
+            "open_webui.routers.shares.get_current_user",
+            return_value=MagicMock(role="user"),
+        ):
+            zipped = self.get("/artifacts/archive?path=plots&format=zip")
+            self.assertEqual(zipped.headers["content-type"], "application/zip")
+            self.assertEqual(self.get("/artifacts/content?path=plots").status_code, 200)
+            self.assertEqual(
+                self.get("/artifacts/size?path=plots").json(), {"size": 13}
+            )
 
     def test_an_expired_or_unknown_share_is_not_found(self):
         self.chats.is_live_share.return_value = False
@@ -58,6 +76,7 @@ class ShareRoutesTest(unittest.TestCase):
         self.assertEqual(self.get("").status_code, 404)
         self.assertEqual(self.get("/artifacts").status_code, 404)
         self.assertEqual(self.get("/artifacts/content?path=notes.csv").status_code, 404)
+        self.assertEqual(self.get("/artifacts/size?path=plots").status_code, 404)
 
     def test_chat_routes_still_need_a_sign_in(self):
         res = self.client.get(f"/api/v1/chats/{SHARE}/artifacts/content?path=notes.csv")
