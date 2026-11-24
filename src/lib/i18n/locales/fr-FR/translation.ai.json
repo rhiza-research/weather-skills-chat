@@ -16,11 +16,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"{{COUNT}} Available Tools": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"{{COUNT}} Available Tools and Skills": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -411,11 +406,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:57:27Z"
 		},
-		"Are you sure you want to clear all memories? This action cannot be undone.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Are you sure you want to unarchive all archived chats?": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -645,11 +635,6 @@
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:57:27Z"
-		},
-		"Clear Memory": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
 		},
 		"Click here to see available models.": {
 			"ai_generated": true,
@@ -901,11 +886,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"CORS must be properly configured by the provider to allow requests from Open WebUI.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Could not load model to clone": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -1101,32 +1081,12 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"Direct Connections": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Direct Connections allow users to connect to their own OpenAI compatible API endpoints.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Direct Connections settings updated": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Direct Tool Servers": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
 		"Directory selection was cancelled": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Discover how to use Open WebUI and seek support from the community.": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
@@ -1222,11 +1182,6 @@
 			"translated_at": "2026-11-24T20:57:27Z"
 		},
 		"Drop any files here to add to my documents": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"e.g. \"json\" or a JSON schema": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
@@ -1476,11 +1431,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"Enter system prompt here": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Enter Tavily Extract Depth": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -1567,16 +1517,6 @@
 			"translated_at": "2026-11-24T20:57:27Z"
 		},
 		"Exceeded the number of seats in your license. Please contact support to increase the number of seats.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Execute code for analysis": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Executing **{{NAME}}**...": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
@@ -1996,11 +1936,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"Invalid JSON schema": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Invitation already used": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -2141,11 +2076,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"Learn more about OpenAPI tool servers.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Leave empty to include all models from \"{{url}}/api/tags\" endpoint": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -2280,11 +2210,6 @@
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Model {{name}} is now {{status}}": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:57:27Z"
 		},
 		"Model {{name}} is now hidden": {
 			"ai_generated": true,
@@ -2607,11 +2532,6 @@
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
 		"Open in new tab": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Open WebUI can use tools provided by any OpenAPI server.": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
@@ -3157,11 +3077,6 @@
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
 		"Search Secrets": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"Search the internet": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
@@ -3796,11 +3711,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"This channel was created on {{createdAt}}. This is the very beginning of the {{channelName}} channel.": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"This chat won’t appear in history and your messages will not be saved.": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -4131,11 +4041,6 @@
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
 		},
-		"User Webhooks": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
 		"Users & Organizations": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
@@ -4177,11 +4082,6 @@
 			"translated_at": "2026-11-24T20:57:27Z"
 		},
 		"Version {{VERSION}}": {
-			"ai_generated": true,
-			"model": "claude-opus-5-5",
-			"translated_at": "2026-11-24T20:50:29Z"
-		},
-		"View Result from **{{NAME}}**": {
 			"ai_generated": true,
 			"model": "claude-opus-5-5",
 			"translated_at": "2026-11-24T20:50:29Z"
