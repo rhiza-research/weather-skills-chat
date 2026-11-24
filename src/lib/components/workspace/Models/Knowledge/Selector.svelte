@@ -94,7 +94,7 @@
 			transition={flyAndScale}
 		>
 			<div class=" flex w-full space-x-2 py-0.5 px-2">
-				<div class="flex flex-1">
+				<div class="flex flex-1 rounded-xl">
 					<div class=" self-center ml-1 mr-3">
 						<MagnifyingGlassSolid className="size-4" />
 					</div>

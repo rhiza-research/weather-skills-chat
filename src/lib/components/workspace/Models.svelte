@@ -286,7 +286,7 @@
 		</div>
 
 		<div class=" flex flex-1 items-center w-full space-x-2">
-			<div class="flex flex-1 items-center">
+			<div class="flex flex-1 items-center rounded-xl">
 				<div class=" self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>

@@ -58,9 +58,14 @@ html {
 	outline-offset: 2px;
 }
 
-/* stylelint-disable-next-line a11y/no-outline-none -- editors sit in a field that shows focus; menu items show a highlight */
-:is(.ProseMirror, .cm-content, [role='menuitem']):focus-visible {
+/* stylelint-disable-next-line a11y/no-outline-none -- editors sit in a field that shows focus; menu items show a highlight; a bare input's row shows it */
+:is(.ProseMirror, .cm-content, [role='menuitem'], .field-bare):focus-visible {
 	outline: none;
+}
+
+:has(> .field-bare:focus-visible) {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: -2px;
 }
 
 code {

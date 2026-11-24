@@ -467,7 +467,7 @@
 
 	<div class="flex gap-1">
 		<div class=" flex w-full space-x-2">
-			<div class="flex flex-1">
+			<div class="flex flex-1 rounded-xl">
 				<div class=" self-center ml-1 mr-3">
 					<MagnifyingGlassSolid className="size-4" />
 				</div>

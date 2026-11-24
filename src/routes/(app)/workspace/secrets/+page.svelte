@@ -148,7 +148,7 @@
 		</div>
 
 		<div class="flex w-full space-x-2">
-			<div class="flex flex-1">
+			<div class="flex flex-1 rounded-xl">
 				<div class="self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>

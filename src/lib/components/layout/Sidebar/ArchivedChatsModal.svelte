@@ -107,7 +107,7 @@
 
 		<div class="flex flex-col w-full px-5 pb-4 dark:text-gray-200">
 			<div class=" flex w-full mt-2 space-x-2">
-				<div class="flex flex-1">
+				<div class="flex flex-1 rounded-xl">
 					<div class=" self-center ml-1 mr-3">
 						<MagnifyingGlassSolid className="size-4" />
 					</div>
