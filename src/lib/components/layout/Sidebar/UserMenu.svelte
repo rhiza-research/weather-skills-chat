@@ -31,7 +31,8 @@
 
 	export let show = false;
 	export let role = '';
-	export let className = 'max-w-[280px]';
+	// Width caps need `!` to beat the inline max-width fitViewport sets.
+	export let className = 'max-w-[280px]!';
 
 	const dispatch = createEventDispatcher();
 
@@ -131,7 +132,8 @@
 
 	<slot name="content">
 		<DropdownMenu.Content
-			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg font-primary"
+			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg font-primary overflow-y-auto"
+			fitViewport
 			sideOffset={8}
 			side="bottom"
 			align="start"
