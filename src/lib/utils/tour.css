@@ -50,8 +50,16 @@
 	border-color: var(--btn);
 }
 
-.wsc-tour .driver-popover-footer-btn:hover {
+.wsc-tour .driver-popover-footer-btn:hover,
+.wsc-tour .wsc-tour-skip:hover {
 	opacity: 0.8;
+}
+
+.wsc-tour .wsc-tour-skip {
+	color: var(--muted);
+	font-size: 0.75rem;
+	margin-right: 0.5rem;
+	text-decoration: underline;
 }
 
 /* The arrow's visible edge points at the popover, so it takes the surface colour. */

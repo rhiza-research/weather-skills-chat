@@ -765,7 +765,6 @@
 			<a
 				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
 				href="/scheduled-tasks"
-				data-tour="scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
 					chatId.set('');
@@ -817,6 +816,7 @@
 		</div>
 
 		<div
+			data-tour="chats"
 			class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden {$temporaryChatEnabled
 				? 'opacity-20'
 				: ''}"
