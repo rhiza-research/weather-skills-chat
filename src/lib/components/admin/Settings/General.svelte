@@ -183,11 +183,11 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 											>{$config?.license_metadata?.type}
 											license</span
 										>
-										registered to
+										{$i18n.t('registered to')}
 										<span class=" capitalize text-black dark:text-white"
 											>{$config?.license_metadata?.organization_name}</span
 										>
-										for
+										{$i18n.t('for')}
 										<span class=" font-medium text-black dark:text-white"
 											>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
 										>
@@ -214,7 +214,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							<select
 								class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 text-xs bg-transparent outline-hidden text-right"
 								bind:value={adminConfig.DEFAULT_USER_ROLE}
-								placeholder="Select a role"
+								placeholder={$i18n.t('Select a role')}
 							>
 								<option value="pending">{$i18n.t('pending')}</option>
 								<option value="user">{$i18n.t('user')}</option>

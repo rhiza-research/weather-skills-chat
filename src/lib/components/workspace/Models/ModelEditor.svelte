@@ -119,11 +119,11 @@
 		info.enabled_by_default = catalog === 'public' ? enabledByDefault : true;
 
 		if (id === '') {
-			toast.error('Model ID is required.');
+			toast.error($i18n.t('Model ID is required.'));
 		}
 
 		if (name === '') {
-			toast.error('Model Name is required.');
+			toast.error($i18n.t('Model Name is required.'));
 		}
 
 		// The base model list is not a form field, so the form cannot require it.
@@ -473,7 +473,7 @@
 								}}
 								type="button"
 							>
-								Reset Image</button
+								{$i18n.t('Reset Image')}</button
 							>
 						</div>
 					</div>
@@ -766,7 +766,7 @@
 										</div>
 									{/each}
 								{:else}
-									<div class="text-xs text-center">No suggestion prompts</div>
+									<div class="text-xs text-center">{$i18n.t('No suggestion prompts')}</div>
 								{/if}
 							</div>
 						{/if}

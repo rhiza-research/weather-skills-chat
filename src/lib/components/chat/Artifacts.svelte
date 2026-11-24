@@ -491,7 +491,7 @@
 							type="button"
 							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
-							aria-label="Expand image"
+							aria-label={$i18n.t('Expand image')}
 						>
 							<ArrowsPointingOut className="size-3.5" />
 						</button>
@@ -500,7 +500,7 @@
 						type="button"
 						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
 						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
-						aria-label="Close preview"
+						aria-label={$i18n.t('Close preview')}
 					>
 						<XMark className="size-3.5" />
 					</button>
@@ -605,7 +605,7 @@
 						type="button"
 						class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
 						on:click={closePanel}
-						aria-label="Close artifacts"
+						aria-label={$i18n.t('Close artifacts')}
 					>
 						<XMark className="size-3.5" />
 					</button>
@@ -745,7 +745,7 @@
 				{#if contents[selectedContentIdx].type === 'iframe'}
 					<iframe
 						bind:this={iframeElement}
-						title="Content"
+						title={$i18n.t('Content')}
 						srcdoc={contents[selectedContentIdx].content}
 						class="w-full border-0 h-full rounded-none"
 						sandbox="allow-scripts{($settings?.iframeSandboxAllowForms ?? false)

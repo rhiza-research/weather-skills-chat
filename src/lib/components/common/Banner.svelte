@@ -19,8 +19,10 @@
 
 <script lang="ts">
 	import type { Banner } from '$lib/types';
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount, createEventDispatcher, getContext } from 'svelte';
 	import { fade } from 'svelte/transition';
+
+	const i18n = getContext('i18n');
 	let html = '';
 
 	const dispatch = createEventDispatcher();
@@ -88,7 +90,7 @@
 							<a
 								class="text-gray-700 dark:text-white text-xs font-semibold underline"
 								href="/assets/files/whitepaper.pdf"
-								target="_blank">Learn More</a
+								target="_blank">{$i18n.t('Learn More')}</a
 							>
 
 							<div
@@ -122,7 +124,7 @@
 					<a
 						class="text-gray-700 dark:text-white text-xs font-semibold underline"
 						href="/"
-						target="_blank">Learn More</a
+						target="_blank">{$i18n.t('Learn More')}</a
 					>
 
 					<div class=" ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-white">

@@ -1,8 +1,10 @@
 <script lang="ts">
 	// Full-screen viewer for an HTML artifact, the counterpart of ImagePreview.
 	// The figure has its own zoom and pan, so there is no panzoom here.
-	import { onDestroy } from 'svelte';
+	import { onDestroy, getContext } from 'svelte';
 	import HtmlArtifactFrame from './HtmlArtifactFrame.svelte';
+
+	const i18n = getContext('i18n');
 
 	export let show = false;
 	export let src = '';
@@ -73,7 +75,7 @@
 			<button
 				type="button"
 				class="p-3 rounded-md hover:bg-white/10"
-				aria-label="Close"
+				aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}
@@ -97,8 +99,8 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				class="p-3 rounded-md hover:bg-white/10"
-				aria-label="Open in new tab"
-				title="Open in new tab"
+				aria-label={$i18n.t('Open in new tab')}
+				title={$i18n.t('Open in new tab')}
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -118,8 +120,8 @@
 			<button
 				type="button"
 				class="p-3 rounded-md hover:bg-white/10"
-				aria-label="Download"
-				title="Download"
+				aria-label={$i18n.t('Download')}
+				title={$i18n.t('Download')}
 				on:click={download}
 			>
 				<svg

@@ -121,7 +121,7 @@
 					<select
 						class=" dark:bg-gray-900 w-fit pr-8 rounded-sm py-2 px-2 text-xs bg-transparent outline-hidden text-right"
 						bind:value={selectedTheme}
-						placeholder="Select a theme"
+						placeholder={$i18n.t('Select a theme')}
 						on:change={() => themeChangeHandler(selectedTheme)}
 					>
 						<option value="system">⚙️ {$i18n.t('System')}</option>
@@ -139,7 +139,7 @@
 					<select
 						class=" dark:bg-gray-900 w-fit pr-8 rounded-sm py-2 px-2 text-xs bg-transparent outline-hidden text-right"
 						bind:value={lang}
-						placeholder="Select a language"
+						placeholder={$i18n.t('Select a language')}
 						on:change={() => {
 							changeLanguage(lang);
 						}}

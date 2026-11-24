@@ -446,7 +446,7 @@
 													: `${WEBUI_BASE_URL}/static/favicon.png`)}
 										/>
 										<div class="translate-y-[0.5px]">
-											Talking to <span class=" font-medium">{atSelectedModel.name}</span>
+											{$i18n.t('Talking to')} <span class=" font-medium">{atSelectedModel.name}</span>
 										</div>
 									</div>
 									<div>
@@ -1128,7 +1128,7 @@
 											<button
 												class="bg-transparent hover:bg-gray-100 text-gray-800 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
 												type="button"
-												aria-label="More"
+												aria-label={$i18n.t('More')}
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -1152,7 +1152,7 @@
 												>
 													<button
 														class="translate-y-[0.5px] flex gap-1 items-center text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition shrink-0"
-														aria-label="Available Tools"
+														aria-label={$i18n.t('Available Tools')}
 														type="button"
 														on:click={() => {
 															showTools = !showTools;
@@ -1301,7 +1301,7 @@
 															toast.error($i18n.t('Permission denied when accessing microphone'));
 														}
 													}}
-													aria-label="Voice Input"
+													aria-label={$i18n.t('Voice Input')}
 												>
 													<svg
 														xmlns="http://www.w3.org/2000/svg"

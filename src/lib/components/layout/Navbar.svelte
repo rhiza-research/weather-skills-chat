@@ -84,7 +84,7 @@
 					on:click={() => {
 						showSidebar.set(!$showSidebar);
 					}}
-					aria-label="Toggle Sidebar"
+					aria-label={$i18n.t('Toggle Sidebar')}
 				>
 					<div class=" m-auto self-center">
 						<MenuLines />
@@ -145,7 +145,7 @@
 							? 'px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850'
 							: 'px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 font-medium'}"
 						on:click={toggleArtifactsPanel}
-						aria-label="Artifacts"
+						aria-label={$i18n.t('Artifacts')}
 						aria-pressed={artifactsPanelOpen}
 						id="artifacts-toggle-button"
 					>
@@ -165,7 +165,7 @@
 						on:click={() => {
 							initNewChat();
 						}}
-						aria-label="New Chat"
+						aria-label={$i18n.t('New Chat')}
 					>
 						<div class=" m-auto self-center">
 							<PencilSquare className=" size-5" strokeWidth="2" />
@@ -185,7 +185,7 @@
 					>
 						<button
 							class="select-none flex rounded-xl p-1.5 w-full hover:bg-gray-50 dark:hover:bg-gray-850 transition"
-							aria-label="User Menu"
+							aria-label={$i18n.t('User Menu')}
 						>
 							<div class=" self-center">
 								<img

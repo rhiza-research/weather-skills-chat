@@ -182,7 +182,7 @@
 						<select
 							class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
 							bind:value={STTEngine}
-							placeholder="Select an engine"
+							placeholder={$i18n.t('Select an engine')}
 						>
 							<option value="">{$i18n.t('Default')}</option>
 							<option value="web">{$i18n.t('Web API')}</option>
@@ -221,7 +221,7 @@
 					<select
 						class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
 						bind:value={TTSEngine}
-						placeholder="Select an engine"
+						placeholder={$i18n.t('Select an engine')}
 					>
 						<option value="">{$i18n.t('Default')}</option>
 						<option value="browser-kokoro">{$i18n.t('Kokoro.js (Browser)')}</option>
@@ -236,9 +236,9 @@
 						<select
 							class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
 							bind:value={TTSEngineConfig.dtype}
-							placeholder="Select dtype"
+							placeholder={$i18n.t('Select dtype')}
 						>
-							<option value="" disabled selected>Select dtype</option>
+							<option value="" disabled selected>{$i18n.t('Select dtype')}</option>
 							<option value="fp32">fp32</option>
 							<option value="fp16">fp16</option>
 							<option value="q8">q8</option>
@@ -294,7 +294,7 @@
 								list="voice-list"
 								class="w-full text-sm bg-white dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 								bind:value={voice}
-								placeholder="Select a voice"
+								placeholder={$i18n.t('Select a voice')}
 							/>
 
 							<datalist id="voice-list">
@@ -362,7 +362,7 @@
 							list="voice-list"
 							class="w-full text-sm bg-white dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 							bind:value={voice}
-							placeholder="Select a voice"
+							placeholder={$i18n.t('Select a voice')}
 						/>
 
 						<datalist id="voice-list">

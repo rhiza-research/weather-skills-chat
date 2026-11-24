@@ -214,7 +214,7 @@
 		<Sidebar bind:show={showSettings} className=" bg-white dark:bg-gray-900" width="300px">
 			<div class="flex flex-col px-5 py-3 text-sm">
 				<div class="flex justify-between items-center mb-2">
-					<div class=" font-medium text-base">Settings</div>
+					<div class=" font-medium text-base">{$i18n.t('Settings')}</div>
 
 					<div class=" translate-x-1.5">
 						<button
@@ -230,7 +230,7 @@
 
 				<div class="mt-1">
 					<div>
-						<div class=" text-xs font-medium mb-1">Model</div>
+						<div class=" text-xs font-medium mb-1">{$i18n.t('Model')}</div>
 
 						<div class="w-full">
 							<select

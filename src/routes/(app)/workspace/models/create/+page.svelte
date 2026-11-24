@@ -42,7 +42,7 @@
 		}
 
 		if (modelInfo.id === '') {
-			toast.error('Error: Model ID cannot be empty. Please enter a valid ID to proceed.');
+			toast.error($i18n.t('Error: Model ID cannot be empty. Please enter a valid ID to proceed.'));
 			return;
 		}
 
