@@ -495,12 +495,10 @@
 						</div>
 					{/if}
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
-							<Tooltip content={$i18n.t('Full Context Mode')} placement="top-start">
-								{$i18n.t('Bypass Embedding and Retrieval')}
-							</Tooltip>
-						</div>
+					<SettingRow
+						label={$i18n.t('Bypass Embedding and Retrieval')}
+						tooltip={$i18n.t('Full Context Mode')}
+					>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={webConfig.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
@@ -514,7 +512,7 @@
 								<Switch bind:state={webConfig.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL} />
 							</Tooltip>
 						</div>
-					</div>
+					</SettingRow>
 
 					<SettingRow label={$i18n.t('Trust Proxy Environment')}>
 						<div class="flex items-center relative">
@@ -663,7 +661,7 @@
 					<SettingRow label={$i18n.t('Youtube Language')}>
 						<div class="flex items-center relative">
 							<input
-								class="field-bare flex-1 text-sm"
+								class="field w-40"
 								type="text"
 								placeholder={$i18n.t('Enter language codes')}
 								bind:value={webConfig.YOUTUBE_LOADER_LANGUAGE}
@@ -678,7 +676,7 @@
 						</div>
 						<div class="flex items-center relative">
 							<input
-								class="field-bare flex-1 text-sm"
+								class="field flex-1"
 								type="text"
 								placeholder={$i18n.t('Enter proxy URL (e.g. https://user:password@host:port)')}
 								bind:value={webConfig.YOUTUBE_LOADER_PROXY_URL}

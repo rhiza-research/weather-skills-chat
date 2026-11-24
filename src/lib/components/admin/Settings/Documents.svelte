@@ -273,14 +273,14 @@
 	}}
 >
 	{#if RAGConfig}
-		<div class=" space-y-2.5 overflow-y-scroll scrollbar-hidden h-full pr-1.5">
+		<div class=" space-y-2.5 overflow-y-scroll scrollbar-hidden h-full">
 			<div class="">
 				<div class="mb-3">
 					<h3 class="section-title">{$i18n.t('General')}</h3>
 
 					<hr class="border-line my-2" />
 
-					<div class="mb-2.5 flex flex-col w-full justify-between">
+					<div class="flex flex-col w-full justify-between">
 						<SettingRow label={$i18n.t('Content Extraction Engine')}>
 							<div class="">
 								<select
@@ -297,21 +297,14 @@
 						</SettingRow>
 
 						{#if RAGConfig.CONTENT_EXTRACTION_ENGINE === ''}
-							<div class="flex w-full mt-1">
-								<div class="flex-1 flex justify-between">
-									<div class=" self-center text-xs font-medium">
-										{$i18n.t('PDF Extract Images (OCR)')}
-									</div>
-									<div class="flex items-center relative">
-										<Switch bind:state={RAGConfig.PDF_EXTRACT_IMAGES} />
-									</div>
-								</div>
-							</div>
+							<SettingRow label={$i18n.t('PDF Extract Images (OCR)')}>
+								<Switch bind:state={RAGConfig.PDF_EXTRACT_IMAGES} />
+							</SettingRow>
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'tika'}
 							<div class="flex w-full mt-1">
 								<div class="flex-1 mr-2">
 									<input
-										class="field-bare flex-1 text-sm"
+										class="field flex-1"
 										placeholder={$i18n.t('Enter Tika Server URL')}
 										bind:value={RAGConfig.TIKA_SERVER_URL}
 									/>
@@ -320,7 +313,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'docling'}
 							<div class="flex w-full mt-1">
 								<input
-									class="field-bare flex-1 text-sm"
+									class="field flex-1"
 									placeholder={$i18n.t('Enter Docling Server URL')}
 									bind:value={RAGConfig.DOCLING_SERVER_URL}
 								/>
@@ -328,7 +321,7 @@
 						{:else if RAGConfig.CONTENT_EXTRACTION_ENGINE === 'document_intelligence'}
 							<div class="my-0.5 flex gap-2 pr-2">
 								<input
-									class="field-bare flex-1 text-sm"
+									class="field flex-1"
 									placeholder={$i18n.t('Enter Document Intelligence Endpoint')}
 									bind:value={RAGConfig.DOCUMENT_INTELLIGENCE_ENDPOINT}
 								/>
@@ -347,12 +340,10 @@
 						{/if}
 					</div>
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">
-							<Tooltip content={$i18n.t('Full Context Mode')} placement="top-start">
-								{$i18n.t('Bypass Embedding and Retrieval')}
-							</Tooltip>
-						</div>
+					<SettingRow
+						label={$i18n.t('Bypass Embedding and Retrieval')}
+						tooltip={$i18n.t('Full Context Mode')}
+					>
 						<div class="flex items-center relative">
 							<Tooltip
 								content={RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL
@@ -366,7 +357,7 @@
 								<Switch bind:state={RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL} />
 							</Tooltip>
 						</div>
-					</div>
+					</SettingRow>
 
 					{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
 						<SettingRow label={$i18n.t('Text Splitter')}>
@@ -453,7 +444,7 @@
 							{#if embeddingEngine === 'openai'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="field-bare flex-1 text-sm"
+										class="field flex-1"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OpenAIUrl}
 										required
@@ -464,7 +455,7 @@
 							{:else if embeddingEngine === 'ollama'}
 								<div class="my-0.5 flex gap-2 pr-2">
 									<input
-										class="field-bare flex-1 text-sm"
+										class="field flex-1"
 										placeholder={$i18n.t('API Base URL')}
 										bind:value={OllamaUrl}
 										required
@@ -487,7 +478,7 @@
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="field-bare flex-1 text-sm"
+												class="field flex-1"
 												bind:value={embeddingModel}
 												placeholder={$i18n.t('Set embedding model')}
 												required
@@ -498,7 +489,7 @@
 									<div class="flex w-full">
 										<div class="flex-1 mr-2">
 											<input
-												class="field-bare flex-1 text-sm"
+												class="field flex-1"
 												placeholder={$i18n.t('Set embedding model (e.g. {{model}})', {
 													model: embeddingModel.slice(-40)
 												})}
@@ -617,7 +608,7 @@
 										<div class="flex w-full">
 											<div class="flex-1 mr-2">
 												<input
-													class="field-bare flex-1 text-sm"
+													class="field flex-1"
 													placeholder={$i18n.t('Set reranking model (e.g. {{model}})', {
 														model: 'BAAI/bge-reranker-v2-m3'
 													})}
@@ -673,7 +664,7 @@
 							<SettingRow label={$i18n.t('Top K')}>
 								<div class="flex items-center relative">
 									<input
-										class="field-bare flex-1 text-sm"
+										class="field w-40"
 										type="number"
 										placeholder={$i18n.t('Enter Top K')}
 										bind:value={RAGConfig.TOP_K}
@@ -687,7 +678,7 @@
 								<SettingRow label={$i18n.t('Top K Reranker')}>
 									<div class="flex items-center relative">
 										<input
-											class="field-bare flex-1 text-sm"
+											class="field w-40"
 											type="number"
 											placeholder={$i18n.t('Enter Top K Reranker')}
 											bind:value={RAGConfig.TOP_K_RERANKER}
@@ -703,7 +694,7 @@
 									<SettingRow label={$i18n.t('Relevance Threshold')}>
 										<div class="flex items-center relative">
 											<input
-												class="field-bare flex-1 text-sm"
+												class="field w-40"
 												type="number"
 												step="0.01"
 												placeholder={$i18n.t('Enter Score')}
@@ -761,7 +752,7 @@
 								placement="top-start"
 							>
 								<input
-									class="field-bare flex-1 text-sm"
+									class="field flex-1"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_SIZE}
@@ -781,7 +772,7 @@
 								placement="top-start"
 							>
 								<input
-									class="field-bare flex-1 text-sm"
+									class="field flex-1"
 									type="number"
 									placeholder={$i18n.t('Leave empty for unlimited')}
 									bind:value={RAGConfig.FILE_MAX_COUNT}

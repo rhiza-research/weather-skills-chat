@@ -240,7 +240,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 						</div>
 
 						<input
-							class="field-bare mt-1 text-sm dark:text-gray-300"
+							class="field mt-1"
 							type="text"
 							placeholder={$i18n.t(
 								'Enter domains separated by commas (e.g., example.com,site.org)'
@@ -273,7 +273,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								</div>
 
 								<input
-									class="field-bare mt-1 text-sm dark:text-gray-300"
+									class="field mt-1"
 									type="text"
 									placeholder={`e.g.) /api/v1/chats`}
 									bind:value={adminConfig.API_KEY_ALLOWED_ENDPOINTS}
@@ -311,7 +311,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 					</div>
 
 					<div class=" space-y-3">
-						<div class="mt-2 space-y-2 pr-1.5">
+						<div class="mt-2 space-y-2">
 							<div class="flex justify-between items-center text-sm">
 								<div class="  font-medium">{$i18n.t('LDAP')}</div>
 
@@ -333,7 +333,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												{$i18n.t('Label')}
 											</div>
 											<input
-												class="field-bare py-0.5"
+												class="field"
 												required
 												placeholder={$i18n.t('Enter server label')}
 												bind:value={LDAP_SERVER.label}
@@ -347,7 +347,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												{$i18n.t('Host')}
 											</div>
 											<input
-												class="field-bare py-0.5"
+												class="field"
 												required
 												placeholder={$i18n.t('Enter server host')}
 												bind:value={LDAP_SERVER.host}
@@ -363,7 +363,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												className="w-full"
 											>
 												<input
-													class="field-bare py-0.5"
+													class="field"
 													type="number"
 													placeholder={$i18n.t('Enter server port')}
 													bind:value={LDAP_SERVER.port}
@@ -381,7 +381,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="field-bare py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Enter Application DN')}
 													bind:value={LDAP_SERVER.app_dn}
@@ -410,7 +410,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="field-bare py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Example: mail')}
 													bind:value={LDAP_SERVER.attribute_for_mail}
@@ -430,7 +430,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="field-bare py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t(
 														'Example: sAMAccountName or uid or userPrincipalName'
@@ -450,7 +450,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="field-bare py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Example: ou=users,dc=foo,dc=example')}
 													bind:value={LDAP_SERVER.search_base}
@@ -464,7 +464,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												{$i18n.t('Search Filters')}
 											</div>
 											<input
-												class="field-bare py-0.5"
+												class="field"
 												placeholder={$i18n.t('Example: (&(objectClass=inetOrgPerson)(uid=%s))')}
 												bind:value={LDAP_SERVER.search_filters}
 											/>
@@ -494,7 +494,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 														{$i18n.t('Certificate Path')}
 													</div>
 													<input
-														class="field-bare py-0.5"
+														class="field"
 														placeholder={$i18n.t('Enter certificate path')}
 														bind:value={LDAP_SERVER.certificate_path}
 													/>
@@ -507,7 +507,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 													</div>
 													<Tooltip content={$i18n.t('Default to ALL')} placement="top-start">
 														<input
-															class="field-bare py-0.5"
+															class="field"
 															placeholder={$i18n.t('Example: ALL')}
 															bind:value={LDAP_SERVER.ciphers}
 														/>
@@ -539,7 +539,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							<div class="w-full">
 								<div class="field-label">{$i18n.t('SMTP Host')}</div>
 								<input
-									class="field-bare py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('smtp.example.com')}
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_HOST}
@@ -548,7 +548,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							<div class="w-full">
 								<div class="field-label">{$i18n.t('SMTP Port')}</div>
 								<input
-									class="field-bare py-0.5"
+									class="field"
 									type="number"
 									placeholder="465"
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_PORT}
@@ -560,7 +560,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							<div class="w-full">
 								<div class="field-label">{$i18n.t('SMTP Username')}</div>
 								<input
-									class="field-bare py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('Enter SMTP username')}
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_USERNAME}
@@ -580,7 +580,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							<div class="w-full">
 								<div class="field-label">{$i18n.t('From Email')}</div>
 								<input
-									class="field-bare py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('no-reply@example.com')}
 									bind:value={emailToolConfig.EMAIL_TOOL_FROM_EMAIL}

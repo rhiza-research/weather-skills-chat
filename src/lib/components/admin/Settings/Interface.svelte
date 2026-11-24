@@ -81,7 +81,7 @@
 			dispatch('save');
 		}}
 	>
-		<div class="  overflow-y-scroll scrollbar-hidden h-full pr-1.5">
+		<div class="  overflow-y-scroll scrollbar-hidden h-full">
 			<div class="mb-3">
 				<h3 class="section-title">{$i18n.t('Tasks')}</h3>
 
@@ -217,7 +217,7 @@
 							placement="top-start"
 						>
 							<input
-								class="field-bare"
+								class="field"
 								bind:value={taskConfig.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH}
 								placeholder={$i18n.t('-1 for no limit, or a positive integer for a specific limit')}
 							/>

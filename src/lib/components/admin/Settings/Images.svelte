@@ -235,7 +235,7 @@
 		saveHandler();
 	}}
 >
-	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden pr-2">
+	<div class=" space-y-3 overflow-y-scroll scrollbar-hidden">
 		{#if config && imageGenerationConfig}
 			<div>
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('Image Settings')}</div>
@@ -576,7 +576,7 @@
 
 						<div class="flex gap-2 mb-1">
 							<input
-								class="field-bare flex-1 text-sm"
+								class="field flex-1"
 								placeholder={$i18n.t('API Base URL')}
 								bind:value={config.openai.OPENAI_API_BASE_URL}
 								required

@@ -194,7 +194,7 @@
 	<div class=" overflow-y-scroll scrollbar-hidden h-full">
 		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null}
 			<div class="my-2">
-				<div class="mt-2 space-y-2 pr-1.5">
+				<div class="mt-2 space-y-2">
 					<div class="flex justify-between items-center text-sm">
 						<div class="  font-medium">{$i18n.t('OpenAI API')}</div>
 
@@ -263,7 +263,7 @@
 
 			<hr class="border-line my-2" />
 
-			<div class="pr-1.5 my-2">
+			<div class="my-2">
 				<div class="flex justify-between items-center text-sm mb-2">
 					<div class="  font-medium">{$i18n.t('Ollama API')}</div>
 
