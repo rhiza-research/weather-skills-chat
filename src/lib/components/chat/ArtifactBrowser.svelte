@@ -120,6 +120,7 @@
 				{selectedImage}
 				on:toggle={onToggle}
 				on:openImage
+				on:openProvenance
 			/>
 		{/each}
 	</div>
