@@ -38,8 +38,7 @@
 	import HtmlArtifactInline from './HtmlArtifactInline.svelte';
 	import ToolCallDetails from './ToolCallDetails.svelte';
 	import { toolArgRows, toolCallHead } from '$lib/chat/toolArgs';
-	import ProvenanceTree from '../chat/ProvenanceTree.svelte';
-	import ProvenanceSteps from '../chat/ProvenanceSteps.svelte';
+	import ProvenanceView from '../chat/ProvenanceView.svelte';
 	import {
 		getArtifactContentUrl,
 		getArtifactProvenance,
@@ -638,14 +637,15 @@
 						</button>
 						{#if displayProvenanceOpen}
 							<div
-								class="mt-1.5 max-h-80 overflow-y-auto rounded-lg border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-900 px-3 py-2"
+								class="mt-1.5 rounded-lg border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-900 px-3 py-2"
 								transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
 							>
-								{#if displayProvenance.length === 1}
-									<ProvenanceSteps steps={displayProvenance[0]?.steps ?? []} />
-								{:else}
-									<ProvenanceTree branches={displayProvenance} />
-								{/if}
+								<ProvenanceView
+									branches={displayProvenance}
+									fileName={displayImagePath?.split('/').pop() ?? ''}
+									title={displayImagePath ?? ''}
+									maxHeight={220}
+								/>
 							</div>
 						{/if}
 					</div>

@@ -76,6 +76,8 @@
 		"codemirror-lang-hcl": "^0.0.0-beta.2",
 		"crc-32": "^1.2.2",
 		"cronstrue": "^3.32.0",
+		"d3": "^7.9.0",
+		"dagre-d3-es": "7.0.11",
 		"dayjs": "^1.11.10",
 		"dompurify": "^3.2.5",
 		"eventsource-parser": "^1.1.2",

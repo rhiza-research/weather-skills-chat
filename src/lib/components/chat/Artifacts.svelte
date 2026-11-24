@@ -14,6 +14,7 @@
 	} from '$lib/stores';
 	import {
 		getArtifactContentUrl,
+		getArtifactProvenance,
 		getArtifactViewUrl,
 		isHtmlArtifact,
 		uploadChatArtifact
@@ -30,11 +31,13 @@
 	import HtmlPreview from '../common/HtmlPreview.svelte';
 	import HtmlArtifactFrame from '../common/HtmlArtifactFrame.svelte';
 	import ArtifactBrowser from './ArtifactBrowser.svelte';
+	import { crumbsKey, openedCrumbs } from './ArtifactTreeNode.svelte';
 	import { goto } from '$app/navigation';
 	import ArrowUpTray from '../icons/ArrowUpTray.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import { newChatWithArtifacts } from '$lib/apis/chats';
 	import Spinner from '../common/Spinner.svelte';
+	import ProvenanceView from './ProvenanceView.svelte';
 
 	export let history;
 	// A share link's frozen files: browse and download only.
@@ -112,6 +115,7 @@
 
 	// Opening a file while full screen keeps it full screen.
 	const openImage = async (path: string) => {
+		closeProvenance();
 		selectedImage = path;
 		modalAlt = path;
 		previewModified = fileModified(path);
@@ -169,6 +173,53 @@
 
 	$: previewTitle = selectedImage || modalAlt || '';
 
+	// Provenance opened from a file's stamp or crumbs takes the top viewer until it is
+	// closed or a file is opened; a rewritten file loads it again.
+	let provenancePath: string | null = null;
+	let provenance: any[] | null = null;
+	let provenanceModified: number | null = null;
+	let provenanceFullscreen = false;
+	let provenanceMode: 'graph' | 'text' = 'graph';
+
+	const openProvenance = async (path: string) => {
+		const modified = fileModified(path);
+		if (path === provenancePath && modified === provenanceModified && provenance) return;
+		provenancePath = path;
+		provenanceModified = modified;
+		provenance = null;
+		try {
+			const res = await getArtifactProvenance(localStorage.token, $chatId, path);
+			const branches = res?.branches;
+			if (path !== provenancePath) return;
+			if (branches?.length) {
+				provenance = branches;
+				if (Array.isArray(res?.crumbs) && res.crumbs.length)
+					openedCrumbs.update((all) => ({ ...all, [crumbsKey($chatId, path, modified)]: res.crumbs }));
+			} else {
+				closeProvenance();
+				toast.info($i18n.t('No provenance recorded for this file.'));
+			}
+		} catch (e) {
+			console.error(e);
+			if (path !== provenancePath) return;
+			closeProvenance();
+			toast.error($i18n.t('Could not load provenance.'));
+		}
+	};
+
+	const closeProvenance = () => {
+		provenancePath = null;
+		provenance = null;
+		provenanceModified = null;
+		provenanceFullscreen = false;
+	};
+
+	$: if (provenancePath && files) {
+		const modified = fileModified(provenancePath);
+		if (modified && provenanceModified && modified !== provenanceModified)
+			openProvenance(provenancePath);
+	}
+
 	// The open file was rewritten (new list from chat:artifacts): reload it.
 	$: if (selectedImage && files) {
 		const modified = fileModified(selectedImage);
@@ -183,7 +234,7 @@
 			}
 		}
 	}
-	$: hasPreview = !!previewUrl || !!previewHtmlUrl;
+	$: hasPreview = !!previewUrl || !!previewHtmlUrl || !!provenancePath;
 
 	const closePanel = () => {
 		showArtifacts.set(false);
@@ -432,14 +483,14 @@
 		>
 			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
 				<div class="text-[11px] leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
-					{previewTitle}
+					{provenancePath ? `${$i18n.t('Provenance')}: ${provenancePath}` : previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
 					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
 							type="button"
 							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
-							on:click={expandPreview}
+							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
 							aria-label="Expand image"
 						>
 							<ArrowsPointingOut className="size-3.5" />
@@ -448,14 +499,33 @@
 					<button
 						type="button"
 						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
-						on:click={clearPreview}
+						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
 						aria-label="Close preview"
 					>
 						<XMark className="size-3.5" />
 					</button>
 				</div>
 			</div>
-			{#if previewHtmlUrl}
+			{#if provenancePath}
+				<div class="flex-1 min-h-0 w-full px-2.5 pb-2">
+					{#if provenance}
+						<ProvenanceView
+							branches={provenance}
+							fileName={provenancePath.split('/').pop() ?? ''}
+							title={provenancePath}
+							fill
+							fullscreenButton={false}
+							bind:mode={provenanceMode}
+							bind:fullscreen={provenanceFullscreen}
+						/>
+					{:else}
+						<div class="flex items-center gap-1.5 text-[11px] text-gray-400">
+							{$i18n.t('Loading provenance')}
+							<Spinner className="size-3" />
+						</div>
+					{/if}
+				</div>
+			{:else if previewHtmlUrl}
 				<div
 					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
 				>
@@ -560,6 +630,7 @@
 					{selectedImage}
 					loading={loadingFiles && !Array.isArray($chatArtifactLists[$chatId])}
 					on:openImage={(e) => openImage(e.detail.path)}
+					on:openProvenance={(e) => openProvenance(e.detail.path)}
 				/>
 			{/if}
 		</div>
