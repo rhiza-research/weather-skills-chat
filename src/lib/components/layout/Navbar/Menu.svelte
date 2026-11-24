@@ -25,13 +25,16 @@
 	import Map from '$lib/components/icons/Map.svelte';
 	import Clipboard from '$lib/components/icons/Clipboard.svelte';
 	import Cube from '$lib/components/icons/Cube.svelte';
-	import { getChatById } from '$lib/apis/chats';
+	import Share from '$lib/components/icons/Share.svelte';
+	import { getChatById, updateChatVisibilityById } from '$lib/apis/chats';
+	import { refreshSidebar } from '$lib/chat/reconnect';
 
 	const i18n = getContext('i18n');
 
 	export let shareEnabled: boolean = false;
 	export let shareHandler: Function;
 	export let downloadHandler: Function;
+	export let onVisibilityChange: (visibility: string) => void = () => {};
 
 	// export let tagHandler: Function;
 
@@ -135,6 +138,20 @@
 		}
 	};
 
+	const toggleVisibility = async () => {
+		const visibility = chat.visibility === 'organization' ? 'private' : 'organization';
+		try {
+			await updateChatVisibilityById(localStorage.token, chat.id, visibility);
+			onVisibilityChange(visibility);
+			toast.success(
+				$i18n.t(visibility === 'organization' ? 'Shared with organization' : 'Moved to private')
+			);
+			await refreshSidebar(true);
+		} catch (error) {
+			toast.error(`${error}`);
+		}
+	};
+
 	const downloadJSONExport = async () => {
 		if (chat.id) {
 			let chatObj = null;
@@ -221,6 +238,21 @@
 					</svg>
 					<div class="flex items-center">{$i18n.t('Share via link')}</div>
 				</DropdownMenu.Item>
+
+				<!-- The personal org's id is the user's id; its chats can't be shared. -->
+				{#if chat.organization_id && chat.organization_id !== $user?.id}
+					<DropdownMenu.Item
+						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						on:click={toggleVisibility}
+					>
+						<Share />
+						<div class="flex items-center">
+							{chat.visibility === 'organization'
+								? $i18n.t('Make private')
+								: $i18n.t('Share with organization')}
+						</div>
+					</DropdownMenu.Item>
+				{/if}
 			{/if}
 
 			<DropdownMenu.Item
