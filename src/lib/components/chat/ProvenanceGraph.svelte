@@ -19,6 +19,8 @@
 	// Fill the parent's height (artifact panel, full screen); otherwise up to maxHeight tall.
 	export let fill = false;
 	export let maxHeight = 220;
+	// Full screen: a graph smaller than the view starts scaled up to fill it, up to K_MAX.
+	export let grow = false;
 
 	// Zoom: never below where the whole graph fits, at least 75% when it fits there, and up to 2x.
 	// Under a chat image a graph that fits whole does not zoom, so the wheel scrolls the chat.
@@ -83,7 +85,7 @@
 		const kmax = fill || (full && Math.min(bw / full.W, bh / full.H) < 1) ? K_MAX : 1;
 		zoomable = kmax > kmin;
 		kRange = [kmin, kmax];
-		const kh = Math.max(kmin, Math.min(1, Math.max(K_HOME, fit)));
+		const kh = Math.max(kmin, Math.min(grow ? K_MAX : 1, Math.max(K_HOME, fit)));
 		home = zoomIdentity
 			.translate(Math.max(0, (bw - L.W * kh) / 2), Math.max(0, (bh - L.H * kh) / 2))
 			.scale(kh);
@@ -421,21 +423,13 @@
 				{$i18n.t('Collapse these {{COUNT}} steps', { COUNT: popNode.count })}
 			</div>
 		{:else if popNode.run}
-			<div class="font-medium">
-				{$i18n.t('{{COUNT}} steps', { COUNT: popNode.run.length })}
-				<span class="font-normal text-gray-500">· {$i18n.t('click to expand')}</span>
+			<div class="font-medium break-words">
+				{popNode.run.map((id) => graph?.nodes[id]?.step?.skill).join(' → ')}
 			</div>
-			{#each popNode.run as id}
-				{@const step = graph?.nodes[id]?.step}
-				<div class="mt-2 font-medium break-words">
-					{step?.skill}
-					<span class="font-normal text-gray-500">{step?.version ?? ''}</span>
-				</div>
-				<ProvenanceArgs args={step?.args} />
-			{/each}
+			<div class="text-gray-500">{$i18n.t('Expand to view arguments')}</div>
 		{:else}
 			<div class="font-medium break-words">
-				{popNode.step?.skill ?? popNode.label}
+				{popNode.file && fileName ? fileName : (popNode.step?.skill ?? popNode.label)}
 			</div>
 			<div class="text-gray-500">
 				{popNode.file

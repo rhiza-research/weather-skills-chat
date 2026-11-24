@@ -17,6 +17,8 @@
 	export let maxHeight = 220;
 	export let mode: 'graph' | 'text' = 'graph';
 	export let fullscreen = false;
+	// Scale a small graph up to fill the view (full screen).
+	export let grow = false;
 	// Off where the host has its own full-screen button, and inside full screen.
 	export let fullscreenButton = true;
 
@@ -41,7 +43,7 @@
 
 <div class="flex flex-col min-w-0 {fill ? 'h-full min-h-0' : ''}">
 	{#if mode === 'graph'}
-		<ProvenanceGraph {branches} {fileName} {fill} {maxHeight}>
+		<ProvenanceGraph {branches} {fileName} {fill} {maxHeight} {grow}>
 			<div slot="lead" class="flex rounded-md bg-gray-100 dark:bg-gray-800 p-0.5 text-xs">
 				{#each modes as [value, label]}
 					<button
@@ -128,7 +130,7 @@
 			</button>
 		</div>
 		<div class="flex-1 min-h-0">
-			<svelte:self {branches} {fileName} fill bind:mode fullscreenButton={false} />
+			<svelte:self {branches} {fileName} fill grow bind:mode fullscreenButton={false} />
 		</div>
 	</div>
 {/if}
