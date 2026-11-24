@@ -2958,6 +2958,8 @@
 					chat={{
 						id: $chatId,
 						user_id: chat?.user_id,
+						organization_id: chat?.organization_id,
+						visibility: chat?.visibility,
 						chat: {
 							title: $chatTitle,
 							models: selectedModels,
@@ -2970,6 +2972,9 @@
 					title={$chatTitle}
 					bind:selectedModels
 					shareEnabled={!!history.currentId}
+					onVisibilityChange={(visibility) => {
+						if (chat) chat.visibility = visibility;
+					}}
 					{initNewChat}
 					{compacting}
 					onCompact={chatWritable ? compactCurrentChat : null}

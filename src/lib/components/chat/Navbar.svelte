@@ -40,6 +40,7 @@
 	export let initNewChat: Function;
 	export let title: string = $WEBUI_NAME;
 	export let shareEnabled: boolean = false;
+	export let onVisibilityChange: (visibility: string) => void = () => {};
 
 	export let chat;
 	export let history;
@@ -121,6 +122,7 @@
 						<Menu
 							{chat}
 							{shareEnabled}
+							{onVisibilityChange}
 							shareHandler={() => {
 								showShareChatModal = true;
 							}}
