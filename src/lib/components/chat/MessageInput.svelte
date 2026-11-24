@@ -582,6 +582,7 @@
 							}}
 						>
 							<div
+								data-tour="composer"
 								class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border border-gray-50 dark:border-gray-850 hover:border-gray-100 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800 transition px-1 bg-white/90 dark:bg-gray-400/5 dark:text-gray-100"
 								dir={$settings?.chatDirection ?? 'auto'}
 							>
@@ -1128,6 +1129,7 @@
 											<button
 												class="bg-transparent hover:bg-gray-100 text-gray-800 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5 outline-hidden focus:outline-hidden"
 												type="button"
+												data-tour="upload"
 												aria-label={$i18n.t('More')}
 											>
 												<svg
@@ -1152,6 +1154,7 @@
 												>
 													<button
 														class="translate-y-[0.5px] flex gap-1 items-center text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg p-1 self-center transition shrink-0"
+														data-tour="tools"
 														aria-label={$i18n.t('Available Tools')}
 														type="button"
 														on:click={() => {
@@ -1180,6 +1183,7 @@
 														<button
 															on:click|preventDefault={() => (webSearchEnabled = !webSearchEnabled)}
 															type="button"
+															data-tour="web-search"
 															class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {webSearchOn
 																? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'
 																: 'bg-transparent border-transparent text-gray-600 dark:text-gray-300 border-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'}"
@@ -1247,6 +1251,7 @@
 														on:click|preventDefault={() =>
 															(readArtifactsEnabled = !readArtifactsEnabled)}
 														type="button"
+														data-tour="read-files"
 														aria-pressed={readArtifactsEnabled}
 														class="px-1.5 @xl:px-2.5 py-1.5 flex gap-1.5 items-center text-sm rounded-full font-medium transition-colors duration-300 focus:outline-hidden shrink-0 border {readArtifactsEnabled
 															? 'bg-blue-100 dark:bg-blue-500/20 border-blue-400/20 text-blue-500 dark:text-blue-400'

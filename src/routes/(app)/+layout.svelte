@@ -37,6 +37,7 @@
 	import { dropOrganization, preloadRecent } from '$lib/chat/cache';
 	import { markAppReady, whenAppIdle } from '$lib/utils/idle';
 	import { revealApp } from '$lib/utils/splash';
+	import { TOUR_VERSION } from '$lib/constants';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -63,6 +64,18 @@
 
 	let loaded = false;
 	$: if (loaded) markAppReady();
+
+	let tourStarted = false;
+	$: if (
+		loaded &&
+		!tourStarted &&
+		$page.url.pathname === '/' &&
+		['user', 'admin'].includes($user?.role ?? '') &&
+		($settings?.tourVersion ?? 0) < TOUR_VERSION
+	) {
+		tourStarted = true;
+		import('$lib/utils/tour').then((m) => m.startTour($i18n.t, true));
+	}
 	$: if (loaded) {
 		const path = $page.url.pathname;
 		if (path !== '/' && !path.startsWith('/c/')) revealApp();

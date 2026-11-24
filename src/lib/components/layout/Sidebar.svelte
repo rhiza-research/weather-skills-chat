@@ -816,6 +816,7 @@
 		</div>
 
 		<div
+			data-tour="chats"
 			class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden {$temporaryChatEnabled
 				? 'opacity-20'
 				: ''}"

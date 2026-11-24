@@ -1,0 +1,5 @@
+# Welcome Tour
+
+The first time a user reaches the new chat page, a tour of up to 17 steps points at the main parts of the screen: starting a new chat, the organization, the Workspace, the model, the message box, Tools and Skills, uploading files, the file-reading switch, web search, the steps the AI shows while it works, Artifacts and provenance, checking a result, sharing and organizing chats, scheduled tasks, settings and credits, and help. The account step opens the account menu to show what is in it, and closes it again. Steps whose part is not on screen, such as the sidebar on a small screen or web search when it is turned off, are skipped.
+
+Every step but the last has **Skip tour**, and the tour also closes with Esc or the close button. Finishing, skipping or closing it marks it as seen on the user's account, so it does not start again in any browser. When the tour is changed in a release, it starts once more for everyone. **Take the tour** in the **?** menu runs it again at any time.

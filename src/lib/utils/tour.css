@@ -1,0 +1,77 @@
+.driver-popover.wsc-tour {
+	--bg: #fff;
+	--fg: var(--color-gray-850, #262626);
+	--muted: var(--color-gray-500, #6b6b6b);
+	--line: rgb(209 213 219 / 0.3);
+	--btn: #000;
+	--btn-fg: #fff;
+	font-family: 'Archivo', sans-serif;
+	background: var(--bg);
+	color: var(--fg);
+	border: 1px solid var(--line);
+	border-radius: 0.75rem;
+	padding: 1rem;
+	box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.dark .driver-popover.wsc-tour {
+	--bg: var(--color-gray-850, #262626);
+	--fg: #fff;
+	--muted: var(--color-gray-400, #9b9b9b);
+	--line: rgb(55 65 81 / 0.5);
+	--btn: #fff;
+	--btn-fg: #000;
+}
+
+.wsc-tour .driver-popover-title {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.wsc-tour .driver-popover-description,
+.wsc-tour .driver-popover-progress-text {
+	color: var(--muted);
+	font-size: 0.875rem;
+}
+
+.wsc-tour .driver-popover-footer-btn {
+	background: transparent;
+	color: var(--fg);
+	border: 1px solid var(--line);
+	border-radius: 9999px;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.wsc-tour .driver-popover-next-btn {
+	background: var(--btn);
+	color: var(--btn-fg);
+	border-color: var(--btn);
+}
+
+.wsc-tour .driver-popover-footer-btn:hover,
+.wsc-tour .wsc-tour-skip:hover {
+	opacity: 0.8;
+}
+
+.wsc-tour .wsc-tour-skip {
+	color: var(--muted);
+	font-size: 0.75rem;
+	margin-right: 0.5rem;
+	text-decoration: underline;
+}
+
+/* The arrow's visible edge points at the popover, so it takes the surface colour. */
+.wsc-tour .driver-popover-arrow-side-left {
+	border-left-color: var(--bg);
+}
+.wsc-tour .driver-popover-arrow-side-right {
+	border-right-color: var(--bg);
+}
+.wsc-tour .driver-popover-arrow-side-top {
+	border-top-color: var(--bg);
+}
+.wsc-tour .driver-popover-arrow-side-bottom {
+	border-bottom-color: var(--bg);
+}

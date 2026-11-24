@@ -18,6 +18,7 @@
 - [[Notifications]]
 - [[Banners]]
 - [[Getting Help]]
+- [[Welcome Tour]]
 - [[Tracing]]
 - [[Deployment]]
 - [[Development]]

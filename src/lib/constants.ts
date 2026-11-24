@@ -2,6 +2,8 @@ import { browser, dev } from '$app/environment';
 // import { version } from '../../package.json';
 
 export const APP_NAME = 'Weather Skills';
+// Raise to show the welcome tour again to everyone once.
+export const TOUR_VERSION = 1;
 
 export const WEBUI_HOSTNAME = browser ? (dev ? `${location.hostname}:8080` : ``) : '';
 export const WEBUI_BASE_URL = browser ? (dev ? `http://${WEBUI_HOSTNAME}` : ``) : ``;
