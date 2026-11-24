@@ -2,15 +2,15 @@
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
-	import { chats, user, settings, scrollPaginationEnabled, currentChatPage } from '$lib/stores';
+	import { user, settings } from '$lib/stores';
+	import { refreshSidebar } from '$lib/chat/reconnect';
 
 	import {
 		archiveAllChats,
 		createNewChat,
 		deleteAllChats,
 		getAllChats,
-		getAllUserChats,
-		getChatList
+		getAllUserChats
 	} from '$lib/apis/chats';
 	import { getImportOrigin, convertOpenAIChats } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
@@ -64,9 +64,7 @@
 			}
 		}
 
-		currentChatPage.set(1);
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		scrollPaginationEnabled.set(true);
+		await refreshSidebar(true);
 	};
 
 	const exportChats = async () => {
@@ -82,9 +80,7 @@
 			toast.error(`${error}`);
 		});
 
-		currentChatPage.set(1);
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		scrollPaginationEnabled.set(true);
+		await refreshSidebar(true);
 	};
 
 	const deleteAllChatsHandler = async () => {
@@ -93,15 +89,11 @@
 			toast.error(`${error}`);
 		});
 
-		currentChatPage.set(1);
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		scrollPaginationEnabled.set(true);
+		await refreshSidebar(true);
 	};
 
 	const handleArchivedChatsChange = async () => {
-		currentChatPage.set(1);
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		scrollPaginationEnabled.set(true);
+		await refreshSidebar(true);
 	};
 </script>
 

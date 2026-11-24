@@ -501,7 +501,7 @@
 	};
 
 	onMount(async () => {
-		setSidebarRefresh(softRefreshChatList);
+		setSidebarRefresh((full) => (full ? initChatList() : softRefreshChatList()));
 		showPinnedChat = localStorage?.showPinnedChat ? localStorage.showPinnedChat === 'true' : true;
 		try {
 			const stored = localStorage?.chatTimeRangeOpen
