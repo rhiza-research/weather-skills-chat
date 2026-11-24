@@ -234,7 +234,8 @@ async def _stream_automation_chat(
     """Run the chat middleware + streaming tool loop for an automation chat.
 
     Returns whether the user stopped the reply. Raises RunTimedOut, after
-    cancelling the reply, when the run takes longer than timeout_s.
+    cancelling the reply, when the run takes longer than timeout_s, and
+    RuntimeError when the reply used every tool round.
     """
     form_data = {
         "model": model_id,
@@ -326,6 +327,8 @@ async def _stream_automation_chat(
     from open_webui.utils.chat_realtime import save_final_reply
 
     await save_final_reply(chat_id, assistant_id, {"done": True})
+    if limit := metadata.get("tool_round_limit"):
+        raise RuntimeError(f"Stopped at the limit of {limit} tool rounds before finishing")
     # The reply loop marks the metadata when the user stopped it.
     return bool(metadata.get("cancelled"))
 

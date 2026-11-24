@@ -76,6 +76,13 @@ class StreamTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await self._stream(reply))
 
+    async def test_a_reply_that_used_every_tool_round_is_an_error(self):
+        async def reply(metadata):
+            metadata["tool_round_limit"] = 1000
+
+        with self.assertRaisesRegex(RuntimeError, "1000 tool rounds"):
+            await self._stream(reply)
+
     async def test_a_reply_past_the_time_limit_is_cancelled(self):
         cancelled = asyncio.Event()
 
