@@ -220,7 +220,9 @@
 		popStyle = `left:${Math.round(left)}px;top:${Math.round(top)}px`;
 	};
 
+	// Only single steps have a popover; folded runs, their handles and the file do not.
 	const show = async (id: string) => {
+		if (!V?.nodes[id]?.step) return;
 		clearTimeout(hideTimer);
 		const fresh = cur !== id;
 		cur = id;
@@ -252,7 +254,7 @@
 			open.delete(o.handle);
 			open = open;
 			draw();
-		} else {
+		} else if (o.step) {
 			pin = pin === id ? null : id;
 			show(id);
 		}
@@ -416,38 +418,13 @@
 		on:mouseenter={() => clearTimeout(hideTimer)}
 		on:mouseleave={hide}
 	>
-		{#if popNode.handle}
-			<div class="font-medium">
-				{$i18n.t('Collapse these {{COUNT}} steps', { COUNT: popNode.count })}
-			</div>
-		{:else if popNode.run}
-			<div class="font-medium">
-				{$i18n.t('{{COUNT}} steps', { COUNT: popNode.run.length })}
-				<span class="font-normal text-gray-500">· {$i18n.t('click to expand')}</span>
-			</div>
-			{#each popNode.run as id}
-				{@const step = graph?.nodes[id]?.step}
-				<div class="mt-2 font-medium break-words">
-					{step?.skill}
-					<span class="font-normal text-gray-500">{step?.version ?? ''}</span>
-				</div>
-				<ProvenanceArgs args={step?.args} />
-			{/each}
-		{:else}
-			<div class="font-medium break-words">
-				{popNode.step?.skill ?? popNode.label}
-			</div>
-			<div class="text-gray-500">
-				{popNode.file
-					? $i18n.t('This file')
-					: popNode.step?.version
-						? $i18n.t('Version {{VERSION}}', { VERSION: popNode.step.version })
-						: ''}{pin === cur ? ` · ${$i18n.t('pinned')}` : ''}
-			</div>
-			{#if !popNode.file}
-				<ProvenanceArgs args={popNode.step?.args} />
-			{/if}
-		{/if}
+		<div class="font-medium break-words">{popNode.step?.skill}</div>
+		<div class="text-gray-500">
+			{popNode.step?.version
+				? $i18n.t('Version {{VERSION}}', { VERSION: popNode.step.version })
+				: ''}{pin === cur ? ` · ${$i18n.t('pinned')}` : ''}
+		</div>
+		<ProvenanceArgs args={popNode.step?.args} />
 	</div>
 {/if}
 
