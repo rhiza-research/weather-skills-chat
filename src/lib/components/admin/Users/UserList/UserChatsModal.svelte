@@ -67,7 +67,7 @@
 
 <Modal size="lg" bind:show>
 	<div class=" flex justify-between dark:text-gray-300 px-5 pt-4">
-		<div class=" text-lg font-medium self-center capitalize">
+		<div class=" modal-title capitalize">
 			{$i18n.t("{{user}}'s Chats", { user: user.name })}
 		</div>
 		<button

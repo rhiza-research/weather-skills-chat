@@ -92,7 +92,7 @@
 		{#if webConfig}
 			<div class="">
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('General')}</h3>
+					<h3 class="section-title">{$i18n.t('General')}</h3>
 
 					<hr class="border-line my-2" />
 
@@ -532,7 +532,7 @@
 				</div>
 
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('Loader')}</h3>
+					<h3 class="section-title">{$i18n.t('Loader')}</h3>
 
 					<hr class="border-line my-2" />
 

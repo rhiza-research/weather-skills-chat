@@ -132,7 +132,7 @@
 
 	<slot name="content">
 		<DropdownMenu.Content
-			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg font-primary overflow-y-auto"
+			class="menu-panel {className} text-sm font-primary overflow-y-auto"
 			fitViewport
 			sideOffset={8}
 			side="bottom"

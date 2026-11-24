@@ -11,7 +11,7 @@
 <Modal bind:show>
 	<div class="text-strong">
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4">
-			<h2 class="text-lg font-medium self-center">{$i18n.t('Keyboard shortcuts')}</h2>
+			<h2 class="modal-title">{$i18n.t('Keyboard shortcuts')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}
@@ -228,7 +228,7 @@
 		</div>
 
 		<div class=" flex justify-between dark:text-gray-300 px-5">
-			<h2 class="text-lg font-medium self-center">{$i18n.t('Input commands')}</h2>
+			<h2 class="modal-title">{$i18n.t('Input commands')}</h2>
 		</div>
 
 		<div class="flex flex-col md:flex-row w-full p-5 md:space-x-4 dark:text-gray-200">

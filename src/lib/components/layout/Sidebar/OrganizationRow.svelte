@@ -94,7 +94,7 @@
 		</DropdownMenu.Trigger>
 
 		<DropdownMenu.Content
-			class="w-60 max-h-72 overflow-y-auto rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
+			class="menu-panel w-60 max-h-72 overflow-y-auto"
 			sideOffset={4}
 			side="bottom"
 			align="start"

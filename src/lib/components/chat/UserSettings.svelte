@@ -342,7 +342,7 @@
 <div class="text-gray-700 dark:text-gray-100 {layout === 'page' ? 'h-full' : ''}">
 		{#if layout === 'modal'}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-				<h2 class="text-lg font-medium self-center">{$i18n.t('Settings')}</h2>
+				<h2 class="modal-title">{$i18n.t('Settings')}</h2>
 				<button
 					class="self-center"
 					aria-label={$i18n.t('Close')}

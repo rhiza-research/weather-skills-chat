@@ -100,7 +100,7 @@
 <Modal bind:show size="md">
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-0.5">
-			<h2 class="text-lg font-medium self-center">{$i18n.t('Available Tools and Skills')}</h2>
+			<h2 class="modal-title">{$i18n.t('Available Tools and Skills')}</h2>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}

@@ -159,7 +159,7 @@
 				</Tooltip>
 				<div slot="content">
 					<DropdownMenu.Content
-						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
+						class="menu-panel max-w-[180px]"
 						sideOffset={4}
 						side="bottom"
 						align="end"

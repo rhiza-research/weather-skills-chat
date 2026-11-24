@@ -83,7 +83,7 @@
 	>
 		<div class="  overflow-y-scroll scrollbar-hidden h-full pr-1.5">
 			<div class="mb-3">
-				<h3 class="text-base font-medium mb-2.5">{$i18n.t('Tasks')}</h3>
+				<h3 class="section-title">{$i18n.t('Tasks')}</h3>
 
 				<hr class="border-line my-2" />
 
@@ -259,7 +259,7 @@
 			</div>
 
 			<div class="mb-3">
-				<h3 class="text-base font-medium mb-2.5">{$i18n.t('UI')}</h3>
+				<h3 class="section-title">{$i18n.t('UI')}</h3>
 
 				<hr class="border-line my-2" />
 

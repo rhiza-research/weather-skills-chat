@@ -75,7 +75,7 @@
 <Modal size="sm" bind:show>
   <div>
     <div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-      <h2 class="text-lg font-medium self-center">
+      <h2 class="modal-title">
         {$i18n.t("Send feedback")}
       </h2>
       <button

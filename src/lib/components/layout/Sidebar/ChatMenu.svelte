@@ -190,7 +190,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[280px] rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
+			class="menu-panel max-w-[280px]"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
@@ -323,7 +323,7 @@
 					<div class="flex items-center">{$i18n.t('Download')}</div>
 				</DropdownMenu.SubTrigger>
 				<DropdownMenu.SubContent
-					class="w-full rounded-xl px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
+					class="menu-panel"
 					transition={flyAndScale}
 					sideOffset={8}
 				>

@@ -66,7 +66,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<h2 class="text-lg font-medium self-center">{$i18n.t('Edit monthly usage limit')}</h2>
+			<h2 class="modal-title">{$i18n.t('Edit monthly usage limit')}</h2>
 			<button
 				class="self-center"
 					aria-label={$i18n.t('Close')}

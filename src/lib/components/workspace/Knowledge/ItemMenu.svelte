@@ -49,7 +49,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[160px] rounded-xl px-1 py-1.5 border border-line z-50 bg-panel dark:text-white shadow-lg"
+			class="menu-panel max-w-[160px]"
 			sideOffset={-2}
 			side="bottom"
 			align="end"

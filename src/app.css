@@ -157,6 +157,18 @@ textarea::placeholder {
 		@apply mt-4 mb-1 border-t border-line pt-4 text-sm font-medium first:mt-0 first:border-t-0 first:pt-0;
 	}
 
+	.menu-panel {
+		@apply z-50 w-full rounded-xl border border-line bg-panel px-1 py-1.5 shadow-lg dark:text-white;
+	}
+
+	.modal-title {
+		@apply self-center text-lg font-medium;
+	}
+
+	.section-title {
+		@apply mb-2.5 text-base font-medium;
+	}
+
 	.page-nav {
 		@apply flex h-13 shrink-0 items-center gap-1 px-2.5 backdrop-blur-xl;
 	}

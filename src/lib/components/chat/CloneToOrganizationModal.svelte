@@ -43,7 +43,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class="text-lg font-medium self-center">
+			<div class="modal-title">
 				{$i18n.t('Clone chat to another organization')}
 			</div>
 			<button

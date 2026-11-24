@@ -276,7 +276,7 @@
 		<div class=" space-y-2.5 overflow-y-scroll scrollbar-hidden h-full pr-1.5">
 			<div class="">
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('General')}</h3>
+					<h3 class="section-title">{$i18n.t('General')}</h3>
 
 					<hr class="border-line my-2" />
 
@@ -422,7 +422,7 @@
 
 				{#if !RAGConfig.BYPASS_EMBEDDING_AND_RETRIEVAL}
 					<div class="mb-3">
-						<h3 class="text-base font-medium mb-2.5">{$i18n.t('Embedding')}</h3>
+						<h3 class="section-title">{$i18n.t('Embedding')}</h3>
 
 						<hr class="border-line my-2" />
 
@@ -577,7 +577,7 @@
 					</div>
 
 					<div class="mb-3">
-						<h3 class="text-base font-medium mb-2.5">{$i18n.t('Retrieval')}</h3>
+						<h3 class="section-title">{$i18n.t('Retrieval')}</h3>
 
 						<hr class="border-line my-2" />
 
@@ -748,7 +748,7 @@
 				{/if}
 
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('Files')}</h3>
+					<h3 class="section-title">{$i18n.t('Files')}</h3>
 
 					<hr class="border-line my-2" />
 
@@ -794,7 +794,7 @@
 				</div>
 
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('Integration')}</h3>
+					<h3 class="section-title">{$i18n.t('Integration')}</h3>
 
 					<hr class="border-line my-2" />
 
@@ -812,7 +812,7 @@
 				</div>
 
 				<div class="mb-3">
-					<h3 class="text-base font-medium mb-2.5">{$i18n.t('Danger Zone')}</h3>
+					<h3 class="section-title">{$i18n.t('Danger Zone')}</h3>
 
 					<hr class="border-line my-2" />
 

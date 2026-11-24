@@ -15,7 +15,7 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class="text-lg font-medium self-center flex flex-col gap-0.5 capitalize">
+			<div class="modal-title flex flex-col gap-0.5 capitalize">
 				{#if codeExecution?.result}
 					<div>
 						{#if codeExecution.result?.error}
