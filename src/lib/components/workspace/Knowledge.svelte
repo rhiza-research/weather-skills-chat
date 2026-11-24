@@ -127,7 +127,7 @@
 
 	<div class="flex flex-col gap-1 mb-1.5">
 		<div class="flex justify-between items-center">
-			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
+			<div class="flex md:self-center text-xl font-medium items-center">
 				{$i18n.t('Knowledge')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
 				<span class="text-lg font-medium text-body"
