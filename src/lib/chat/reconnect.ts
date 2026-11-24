@@ -11,7 +11,8 @@ export async function afterSocketReconnect(hooks: {
 	if (hooks.refreshScheduledTasks) await hooks.refreshScheduledTasks();
 }
 
-type SidebarRefresh = () => Promise<void>;
+// full also reloads folders, pinned chats and tags, and drops deleted chats.
+type SidebarRefresh = (full?: boolean) => Promise<void>;
 
 let sidebarRefresh: SidebarRefresh | null = null;
 
@@ -19,6 +20,6 @@ export function setSidebarRefresh(fn: SidebarRefresh | null) {
 	sidebarRefresh = fn;
 }
 
-export async function refreshSidebar() {
-	if (sidebarRefresh) await sidebarRefresh();
+export async function refreshSidebar(full = false) {
+	if (sidebarRefresh) await sidebarRefresh(full);
 }
