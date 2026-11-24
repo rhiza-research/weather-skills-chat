@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	COMPACTION_TIMEOUT_MS,
 	compactionRunning,
-	compactionSteps,
+	compactionStep,
 	contextShown,
 	runningCompaction
 } from './compaction';
@@ -31,24 +31,21 @@ describe('compactionRunning', () => {
 	});
 });
 
-describe('compactionSteps', () => {
-	it('times each step, the last one up to now', () => {
+describe('compactionStep', () => {
+	it('times the latest step from its own start', () => {
 		const compaction = {
 			status: 'running',
 			started_at: 100,
 			steps: { sending: 100, waiting: 103.5, receiving: 120 }
 		};
-		expect(compactionSteps(compaction, 150_000)).toEqual([
-			{ step: 'sending', seconds: 3, current: false },
-			{ step: 'waiting', seconds: 16, current: false },
-			{ step: 'receiving', seconds: 30, current: true }
-		]);
+		expect(compactionStep(compaction, 150_000)).toEqual({ step: 'receiving', seconds: 30 });
 	});
 
 	it('times the whole compaction when the steps are unknown', () => {
-		expect(compactionSteps({ status: 'running', started_at: 100 }, 142_000)).toEqual([
-			{ step: null, seconds: 42, current: true }
-		]);
+		expect(compactionStep({ status: 'running', started_at: 100 }, 142_000)).toEqual({
+			step: null,
+			seconds: 42
+		});
 	});
 });
 
