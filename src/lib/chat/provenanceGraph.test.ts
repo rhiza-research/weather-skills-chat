@@ -114,6 +114,12 @@ describe('buildGraph', () => {
 			expect(() => layoutGraph(viewGraph(g, new Set()), (s) => s.length * k)).not.toThrow();
 	});
 
+	it('leaves arguments that were not set out of the popover rows', () => {
+		const rows = argRows({ cmap: 'BrBG', norm: null, vmin: 0, flag: false, title: '', gone: undefined });
+		expect(rows.map((r) => r.key)).toEqual(['cmap', 'vmin', 'flag', 'title']);
+		expect(argRows({ norm: null })).toEqual([]);
+	});
+
 	it('ignores malformed entries', () => {
 		expect(buildGraph([{ steps: [null, 3, { skill: 5 }, 'x'] }], 'f').graph).toBeNull();
 		expect(buildGraph(null, 'f').graph).toBeNull();

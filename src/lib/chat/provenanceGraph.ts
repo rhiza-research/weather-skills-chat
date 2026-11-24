@@ -317,11 +317,14 @@ export function layoutGraph(V: ProvView, textWidth: (s: string) => number): Laid
 	};
 }
 
-/** A step's arguments as the chat's arguments viewer shows them, one row each. */
+/** A step's arguments as the chat's arguments viewer shows them, one row each, leaving out
+ * arguments that were not set (null). */
 export const argRows = (args: unknown): ToolArgRow[] => {
 	if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
-	return Object.entries(args).map(([key, value]) => {
-		const { text, lang } = formatToolArgValue(value);
-		return { key, value: text, lang, multiline: text.includes('\n') };
-	});
+	return Object.entries(args)
+		.filter(([, value]) => value != null)
+		.map(([key, value]) => {
+			const { text, lang } = formatToolArgValue(value);
+			return { key, value: text, lang, multiline: text.includes('\n') };
+		});
 };
