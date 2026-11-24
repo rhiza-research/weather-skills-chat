@@ -189,13 +189,13 @@
 										<div
 											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-amber-500/20 text-amber-800 dark:text-amber-200"
 										>
-											SKILL
+											{$i18n.t('Skill')}
 										</div>
 									{:else}
 										<div
 											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
 										>
-											TOOL
+											{$i18n.t('Tool')}
 										</div>
 									{/if}
 

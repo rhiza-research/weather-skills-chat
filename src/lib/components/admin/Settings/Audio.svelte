@@ -184,7 +184,7 @@
 						<select
 							class="dark:bg-gray-900 cursor-pointer w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
 							bind:value={STT_ENGINE}
-							placeholder="Select an engine"
+							placeholder={$i18n.t('Select an engine')}
 						>
 							<option value="">{$i18n.t('Whisper (Local)')}</option>
 							<option value="openai">OpenAI</option>
@@ -219,7 +219,7 @@
 									list="model-list"
 									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 									bind:value={STT_MODEL}
-									placeholder="Select a model"
+									placeholder={$i18n.t('Select a model')}
 								/>
 
 								<datalist id="model-list">
@@ -244,7 +244,7 @@
 								<input
 									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 									bind:value={STT_MODEL}
-									placeholder="Select a model (optional)"
+									placeholder={$i18n.t('Select a model (optional)')}
 								/>
 							</div>
 						</div>
@@ -386,7 +386,7 @@
 						<select
 							class=" dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
 							bind:value={TTS_ENGINE}
-							placeholder="Select a mode"
+							placeholder={$i18n.t('Select a mode')}
 							on:change={async (e) => {
 								await updateConfigHandler();
 								await getVoices();
@@ -485,7 +485,7 @@
 									list="model-list"
 									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 									bind:value={TTS_MODEL}
-									placeholder="CMU ARCTIC speaker embedding name"
+									placeholder={$i18n.t('CMU ARCTIC speaker embedding name')}
 								/>
 
 								<datalist id="model-list">
@@ -507,7 +507,7 @@
 									name: 'SpeechT5'
 								})}.
 							</a>
-							To see the available CMU Arctic speaker embeddings,
+							{$i18n.t('To see the available CMU Arctic speaker embeddings,')}
 							<a
 								class=" hover:underline dark:text-gray-200 text-gray-800"
 								href="https://huggingface.co/datasets/Matthijs/cmu-arctic-xvectors"
@@ -527,7 +527,7 @@
 										list="voice-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_VOICE}
-										placeholder="Select a voice"
+										placeholder={$i18n.t('Select a voice')}
 									/>
 
 									<datalist id="voice-list">
@@ -546,7 +546,7 @@
 										list="tts-model-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_MODEL}
-										placeholder="Select a model"
+										placeholder={$i18n.t('Select a model')}
 									/>
 
 									<datalist id="tts-model-list">
@@ -568,7 +568,7 @@
 										list="voice-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_VOICE}
-										placeholder="Select a voice"
+										placeholder={$i18n.t('Select a voice')}
 									/>
 
 									<datalist id="voice-list">
@@ -587,7 +587,7 @@
 										list="tts-model-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_MODEL}
-										placeholder="Select a model"
+										placeholder={$i18n.t('Select a model')}
 									/>
 
 									<datalist id="tts-model-list">
@@ -609,7 +609,7 @@
 										list="voice-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_VOICE}
-										placeholder="Select a voice"
+										placeholder={$i18n.t('Select a voice')}
 									/>
 
 									<datalist id="voice-list">
@@ -636,7 +636,7 @@
 										list="tts-model-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
 										bind:value={TTS_AZURE_SPEECH_OUTPUT_FORMAT}
-										placeholder="Select a output format"
+										placeholder={$i18n.t('Select an output format')}
 									/>
 								</div>
 							</div>
@@ -651,7 +651,7 @@
 					<div class="flex items-center relative">
 						<select
 							class="dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
-							aria-label="Select how to split message text for TTS requests"
+							aria-label={$i18n.t('Select how to split message text for TTS requests')}
 							bind:value={TTS_SPLIT_ON}
 						>
 							{#each Object.values(TTS_RESPONSE_SPLIT) as split}

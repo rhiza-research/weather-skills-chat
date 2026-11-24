@@ -152,7 +152,7 @@
 			const res = await uploadPipeline(localStorage.token, file, selectedPipelinesUrlIdx).catch(
 				(error) => {
 					console.log(error);
-					toast.error('Sorry, something went wrong');
+					toast.error($i18n.t('Sorry, something went wrong'));
 					return null;
 				}
 			);
@@ -410,10 +410,10 @@
 					</div>
 
 					<div class="mt-2 text-xs text-gray-500">
-						<span class=" font-semibold dark:text-gray-200">Warning:</span> Pipelines are a plugin
-						system with arbitrary code execution —
+						<span class=" font-semibold dark:text-gray-200">{$i18n.t('Warning:')}</span>
+						{$i18n.t('Pipelines are a plugin system with arbitrary code execution —')}
 						<span class=" font-medium dark:text-gray-400"
-							>don't fetch random pipelines from sources you don't trust.</span
+							>{$i18n.t("don't fetch random pipelines from sources you don't trust.")}</span
 						>
 					</div>
 				</div>
@@ -540,12 +540,12 @@
 										<Spinner className="size-5" />
 									{/if}
 								{:else}
-									<div>No valves</div>
+									<div>{$i18n.t('No valves')}</div>
 								{/if}
 							</div>
 						</div>
 					{:else if pipelines.length === 0}
-						<div>Pipelines Not Detected</div>
+						<div>{$i18n.t('Pipelines Not Detected')}</div>
 					{/if}
 				{:else}
 					<div class="flex justify-center">

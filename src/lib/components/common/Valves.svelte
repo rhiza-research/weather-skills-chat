@@ -17,7 +17,7 @@
 					{valvesSpec.properties[property].title}
 
 					{#if (valvesSpec?.required ?? []).includes(property)}
-						<span class=" text-gray-500">*required</span>
+						<span class=" text-gray-500">{$i18n.t('*required')}</span>
 					{/if}
 				</div>
 
@@ -116,5 +116,5 @@
 		</div>
 	{/each}
 {:else}
-	<div class="text-xs">No valves</div>
+	<div class="text-xs">{$i18n.t('No valves')}</div>
 {/if}

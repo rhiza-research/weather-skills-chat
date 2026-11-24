@@ -85,7 +85,7 @@
 									columns[2],
 									columns[3].toLowerCase()
 								).catch((error) => {
-									toast.error(`Row ${idx + 1}: ${error}`);
+									toast.error($i18n.t('Row {{ROW}}: {{ERROR}}', { ROW: idx + 1, ERROR: error }));
 									return null;
 								});
 
@@ -93,12 +93,12 @@
 									userCount = userCount + 1;
 								}
 							} else {
-								toast.error(`Row ${idx + 1}: invalid format.`);
+								toast.error($i18n.t('Row {{ROW}}: invalid format.', { ROW: idx + 1 }));
 							}
 						}
 					}
 
-					toast.success(`Successfully imported ${userCount} users.`);
+					toast.success($i18n.t('Successfully imported {{COUNT}} users.', { COUNT: userCount }));
 					inputFiles = null;
 					const uploadInputElement = document.getElementById('upload-user-csv-input');
 

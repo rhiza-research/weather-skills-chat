@@ -1,6 +1,9 @@
 <script>
+	import { getContext } from 'svelte';
 	import { page } from '$app/stores';
 	import HelpContact from '$lib/components/common/HelpContact.svelte';
+
+	const i18n = getContext('i18n');
 </script>
 
 <div class=" bg-white dark:bg-gray-800 min-h-screen">
@@ -10,7 +13,7 @@
 				{$page.status}: {$page.error?.message ?? 'Sorry, something went wrong'}
 			</div>
 
-			<a class="text-sm underline text-gray-500 dark:text-gray-400" href="/">Back to chat</a>
+			<a class="text-sm underline text-gray-500 dark:text-gray-400" href="/">{$i18n.t('Back to chat')}</a>
 
 			<HelpContact
 				className="text-xs text-gray-500 dark:text-gray-400"

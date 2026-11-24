@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, getContext } from 'svelte';
 	import panzoom, { type PanZoom } from 'panzoom';
+
+	const i18n = getContext('i18n');
 
 	export let show = false;
 	export let src = '';
@@ -111,7 +113,7 @@
 			<button
 				type="button"
 				class="p-3 rounded-md hover:bg-white/10"
-				aria-label="Close"
+				aria-label={$i18n.t('Close')}
 				on:pointerdown={(e) => {
 					e.stopImmediatePropagation();
 					e.preventDefault();
@@ -136,7 +138,7 @@
 			<button
 				type="button"
 				class="p-3 rounded-md hover:bg-white/10"
-				aria-label="Download"
+				aria-label={$i18n.t('Download')}
 				on:pointerdown={(e) => {
 					e.stopImmediatePropagation();
 					e.preventDefault();

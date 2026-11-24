@@ -111,7 +111,7 @@
 										<span
 											class="text-[10px] font-bold px-1 rounded-sm uppercase bg-amber-500/20 text-amber-800 dark:text-amber-200"
 										>
-											skill
+											{$i18n.t('skill')}
 										</span>
 									{/if}
 									<span class="break-all">{toolBaseName(item)}</span>

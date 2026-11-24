@@ -3242,7 +3242,7 @@
 				type="button"
 				class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-40 flex-col items-center gap-1 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 py-3 shadow-md text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750"
 				on:click={() => openArtifactsPanel()}
-				aria-label="Open artifacts"
+				aria-label={$i18n.t('Open artifacts')}
 			>
 				<DocumentChartBar className="size-4" />
 				<span

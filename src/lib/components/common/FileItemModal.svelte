@@ -79,7 +79,7 @@
 							<div class="flex items-center gap-1 shrink-0">
 								<Info />
 
-								Formatting may be inconsistent from source.
+								{$i18n.t('Formatting may be inconsistent from source.')}
 							</div>
 						{/if}
 					</div>

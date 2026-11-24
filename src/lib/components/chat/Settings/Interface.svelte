@@ -946,14 +946,14 @@
 								type="number"
 								class="w-20 bg-transparent outline-hidden text-center"
 								min="0"
-								placeholder="Width"
+								placeholder={$i18n.t('Width')}
 							/>x
 							<input
 								bind:value={imageCompressionSize.height}
 								type="number"
 								class="w-20 bg-transparent outline-hidden text-center"
 								min="0"
-								placeholder="Height"
+								placeholder={$i18n.t('Height')}
 							/>
 						</div>
 					</div>

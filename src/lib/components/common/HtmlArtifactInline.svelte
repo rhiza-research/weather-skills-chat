@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
 	// An HTML artifact shown in a message: a lazy, fixed-height frame with an
 	// expand button that opens it full screen.
 	import HtmlArtifactFrame from './HtmlArtifactFrame.svelte';
 	import HtmlPreview from './HtmlPreview.svelte';
+
+	const i18n = getContext('i18n');
 
 	export let src = '';
 	export let downloadUrl = '';
@@ -18,8 +21,8 @@
 	<button
 		type="button"
 		class="absolute right-2 top-2 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
-		aria-label="Expand"
-		title="Expand"
+		aria-label={$i18n.t('Expand')}
+		title={$i18n.t('Expand')}
 		on:click={() => {
 			showPreview = true;
 		}}

@@ -90,7 +90,7 @@
 	const installHandler = async () => {
 		if (busy) return;
 		if (!gitUrl.trim()) {
-			toast.error('Git URL is required');
+			toast.error($i18n.t('Git URL is required'));
 			return;
 		}
 		busy = true;
@@ -105,7 +105,12 @@
 		});
 		busy = false;
 		if (pack) {
-			toast.success(`Installed ${pack.skills?.length || 0} skill(s) from ${pack.git_ref}`);
+			toast.success(
+				$i18n.t('Installed {{COUNT}} skill(s) from {{REF}}', {
+					COUNT: pack.skills?.length || 0,
+					REF: pack.git_ref
+				})
+			);
 			gitUrl = '';
 			gitRef = 'main';
 			enabledByDefault = true;
@@ -123,7 +128,12 @@
 		});
 		busy = false;
 		if (updated) {
-			toast.success(`Updated to ${shortSha(updated.commit_sha)} on ${updated.git_ref}`);
+			toast.success(
+				$i18n.t('Updated to {{SHA}} on {{REF}}', {
+					SHA: shortSha(updated.commit_sha),
+					REF: updated.git_ref
+				})
+			);
 			await refresh();
 			await refreshTools();
 		}
@@ -192,7 +202,7 @@
 		showDeleteConfirm = false;
 		deletePackId = '';
 		if (ok) {
-			toast.success('Skill pack removed');
+			toast.success($i18n.t('Skill pack removed'));
 			await refresh();
 			await refreshTools();
 		}
@@ -276,14 +286,12 @@
 
 {#if loaded}
 	<div class="mb-3">
-		<div class="text-lg font-medium mb-1">Skills</div>
+		<div class="text-lg font-medium mb-1">{$i18n.t('Skills')}</div>
 		<div class="text-sm text-gray-500 dark:text-gray-400 mb-4">
 			{#if catalog === 'public'}
-				Install Agent Skills into the public catalog. Organizations can then enable or disable each
-				pack and skill. Skills run like tools in chat.
+				{$i18n.t('Install Agent Skills into the public catalog. Organizations can then enable or disable each pack and skill. Skills run like tools in chat.')}
 			{:else}
-				Platform skill packs can be turned on or off for this organization. Organization packs are
-				only visible here.
+				{$i18n.t('Platform skill packs can be turned on or off for this organization. Organization packs are only visible here.')}
 			{/if}
 		</div>
 
@@ -300,7 +308,7 @@
 					/>
 					<input
 						class="md:w-48 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
-						placeholder="branch / tag / sha"
+						placeholder={$i18n.t('branch / tag / sha')}
 						bind:value={gitRef}
 						disabled={busy}
 					/>
@@ -309,7 +317,7 @@
 						disabled={busy}
 						on:click={installHandler}
 					>
-						Install
+						{$i18n.t('Install')}
 					</button>
 				</div>
 				{#if catalog === 'public'}
@@ -332,7 +340,7 @@
 				{$i18n.t('Skills from catalog')}
 			</div>
 			{#if publicPacks.length === 0}
-				<div class="text-sm text-gray-500 dark:text-gray-400 py-4">No platform skill packs.</div>
+				<div class="text-sm text-gray-500 dark:text-gray-400 py-4">{$i18n.t('No platform skill packs.')}</div>
 			{:else}
 				<div class="flex flex-col gap-3 mb-6">
 					{#each publicPacks as pack (pack.id)}
@@ -458,7 +466,7 @@
 		{#if catalog === 'public' || showOrgSection}
 		{#if sectionPacks.length === 0}
 			<div class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
-				No skill packs installed yet.
+				{$i18n.t('No skill packs installed yet.')}
 			</div>
 		{:else}
 			<div class="flex flex-col gap-3">
@@ -557,7 +565,7 @@
 										disabled={busy}
 										on:click|stopPropagation={() => updateHandler(pack)}
 									>
-										Update
+										{$i18n.t('Update')}
 									</button>
 									<button
 										type="button"
@@ -568,7 +576,7 @@
 											showDeleteConfirm = true;
 										}}
 									>
-										Remove
+										{$i18n.t('Remove')}
 									</button>
 								{/if}
 							</div>
@@ -677,7 +685,7 @@
 								</ul>
 							{:else}
 								<div class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-									No skills in this pack.
+									{$i18n.t('No skills in this pack.')}
 								</div>
 							{/if}
 						</div>

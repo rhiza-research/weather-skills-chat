@@ -44,7 +44,7 @@
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}
-						aria-label="Toggle Sidebar"
+						aria-label={$i18n.t('Toggle Sidebar')}
 					>
 						<div class=" m-auto self-center">
 							<MenuLines />
@@ -71,7 +71,7 @@
 								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
 							href="/workspace/skills"
 						>
-							Skills
+							{$i18n.t('Skills')}
 						</a>
 
 						<a

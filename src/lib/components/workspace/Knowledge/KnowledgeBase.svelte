@@ -222,7 +222,9 @@
 		// Function to update the UI with the progress
 		const updateProgress = () => {
 			const percentage = (uploadedFiles / totalFiles) * 100;
-			toast.info(`Upload Progress: ${uploadedFiles}/${totalFiles} (${percentage.toFixed(2)}%)`);
+			toast.info(
+				`${$i18n.t('Upload Progress')}: ${uploadedFiles}/${totalFiles} (${percentage.toFixed(2)}%)`
+			);
 		};
 
 		// Recursive function to count all files excluding hidden ones
@@ -346,9 +348,9 @@
 	// Error handler
 	const handleUploadError = (error) => {
 		if (error.name === 'AbortError') {
-			toast.info('Directory selection was cancelled');
+			toast.info($i18n.t('Directory selection was cancelled'));
 		} else {
-			toast.error('Error accessing directory');
+			toast.error($i18n.t('Error accessing directory'));
 			console.error('Directory access error:', error);
 		}
 	};
@@ -583,14 +585,14 @@
 			: 'left-0'}  w-full h-full flex z-50 touch-none pointer-events-none"
 		id="dropzone"
 		role="region"
-		aria-label="Drag and Drop Container"
+		aria-label={$i18n.t('Drag and Drop Container')}
 	>
 		<div class="absolute w-full h-full backdrop-blur-sm bg-gray-800/40 flex justify-center">
 			<div class="m-auto pt-64 flex flex-col justify-center">
 				<div class="max-w-md">
 					<AddFilesPlaceholder>
 						<div class=" mt-2 text-center text-sm dark:text-gray-200 w-full">
-							Drop any files here to add to my documents
+							{$i18n.t('Drop any files here to add to my documents')}
 						</div>
 					</AddFilesPlaceholder>
 				</div>
@@ -652,7 +654,7 @@
 								type="text"
 								class="text-left w-full font-semibold text-2xl font-primary bg-transparent outline-hidden"
 								bind:value={knowledge.name}
-								placeholder="Knowledge Name"
+								placeholder={$i18n.t('Knowledge Name')}
 								disabled={!canWrite}
 								on:input={() => {
 									if (canWrite) changeDebounceHandler();
@@ -678,7 +680,7 @@
 							type="text"
 							class="text-left text-xs w-full text-gray-500 bg-transparent outline-hidden"
 							bind:value={knowledge.description}
-							placeholder="Knowledge Description"
+							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}
 							on:input={() => {
 								if (canWrite) changeDebounceHandler();
