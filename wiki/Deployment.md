@@ -147,7 +147,7 @@ In one reply, the model can call tools, read their results, and call more, round
 
 | Env var | Default | Effect |
 |-|-|-|
-| `MAX_TOOL_CALL_RETRIES` | `100` | Most tool rounds the model can take in one reply |
+| `MAX_TOOL_CALL_RETRIES` | `1000` | Most tool rounds the model can take in one reply |
 
 ## Other admin settings
 
