@@ -24,6 +24,7 @@
 	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import TextSkills from '$lib/components/workspace/TextSkills.svelte';
 	import {
 		canAddKind,
 		canManageCatalogItem,
@@ -275,8 +276,13 @@
 />
 
 {#if loaded}
+	{#if catalog === 'org'}
+		<TextSkills />
+	{/if}
 	<div class="mb-3">
-		<div class="text-lg font-medium mb-1">Skills</div>
+		<div class="text-lg font-medium mb-1">
+			{catalog === 'org' ? $i18n.t('Weather Skills') : 'Skills'}
+		</div>
 		<div class="text-sm text-gray-500 dark:text-gray-400 mb-4">
 			{#if catalog === 'public'}
 				Install Agent Skills into the public catalog. Organizations can then enable or disable each

@@ -29,6 +29,7 @@ from open_webui.utils.automation_scheduler import (
     sync_automation_job,
 )
 from open_webui.utils.schedule import parse_schedule, prompt_from_messages
+from open_webui.utils.text_skills import split_text_skill_ids
 from open_webui.utils.organizations import (
     can_manage_automation,
     can_read_chat,
@@ -277,7 +278,8 @@ async def create_scheduled_task(
     # scheduled runs replay with the same skill/tool set.
     tool_ids = metadata.get("tool_ids")
     if isinstance(tool_ids, list):
-        tool_ids = [str(t) for t in tool_ids if t]
+        # Scheduled tasks do not use text skills yet.
+        tool_ids, _ = split_text_skill_ids([str(t) for t in tool_ids if t])
     else:
         tool_ids = None
     features = metadata.get("features")

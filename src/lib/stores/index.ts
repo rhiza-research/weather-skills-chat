@@ -3,6 +3,7 @@ import { type Writable, writable } from 'svelte/store';
 import type { ModelConfig } from '$lib/apis';
 import type { Banner } from '$lib/types';
 import type { FeedbackDraft } from '$lib/utils/feedback';
+import type { TextSkill } from '$lib/apis/textSkills';
 import type { Socket } from 'socket.io-client';
 
 // Backend
@@ -58,6 +59,8 @@ export const models: Writable<Model[]> = writable([]);
 export const prompts: Writable<null | Prompt[]> = writable(null);
 export const knowledge: Writable<null | Document[]> = writable(null);
 export const tools = writable(null);
+/** The active organization's text skills (the workspace's "Skills"); null until loaded. */
+export const textSkills: Writable<null | TextSkill[]> = writable(null);
 export const functions = writable(null);
 
 export const toolServers = writable([]);
