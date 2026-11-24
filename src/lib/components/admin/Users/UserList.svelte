@@ -181,7 +181,11 @@
 	const toggleCanAdd = async (row, key) => {
 		const next = !row[key];
 		const kind =
-			key === 'can_add_models' ? 'models' : key === 'can_add_skills' ? 'skills' : 'knowledge';
+			key === 'can_add_models'
+				? $i18n.t('models')
+				: key === 'can_add_skills'
+					? $i18n.t('skills')
+					: $i18n.t('knowledge');
 		try {
 			await updateOrganizationById(localStorage.token, row.id, {
 				[key]: next
