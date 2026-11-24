@@ -575,12 +575,15 @@ class ChatTable:
         *,
         children: Optional[list] = None,
         bump_revision: bool = True,
-    ) -> bool:
-        """Set or clear (None) a message's ``compaction``; True when written.
+    ) -> Optional[int]:
+        """Set or clear (None) a message's ``compaction``. Returns the chat's
+        revision after the write, or None when nothing was written.
 
         With ``children``, writes only while the message still has exactly
         those replies, so a turn sent meanwhile wins over the compaction.
         """
+        from open_webui.utils.chat_realtime import chat_revision
+
         written = False
 
         def apply(chat, _item):
@@ -597,8 +600,8 @@ class ChatTable:
             written = True
             return chat, True
 
-        self._write_locked_chat(id, apply, bump_revision=bump_revision)
-        return written
+        model, _ = self._write_locked_chat(id, apply, bump_revision=bump_revision)
+        return chat_revision(model) if written else None
 
     def append_message_content(
         self, id: str, message_id: str, text: str

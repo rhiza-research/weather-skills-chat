@@ -625,7 +625,7 @@ function absorbTurnSignal(event: any) {
 	const type = event?.data?.type ?? null;
 	const data = event?.data?.data ?? null;
 	if (TURN_ACTIVITY_TYPES.has(type)) noteTurnActivity(id);
-	if (type !== 'chat:completion') return;
+	if (type !== 'chat:completion' && type !== 'chat:compaction') return;
 	const revision = Number(data?.revision);
 	if (Number.isFinite(revision)) setRevision(id, revision);
 }
@@ -761,8 +761,10 @@ function writeCachedStream(event: any, token: string) {
 		return false;
 	}
 	if (type === 'chat:compaction') {
-		// The finished state also comes with the chat's next revision; this shows it now.
-		if (data?.status === 'running' || data?.status === 'done') message.compaction = data;
+		// The finished state carries the chat's revision, so a copy downloaded
+		// before it was saved cannot bring back the old state.
+		const { revision, ...compaction } = data ?? {};
+		if (data?.status === 'running' || data?.status === 'done') message.compaction = compaction;
 		else delete message.compaction;
 		return true;
 	}

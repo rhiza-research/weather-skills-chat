@@ -350,3 +350,33 @@ test('compaction events set and clear the compaction on a finished reply', () =>
 	send({ status: 'failed' });
 	expect(reply().compaction).toBeUndefined();
 });
+
+test('a download from before a compaction finished does not undo it', () => {
+	const running = { status: 'running', started_at: 1 };
+	const doc = (compaction: any, revision: number) => ({
+		id: 'chat-compact-stale',
+		meta: { revision },
+		chat: {
+			history: {
+				currentId: 'a1',
+				messages: {
+					a1: { id: 'a1', role: 'assistant', content: 'hi', done: true, compaction }
+				}
+			}
+		}
+	});
+	const live = doc(running, 1);
+	putChat(live);
+	applyCachedStreamEvent(
+		{
+			chat_id: 'chat-compact-stale',
+			message_id: 'a1',
+			data: { type: 'chat:compaction', data: { status: 'done', summary: 'S', revision: 2 } }
+		},
+		'token'
+	);
+	putChat(doc(running, 1));
+	const compaction = (live.chat.history.messages.a1 as any).compaction;
+	expect(compaction).toEqual({ status: 'done', summary: 'S' });
+	expect(revisionOf('chat-compact-stale')).toBe(2);
+});

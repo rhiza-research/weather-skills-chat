@@ -6,7 +6,7 @@ A model can only read so much of a chat at once: its context window. Compaction 
 
 The ring in the top bar of a chat shows how full the model's context is. Clicking it shows the number of tokens used out of the model's window and the percentage. The count comes from the model provider after each reply: the tokens the model read on the reply's last model call plus the tokens it wrote. When a reply runs skills, that is its last call, not the sum of all its calls. The window size comes from the model provider's model list. A chat shows no ring until its first reply, and none for a model whose provider does not list a context window.
 
-Right after a compaction, the count is an estimate marked **(estimate)**. The app works it out from the summary's size, before the model has read the chat again. The next reply replaces it with the provider's count.
+Right after a compaction, the count is an estimate marked **(estimate)**. The model still reads its instructions and skill descriptions on every call, so the estimate is that part of the reply's last call plus the summary. The next reply replaces it with the provider's count.
 
 ## Compacting a chat
 
@@ -14,10 +14,12 @@ Right after a compaction, the count is an estimate marked **(estimate)**. The ap
 
 While compaction runs:
 
-- A line under the reply reads **Compacting conversation…**, and the ring shows a spinner.
+- A line under the reply reads **Compacting conversation…**, and the ring shows a spinner. Under the line, each step shows how long it has taken: sending the conversation to the model, waiting for the model, and receiving the summary. A page opened while compaction runs shows only the total time.
 - Sending is paused. The send button is disabled and says why, and [[Queued Messages]] wait until compaction finishes.
 
 When it finishes, the line changes to **Chat compacted**. Clicking that line shows the summary the model now reads in place of the messages above it.
+
+The summary keeps what the model needs to carry on: what the user wants and has decided, choices later work must reuse to stay consistent (such as areas of interest and periods), where the work stands and what comes next, the files that matter with a few words on what each holds, and problems that will affect further work. It leaves out what the model can get back by reading files or running skills again: results, commands and their arguments, and how files were made.
 
 If compaction fails, or does not finish in time, the line goes away, an error is shown, and sending works again. The chat is unchanged. If someone else adds a message to the chat while it runs, that message wins and the compaction is dropped.
 

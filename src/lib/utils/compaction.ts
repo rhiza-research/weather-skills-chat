@@ -1,9 +1,13 @@
 /** Matches the server's limit on the summary call. */
-export const COMPACTION_TIMEOUT_MS = 90_000;
+export const COMPACTION_TIMEOUT_MS = 180_000;
+
+export type CompactionStep = 'sending' | 'waiting' | 'receiving';
 
 export type Compaction = {
 	status?: string;
 	started_at?: number;
+	/** When each step of the summary call began, in seconds since the epoch. */
+	steps?: Partial<Record<CompactionStep, number>>;
 	summary?: string;
 	context_estimate?: number;
 	context_window?: number;
@@ -14,6 +18,29 @@ export const compactionRunning = (compaction: Compaction | null | undefined, now
 	compaction?.status === 'running' &&
 	typeof compaction.started_at === 'number' &&
 	nowMs - compaction.started_at * 1000 < COMPACTION_TIMEOUT_MS;
+
+/**
+ * Each step reached so far and how long it took, the last one still running.
+ * Without steps (a reloaded page), one row for the whole compaction.
+ */
+export const compactionSteps = (
+	compaction: Compaction,
+	nowMs = Date.now()
+): { step: CompactionStep | null; seconds: number; current: boolean }[] => {
+	const starts = Object.entries(compaction.steps ?? {}) as [CompactionStep, number][];
+	if (!starts.length) {
+		const seconds = Math.max(0, Math.floor(nowMs / 1000 - (compaction.started_at ?? 0)));
+		return [{ step: null, seconds, current: true }];
+	}
+	return starts.map(([step, start], i) => {
+		const end = i + 1 < starts.length ? starts[i + 1][1] : nowMs / 1000;
+		return {
+			step,
+			seconds: Math.max(0, Math.floor(end - start)),
+			current: i === starts.length - 1
+		};
+	});
+};
 
 /** When a running compaction counts as failed, in ms since the epoch. */
 export const compactionExpiresAt = (compaction: Compaction) =>

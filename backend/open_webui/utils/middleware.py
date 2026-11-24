@@ -3120,6 +3120,7 @@ async def process_chat_response(
                             metadata,
                             form_data["messages"],
                             followup_messages,
+                            form_data.get("tools"),
                         )
 
                         await waiting_heartbeat.start()

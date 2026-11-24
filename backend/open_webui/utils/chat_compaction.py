@@ -32,27 +32,27 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 # The page treats a compaction still running after this long as failed.
-COMPACTION_TIMEOUT_S = 90
+COMPACTION_TIMEOUT_S = 180
 END_OF_TURN_RATIO = 0.9
 CHARS_PER_TOKEN = 4
 SUMMARY_MAX_TOKENS = 16000
 
-SUMMARY_INSTRUCTIONS = """Summarize this conversation. The summary replaces it: the assistant will continue the conversation with only the summary as context, so keep everything needed to carry on.
+SUMMARY_INSTRUCTIONS = """Summarize the conversation above. The assistant will continue it with only your summary, so keep what it needs to carry on, and nothing it can get back by reading files or running tools again.
 
-Include:
-- What the user wants and asked for, and any preferences they stated.
-- Decisions and conclusions reached.
-- Datasets, regions, dates, variables, models and parameters used.
-- Files and artifacts created or read, with their exact paths.
-- Results of tool calls that later work may need, with key numbers.
-- Errors met and how they were resolved.
-- Open questions and what was about to happen next.
+Keep:
+- What the user wants, their decisions and stated preferences.
+- Choices later work must reuse to stay consistent, such as the areas of interest (bounding boxes) and periods.
+- Where the work stands and what comes next, as tasks in plain words.
+- Files and folders that matter: the path and a few words on what each holds. Describe a family of files by its pattern.
+- Problems that will affect further work, and how to avoid them.
 
-Write plain notes. No preamble.
+Leave out:
+- Results: numbers, scores, tables. They are in the files.
+- Details a tool or file can give again: unit conversions, variables, grids, members, date lists.
+- Commands, arguments and options, for work done or still to do. Files record their own provenance, and the assistant knows its tools.
+- Problems that were solved and will not come back.
 
-Many parts of the chat can likely be made concise by describing the final result of a set of analysis and/or tool calls. Please be as concise as reasonably possible without preventing continued analysis.
-
-Answer with the summary as text. Do not call any tools."""
+Write short plain notes. No preamble. Answer with the summary as text. Do not call any tools."""
 
 TOOL_RESULT_REMOVED = (
     "[This tool result was removed to fit the model's context window. "
@@ -205,6 +205,29 @@ def _begin(
     return job
 
 
+class _Progress:
+    """The running compaction the page shows, with when each step of the summary
+    call began: sending the conversation, waiting for the model, receiving the
+    summary. Steps go out in events only; a reloaded page shows the total time."""
+
+    def __init__(self, notify: dict, chat_id: str, reply_id: str, running: dict):
+        self.notify, self.chat_id, self.reply_id = notify, chat_id, reply_id
+        self.running = {**running, "steps": {"sending": time.time()}}
+
+    @property
+    def steps(self) -> dict:
+        return self.running["steps"]
+
+    async def step(self, name: str) -> None:
+        if name == "sending":
+            self.steps.clear()
+        self.steps[name] = time.time()
+        await _notify(self.notify, self.chat_id, self.reply_id, self.event())
+
+    def event(self) -> dict:
+        return {**self.running, "steps": dict(self.steps)}
+
+
 def _summary_text(response) -> tuple[str, dict]:
     choices = response.get("choices") if isinstance(response, dict) else None
     message = (choices[0] if choices else {}).get("message") or {}
@@ -214,7 +237,29 @@ def _summary_text(response) -> tuple[str, dict]:
     return summary.strip(), response.get("usage") or {}
 
 
-async def _resend(request, user, chat_id, reply_id, job, metadata):
+async def _read_summary(response, progress: _Progress) -> tuple[str, dict]:
+    """The summary and usage of a reply, streamed or not."""
+    if isinstance(response, dict):
+        return _summary_text(response)
+    from open_webui.utils.langfuse_tracing import ingest_sse_chunk, new_sse_state
+
+    await progress.step("waiting")
+    state = new_sse_state()
+    try:
+        async for chunk in response.body_iterator:
+            ingest_sse_chunk(state, chunk)
+            if state["content"] and "receiving" not in progress.steps:
+                await progress.step("receiving")
+    finally:
+        if response.background is not None:
+            await response.background()
+    if state["error"]:
+        raise ValueError(f"The summary call failed: {state['error']}")
+    message = {"content": "".join(state["content"]), "tool_calls": list(state["tool_calls"].values())}
+    return _summary_text({"choices": [{"message": message}], "usage": state["usage"] or {}})
+
+
+async def _resend(request, user, chat_id, reply_id, job, metadata, progress):
     """The summary from the reply's own last call, re-sent while it is cached.
 
     Its usage is recorded for the person compacting, as the fresh call's is.
@@ -235,46 +280,54 @@ async def _resend(request, user, chat_id, reply_id, job, metadata):
             ],
             SUMMARY_MAX_TOKENS,
             resolve_usage_context(request, {"model": job.model_id, "metadata": metadata}, user),
+            stream=True,
         )
         if sent is None:
             return None
-        return (*_summary_text(sent[0]), sent[1])
+        return (*await _read_summary(sent[0], progress), sent[1])
     except Exception:
         log.info("Summary from the cached call failed; sending it fresh", exc_info=True)
         return None
 
 
-async def _summarize(request, user, chat_id, reply_id, job, metadata):
+async def _summarize(request, user, chat_id, reply_id, job, metadata, progress):
     """The summary, its call's usage, and the characters that call was sent."""
     from open_webui.utils.chat import generate_chat_completion
 
-    resent = await _resend(request, user, chat_id, reply_id, job, metadata)
+    resent = await _resend(request, user, chat_id, reply_id, job, metadata, progress)
     if resent is not None:
         return resent
-    prompt = f"{SUMMARY_INSTRUCTIONS}\n\n<conversation>\n{job.transcript}\n</conversation>"
+    if len(progress.steps) > 1:  # the cached call got an answer, then failed
+        await progress.step("sending")
+    prompt = f"<conversation>\n{job.transcript}\n</conversation>\n\n{SUMMARY_INSTRUCTIONS}"
     response = await generate_chat_completion(
         request,
         {
             "model": job.model_id,
-            "stream": False,
+            "stream": True,
+            "max_tokens": SUMMARY_MAX_TOKENS,
             "messages": [{"role": "user", "content": prompt}],
             "metadata": metadata,
         },
         user,
     )
-    return (*_summary_text(response), len(prompt))
+    return (*await _read_summary(response, progress), len(prompt))
 
 
 def context_after(job_usage, summary_usage, transcript_chars, sent_chars) -> dict:
-    """Context use after compacting: the reply's, less the conversation, plus the summary.
+    """Context use after compacting: what the reply's call keeps, plus the summary.
 
-    The conversation's tokens use the tokens per character the summary call
-    reported for what it was sent.
+    The call keeps its system prompt and tools (context_kept). A reply saved
+    without it counts the reply's use less the conversation, with the tokens
+    per character the summary call reported for what it was sent.
     """
     used = job_usage.get("context_used")
     window = job_usage.get("context_window")
+    kept = job_usage.get("context_kept")
     prompt = summary_usage.get("prompt_tokens")
     added = summary_usage.get("completion_tokens")
+    if all(isinstance(v, (int, float)) for v in (kept, window, added)):
+        return {"context_estimate": int(kept + added), "context_window": window}
     if not all(isinstance(v, (int, float)) for v in (used, window, prompt, added)):
         return {}
     removed = prompt * transcript_chars / max(sent_chars, 1)
@@ -339,12 +392,13 @@ async def compact(
     if job is None:
         await _notify(notify, chat_id, reply_id, {"status": "failed"})
         return {"status": "failed"}
-    await _notify(notify, chat_id, reply_id, job.running)
+    progress = _Progress(notify, chat_id, reply_id, job.running)
+    await _notify(notify, chat_id, reply_id, progress.event())
 
-    result = {"status": "failed"}
+    result = event = {"status": "failed"}
     try:
         summary, summary_usage, sent_chars = await asyncio.wait_for(
-            _summarize(request, user, chat_id, reply_id, job, metadata),
+            _summarize(request, user, chat_id, reply_id, job, metadata, progress),
             COMPACTION_TIMEOUT_S,
         )
         done = {
@@ -354,11 +408,14 @@ async def compact(
             "created_at": int(time.time()),
             **context_after(job.usage, summary_usage, len(job.transcript), sent_chars),
         }
-        saved = await asyncio.to_thread(
+        revision = await asyncio.to_thread(
             Chats.set_message_compaction, chat_id, reply_id, done, children=job.children
         )
-        result = done if saved else {"status": "cancelled"}
+        saved = revision is not None
+        result = event = done if saved else {"status": "cancelled"}
         if saved:
+            # The page drops a copy of the chat downloaded before this.
+            event = {**done, "revision": revision}
             # The next call sends the summary, so nothing reads the old prompt
             # cache again: stop the keep-alives that would keep paying for it.
             cache_keepalive.restart(chat_id, None, "")
@@ -371,7 +428,7 @@ async def compact(
                 await asyncio.to_thread(Chats.set_message_compaction, chat_id, reply_id, None)
             except Exception:
                 log.warning("Could not clear compaction chat_id=%s", chat_id, exc_info=True)
-        await _notify(notify, chat_id, reply_id, result)
+        await _notify(notify, chat_id, reply_id, event)
     return result
 
 
@@ -430,9 +487,18 @@ class ContextBudget:
         self.compacted = False
         self.usage: dict = {}  # the last call's usage, with its context use
         self.sent_chars: Optional[int] = None  # characters that call was sent
+        # Characters of the last call, and of its system messages and tools.
+        self.call_chars = 0
+        self.kept_chars = 0
 
     def record(self, usage: Optional[dict]) -> None:
+        """Keep the call's usage, adding context_kept: its prompt tokens that a
+        compaction keeps (system messages and tools), by their share of its
+        characters. The caller saves usage after this."""
         if isinstance(usage, dict):
+            prompt = usage.get("prompt_tokens")
+            if isinstance(prompt, (int, float)) and self.call_chars:
+                usage["context_kept"] = int(prompt * self.kept_chars / self.call_chars)
             self.usage = usage
 
     def _first_call(self, call: list[dict]) -> None:
@@ -449,9 +515,10 @@ class ContextBudget:
             return _chars(call) // CHARS_PER_TOKEN
         return int(known + (_chars(call) - self.sent_chars) // CHARS_PER_TOKEN)
 
-    async def fit(self, request, user, model, metadata, base, call):
+    async def fit(self, request, user, model, metadata, base, call, tools=None):
         """Make the next call fit the window. base is the turn's messages up to its
-        tool calls; call is what the model gets. Returns the new base and call."""
+        tool calls; call is what the model gets, with tools. Returns the new base
+        and call."""
         if self.sent_chars is None:
             self._first_call(call)
         try:
@@ -459,6 +526,9 @@ class ContextBudget:
         except Exception:
             log.warning("Fitting a model call failed", exc_info=True)
         self.sent_chars = _chars(call)
+        tools_chars = len(json.dumps(tools)) if tools else 0
+        self.call_chars = self.sent_chars + tools_chars
+        self.kept_chars = _chars([m for m in call if m.get("role") == "system"]) + tools_chars
         return base, call
 
     async def _fit(self, request, user, model, metadata, base, call):
