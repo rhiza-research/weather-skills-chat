@@ -31,6 +31,8 @@ from open_webui.utils.artifacts import (
     normalize_sandbox_relpath,
     pack_sandbox_archive,
     pack_sandbox_zip,
+    sandbox_tree_size,
+    TooManyFilesToSize,
     write_bytes,
 )
 
@@ -292,6 +294,44 @@ class DeleteSandboxTest(unittest.TestCase):
             (old / "plots" / "b.png").unlink()
             self.assertEqual(empty_trash(), 1)
             self.assertFalse(old.exists())
+
+
+class SandboxTreeSizeTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name) / "store"
+        (self.folder / "0").mkdir(parents=True)
+        (self.folder / "0" / "a").write_bytes(b"x" * 10)
+        (self.folder / "b").write_bytes(b"x" * 5)
+
+    def juicefs(self, **result):
+        """Pretend juicefs is installed and its summary returns this."""
+        done = subprocess.CompletedProcess([], result.pop("returncode", 0), **result)
+        return patch(
+            "open_webui.utils.artifacts.shutil.which", return_value="/usr/local/bin/juicefs"
+        ), patch("open_webui.utils.artifacts.subprocess.run", return_value=done)
+
+    def test_juicefs_summary_sizes_a_folder(self):
+        which, run = self.juicefs(stdout="PATH,SIZE,DIRS,FILES\n/,48615092224,46835,97821\n", stderr="")
+        with which, run as mock_run:
+            self.assertEqual(sandbox_tree_size(self.folder), 48615092224)
+        self.assertEqual(
+            mock_run.call_args.args[0],
+            ["juicefs", "summary", "--depth", "0", "--csv", str(self.folder)],
+        )
+
+    def test_a_failed_summary_falls_back_to_a_walk(self):
+        which, run = self.juicefs(returncode=1, stdout="", stderr="open controller")
+        with which, run:
+            self.assertEqual(sandbox_tree_size(self.folder), 15)
+
+    def test_without_juicefs_a_folder_over_the_file_limit_is_not_sized(self):
+        with patch("open_webui.utils.artifacts.shutil.which", return_value=None):
+            self.assertEqual(sandbox_tree_size(self.folder), 15)
+            with patch("open_webui.utils.artifacts.SIZE_WALK_MAX_FILES", 1):
+                with self.assertRaises(TooManyFilesToSize):
+                    sandbox_tree_size(self.folder)
 
 
 class ArtifactCopyStateTest(unittest.TestCase):

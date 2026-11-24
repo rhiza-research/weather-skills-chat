@@ -15,6 +15,7 @@
 	import ChevronRight from '../icons/ChevronRight.svelte';
 	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
 	import ArrowDownTray from '../icons/ArrowDownTray.svelte';
+	import Spinner from '../common/Spinner.svelte';
 	import DocumentDuplicate from '../icons/DocumentDuplicate.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import ConfirmDialog from '../common/ConfirmDialog.svelte';
@@ -62,8 +63,9 @@
 
 	// Above this, ask before downloading (and, for folders, before zipping).
 	const LARGE_DOWNLOAD_BYTES = 1024 * 1024 * 1024;
-	let largeDownload: { url: string; size: number } | null = null;
-	// Sizing a big Zarr store can take seconds; ignore clicks until it answers.
+	// size is null when the server could not size the folder.
+	let largeDownload: { url: string; size: number | null } | null = null;
+	// Sizing a big Zarr store can take seconds: show a spinner, ignore clicks until it answers.
 	let checkingSize = false;
 
 	const startDownload = (url: string) => {
@@ -89,7 +91,7 @@
 		} finally {
 			checkingSize = false;
 		}
-		if (size > LARGE_DOWNLOAD_BYTES) largeDownload = { url, size };
+		if (size === null || size > LARGE_DOWNLOAD_BYTES) largeDownload = { url, size };
 		else startDownload(url);
 	};
 
@@ -149,7 +151,11 @@
 							aria-label={$i18n.t('Download as zip')}
 							on:click={() => download(node.path, true)}
 						>
-							<ArrowDownTray className="size-3.5" />
+							{#if checkingSize}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ArrowDownTray className="size-3.5" />
+							{/if}
 						</button>
 					</Tooltip>
 				</div>
@@ -197,7 +203,11 @@
 							aria-label={$i18n.t('Download')}
 							on:click={() => download(file.path, true)}
 						>
-							<ArrowDownTray className="size-3.5" />
+							{#if checkingSize}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ArrowDownTray className="size-3.5" />
+							{/if}
 						</button>
 					</Tooltip>
 				{/if}
@@ -276,7 +286,11 @@
 							aria-label={$i18n.t('Download')}
 							on:click={() => download(file.path, false, file.size)}
 						>
-							<ArrowDownTray className="size-3.5" />
+							{#if checkingSize}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ArrowDownTray className="size-3.5" />
+							{/if}
 						</button>
 					</Tooltip>
 				{:else if !file.is_dir}
@@ -287,7 +301,11 @@
 							aria-label={$i18n.t('Download')}
 							on:click={() => download(file.path, false, file.size)}
 						>
-							<ArrowDownTray className="size-3.5" />
+							{#if checkingSize}
+								<Spinner className="size-3.5" />
+							{:else}
+								<ArrowDownTray className="size-3.5" />
+							{/if}
 						</button>
 					</Tooltip>
 				{/if}
@@ -308,9 +326,11 @@
 <ConfirmDialog
 	show={largeDownload !== null}
 	title={$i18n.t('Large download')}
-	message={$i18n.t('This download is {{size}}. It may take a while. Download anyway?', {
-		size: formatFileSize(largeDownload?.size)
-	})}
+	message={largeDownload?.size == null
+		? $i18n.t('This folder has too many files to size. It may take a while. Download anyway?')
+		: $i18n.t('This download is {{size}}. It may take a while. Download anyway?', {
+				size: formatFileSize(largeDownload.size)
+			})}
 	confirmLabel={$i18n.t('Download')}
 	on:confirm={() => {
 		if (largeDownload) startDownload(largeDownload.url);

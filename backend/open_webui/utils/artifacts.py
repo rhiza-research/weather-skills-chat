@@ -1136,14 +1136,60 @@ def normalize_sandbox_relpath(path: str) -> str:
     return Path(*parts).as_posix()
 
 
+# A failed or unavailable juicefs summary falls back to a walk only up to this
+# many files: the walk managed about 1,500 files a second on staging.
+SIZE_WALK_MAX_FILES = 5000
+SIZE_SUMMARY_TIMEOUT_SECONDS = 60
+
+
+class TooManyFilesToSize(ValueError):
+    """A folder too large to walk, and juicefs could not size it."""
+
+
+def _juicefs_tree_size(path: Path) -> int | None:
+    """``juicefs summary`` reads the metadata server: 3 s for a 98k-file folder
+    on staging, where a walk took 66 s. It counts disk usage (4 KiB blocks per
+    file and folder), so it reads about 1% above the bytes. None on failure."""
+    if not shutil.which("juicefs"):
+        return None
+    try:
+        result = subprocess.run(
+            ["juicefs", "summary", "--depth", "0", "--csv", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=SIZE_SUMMARY_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        log.warning("juicefs summary of %s timed out", path)
+        return None
+    if result.returncode != 0:
+        log.warning("juicefs summary of %s failed: %s", path, result.stderr.strip())
+        return None
+    # PATH,SIZE,DIRS,FILES header, then the root row.
+    try:
+        return int(result.stdout.splitlines()[1].rsplit(",", 3)[1])
+    except (IndexError, ValueError):
+        log.warning("juicefs summary of %s printed %r", path, result.stdout)
+        return None
+
+
 def sandbox_tree_size(path: Path) -> int:
+    """Bytes in a file or folder. Raises TooManyFilesToSize for a folder over
+    SIZE_WALK_MAX_FILES that juicefs could not size."""
     if path.is_file():
         return path.stat().st_size
-    total = 0
-    # One lstat per file: a Zarr store can hold millions of chunks on JuiceFS.
+    size = _juicefs_tree_size(path)
+    if size is not None:
+        return size
+    total = files = 0
     # os.walk does not follow symlinked folders; symlinked files are skipped.
     for dirpath, _, filenames in os.walk(path):
         for name in filenames:
+            files += 1
+            if files > SIZE_WALK_MAX_FILES:
+                raise TooManyFilesToSize(
+                    f"{path.name} has over {SIZE_WALK_MAX_FILES} files, too many to size"
+                )
             st = os.lstat(os.path.join(dirpath, name))
             if stat.S_ISREG(st.st_mode):
                 total += st.st_size

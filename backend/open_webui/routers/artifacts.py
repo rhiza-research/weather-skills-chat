@@ -43,6 +43,7 @@ from open_webui.utils.artifacts import (
     pack_sandbox_archive,
     resolve_in_sandbox,
     sandbox_tree_size,
+    TooManyFilesToSize,
     write_bytes,
 )
 from open_webui.utils.auth import get_verified_user
@@ -169,7 +170,8 @@ def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_u
 
 @router.get("/{chat_id}/artifacts/size")
 def get_artifact_size(chat_id: str, path: str, user=Depends(get_verified_user)):
-    """Total bytes of a file or folder, so the browser can warn before a big download."""
+    """Total bytes of a file or folder, so the browser can warn before a big
+    download; null when it is too large to size."""
     require_chat_files_read(chat_id, user)
     try:
         target = resolve_in_sandbox(chat_id, normalize_sandbox_relpath(path))
@@ -179,7 +181,10 @@ def get_artifact_size(chat_id: str, path: str, user=Depends(get_verified_user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
         )
-    return {"size": sandbox_tree_size(target)}
+    try:
+        return {"size": sandbox_tree_size(target)}
+    except TooManyFilesToSize:
+        return {"size": None}
 
 
 @router.get("/{chat_id}/artifacts/content")
