@@ -85,6 +85,16 @@ export const artifactPathForChat = (href: string, chatId: string | null | undefi
 export const getArtifactArchiveUrl = (chatId: string, path: string) =>
 	`${artifactsBase(chatId)}/archive?path=${encodeURIComponent(path)}&format=zip`;
 
+/** Total bytes of a file or folder, to warn before a large download. */
+export const getArtifactSize = async (token: string, chatId: string, path: string) => {
+	const res = await fetch(
+		`${artifactsBase(chatId)}/size?path=${encodeURIComponent(path)}`,
+		{ headers: { authorization: `Bearer ${token}` } }
+	);
+	if (!res.ok) throw await parseApiError(res);
+	return (await res.json()).size as number;
+};
+
 export const getZarrMeta = async (token: string, chatId: string, path: string) => {
 	const res = await fetch(
 		`${artifactsBase(chatId)}/zarr/meta?path=${encodeURIComponent(path)}`,

@@ -3,6 +3,7 @@ import hashlib
 import io
 import logging
 import re
+import sys
 import zlib
 from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
@@ -38,9 +39,10 @@ from open_webui.utils.artifacts import (
     extract_sandbox_archive,
     is_zarr_store,
     list_artifacts_async,
+    normalize_sandbox_relpath,
     pack_sandbox_archive,
-    pack_sandbox_zip,
     resolve_in_sandbox,
+    sandbox_tree_size,
     write_bytes,
 )
 from open_webui.utils.auth import get_verified_user
@@ -81,6 +83,58 @@ async def artifact_link_exception_handler(request: Request, exc):
     return await http_exception_handler(request, exc)
 
 
+ZIP_SCRIPT = Path(__file__).resolve().parent.parent / "utils" / "zip_stream.py"
+ZIP_CHUNK_BYTES = 1024 * 1024
+# Each download zips in its own process (about 20 MB plus 500 bytes per file);
+# this caps how many run at once per server process.
+ZIP_SLOTS = asyncio.Semaphore(10)
+
+
+async def _zip_stream(args: list[str]):
+    async with ZIP_SLOTS:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-I",
+            str(ZIP_SCRIPT),
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+        )
+        try:
+            while chunk := await proc.stdout.read(ZIP_CHUNK_BYTES):
+                yield chunk
+            if await proc.wait():
+                # Aborts the response, so the browser marks the download failed.
+                raise RuntimeError(f"zip_stream exited with {proc.returncode}")
+        finally:
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+
+
+def _zip_response(chat_id: str, paths: list[str], filename: str) -> StreamingResponse:
+    """Stream a zip of sandbox files/folders (zarr internals included).
+
+    Memory stays flat whatever the size: the zip is written as it is sent.
+    """
+    args: list[str] = []
+    try:
+        for rel in dict.fromkeys(normalize_sandbox_relpath(p) for p in paths):
+            target = resolve_in_sandbox(chat_id, rel)
+            if not target.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Artifact not found: {rel}",
+                )
+            args += [rel, str(target)]
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return StreamingResponse(
+        _zip_stream(args),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{chat_id}/artifacts")
 async def get_artifacts(
     chat_id: str,
@@ -113,6 +167,21 @@ def get_artifact_provenance(chat_id: str, path: str, user=Depends(get_verified_u
         )
 
 
+@router.get("/{chat_id}/artifacts/size")
+def get_artifact_size(chat_id: str, path: str, user=Depends(get_verified_user)):
+    """Total bytes of a file or folder, so the browser can warn before a big download."""
+    require_chat_files_read(chat_id, user)
+    try:
+        target = resolve_in_sandbox(chat_id, normalize_sandbox_relpath(path))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not target.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
+        )
+    return {"size": sandbox_tree_size(target)}
+
+
 @router.get("/{chat_id}/artifacts/content")
 def get_artifact_content(
     chat_id: str, path: str, request: Request, user=Depends(get_verified_user)
@@ -123,22 +192,10 @@ def get_artifact_content(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if is_zarr_store(target) or target.is_dir():
-        try:
-            data = pack_sandbox_zip(chat_id, [path])
-        except FileNotFoundError:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         name = target.name.rstrip("/") or "artifacts"
         if not name.endswith(".zip"):
             name = f"{name}.zip"
-        return StreamingResponse(
-            io.BytesIO(data),
-            media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="{name}"'},
-        )
+        return _zip_response(chat_id, [path], name)
     if not target.is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND
@@ -296,30 +353,25 @@ def get_artifact_archive(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="format must be tar.gz or zip",
         )
-    try:
-        data = (
-            pack_sandbox_zip(chat_id, path)
-            if fmt == "zip"
-            else pack_sandbox_archive(chat_id, path)
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
     ext = ".zip" if fmt == "zip" else ".tar.gz"
-    media_type = "application/zip" if fmt == "zip" else "application/gzip"
     if len(path) == 1:
         name = path[0].rstrip("/").split("/")[-1] or "artifacts"
         if not name.endswith(ext):
             name = f"{name}{ext}"
-        disposition = f'attachment; filename="{name}"'
     else:
-        disposition = f'attachment; filename="artifacts{ext}"'
+        name = f"artifacts{ext}"
+    if fmt == "zip":
+        return _zip_response(chat_id, path, name)
+    try:
+        data = pack_sandbox_archive(chat_id, path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return StreamingResponse(
         io.BytesIO(data),
-        media_type=media_type,
-        headers={"Content-Disposition": disposition},
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 

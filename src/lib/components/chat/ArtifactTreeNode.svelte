@@ -17,13 +17,15 @@
 	import ArrowDownTray from '../icons/ArrowDownTray.svelte';
 	import DocumentDuplicate from '../icons/DocumentDuplicate.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
+	import ConfirmDialog from '../common/ConfirmDialog.svelte';
 	import {
 		getArtifactArchiveUrl,
 		getArtifactContentUrl,
+		getArtifactSize,
 		getArtifactViewUrl
 	} from '$lib/apis/artifacts';
-	import { chatId } from '$lib/stores';
-	import { copyToClipboard } from '$lib/utils';
+	import { chatId, user } from '$lib/stores';
+	import { copyToClipboard, formatFileSize } from '$lib/utils';
 	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
@@ -58,24 +60,37 @@
 		dispatch('toggle', { path: node.path });
 	};
 
-	const downloadFile = async (path: string, name: string) => {
+	// Above this, ask before downloading (and, for folders, before zipping).
+	const LARGE_DOWNLOAD_BYTES = 1024 * 1024 * 1024;
+	let largeDownload: { url: string; size: number } | null = null;
+	// Sizing a big Zarr store can take seconds; ignore clicks until it answers.
+	let checkingSize = false;
+
+	const startDownload = (url: string) => {
+		// A link, not fetch: the browser saves the stream to disk as it arrives.
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = '';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	/** Folders and Zarr stores download as a zip. Size is fetched when not known. */
+	const download = async (path: string, zip: boolean, size: number | null = null) => {
+		const url = zip ? getArtifactArchiveUrl($chatId, path) : getArtifactContentUrl($chatId, path);
+		if (checkingSize) return;
+		checkingSize = true;
 		try {
-			const res = await fetch(getArtifactContentUrl($chatId, path), {
-				headers: { authorization: `Bearer ${localStorage.token}` }
-			});
-			if (!res.ok) throw new Error(`download failed: ${res.status}`);
-			const blob = await res.blob();
-			const objectUrl = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = objectUrl;
-			link.download = name || path.split('/').pop() || 'download';
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(objectUrl);
+			size ??= await getArtifactSize(localStorage.token, $chatId, path);
 		} catch (e) {
-			console.error(e);
+			toast.error(`${e}`);
+			return;
+		} finally {
+			checkingSize = false;
 		}
+		if (size > LARGE_DOWNLOAD_BYTES) largeDownload = { url, size };
+		else startDownload(url);
 	};
 
 	// HTML: the full-screen viewer's "Open in new tab" link. Images: the file itself.
@@ -109,20 +124,37 @@
 
 {#if navigable}
 	<div class="flex flex-col">
-		<button
-			type="button"
-			class="flex items-center gap-1 w-full text-left text-xs px-1 py-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-			style={pad}
-			on:click={toggle}
-		>
-			{#if open}
-				<ChevronDown className="size-3 shrink-0 text-gray-400" />
-			{:else}
-				<ChevronRight className="size-3 shrink-0 text-gray-400" />
+		<div class="flex items-center gap-2 rounded-md hover:bg-black/5 dark:hover:bg-white/5">
+			<button
+				type="button"
+				class="flex items-center gap-1 flex-1 min-w-0 text-left text-xs px-1 py-1"
+				style={pad}
+				on:click={toggle}
+			>
+				{#if open}
+					<ChevronDown className="size-3 shrink-0 text-gray-400" />
+				{:else}
+					<ChevronRight className="size-3 shrink-0 text-gray-400" />
+				{/if}
+				<span class="truncate min-w-0" title={node.name}>{node.name}</span>
+				<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
+			</button>
+			<!-- Zipping needs a sign-in: share-link visitors may be signed out. -->
+			{#if $user}
+				<div class="shrink-0 pr-1">
+					<Tooltip content={$i18n.t('Download as zip')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download as zip')}
+							on:click={() => download(node.path, true)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
+				</div>
 			{/if}
-			<span class="truncate min-w-0" title={node.name}>{node.name}</span>
-			<span class="text-gray-400 shrink-0">{kindLabel(file)}</span>
-		</button>
+		</div>
 		{#if open}
 			{#each node.children as child}
 				<svelte:self
@@ -157,15 +189,18 @@
 						</button>
 					</Tooltip>
 				{/if}
-				<Tooltip content={$i18n.t('Download')}>
-					<a
-						class="{iconButton} shrink-0 block"
-						href={getArtifactArchiveUrl($chatId, file.path)}
-						target="_blank"
-						rel="noreferrer"
-						aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
-					>
-				</Tooltip>
+				{#if $user}
+					<Tooltip content={$i18n.t('Download')}>
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() => download(file.path, true)}
+						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
+					</Tooltip>
+				{/if}
 			</div>
 		</div>
 		{#if crumbs.length}
@@ -239,36 +274,21 @@
 							type="button"
 							class={iconButton}
 							aria-label={$i18n.t('Download')}
-							on:click={() => downloadFile(file.path, node.name)}
-						>
-							<ArrowDownTray className="size-3.5" />
-						</button>
-					</Tooltip>
-				{:else if file.kind === 'zarr'}
-					<Tooltip content={$i18n.t('Download')}>
-						<button
-							type="button"
-							class={iconButton}
-							aria-label={$i18n.t('Download')}
-							on:click={() =>
-								downloadFile(
-									file.path,
-									node.name.endsWith('.zip') ? node.name : `${node.name}.zip`
-								)}
+							on:click={() => download(file.path, false, file.size)}
 						>
 							<ArrowDownTray className="size-3.5" />
 						</button>
 					</Tooltip>
 				{:else if !file.is_dir}
 					<Tooltip content={$i18n.t('Download')}>
-						<a
-							class="{iconButton} block"
-							href={getArtifactContentUrl($chatId, file.path)}
-							download={node.name}
-							target="_blank"
-							rel="noreferrer"
-							aria-label={$i18n.t('Download')}><ArrowDownTray className="size-3.5" /></a
+						<button
+							type="button"
+							class={iconButton}
+							aria-label={$i18n.t('Download')}
+							on:click={() => download(file.path, false, file.size)}
 						>
+							<ArrowDownTray className="size-3.5" />
+						</button>
 					</Tooltip>
 				{/if}
 			</div>
@@ -284,3 +304,17 @@
 		{/if}
 	</div>
 {/if}
+
+<ConfirmDialog
+	show={largeDownload !== null}
+	title={$i18n.t('Large download')}
+	message={$i18n.t('This download is {{size}}. It may take a while. Download anyway?', {
+		size: formatFileSize(largeDownload?.size)
+	})}
+	confirmLabel={$i18n.t('Download')}
+	on:confirm={() => {
+		if (largeDownload) startDownload(largeDownload.url);
+		largeDownload = null;
+	}}
+	on:cancel={() => (largeDownload = null)}
+/>

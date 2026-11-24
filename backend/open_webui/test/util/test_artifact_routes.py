@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 import io
+import os
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -126,6 +128,7 @@ class ArtifactRoutesTest(unittest.TestCase):
             artifacts_router.get_artifact_content,
             artifacts_router.view_html_artifact,
             artifacts_router.get_artifact_archive,
+            artifacts_router.get_artifact_size,
             artifacts_router.zarr_meta,
         ):
             self.assertFalse(inspect.iscoroutinefunction(handler), handler.__name__)
@@ -139,6 +142,38 @@ class ArtifactRoutesTest(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         res = self.client.get(self.url("/view/plots/map.html"))
         self.assertEqual(res.status_code, 200)
+
+    def test_folders_zip_in_a_child_process_without_symlinks(self):
+        root = self.artifacts / CHAT
+        (root / "plots" / "k.zarr").mkdir()
+        (root / "plots" / "k.zarr" / ".zgroup").write_text("{}")
+        (root / "plots" / "leak").symlink_to(root / "notes.csv")
+        for url in ("/content?path=plots", "/archive?path=plots&format=zip"):
+            res = self.client.get(self.url(url))
+            self.assertEqual(res.status_code, 200)
+            self.assertIn('filename="plots.zip"', res.headers["content-disposition"])
+            with zipfile.ZipFile(io.BytesIO(res.content)) as zf:
+                self.assertEqual(
+                    sorted(zf.namelist()),
+                    ["plots/k.zarr/.zgroup", "plots/map.html", "plots/map.png"],
+                )
+                self.assertEqual(zf.read("plots/map.png"), PNG)
+        # Text is deflated; data that does not shrink is stored as is.
+        (root / "plots" / "table.csv").write_text("2024-01-01,1.5\n" * 10_000)
+        (root / "plots" / "chunk").write_bytes(os.urandom(100_000))
+        res = self.client.get(self.url("/content?path=plots"))
+        with zipfile.ZipFile(io.BytesIO(res.content)) as zf:
+            kinds = {i.filename: i.compress_type for i in zf.infolist()}
+            self.assertEqual(kinds["plots/table.csv"], zipfile.ZIP_DEFLATED)
+            self.assertEqual(kinds["plots/chunk"], zipfile.ZIP_STORED)
+            self.assertIsNone(zf.testzip())
+        res = self.client.get(self.url("/archive?path=missing&format=zip"))
+        self.assertEqual(res.status_code, 404)
+
+    def test_size_totals_a_folder(self):
+        res = self.client.get(self.url("/size?path=plots"))
+        self.assertEqual(res.json(), {"size": len("<html></html>") + len(PNG)})
+        self.assertEqual(self.client.get(self.url("/size?path=nope")).status_code, 404)
 
     def test_unchanged_file_answers_304_without_a_body(self):
         first = self.client.get(self.url("/content?path=plots/map.png"))
