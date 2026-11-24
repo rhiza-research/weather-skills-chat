@@ -3170,6 +3170,8 @@ async def process_chat_response(
                         break
 
                 if len(tool_calls) > 0 and tool_call_retries >= MAX_TOOL_CALL_RETRIES:
+                    # Lets a scheduled task's run end as an error, not as finished.
+                    metadata["tool_round_limit"] = MAX_TOOL_CALL_RETRIES
                     note_loop_exit(
                         "tool_retry_limit",
                         limit=MAX_TOOL_CALL_RETRIES,
