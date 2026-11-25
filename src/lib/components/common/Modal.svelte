@@ -135,7 +135,7 @@
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"
-			class="m-auto max-w-full outline-none {sizeToWidth(size)} {size !== 'full'
+			class="m-auto max-w-full text-strong outline-none {sizeToWidth(size)} {size !== 'full'
 				? 'mx-2'
 				: ''} shadow-3xl min-h-fit scrollbar-hidden {className}"
 			in:flyAndScale
