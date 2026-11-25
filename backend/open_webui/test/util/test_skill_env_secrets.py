@@ -11,7 +11,9 @@ from unittest.mock import patch
 from open_webui.utils.skill_runtime import (
     _redact_skill_result,
     normalize_env_secret_names,
+    prepare_skill_run,
     run_skill,
+    unread_env_names,
 )
 
 
@@ -80,6 +82,34 @@ class NormalizeEnvSecretNamesTest(unittest.TestCase):
             normalize_env_secret_names(["1LEADING"])
         with self.assertRaises(ValueError):
             normalize_env_secret_names(["HAS SPACE"])
+
+
+class UnreadEnvNamesTest(unittest.TestCase):
+    def skill(self, frontmatter: str) -> Path:
+        path = Path(tempfile.mkdtemp())
+        (path / "SKILL.md").write_text(f"---\nname: s\n{frontmatter}---\n")
+        return path
+
+    def test_flags_names_the_skill_never_mentions(self):
+        skill = self.skill(
+            'compatibility: "Optional OTHER."\nmetadata:\n  required-env: "A B"\n'
+        )
+        self.assertEqual(
+            unread_env_names(skill, ["A", "OTHER", "OTH", "WRONG"]),
+            (["A", "B"], ["OTH", "WRONG"]),
+        )
+        for unrestricted in ("", 'metadata: "x"\n'):
+            self.assertEqual(
+                unread_env_names(self.skill(unrestricted), ["WRONG"]), ([], [])
+            )
+
+    def test_run_rejects_a_secret_the_skill_does_not_read(self):
+        skill = self.skill('metadata:\n  required-env: "RIGHT"\n')
+        (skill / "scripts").mkdir()
+        (skill / "scripts" / "s.py").write_text("")
+        run = prepare_skill_run(skill, env_secrets=["WRONG"])
+        self.assertFalse(run["ok"])
+        self.assertIn("reads RIGHT, not WRONG", run["stderr"])
 
 
 class RedactSkillResultTest(unittest.TestCase):
