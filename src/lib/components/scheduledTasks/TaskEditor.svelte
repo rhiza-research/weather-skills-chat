@@ -399,7 +399,7 @@
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 		{#if canManage}
 			<button
-				class="rounded-lg bg-inverse text-on-inverse px-3 py-1.5 text-sm disabled:opacity-50"
+				class="btn-primary rounded-lg px-3 disabled:opacity-50"
 				type="submit"
 				disabled={saving}
 			>

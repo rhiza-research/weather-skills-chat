@@ -480,7 +480,7 @@
 
 			<div>
 				<button
-					class="px-3 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-sm flex items-center gap-1.5"
+					class="btn-primary px-3 flex items-center gap-1.5"
 					type="button"
 					on:click={() => {
 						inviteEmail = '';
@@ -789,7 +789,7 @@
 				<div class="flex justify-end items-center gap-1 shrink-0 flex-wrap">
 					{#if row.kind === 'invite'}
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse whitespace-nowrap"
+							class="btn-primary rounded-lg text-xs px-2 whitespace-nowrap"
 							type="button"
 							on:click={() => resendInvite(row.invite.id)}
 						>
@@ -804,7 +804,7 @@
 						</button>
 					{:else if row.kind === 'workspace' && row.active === false}
 						<button
-							class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse disabled:opacity-50 whitespace-nowrap"
+							class="btn-primary rounded-lg text-xs px-2 disabled:opacity-50 whitespace-nowrap"
 							disabled={activating === row.id}
 							on:click={() => activate(row.id)}
 						>
@@ -815,7 +815,7 @@
 					{#if row.person}
 						{#if row.person.role === 'pending'}
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse"
+								class="btn-primary rounded-lg text-xs px-2"
 								on:click={() => updateRoleHandler(row.person.id, 'user')}
 							>
 								{$i18n.t('Activate')}
@@ -892,7 +892,7 @@
 				<div class="ml-10 mt-1 mb-2 rounded-lg bg-surface/60 px-3 py-2">
 					<div class="flex justify-end py-1">
 						<button
-							class="px-2.5 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-xs flex items-center gap-1.5"
+							class="btn-primary rounded-lg px-2.5 text-xs flex items-center gap-1.5"
 							type="button"
 							on:click={() => {
 								showAddMember = !showAddMember;
@@ -963,7 +963,7 @@
 							<span class="text-xs text-muted">{$i18n.t('Admin')}</span>
 						{/if}
 						<button
-							class="text-xs px-2.5 py-1.5 rounded-lg bg-inverse text-on-inverse disabled:opacity-50"
+							class="btn-primary rounded-lg text-xs px-2.5 disabled:opacity-50"
 							type="submit"
 							disabled={addingMember || !memberUserId}
 						>

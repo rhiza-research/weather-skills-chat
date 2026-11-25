@@ -194,7 +194,7 @@
 				</select>
 			{/if}
 			<button
-				class="px-4 py-2 text-sm rounded-lg bg-inverse text-on-inverse"
+				class="btn-primary rounded-lg py-2"
 				type="submit"
 			>
 				{$i18n.t('Save')}

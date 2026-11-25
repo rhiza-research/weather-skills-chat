@@ -185,7 +185,7 @@
 					<div></div>
 				{/if}
 				<button
-					class="px-4 py-2 text-sm rounded-lg bg-inverse text-on-inverse"
+					class="btn-primary rounded-lg py-2"
 					type="submit"
 				>
 					{$i18n.t('Save')}
@@ -234,7 +234,7 @@
 						></textarea>
 						<div class="flex gap-2">
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse"
+								class="btn-primary rounded-lg text-xs px-2"
 								on:click={() => saveEdit(preference)}
 							>
 								{$i18n.t('Save')}

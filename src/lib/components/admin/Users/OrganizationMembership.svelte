@@ -241,7 +241,7 @@
 			bind:value={search}
 		/>
 		<button
-			class="px-3 py-1.5 rounded-lg bg-inverse text-on-inverse transition font-medium text-sm flex items-center gap-1.5"
+			class="btn-primary px-3 flex items-center gap-1.5"
 			type="button"
 			on:click={openInvite}
 		>
@@ -441,7 +441,7 @@
 			<div class="text-muted">—</div>
 			<div class="flex justify-end items-center gap-1 flex-wrap">
 				<button
-					class="text-xs px-2 py-1.5 rounded-lg bg-inverse text-on-inverse whitespace-nowrap"
+					class="btn-primary rounded-lg text-xs px-2 whitespace-nowrap"
 					type="button"
 					on:click={() => resendInvite(row.invite.id)}
 				>

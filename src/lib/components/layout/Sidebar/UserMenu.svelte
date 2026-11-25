@@ -228,7 +228,7 @@
 								bind:value={requestDescription}
 							/>
 							<button
-								class="self-start rounded-lg bg-inverse text-on-inverse px-2.5 py-1 text-xs"
+								class="btn-primary rounded-lg self-start px-2.5 py-1 text-xs"
 								type="submit"
 								disabled={requesting}
 							>
