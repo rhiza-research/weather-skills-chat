@@ -1,4 +1,7 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import Info from '$lib/components/icons/Info.svelte';
+	import PlusSolid20 from '$lib/components/icons/PlusSolid20.svelte';
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
 
@@ -67,6 +70,7 @@
 	const updateBanners = async () => {
 		_banners.set(await setBanners(localStorage.token, banners));
 	};
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 {#if taskConfig}
@@ -77,11 +81,11 @@
 			dispatch('save');
 		}}
 	>
-		<div class="  overflow-y-scroll scrollbar-hidden h-full pr-1.5">
-			<div class="mb-3.5">
-				<div class=" mb-2.5 text-base font-medium">{$i18n.t('Tasks')}</div>
+		<div class="  overflow-y-scroll scrollbar-hidden h-full">
+			<div class="mb-3">
+				<h3 class="section-title">{$i18n.t('Tasks')}</h3>
 
-				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+				<hr class="border-line my-2" />
 
 				<div class=" mb-1 font-medium flex items-center">
 					<div class=" text-xs mr-1">{$i18n.t('Set Task Model')}</div>
@@ -90,20 +94,7 @@
 							'A task model is used when performing tasks such as generating titles for chats and web search queries'
 						)}
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="1.5"
-							stroke="currentColor"
-							class="size-3.5"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-							/>
-						</svg>
+						<Info className="size-3.5" />
 					</Tooltip>
 				</div>
 
@@ -111,7 +102,7 @@
 					<div class="flex-1">
 						<div class=" text-xs mb-1">{$i18n.t('Local Models')}</div>
 						<select
-							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={taskConfig.TASK_MODEL}
 							placeholder={$i18n.t('Select a model')}
 						>
@@ -127,7 +118,7 @@
 					<div class="flex-1">
 						<div class=" text-xs mb-1">{$i18n.t('External Models')}</div>
 						<select
-							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={taskConfig.TASK_MODEL_EXTERNAL}
 							placeholder={$i18n.t('Select a model')}
 						>
@@ -141,17 +132,13 @@
 					</div>
 				</div>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Title Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Title Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_TITLE_GENERATION} />
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_TITLE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">{$i18n.t('Title Generation Prompt')}</div>
+						<div class="field-label">{$i18n.t('Title Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -167,17 +154,13 @@
 					</div>
 				{/if}
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Tags Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Tags Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_TAGS_GENERATION} />
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_TAGS_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">{$i18n.t('Tags Generation Prompt')}</div>
+						<div class="field-label">{$i18n.t('Tags Generation Prompt')}</div>
 
 						<Tooltip
 							content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -193,24 +176,16 @@
 					</div>
 				{/if}
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Retrieval Query Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Retrieval Query Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_RETRIEVAL_QUERY_GENERATION} />
-				</div>
+				</SettingRow>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Web Search Query Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Web Search Query Generation')}>
 					<Switch bind:state={taskConfig.ENABLE_SEARCH_QUERY_GENERATION} />
-				</div>
+				</SettingRow>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Query Generation Prompt')}</div>
+					<div class="field-label">{$i18n.t('Query Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -225,19 +200,15 @@
 					</Tooltip>
 				</div>
 
-				<div class="mb-2.5 flex w-full items-center justify-between">
-					<div class=" self-center text-xs font-medium">
-						{$i18n.t('Autocomplete Generation')}
-					</div>
-
+				<SettingRow label={$i18n.t('Autocomplete Generation')}>
 					<Tooltip content={$i18n.t('Enable autocomplete generation for chat messages')}>
 						<Switch bind:state={taskConfig.ENABLE_AUTOCOMPLETE_GENERATION} />
 					</Tooltip>
-				</div>
+				</SettingRow>
 
 				{#if taskConfig.ENABLE_AUTOCOMPLETE_GENERATION}
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium">
+						<div class="field-label">
 							{$i18n.t('Autocomplete Generation Input Max Length')}
 						</div>
 
@@ -246,7 +217,7 @@
 							placement="top-start"
 						>
 							<input
-								class="w-full outline-hidden bg-transparent"
+								class="field"
 								bind:value={taskConfig.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH}
 								placeholder={$i18n.t('-1 for no limit, or a positive integer for a specific limit')}
 							/>
@@ -255,7 +226,7 @@
 				{/if}
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Image Prompt Generation Prompt')}</div>
+					<div class="field-label">{$i18n.t('Image Prompt Generation Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -271,7 +242,7 @@
 				</div>
 
 				<div class="mb-2.5">
-					<div class=" mb-1 text-xs font-medium">{$i18n.t('Tools Function Calling Prompt')}</div>
+					<div class="field-label">{$i18n.t('Tools Function Calling Prompt')}</div>
 
 					<Tooltip
 						content={$i18n.t('Leave empty to use the default prompt, or enter a custom prompt')}
@@ -287,10 +258,10 @@
 				</div>
 			</div>
 
-			<div class="mb-3.5">
-				<div class=" mb-2.5 text-base font-medium">{$i18n.t('UI')}</div>
+			<div class="mb-3">
+				<h3 class="section-title">{$i18n.t('UI')}</h3>
 
-				<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+				<hr class="border-line my-2" />
 
 				<div class="  {banners.length > 0 ? ' mb-3' : ''}">
 					<div class="mb-2.5 flex w-full justify-between">
@@ -299,7 +270,7 @@
 						</div>
 
 						<button
-							class="p-1 px-3 text-xs flex rounded-sm transition"
+							class="btn-secondary"
 							type="button"
 							on:click={() => {
 								if (banners.length === 0 || banners.at(-1).content !== '') {
@@ -317,16 +288,7 @@
 								}
 							}}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
-								/>
-							</svg>
+							<PlusSolid20 className="size-4" />
 						</button>
 					</div>
 
@@ -334,7 +296,7 @@
 						{#each banners as banner, bannerIdx}
 							<div class=" flex justify-between">
 								<div
-									class="flex flex-row flex-1 border rounded-xl border-gray-100 dark:border-gray-850"
+									class="flex flex-row flex-1 border rounded-xl border-line"
 								>
 									<Dropdown>
 										<div
@@ -349,7 +311,7 @@
 
 										<div slot="content">
 											<DropdownMenu.Content
-												class="rounded-lg p-1 z-50 bg-white dark:bg-gray-850 shadow-lg flex flex-col gap-1"
+												class="rounded-lg p-1 z-50 bg-panel shadow-lg flex flex-col gap-1"
 												sideOffset={4}
 												align="start"
 											>
@@ -380,12 +342,12 @@
 									/>
 
 									<label
-										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+										class="flex items-center gap-1.5 pr-3 text-xs text-muted whitespace-nowrap"
 									>
 										{$i18n.t('Expires at')}
 										<input
 											type="date"
-											class="py-1.5 text-xs text-gray-800 dark:text-gray-100 bg-transparent outline-hidden"
+											class="py-1.5 text-xs text-strong bg-transparent outline-hidden"
 											value={banner.expires_at
 												? dayjs.unix(banner.expires_at).format('YYYY-MM-DD')
 												: ''}
@@ -397,7 +359,7 @@
 									</label>
 
 									<label
-										class="flex items-center gap-1.5 pr-3 text-xs text-gray-500 whitespace-nowrap"
+										class="flex items-center gap-1.5 pr-3 text-xs text-muted whitespace-nowrap"
 									>
 										{$i18n.t('Dismissible')}
 										<Switch bind:state={banner.dismissible} />
@@ -412,16 +374,7 @@
 										banners = banners;
 									}}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-										/>
-									</svg>
+									<XMarkSolid className="size-4" />
 								</button>
 							</div>
 						{/each}
@@ -436,7 +389,7 @@
 							</div>
 
 							<button
-								class="p-1 px-3 text-xs flex rounded-sm transition"
+								class="btn-secondary"
 								type="button"
 								on:click={() => {
 									if (promptSuggestions.length === 0 || promptSuggestions.at(-1).content !== '') {
@@ -444,16 +397,7 @@
 									}
 								}}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-									class="w-4 h-4"
-								>
-									<path
-										d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
-									/>
-								</svg>
+								<PlusSolid20 className="size-4" />
 							</button>
 						</div>
 						<div class="grid lg:grid-cols-2 flex-col gap-1.5">
@@ -462,22 +406,22 @@
 									class=" flex border border-gray-100 dark:border-none dark:bg-gray-850 rounded-xl py-1.5"
 								>
 									<div class="flex flex-col flex-1 pl-1">
-										<div class="flex border-b border-gray-100 dark:border-gray-850 w-full">
+										<div class="flex border-b border-line w-full">
 											<input
-												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class="px-3 py-1.5 text-xs field-bare border-r border-line"
 												placeholder={$i18n.t('Title (e.g. Tell me a fun fact)')}
 												bind:value={prompt.title[0]}
 											/>
 
 											<input
-												class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class="px-3 py-1.5 text-xs field-bare border-r border-line"
 												placeholder={$i18n.t('Subtitle (e.g. about the Roman Empire)')}
 												bind:value={prompt.title[1]}
 											/>
 										</div>
 
 										<textarea
-											class="px-3 py-1.5 text-xs w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850 resize-none"
+											class="px-3 py-1.5 text-xs field-bare border-r border-line resize-none"
 											placeholder={$i18n.t(
 												'Prompt (e.g. Tell me a fun fact about the Roman Empire)'
 											)}
@@ -494,16 +438,7 @@
 											promptSuggestions = promptSuggestions;
 										}}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											viewBox="0 0 20 20"
-											fill="currentColor"
-											class="w-4 h-4"
-										>
-											<path
-												d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-											/>
-										</svg>
+										<XMarkSolid className="size-4" />
 									</button>
 								</div>
 							{/each}
@@ -521,7 +456,7 @@
 
 		<div class="flex justify-end text-sm font-medium">
 			<button
-				class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+				class="btn-primary"
 				type="submit"
 			>
 				{$i18n.t('Save')}

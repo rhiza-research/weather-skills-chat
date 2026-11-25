@@ -66,6 +66,7 @@
 
 <Tags
 	{tags}
+	className="px-3 py-1.5"
 	on:delete={(e) => {
 		deleteTag(e.detail);
 	}}

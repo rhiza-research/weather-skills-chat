@@ -81,7 +81,7 @@
 				<Collapsible
 					title={null}
 					open={opened[branchIdx] ?? false}
-					buttonClassName="w-full min-w-0 text-[10px] leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+					buttonClassName="w-full min-w-0 text-xs leading-snug text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
 					className="w-full min-w-0"
 					on:change={(e) => {
 						opened[branchIdx] = e.detail;
@@ -101,9 +101,9 @@
 					{/if}
 					<div class="mb-1 pl-1 space-y-1" slot="content">
 						{#if !branch?.steps && loadSteps && failed}
-							<div class="text-[10px] text-gray-400">{$i18n.t('Could not load provenance.')}</div>
+							<div class="text-xs text-muted">{$i18n.t('Could not load provenance.')}</div>
 						{:else if steps.length === 0}
-							<div class="text-[10px] text-gray-400">{$i18n.t('No steps recorded.')}</div>
+							<div class="text-xs text-muted">{$i18n.t('No steps recorded.')}</div>
 						{:else}
 							<ProvenanceSteps {steps} />
 						{/if}

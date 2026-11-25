@@ -112,35 +112,36 @@
 </svelte:head>
 
 <div class="flex flex-col w-full h-screen max-h-[100dvh]">
-	<nav class="px-2.5 pt-1 backdrop-blur-xl">
-		<div class="flex items-center justify-between gap-2">
+	<nav class="page-nav">
+		<div class="flex w-full items-center justify-between gap-2">
 			<div class="flex items-center gap-1 min-w-0">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
-						class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="btn-ghost"
+						aria-label="Toggle Sidebar"
 						on:click={() => showSidebar.set(!$showSidebar)}
 					>
 						<MenuLines />
 					</button>
 				</div>
 				<a
-					class="p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+					class="btn-ghost"
 					href="/scheduled-tasks"
 					aria-label={$i18n.t('Scheduled tasks')}
 				>
 					<ArrowLeft className="size-4" />
 				</a>
-				<div class="text-lg font-medium px-1.5 truncate">
+				<h1 class="text-lg font-medium px-1.5 truncate">
 					{isNew ? $i18n.t('New scheduled task') : (task?.name ?? '')}
-				</div>
+				</h1>
 			</div>
 			{#if task}
 				<div class="flex items-center gap-2 mr-2 text-sm shrink-0">
 					{#if canManage}
-						<button class="text-red-500" on:click={remove}>{$i18n.t('Delete')}</button>
+						<button class="btn-secondary text-red-600 dark:text-red-400" on:click={remove}>{$i18n.t('Delete')}</button>
 					{/if}
 					<button
-						class="rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-3 py-1.5"
+						class="btn-primary"
 						on:click={runNow}
 					>
 						{$i18n.t('Run now')}
@@ -160,7 +161,7 @@
 							className="w-full max-h-72 rounded-xl object-contain"
 						/>
 					{/if}
-					<div class="flex items-center gap-3 text-xs text-gray-500">
+					<div class="flex items-center gap-3 text-xs text-muted">
 						{#if !task.image_updated_at}
 							<TaskImage {task} className="size-10 rounded-lg text-base" />
 						{/if}
@@ -172,7 +173,7 @@
 									)}
 						</span>
 						{#if task.image_updated_at && canManage}
-							<button class="text-gray-500 hover:text-red-500" on:click={removeImage}>
+							<button class="text-muted hover:text-red-500" on:click={removeImage}>
 								{$i18n.t('Remove picture')}
 							</button>
 						{/if}
@@ -196,28 +197,28 @@
 
 			{#if task}
 				<section class="flex flex-col gap-1">
-					<div class="text-xs font-medium text-gray-500">{$i18n.t('Runs')}</div>
+					<div class="text-xs font-medium text-muted">{$i18n.t('Runs')}</div>
 					{#each runs as run (run.id)}
 						<button
-							class="text-left text-sm px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-850 flex justify-between gap-3 disabled:cursor-default"
+							class="text-left text-sm px-2 py-1.5 rounded-xl hover:bg-tint flex justify-between gap-3 disabled:cursor-default"
 							disabled={!run.chat_id}
 							on:click={() => goto(`/c/${run.chat_id}`)}
 						>
 							<span class="min-w-0">
 								<span class={statusClass(run.status)}>{run.status}</span>
 								{#if run.summary}
-									<span class="text-gray-600 dark:text-gray-300"> · {run.summary}</span>
+									<span class="text-body"> · {run.summary}</span>
 								{/if}
 								{#if run.error}
-									<span class="text-gray-500"> · {run.error}</span>
+									<span class="text-muted"> · {run.error}</span>
 								{/if}
 							</span>
-							<span class="text-xs text-gray-400 shrink-0">
+							<span class="text-xs text-muted shrink-0">
 								{run.started_at ? new Date(run.started_at * 1000).toLocaleString() : ''}
 							</span>
 						</button>
 					{:else}
-						<div class="text-xs text-gray-400 px-2">{$i18n.t('No runs yet')}</div>
+						<div class="text-xs text-muted px-2">{$i18n.t('No runs yet')}</div>
 					{/each}
 				</section>
 			{/if}

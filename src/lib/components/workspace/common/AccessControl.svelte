@@ -99,7 +99,7 @@
 
 		<div class="flex gap-2.5 items-center mb-1">
 			<div>
-				<div class=" p-2 bg-black/5 dark:bg-white/5 rounded-full">
+				<div class=" p-2 bg-tint rounded-full">
 					{#if accessControl !== null}
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -107,7 +107,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -122,7 +122,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -165,7 +165,7 @@
 					{/if}
 				</select>
 
-				<div class=" text-xs text-gray-400 font-medium">
+				<div class="text-xs text-muted font-medium">
 					{#if accessControl !== null}
 						{$i18n.t('Only selected users and organizations with permission can access')}
 					{:else}
@@ -221,7 +221,7 @@
 									{/if}
 								</button>
 								<button
-									class=" rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+									class=" rounded-full p-1 hover:bg-tint transition"
 									type="button"
 									on:click={() => {
 										accessControl.read.organization_ids = (
@@ -240,7 +240,7 @@
 					{/each}
 				{:else}
 					<div class="flex items-center justify-center">
-						<div class="text-gray-500 text-xs text-center py-2 px-10">
+						<div class="text-muted text-xs text-center py-2 px-10">
 							{$i18n.t('No organizations with access, add an organization to grant access')}
 						</div>
 					</div>

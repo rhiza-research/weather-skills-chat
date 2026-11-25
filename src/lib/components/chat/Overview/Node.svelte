@@ -26,7 +26,7 @@
 				/>
 				<div class="ml-2">
 					<div class=" flex justify-between items-center">
-						<div class="text-xs text-black dark:text-white font-medium line-clamp-1">
+						<div class="text-xs text-strong font-medium line-clamp-1">
 							{data?.user?.name ?? 'User'}
 						</div>
 					</div>
@@ -34,7 +34,7 @@
 					{#if data?.message?.error}
 						<div class="text-red-500 line-clamp-2 text-xs mt-0.5">{data.message.error.content}</div>
 					{:else}
-						<div class="text-gray-500 line-clamp-2 text-xs mt-0.5">{data.message.content}</div>
+						<div class="text-muted line-clamp-2 text-xs mt-0.5">{data.message.content}</div>
 					{/if}
 				</div>
 			</div>
@@ -47,7 +47,7 @@
 
 				<div class="ml-2">
 					<div class=" flex justify-between items-center">
-						<div class="text-xs text-black dark:text-white font-medium line-clamp-1">
+						<div class="text-xs text-strong font-medium line-clamp-1">
 							{data?.model?.name ?? data?.message?.model ?? 'Assistant'}
 						</div>
 
@@ -71,7 +71,7 @@
 							{data.message.error.content}
 						</div>
 					{:else}
-						<div class="text-gray-500 line-clamp-2 text-xs mt-0.5">{data.message.content}</div>
+						<div class="text-muted line-clamp-2 text-xs mt-0.5">{data.message.content}</div>
 					{/if}
 				</div>
 			</div>

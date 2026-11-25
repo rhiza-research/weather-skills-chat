@@ -1,4 +1,8 @@
 <script lang="ts">
+	import Trash from '$lib/components/icons/Trash.svelte';
+	import ChevronLeft from '$lib/components/icons/ChevronLeft.svelte';
+	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
+	import ClipboardDocument from '$lib/components/icons/ClipboardDocument.svelte';
 	import { toast } from 'svelte-sonner';
 	import dayjs from 'dayjs';
 
@@ -586,14 +590,14 @@
 		<div class="flex-auto w-0 pl-1">
 			<Name>
 				<Tooltip content={model?.name ?? message.model} placement="top-start">
-					<span class="line-clamp-1 text-black dark:text-white">
+					<span class="line-clamp-1 text-strong">
 						{model?.name ?? message.model}
 					</span>
 				</Tooltip>
 
 				{#if message.timestamp}
 					<div
-						class=" self-center text-xs invisible group-hover:visible text-gray-400 font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
+						class="self-center text-xs invisible group-hover:visible text-muted font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 					>
 						<Tooltip content={dayjs(message.timestamp * 1000).format('LLLL')}>
 							<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
@@ -631,7 +635,7 @@
 								<textarea
 									id="message-edit-{message.id}"
 									bind:this={editTextAreaElement}
-									class=" bg-transparent outline-hidden w-full resize-none"
+									class="field-bare resize-none"
 									bind:value={editedContent}
 									on:input={(e) => {
 										e.target.style.height = '';
@@ -655,7 +659,7 @@
 									<div>
 										<button
 											id="save-new-message-button"
-											class=" px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition rounded-3xl"
+											class="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-line text-body transition rounded-3xl"
 											on:click={() => {
 												saveAsCopyHandler();
 											}}
@@ -667,7 +671,7 @@
 									<div class="flex space-x-1.5">
 										<button
 											id="close-edit-message-button"
-											class="px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-100 text-gray-800 dark:text-gray-100 transition rounded-3xl"
+											class="px-4 py-2 bg-page hover:bg-gray-100 text-strong transition rounded-3xl"
 											on:click={() => {
 												cancelEditMessage();
 											}}
@@ -677,7 +681,7 @@
 
 										<button
 											id="confirm-edit-message-button"
-											class=" px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
+											class="px-4 py-2 bg-inverse hover:bg-gray-850 text-gray-100 dark:text-gray-800 transition rounded-3xl"
 											on:click={() => {
 												editMessageConfirmHandler();
 											}}
@@ -803,7 +807,7 @@
 													<div
 																class="{status?.done === false
 																	? 'shimmer'
-																	: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+																	: ''} text-muted dark:text-gray-500 text-base line-clamp-1 text-wrap"
 													>
 																{$i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
 																	searchQuery: status.query
@@ -815,7 +819,7 @@
 													<div
 																class="{status?.done === false
 																	? 'shimmer'
-																	: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+																	: ''} text-muted dark:text-gray-500 text-base line-clamp-1 text-wrap"
 													>
 																<!-- $i18n.t(`Searching "{{searchQuery}}"`) -->
 																{#if status?.description.includes('{{searchQuery}}')}
@@ -842,7 +846,7 @@
 										<div class="mt-2">
 											<button
 												type="button"
-												class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-black/5 dark:hover:bg-white/5 transition"
+												class="text-sm px-3 py-1.5 rounded-xl border border-line-strong hover:bg-tint transition"
 												on:click={() => {
 													showRateComment = false;
 													regenerateResponse(message);
@@ -874,25 +878,12 @@
 							{#if siblings.length > 1}
 								<div class="flex self-center min-w-fit" dir="ltr">
 									<button
-										class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+										class="btn-ghost p-1"
 										on:click={() => {
 											showPreviousMessage(message);
 										}}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-											stroke-width="2.5"
-											class="size-3.5"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M15.75 19.5 8.25 12l7.5-7.5"
-											/>
-										</svg>
+										<ChevronLeft className="size-3.5" strokeWidth="2.5" />
 									</button>
 
 									{#if messageIndexEdit}
@@ -941,25 +932,12 @@
 									{/if}
 
 									<button
-										class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
+										class="btn-ghost p-1"
 										on:click={() => {
 											showNextMessage(message);
 										}}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-											stroke-width="2.5"
-											class="size-3.5"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="m8.25 4.5 7.5 7.5-7.5 7.5"
-											/>
-										</svg>
+										<ChevronRight className="size-3.5" strokeWidth="2.5" />
 									</button>
 								</div>
 							{/if}
@@ -969,25 +947,12 @@
 									<button
 										class="{isLastMessage
 											? 'visible'
-											: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition copy-response-button"
+											: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition copy-response-button"
 										on:click={() => {
 											copyToClipboard(message.content);
 										}}
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke-width="2.3"
-											stroke="currentColor"
-											class="w-4 h-4"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"
-											/>
-										</svg>
+										<ClipboardDocument className="size-4" />
 									</button>
 								</Tooltip>
 
@@ -997,7 +962,7 @@
 											id="speak-button-{message.id}"
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+												: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												if (!loadingSpeech) {
 													toggleSpeakMessage();
@@ -1006,7 +971,7 @@
 										>
 											{#if loadingSpeech}
 												<svg
-													class=" w-4 h-4"
+													class=" size-4"
 													fill="currentColor"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg"
@@ -1043,7 +1008,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1058,7 +1023,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1076,7 +1041,7 @@
 										<button
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'}  p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+												: 'invisible group-hover:visible'}  p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												if (!generatingImage) {
 													generateImage(message);
@@ -1085,7 +1050,7 @@
 										>
 											{#if generatingImage}
 												<svg
-													class=" w-4 h-4"
+													class=" size-4"
 													fill="currentColor"
 													viewBox="0 0 24 24"
 													xmlns="http://www.w3.org/2000/svg"
@@ -1122,7 +1087,7 @@
 													viewBox="0 0 24 24"
 													stroke-width="2.3"
 													stroke="currentColor"
-													class="w-4 h-4"
+													class="size-4"
 												>
 													<path
 														stroke-linecap="round"
@@ -1153,7 +1118,7 @@
 										<button
 											class=" {isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition whitespace-pre-wrap"
+												: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition whitespace-pre-wrap"
 											on:click={() => {
 												console.log(message);
 											}}
@@ -1165,7 +1130,7 @@
 												viewBox="0 0 24 24"
 												stroke-width="2.3"
 												stroke="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													stroke-linecap="round"
@@ -1183,7 +1148,7 @@
 											<button
 												class="{isLastMessage
 													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg {(
+													: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl {(
 													message?.annotation?.rating ?? ''
 												).toString() === '1'
 													? 'bg-gray-100 dark:bg-gray-800'
@@ -1205,7 +1170,7 @@
 													viewBox="0 0 24 24"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													class="w-4 h-4"
+													class="size-4"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1219,7 +1184,7 @@
 											<button
 												class="{isLastMessage
 													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg {(
+													: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl {(
 													message?.annotation?.rating ?? ''
 												).toString() === '-1'
 													? 'bg-gray-100 dark:bg-gray-800'
@@ -1241,7 +1206,7 @@
 													viewBox="0 0 24 24"
 													stroke-linecap="round"
 													stroke-linejoin="round"
-													class="w-4 h-4"
+													class="size-4"
 													xmlns="http://www.w3.org/2000/svg"
 												>
 													<path
@@ -1257,7 +1222,7 @@
 											type="button"
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition regenerate-response-button"
+												: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition regenerate-response-button"
 											on:click={() => {
 												showRateComment = false;
 												regenerateResponse(message);
@@ -1281,7 +1246,7 @@
 												viewBox="0 0 24 24"
 												stroke-width="2.3"
 												stroke="currentColor"
-												class="w-4 h-4"
+												class="size-4"
 											>
 												<path
 													stroke-linecap="round"
@@ -1299,25 +1264,12 @@
 												id="delete-response-button"
 												class="{isLastMessage
 													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition regenerate-response-button"
+													: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition regenerate-response-button"
 												on:click={() => {
 													showDeleteConfirm = true;
 												}}
 											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke-width="2"
-													stroke="currentColor"
-													class="w-4 h-4"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-													/>
-												</svg>
+												<Trash className="size-4" strokeWidth="2" />
 											</button>
 										</Tooltip>
 									{/if}
@@ -1329,7 +1281,7 @@
 													type="button"
 													class="{isLastMessage
 														? 'visible'
-														: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+														: 'invisible group-hover:visible'} p-1.5 hover:bg-tint rounded-xl dark:hover:text-white hover:text-black transition"
 													on:click={() => {
 														actionMessage(action.id, message);
 													}}
@@ -1338,7 +1290,7 @@
 														<div class="size-4">
 															<img
 																src={action.icon_url}
-																class="w-4 h-4 {action.icon_url.includes('svg')
+																class="size-4 {action.icon_url.includes('svg')
 																	? 'dark:invert-[80%]'
 																	: ''}"
 																style="fill: currentColor;"

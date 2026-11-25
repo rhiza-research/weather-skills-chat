@@ -64,7 +64,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[420px] rounded-xl px-1 py-1 border border-gray-300/30 dark:border-gray-700/50 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-sm"
+			class="w-full max-w-[420px] rounded-xl px-1 py-1 border border-line z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={10}
 			alignOffset={-8}
 			side="top"
@@ -76,7 +76,7 @@
 				className="w-full"
 			>
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm  font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-xl {!fileUploadEnabled
+					class="menu-item {!fileUploadEnabled
 						? 'opacity-50'
 						: ''}"
 					on:click={() => {
@@ -103,7 +103,7 @@
 				className="w-full"
 			>
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl {!fileUploadEnabled
+					class="menu-item {!fileUploadEnabled
 						? 'opacity-50'
 						: ''}"
 					on:click={() => {
@@ -119,12 +119,12 @@
 
 			{#if $config?.features?.enable_google_drive_integration}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+					class="menu-item"
 					on:click={() => {
 						uploadGoogleDriveHandler();
 					}}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87.3 78" class="w-5 h-5">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87.3 78" class="size-5">
 						<path
 							d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
 							fill="#0066da"
@@ -156,12 +156,12 @@
 
 			{#if $config?.features?.enable_onedrive_integration}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-2 text-sm font-medium cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl"
+					class="menu-item"
 					on:click={() => {
 						uploadOneDriveHandler();
 					}}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="w-5 h-5" fill="none">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="size-5" fill="none">
 						<mask
 							id="mask0_87_7796"
 							style="mask-type:alpha"

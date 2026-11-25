@@ -9,7 +9,7 @@
 	<div class="flex justify-center relative">
 		{#if selected === 'home'}
 			<div class="absolute top-0 left-0 flex h-full">
-				<div class="my-auto rounded-r-lg w-1 h-8 bg-black dark:bg-white"></div>
+				<div class="my-auto rounded-r-lg w-1 h-8 bg-inverse"></div>
 			</div>
 		{/if}
 
@@ -34,12 +34,12 @@
 		</Tooltip>
 	</div>
 
-	<div class=" -mt-1 border-[1.5px] border-gray-100 dark:border-gray-900 mx-4"></div>
+	<div class=" -mt-1 border-[1.5px] border-line mx-4"></div>
 
 	<div class="flex justify-center relative group">
 		{#if selected === ''}
 			<div class="absolute top-0 left-0 flex h-full">
-				<div class="my-auto rounded-r-lg w-1 h-8 bg-black dark:bg-white"></div>
+				<div class="my-auto rounded-r-lg w-1 h-8 bg-inverse"></div>
 			</div>
 		{/if}
 		<button
@@ -57,7 +57,7 @@
 		</button>
 	</div>
 
-	<!-- <div class="flex justify-center relative group text-gray-400">
+	<!-- <div class="flex justify-center relative group text-muted">
 		<button class=" cursor-pointer p-2" on:click={() => {}}>
 			<Plus className="size-4" strokeWidth="2" />
 		</button>

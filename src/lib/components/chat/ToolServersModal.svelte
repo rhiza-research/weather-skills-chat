@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
 	import { getContext, tick } from 'svelte';
 	import { toolServers, tools, WEBUI_NAME } from '$lib/stores';
 
@@ -99,7 +100,7 @@
 <Modal bind:show size="md">
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-0.5">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Available Tools and Skills')}</div>
+			<h2 class="modal-title">{$i18n.t('Available Tools and Skills')}</h2>
 			<button
 				class="self-center"
 				aria-label={$i18n.t('Close')}
@@ -107,16 +108,7 @@
 					show = false;
 				}}
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-5 h-5"
-				>
-					<path
-						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-					/>
-				</svg>
+				<XMarkSolid className="size-5" />
 			</button>
 		</div>
 
@@ -126,24 +118,24 @@
 				bind:value={query}
 				type="search"
 				placeholder={$i18n.t('Search tools')}
-				class="w-full rounded-lg px-2.5 py-1.5 text-sm bg-gray-50 dark:bg-gray-850 dark:text-gray-200 outline-hidden border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
+				class="field border border-transparent focus:border-gray-200 dark:focus:border-gray-700"
 			/>
 		</div>
 
 		{#if builtinOptions.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-				<div class=" text-base font-medium self-center">{$i18n.t('Built-in Tools')}</div>
+				<h3 class="text-base font-medium self-center">{$i18n.t('Built-in Tools')}</h3>
 			</div>
 			<div class="px-3 pb-2 w-full flex flex-col">
 				{#each builtinOptions as option (option.key)}
 					<div
-						class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition flex items-center gap-2"
+						class="px-2 py-1.5 rounded-xl hover:bg-tint transition flex items-center gap-2"
 					>
 						<div class="flex-1 min-w-0">
-							<div class="text-sm font-medium dark:text-gray-100 text-gray-800">
+							<div class="text-sm font-medium text-strong">
 								{option.name}
 							</div>
-							<div class="text-xs text-gray-500">{option.description}</div>
+							<div class="text-xs text-muted">{option.description}</div>
 						</div>
 						<div class="shrink-0">
 							<Switch
@@ -159,7 +151,7 @@
 		{#if visibleTools.length > 0}
 			{#if builtinOptions.length > 0 || $toolServers.length > 0}
 				<div class=" flex justify-between dark:text-gray-300 px-5 pb-1">
-					<div class=" text-base font-medium self-center">{$i18n.t('Weather Skills')}</div>
+					<h3 class="text-base font-medium self-center">{$i18n.t('Weather Skills')}</h3>
 				</div>
 			{/if}
 
@@ -168,7 +160,7 @@
 					{@const version = toolSkillVersion(tool)}
 					{@const repoRef = toolSkillRepoRef(tool)}
 					{@const description = tool?.meta?.description}
-					<div class="px-2 py-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition">
+					<div class="px-2 py-1.5 rounded-xl hover:bg-tint transition">
 						<div class="flex items-center gap-2">
 							<button
 								type="button"
@@ -184,25 +176,25 @@
 							>
 								<div class="min-w-0">
 									<div
-										class="text-sm font-medium dark:text-gray-100 text-gray-800 flex flex-wrap items-center gap-1.5"
+										class="text-sm font-medium text-strong flex flex-wrap items-center gap-1.5"
 									>
 										<span class="truncate">{toolBaseName(tool)}</span>
 										{#if isSkillTool(tool) && version}
 											<span
-												class="text-[10px] font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+												class="text-xs font-semibold px-1 rounded-sm bg-gray-500/15 text-body"
 											>
 												v{version}
 											</span>
 										{/if}
 										{#if isSkillTool(tool) && repoRef}
 											<span
-												class="text-[10px] font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-gray-600 dark:text-gray-300"
+												class="text-xs font-mono font-semibold px-1 rounded-sm bg-gray-500/15 text-body"
 											>
 												{repoRef}
 											</span>
 										{/if}
 										{#if !isSkillDefaultEnabled(tool)}
-											<span class="text-[10px] text-gray-500 dark:text-gray-400">
+											<span class="text-xs text-muted">
 												{$i18n.t('off by default')}
 											</span>
 										{/if}
@@ -210,7 +202,7 @@
 								</div>
 
 								{#if description}
-									<div class="shrink-0 text-gray-500">
+									<div class="shrink-0 text-muted">
 										{#if expanded[tool.id]}
 											<ChevronUp strokeWidth="2.5" className="size-3" />
 										{:else}
@@ -229,7 +221,7 @@
 						</div>
 
 						{#if description && expanded[tool.id]}
-							<div class="mt-1 text-xs text-gray-500 whitespace-pre-line">
+							<div class="mt-1 text-xs text-muted whitespace-pre-line">
 								{description}
 							</div>
 						{/if}
@@ -237,7 +229,7 @@
 				{/each}
 
 				{#if filteredTools.length === 0}
-					<div class="px-2 py-2 text-xs text-gray-500 dark:text-gray-400">
+					<div class="px-2 py-2 text-xs text-muted">
 						{$i18n.t('No skills match your search')}
 					</div>
 				{/if}
@@ -246,11 +238,11 @@
 
 		{#if $toolServers.length > 0}
 			<div class=" flex justify-between dark:text-gray-300 px-5 pb-0.5">
-				<div class=" text-base font-medium self-center">{$i18n.t('Tool Servers')}</div>
+				<h3 class="text-base font-medium self-center">{$i18n.t('Tool Servers')}</h3>
 			</div>
 
 			<div class="px-5 pb-5 w-full flex flex-col justify-center">
-				<div class=" text-xs text-gray-600 dark:text-gray-300 mb-2">
+				<div class="text-xs text-body mb-2">
 					{$i18n.t('{{WEBUI_NAME}} can use tools provided by any OpenAPI server.', {
 						WEBUI_NAME: $WEBUI_NAME
 					})}
@@ -258,22 +250,22 @@
 				<div class=" text-sm dark:text-gray-300 mb-1">
 					{#each filteredToolServers as toolServer}
 						<Collapsible buttonClassName="w-full" chevron>
-							<div class="text-sm font-medium dark:text-gray-100 text-gray-800">
+							<div class="text-sm font-medium text-strong">
 								{toolServer?.openapi?.info?.title} - v{toolServer?.openapi?.info?.version}
 							</div>
 
 							<div slot="content">
-								<div class="text-xs text-gray-500">
+								<div class="text-xs text-muted">
 									{toolServer?.openapi?.info?.description}
 								</div>
 
-								<div class="text-xs text-gray-500">
+								<div class="text-xs text-muted">
 									{toolServer?.url}
 								</div>
 
 								{#each toolServer?.specs ?? [] as tool_spec}
 									<div class="my-1">
-										<div class="font-medium text-gray-800 dark:text-gray-100">
+										<div class="font-medium text-strong">
 											{tool_spec?.name}
 										</div>
 

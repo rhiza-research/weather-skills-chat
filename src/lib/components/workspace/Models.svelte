@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PencilLine from '$lib/components/icons/PencilLine.svelte';
 	import { marked } from 'marked';
 
 	import { toast } from 'svelte-sonner';
@@ -273,24 +274,24 @@
 		}}
 	/>
 
-	<div class="flex flex-col gap-1 my-1.5">
+	<div class="flex flex-col gap-1 mb-1.5">
 		<div class="flex justify-between items-center">
-			<div class="flex items-center md:self-center text-xl font-medium px-0.5">
+			<div class="flex items-center md:self-center text-xl font-medium">
 				{$i18n.t('Models')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+				<span class="text-lg font-medium text-body"
 					>{filteredModels.length}</span
 				>
 			</div>
 		</div>
 
 		<div class=" flex flex-1 items-center w-full space-x-2">
-			<div class="flex flex-1 items-center">
+			<div class="flex flex-1 items-center rounded-xl">
 				<div class=" self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={searchValue}
 					placeholder={$i18n.t('Search Models')}
 				/>
@@ -303,11 +304,11 @@
 	</div>
 
 	{#if catalog === 'org'}
-		<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+		<div class="mt-4 mb-1 text-sm font-medium text-muted">
 			{$i18n.t('Models from catalog')}
 		</div>
 		{#if publicModels.length === 0}
-			<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+			<div class="text-xs text-muted py-3">{$i18n.t('No models')}</div>
 		{/if}
 		<div class=" my-2 mb-5 gap-2 grid lg:grid-cols-2 xl:grid-cols-3">
 			{#each publicModels as model}
@@ -315,7 +316,7 @@
 				{@const usable = isCatalogEnabled(model)}
 				<div
 					class=" flex flex-col w-full px-3 py-2 rounded-xl transition {usable
-						? 'cursor-pointer dark:hover:bg-white/5 hover:bg-black/5'
+						? 'cursor-pointer hover:bg-tint'
 						: 'cursor-default'}"
 					id="model-item-{model.id}"
 				>
@@ -335,7 +336,7 @@
 							class=" flex flex-1 w-full {usable ? 'cursor-pointer' : 'cursor-default'}"
 							href={usable ? `/?models=${encodeURIComponent(model.id)}` : undefined}
 						>
-							<div class=" flex-1 self-center {usable ? '' : 'text-gray-500'}">
+							<div class=" flex-1 self-center {usable ? '' : 'text-muted'}">
 								<Tooltip
 									content={marked.parse(model?.meta?.description ?? model.id)}
 									className=" w-fit"
@@ -375,7 +376,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost p-1.5"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -395,7 +396,7 @@
 											}}
 										/>
 									{:else}
-										<span class="text-xs text-gray-500"
+										<span class="text-xs text-muted"
 											>{model.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
 										>
 									{/if}
@@ -408,11 +409,11 @@
 		</div>
 
 		{#if showOrgSection}
-			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			<div class="mt-4 mb-1 text-sm font-medium text-muted">
 				{$i18n.t('{{name}} Models', { name: orgName })}
 			</div>
 			{#if sectionModels.length === 0}
-				<div class="text-xs text-gray-500 py-3">{$i18n.t('No models')}</div>
+				<div class="text-xs text-muted py-3">{$i18n.t('No models')}</div>
 			{/if}
 		{/if}
 	{/if}
@@ -422,7 +423,7 @@
 		{#each sectionModels as model}
 			{@const manage = canManage(model)}
 			<div
-				class=" flex flex-col cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-xl transition"
+				class=" flex flex-col cursor-pointer w-full px-3 py-2 hover:bg-tint rounded-xl transition"
 				id="model-item-{model.id}"
 			>
 				<div class="flex gap-4 mt-0.5 mb-0.5">
@@ -444,7 +445,7 @@
 						class=" flex flex-1 cursor-pointer w-full"
 						href={`/?models=${encodeURIComponent(model.id)}`}
 					>
-						<div class=" flex-1 self-center {model.is_active ? '' : 'text-gray-500'}">
+						<div class=" flex-1 self-center {model.is_active ? '' : 'text-muted'}">
 							<Tooltip
 								content={marked.parse(model?.meta?.description ?? model.id)}
 								className=" w-fit"
@@ -478,7 +479,7 @@
 								className="flex shrink-0"
 								placement="top-start"
 							>
-								<div class="shrink-0 text-gray-500">
+								<div class="shrink-0 text-muted">
 									{$i18n.t('By {{name}}', {
 										name: capitalizeFirstLetter(
 											model?.user?.name ?? model?.user?.email ?? $i18n.t('Deleted User')
@@ -493,7 +494,7 @@
 						{#if shiftKey && manage}
 							<Tooltip content={$i18n.t('Delete')}>
 								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									on:click={() => {
 										deleteModelHandler(model);
@@ -505,24 +506,11 @@
 						{:else}
 							{#if manage}
 								<a
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									href={`${basePath}/models/edit?id=${encodeURIComponent(model.id)}`}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-										/>
-									</svg>
+									<PencilLine className="size-4" />
 								</a>
 							{/if}
 
@@ -546,7 +534,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost p-1.5"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -560,7 +548,7 @@
 										<Tooltip content={$i18n.t('Enabled by default')}>
 											<div class="flex items-center gap-1">
 												<span
-													class="text-[10px] leading-none text-gray-500 max-w-[4.5rem] text-right {!model.is_active
+													class="text-xs leading-none text-muted max-w-[4.5rem] text-right {!model.is_active
 														? 'opacity-40'
 														: ''}"
 													>{$i18n.t('Enabled by default')}</span
@@ -583,7 +571,7 @@
 												: $i18n.t('Not in catalog')}
 										>
 											<div class="flex items-center gap-1">
-												<span class="text-[10px] leading-none text-gray-500"
+												<span class="text-xs leading-none text-muted"
 													>{$i18n.t('In catalog')}</span
 												>
 												<Switch
@@ -679,7 +667,7 @@
 				/>
 
 				<button
-					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+					class="btn-secondary"
 					on:click={() => {
 						modelsImportInputElement.click();
 					}}
@@ -689,7 +677,7 @@
 
 				{#if models.length}
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={async () => {
 							downloadModels(models);
 						}}

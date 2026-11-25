@@ -294,7 +294,7 @@
 			{#if V?.heads.length}
 				<button
 					type="button"
-					class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap transition"
+					class="flex items-center gap-1 text-xs muted hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap transition"
 					on:click={toggleAll}
 				>
 					<svg
@@ -344,7 +344,7 @@
 		class={fill ? 'flex-1 min-h-0 overflow-hidden' : ''}
 	>
 		{#if tooBig}
-			<div class="text-xs text-gray-500 py-2">
+			<div class="text-xs muted py-2">
 				{$i18n.t('This provenance cannot be drawn as a graph. Switch to Text to read it.')}
 			</div>
 		{/if}
@@ -413,7 +413,7 @@
 	<div
 		use:portal
 		bind:this={popEl}
-		class="fixed z-[10000] w-72 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 px-2.5 py-2 text-xs leading-snug text-gray-700 dark:text-gray-200 shadow-md"
+		class="fixed z-[10000] w-72 overflow-y-auto rounded-lg border border-line-strong bg-panel px-2.5 py-2 text-xs leading-snug body shadow-md"
 		style={popStyle}
 		on:mouseenter={() => clearTimeout(hideTimer)}
 		on:mouseleave={hide}
@@ -426,12 +426,12 @@
 			<div class="font-medium break-words">
 				{popNode.run.map((id) => graph?.nodes[id]?.step?.skill).join(' → ')}
 			</div>
-			<div class="text-gray-500">{$i18n.t('Expand to view arguments')}</div>
+			<div class="muted">{$i18n.t('Expand to view arguments')}</div>
 		{:else}
 			<div class="font-medium break-words">
 				{popNode.file && fileName ? fileName : (popNode.step?.skill ?? popNode.label)}
 			</div>
-			<div class="text-gray-500">
+			<div class="muted">
 				{popNode.file
 					? $i18n.t('This file')
 					: popNode.step?.version

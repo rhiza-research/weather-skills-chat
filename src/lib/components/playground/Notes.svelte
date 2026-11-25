@@ -81,7 +81,7 @@
 			{:else}
 				<Tooltip content={$i18n.t('Voice Input')}>
 					<button
-						class="cursor-pointer p-2.5 flex rounded-full hover:bg-gray-100 dark:hover:bg-gray-850 transition shadow-xl"
+						class="cursor-pointer p-2.5 flex rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition shadow-xl"
 						type="button"
 						on:click={async () => {
 							try {
@@ -113,7 +113,7 @@
 			{/if}
 
 			<!-- <button
-				class="cursor-pointer p-2.5 flex rounded-full hover:bg-gray-100 dark:hover:bg-gray-850 transition shadow-xl"
+				class="cursor-pointer p-2.5 flex rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition shadow-xl"
 			>
 				<SparklesSolid className="size-4" />
 			</button> -->

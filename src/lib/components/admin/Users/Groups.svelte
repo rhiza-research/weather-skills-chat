@@ -133,7 +133,7 @@
 			{$i18n.t('Groups')}
 			<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 
-			<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{groups.length}</span>
+			<span class="text-lg font-medium text-body">{groups.length}</span>
 		</div>
 
 		<div class="flex gap-1">
@@ -144,7 +144,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 20 20"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"
@@ -209,7 +209,7 @@
 					<div class="w-full"></div>
 				</div>
 
-				<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
+				<hr class="mt-1.5 border-line" />
 
 				{#each filteredGroups as group}
 					<div class="my-2">
@@ -219,7 +219,7 @@
 			</div>
 		{/if}
 
-		<hr class="mb-2 border-gray-100 dark:border-gray-850" />
+		<hr class="mb-2 border-line" />
 
 		<GroupModal
 			bind:show={showDefaultPermissionsModal}

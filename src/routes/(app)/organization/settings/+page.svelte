@@ -107,21 +107,21 @@
 
 <div class="max-w-xl flex flex-col gap-4 text-sm">
 	<div class="flex flex-col gap-1">
-		<div class="text-xs font-medium text-gray-500">{$i18n.t('Name')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Name')}</div>
 		<input
-			class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+			class="field"
 			bind:value={name}
 		/>
 	</div>
 
 	<div class="flex flex-col gap-2">
-		<div class="text-xs font-medium text-gray-500">{$i18n.t('Logo')}</div>
+		<div class="text-xs font-medium text-muted">{$i18n.t('Logo')}</div>
 		<div class="flex items-center gap-4">
 			{#if logo}
-				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-gray-100 dark:bg-gray-850" />
+				<img src={logo} alt="" class="size-16 rounded-full object-cover bg-surface" />
 			{:else}
 				<div
-					class="size-16 rounded-full bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-gray-400"
+					class="size-16 rounded-full bg-surface flex items-center justify-center text-xs text-muted"
 				>
 					{$i18n.t('None')}
 				</div>
@@ -129,7 +129,7 @@
 			<div class="flex flex-col gap-2">
 				<input bind:this={fileInput} type="file" accept="image/*" hidden on:change={onLogo} />
 				<button
-					class="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition font-medium"
+					class="px-3 py-1.5 rounded-xl bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition font-medium"
 					type="button"
 					on:click={() => fileInput.click()}
 				>
@@ -137,7 +137,7 @@
 				</button>
 				{#if logo}
 					<button
-						class="self-start text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+						class="self-start text-xs text-muted hover:text-gray-800 dark:hover:text-gray-200"
 						type="button"
 						on:click={() => {
 							logo = '';
@@ -152,7 +152,7 @@
 
 	<div>
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			type="button"
 			disabled={saving}
 			on:click={save}

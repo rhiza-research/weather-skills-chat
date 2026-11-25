@@ -274,7 +274,7 @@
 
 		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
 
-		<span class="text-lg font-medium text-gray-500 dark:text-gray-300 mr-1.5"
+		<span class="text-lg font-medium text-body mr-1.5"
 			>{rankedModels.length}</span
 		>
 	</div>
@@ -309,7 +309,7 @@
 		</div>
 	{/if}
 	{#if (rankedModels ?? []).length === 0}
-		<div class="text-center text-xs text-gray-500 dark:text-gray-400 py-1">
+		<div class="text-center text-xs text-muted py-1">
 			{$i18n.t('No models found')}
 		</div>
 	{:else}
@@ -357,7 +357,7 @@
 									/>
 								</div>
 
-								<div class="font-medium text-gray-800 dark:text-gray-200 pr-4">
+								<div class="font-medium text-strong pr-4">
 									{model.name}
 								</div>
 							</div>
@@ -398,7 +398,7 @@
 	{/if}
 </div>
 
-<div class=" text-gray-500 text-xs mt-1.5 w-full flex justify-end">
+<div class="text-muted text-xs mt-1.5 w-full flex justify-end">
 	<div class=" text-right">
 		<div class="line-clamp-1">
 			ⓘ {$i18n.t(

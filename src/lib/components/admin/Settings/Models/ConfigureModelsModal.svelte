@@ -1,4 +1,5 @@
 <script>
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
 	import { toast } from 'svelte-sonner';
 
 	import { createEventDispatcher, getContext, onMount } from 'svelte';
@@ -120,25 +121,17 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center font-primary">
+			<h2 class="text-lg font-medium self-center">
 				{$i18n.t('Settings')}
-			</div>
+			</h2>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-5 h-5"
-				>
-					<path
-						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-					/>
-				</svg>
+				<XMarkSolid className="size-5" />
 			</button>
 		</div>
 
@@ -176,7 +169,7 @@
 											});
 									}}
 								>
-									<div class="text-xs text-gray-500">{$i18n.t('Reorder Models')}</div>
+									<div class="text-xs text-muted">{$i18n.t('Reorder Models')}</div>
 
 									{#if sortKey === 'model'}
 										<span class="font-normal self-center">
@@ -197,19 +190,19 @@
 							</div>
 						</div>
 
-						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div>
 							<div class="flex flex-col w-full">
 								<div class="mb-1 flex justify-between">
-									<div class="text-xs text-gray-500">{$i18n.t('Default Models')}</div>
+									<div class="text-xs text-muted">{$i18n.t('Default Models')}</div>
 								</div>
 
 								<div class="flex items-center -mr-1">
 									<select
 										class="w-full py-1 text-sm rounded-lg bg-transparent {selectedModelId
 											? ''
-											: 'text-gray-500'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+											: 'text-muted'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 										bind:value={selectedModelId}
 									>
 										<option value="">{$i18n.t('Select a model')}</option>
@@ -221,7 +214,7 @@
 									</select>
 								</div>
 
-								<!-- <hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" /> -->
+								<!-- <hr class="border-line my-2.5 w-full" /> -->
 
 								{#if defaultModelIds.length > 0}
 									<div class="flex flex-col">
@@ -246,7 +239,7 @@
 										{/each}
 									</div>
 								{:else}
-									<div class="text-gray-500 text-xs text-center py-2">
+									<div class="text-muted text-xs text-center py-2">
 										{$i18n.t('No models selected')}
 									</div>
 								{/if}
@@ -256,7 +249,7 @@
 						<div class="flex justify-between pt-3 text-sm font-medium gap-1.5">
 							<Tooltip content={$i18n.t('This will delete all models including custom models')}>
 								<button
-									class="px-3.5 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-950 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+									class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-950 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 									type="button"
 									on:click={() => {
 										showResetModal = true;
@@ -268,7 +261,7 @@
 							</Tooltip>
 
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+								class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 									? ' cursor-not-allowed'
 									: ''}"
 								type="submit"
@@ -279,7 +272,7 @@
 								{#if loading}
 									<div class="ml-2 self-center">
 										<svg
-											class=" w-4 h-4"
+											class=" size-4"
 											viewBox="0 0 24 24"
 											fill="currentColor"
 											xmlns="http://www.w3.org/2000/svg"

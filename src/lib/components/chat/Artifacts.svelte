@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronRight from '$lib/components/icons/ChevronRight.svelte';
 	import { toast } from 'svelte-sonner';
 	import { onDestroy, getContext, createEventDispatcher } from 'svelte';
 	const i18n = getContext('i18n');
@@ -474,22 +475,22 @@
 	title={modalAlt}
 />
 
-<div class="w-full h-full max-h-full relative flex flex-col bg-gray-50 dark:bg-gray-850 min-h-0 overflow-hidden">
+<div class="w-full h-full max-h-full relative flex flex-col bg-surface min-h-0 overflow-hidden">
 	{#if hasPreview}
 		<div
 			class="flex flex-col min-h-0 shrink-0 {contents.length > 0
 				? 'h-[38%]'
-				: 'h-1/2'} border-b border-gray-100 dark:border-gray-800"
+				: 'h-1/2'} border-b border-line"
 		>
 			<div class="flex items-start justify-between gap-2 px-2.5 py-1.5 shrink-0">
-				<div class="text-[11px] leading-4 py-[3px] text-gray-600 dark:text-gray-300 break-words min-w-0">
+				<div class="text-xs leading-4 py-1 text-body break-words min-w-0">
 					{provenancePath ? `${$i18n.t('Provenance')}: ${provenancePath}` : previewTitle}
 				</div>
 				<div class="flex items-center gap-0.5 shrink-0">
 					<Tooltip content={$i18n.t('Open in full screen')}>
 						<button
 							type="button"
-							class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+							class="p-1 rounded-xl muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-tint"
 							on:click={() => (provenancePath ? (provenanceFullscreen = true) : expandPreview())}
 							aria-label={$i18n.t('Expand image')}
 						>
@@ -498,7 +499,7 @@
 					</Tooltip>
 					<button
 						type="button"
-						class="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+						class="p-1 rounded-xl muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-tint"
 						on:click={() => (provenancePath ? closeProvenance() : clearPreview())}
 						aria-label={$i18n.t('Close preview')}
 					>
@@ -519,7 +520,7 @@
 							bind:fullscreen={provenanceFullscreen}
 						/>
 					{:else}
-						<div class="flex items-center gap-1.5 text-[11px] text-gray-400">
+						<div class="flex items-center gap-1.5 text-xs text-subtle">
 							{$i18n.t('Loading provenance')}
 							<Spinner className="size-3" />
 						</div>
@@ -530,7 +531,7 @@
 					class="flex-1 min-h-0 w-full overflow-hidden px-2 pb-2"
 				>
 					<div
-						class="h-full w-full overflow-hidden rounded border border-gray-100 dark:border-gray-800"
+						class="h-full w-full overflow-hidden rounded border border-line"
 					>
 						<HtmlArtifactFrame
 							src={previewHtmlUrl}
@@ -547,7 +548,7 @@
 					on:click={expandPreview}
 				>
 					<img
-						class="max-w-full max-h-full object-contain rounded border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+						class="max-w-full max-h-full object-contain rounded border border-line bg-page"
 						src={previewUrl}
 						alt={previewTitle || 'preview'}
 					/>
@@ -566,7 +567,7 @@
 					<Tooltip content={$i18n.t('Start a new chat with a copy of these artifacts')} placement="bottom">
 						<button
 							type="button"
-							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center gap-1.5 text-sm text-muted hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={startingChat}
 							on:click={startChatWithArtifacts}
 							aria-label={$i18n.t('New chat with these artifacts')}
@@ -585,7 +586,7 @@
 					>
 						<button
 							type="button"
-							class="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+							class="flex items-center gap-1.5 text-sm text-muted hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
 							disabled={uploading || !$chatId || $chatId === 'local'}
 							on:click={() => fileInput?.click()}
 						>
@@ -603,7 +604,7 @@
 				<Tooltip content={$i18n.t('Close artifacts')} placement="bottom">
 					<button
 						type="button"
-						class="p-0.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+						class="p-0.5 text-muted hover:text-gray-700 dark:hover:text-gray-300"
 						on:click={closePanel}
 						aria-label={$i18n.t('Close artifacts')}
 					>
@@ -615,7 +616,7 @@
 
 		<div class="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pb-3">
 			{#if copyState === 'copying'}
-				<div class="flex items-center gap-2 text-xs text-gray-500" role="status">
+				<div class="flex items-center gap-2 text-xs text-muted" role="status">
 					<Spinner className="size-3.5" />
 					{$i18n.t('Artifact copy in progress...')}
 				</div>
@@ -641,7 +642,7 @@
 			>
 				<button
 					type="button"
-					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
+					class="self-center pointer-events-auto p-1 rounded-full bg-panel"
 					on:click={() => {
 						showArtifacts.set(false);
 					}}
@@ -654,7 +655,7 @@
 						<div class="flex items-center gap-0.5 self-center min-w-fit" dir="ltr">
 							<button
 								type="button"
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="btn-ghost p-1 disabled:cursor-not-allowed"
 								on:click={() => navigateContent('prev')}
 								disabled={contents.length <= 1}
 							>
@@ -683,24 +684,11 @@
 
 							<button
 								type="button"
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="btn-ghost p-1 disabled:cursor-not-allowed"
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									stroke-width="2.5"
-									class="size-3.5"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="m8.25 4.5 7.5 7.5-7.5 7.5"
-									/>
-								</svg>
+								<ChevronRight className="size-3.5" strokeWidth="2.5" />
 							</button>
 						</div>
 					</div>
@@ -708,7 +696,7 @@
 					<div class="flex items-center gap-1">
 						<button
 							type="button"
-							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+							class="copy-code-button bg-none border-none text-xs bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 							on:click={() => {
 								copyToClipboard(contents[selectedContentIdx].content);
 								copied = true;
@@ -722,7 +710,7 @@
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
 									type="button"
-									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md p-0.5"
+									class="bg-none border-none text-xs bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl p-0.5"
 									on:click={showFullScreen}
 								>
 									<ArrowsPointingOut className="size-3.5" />
@@ -734,7 +722,7 @@
 
 				<button
 					type="button"
-					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
+					class="self-center pointer-events-auto p-1 rounded-full bg-panel"
 					on:click={closePanel}
 				>
 					<XMark className="size-3.5 text-gray-900 dark:text-white" />

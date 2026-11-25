@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
 	import { getContext } from 'svelte';
 	import { safeLinkUrl } from '$lib/utils';
 	import CodeBlock from './CodeBlock.svelte';
@@ -14,7 +15,7 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class="text-lg font-medium self-center flex flex-col gap-0.5 capitalize">
+			<div class="modal-title flex flex-col gap-0.5 capitalize">
 				{#if codeExecution?.result}
 					<div>
 						{#if codeExecution.result?.error}
@@ -45,21 +46,13 @@
 			</div>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 					codeExecution = null;
 				}}
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-5 h-5"
-				>
-					<path
-						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-					/>
-				</svg>
+				<XMarkSolid className="size-5" />
 			</button>
 		</div>
 
@@ -86,13 +79,13 @@
 					<div class="dark:bg-[#202123] dark:text-white px-4 py-4 rounded-b-lg flex flex-col gap-3">
 						{#if codeExecution?.result?.error}
 							<div>
-								<div class=" text-gray-500 text-xs mb-1">{$i18n.t('ERROR')}</div>
+								<div class="text-muted text-xs mb-1">{$i18n.t('ERROR')}</div>
 								<div class="text-sm">{codeExecution?.result?.error}</div>
 							</div>
 						{/if}
 						{#if codeExecution?.result?.output}
 							<div>
-								<div class=" text-gray-500 text-xs mb-1">{$i18n.t('OUTPUT')}</div>
+								<div class="text-muted text-xs mb-1">{$i18n.t('OUTPUT')}</div>
 								<div class="text-sm">{codeExecution?.result?.output}</div>
 							</div>
 						{/if}
@@ -100,7 +93,7 @@
 				{/if}
 				{#if codeExecution?.result?.files && codeExecution?.result?.files.length > 0}
 					<div class="flex flex-col w-full">
-						<hr class="border-gray-100 dark:border-gray-850 my-2" />
+						<hr class="border-line my-2" />
 						<div class=" text-sm font-medium dark:text-gray-300">
 							{$i18n.t('Files')}
 						</div>

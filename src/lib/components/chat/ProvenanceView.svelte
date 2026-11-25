@@ -23,7 +23,7 @@
 	export let fullscreenButton = true;
 
 	const iconButton =
-		'p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5';
+		'p-1 rounded-md muted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-tint';
 	const modes = [
 		['graph', 'Graph'],
 		['text', 'Text']
@@ -49,8 +49,8 @@
 					<button
 						type="button"
 						class="px-2 py-0.5 rounded {mode === value
-							? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 shadow-sm'
-							: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+							? 'bg-white dark:bg-gray-700 strong shadow-lg'
+							: 'muted hover:text-gray-700 dark:hover:text-gray-300'}"
 						aria-pressed={mode === value}
 						on:click={() => (mode = value)}>{$i18n.t(label)}</button
 					>
@@ -78,8 +78,8 @@
 					<button
 						type="button"
 						class="px-2 py-0.5 rounded {mode === value
-							? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 shadow-sm'
-							: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+							? 'bg-white dark:bg-gray-700 strong shadow-lg'
+							: 'muted hover:text-gray-700 dark:hover:text-gray-300'}"
 						aria-pressed={mode === value}
 						on:click={() => (mode = value)}>{$i18n.t(label)}</button
 					>
@@ -111,13 +111,13 @@
 {#if fullscreen}
 	<div
 		use:portal
-		class="fixed inset-0 z-[9999] flex flex-col bg-white dark:bg-gray-900 px-4 pb-4"
+		class="fixed inset-0 z-[9999] flex flex-col bg-page px-4 pb-4"
 		role="dialog"
 		aria-modal="true"
 		aria-label={$i18n.t('Provenance')}
 	>
 		<div class="flex items-center justify-between gap-2 h-12 shrink-0">
-			<div class="text-sm text-gray-600 dark:text-gray-300 truncate min-w-0">
+			<div class="text-sm body truncate min-w-0">
 				{title || fileName}
 			</div>
 			<button

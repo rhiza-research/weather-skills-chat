@@ -190,7 +190,7 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[280px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="menu-panel max-w-[280px]"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
@@ -198,7 +198,7 @@
 		>
 			{#if isMine}
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					pinHandler();
 				}}
@@ -213,7 +213,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					renameHandler();
 				}}
@@ -224,7 +224,7 @@
 			{/if}
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					cloneChatHandler();
 				}}
@@ -235,7 +235,7 @@
 
 			{#if isMine}
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					archiveChatHandler();
 				}}
@@ -247,7 +247,7 @@
 
 			{#if isMine && !isPersonal}
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800  rounded-md"
+				class="menu-item"
 				on:click={() => {
 					shareHandler();
 				}}
@@ -258,7 +258,7 @@
 
 			{#if visibility === 'organization'}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="menu-item"
 					on:click={async () => {
 						try {
 							await updateChatVisibilityById(localStorage.token, chatId, 'private');
@@ -274,7 +274,7 @@
 				</DropdownMenu.Item>
 			{:else}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="menu-item"
 					on:click={async () => {
 						try {
 							await updateChatVisibilityById(localStorage.token, chatId, 'organization');
@@ -294,7 +294,7 @@
 
 			{#if isMine && ($organizations ?? []).some((org) => org.id !== $activeOrganizationId)}
 				<DropdownMenu.Item
-					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-tint rounded-xl"
 					on:click={() => {
 						cloneToOrgHandler();
 					}}
@@ -305,7 +305,7 @@
 			{/if}
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					goto(`/scheduled-tasks/new?from=${chatId}`);
 				}}
@@ -316,19 +316,19 @@
 
 			<DropdownMenu.Sub>
 				<DropdownMenu.SubTrigger
-					class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+					class="menu-item"
 				>
 					<Download strokeWidth="2" />
 
 					<div class="flex items-center">{$i18n.t('Download')}</div>
 				</DropdownMenu.SubTrigger>
 				<DropdownMenu.SubContent
-					class="w-full rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+					class="menu-panel"
 					transition={flyAndScale}
 					sideOffset={8}
 				>
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadJSONExport();
 						}}
@@ -336,7 +336,7 @@
 						<div class="flex items-center line-clamp-1">{$i18n.t('Export chat (.json)')}</div>
 					</DropdownMenu.Item>
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadTxt();
 						}}
@@ -345,7 +345,7 @@
 					</DropdownMenu.Item>
 
 					<DropdownMenu.Item
-						class="flex gap-2 items-center px-3 py-2 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+						class="menu-item"
 						on:click={() => {
 							downloadPdf();
 						}}
@@ -356,7 +356,7 @@
 			</DropdownMenu.Sub>
 			{#if isMine}
 			<DropdownMenu.Item
-				class="flex  gap-2  items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					deleteHandler();
 				}}
@@ -366,9 +366,9 @@
 			</DropdownMenu.Item>
 			{/if}
 
-			<hr class="border-gray-100 dark:border-gray-850 my-0.5" />
+			<hr class="border-line my-0.5" />
 
-			<div class="flex p-1">
+			<div class="flex">
 				<Tags
 					{chatId}
 					on:add={(e) => {

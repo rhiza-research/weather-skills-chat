@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint CSS accessibility
+        run: npm run lint:css
+
       - name: Run Vitest
         id: vitest
         run: |

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Trash from '$lib/components/icons/Trash.svelte';
+	import MagnifyingGlassSolid from '$lib/components/icons/MagnifyingGlassSolid.svelte';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 	import { toast } from 'svelte-sonner';
@@ -80,9 +82,10 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
-			<div class=" text-lg font-medium self-center">{$i18n.t('Archived Chats')}</div>
+			<h2 class="modal-title">{$i18n.t('Archived Chats')}</h2>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}
@@ -91,7 +94,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						fill-rule="evenodd"
@@ -104,37 +107,26 @@
 
 		<div class="flex flex-col w-full px-5 pb-4 dark:text-gray-200">
 			<div class=" flex w-full mt-2 space-x-2">
-				<div class="flex flex-1">
+				<div class="flex flex-1 rounded-xl">
 					<div class=" self-center ml-1 mr-3">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 20 20"
-							fill="currentColor"
-							class="w-4 h-4"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-								clip-rule="evenodd"
-							/>
-						</svg>
+						<MagnifyingGlassSolid className="size-4" />
 					</div>
 					<input
-						class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
+						class="field-bare text-sm pr-4 py-1 rounded-r-xl"
 						bind:value={searchValue}
 						placeholder={$i18n.t('Search Chats')}
 					/>
 				</div>
 			</div>
-			<hr class="border-gray-100 dark:border-gray-850 my-2" />
+			<hr class="border-line my-2" />
 			<div class=" flex flex-col w-full sm:flex-row sm:justify-center sm:space-x-6">
 				{#if chats.length > 0}
 					<div class="w-full">
 						<div class="text-left text-sm w-full mb-3 max-h-[22rem] overflow-y-scroll">
 							<div class="relative overflow-x-auto">
-								<table class="w-full text-sm text-left text-gray-600 dark:text-gray-400 table-auto">
+								<table class="w-full text-sm text-left text-body table-auto">
 									<thead
-										class="text-xs text-gray-700 uppercase bg-transparent dark:text-gray-200 border-b-2 border-gray-50 dark:border-gray-850"
+										class="text-xs text-body uppercase bg-transparent border-b-2 border-line"
 									>
 										<tr>
 											<th scope="col" class="px-3 py-2"> {$i18n.t('Name')} </th>
@@ -150,7 +142,7 @@
 													.includes(searchValue.toLowerCase())) as chat, idx}
 											<tr
 												class="bg-transparent {idx !== chats.length - 1 &&
-													'border-b'} dark:bg-gray-900 border-gray-50 dark:border-gray-850 text-xs"
+													'border-b'} dark:bg-gray-900 border-line text-xs"
 											>
 												<td class="px-3 py-1 w-2/3">
 													<a href="/c/{chat.id}" target="_blank">
@@ -170,7 +162,7 @@
 													<div class="flex justify-end w-full">
 														<Tooltip content={$i18n.t('Unarchive Chat')}>
 															<button
-																class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+																class="btn-ghost"
 																on:click={async () => {
 																	unarchiveChatHandler(chat.id);
 																}}
@@ -194,25 +186,12 @@
 
 														<Tooltip content={$i18n.t('Delete Chat')}>
 															<button
-																class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+																class="btn-ghost"
 																on:click={async () => {
 																	deleteChatHandler(chat.id);
 																}}
 															>
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	fill="none"
-																	viewBox="0 0 24 24"
-																	stroke-width="1.5"
-																	stroke="currentColor"
-																	class="w-4 h-4"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-																	/>
-																</svg>
+																<Trash className="size-4" />
 															</button>
 														</Tooltip>
 													</div>
@@ -226,7 +205,7 @@
 
 						<div class="flex flex-wrap text-sm font-medium gap-1.5 mt-2 m-1 justify-end w-full">
 							<button
-								class=" px-3.5 py-1.5 font-medium hover:bg-black/5 dark:hover:bg-white/5 outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
+								class=" px-4 py-1.5 font-medium hover:bg-tint outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
 								on:click={() => {
 									showUnarchiveAllConfirmDialog = true;
 								}}
@@ -235,7 +214,7 @@
 							</button>
 
 							<button
-								class="px-3.5 py-1.5 font-medium hover:bg-black/5 dark:hover:bg-white/5 outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
+								class="px-4 py-1.5 font-medium hover:bg-tint outline outline-1 outline-gray-300 dark:outline-gray-800 rounded-3xl"
 								on:click={() => {
 									exportChatsHandler();
 								}}

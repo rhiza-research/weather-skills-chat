@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
   import { getContext } from "svelte";
   import { toast } from "svelte-sonner";
 
@@ -74,9 +75,9 @@
 <Modal size="sm" bind:show>
   <div>
     <div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-      <div class=" text-lg font-medium self-center">
+      <h2 class="modal-title">
         {$i18n.t("Send feedback")}
-      </div>
+      </h2>
       <button
         class="self-center"
         aria-label={$i18n.t("Close")}
@@ -84,19 +85,10 @@
           show = false;
         }}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          class="w-5 h-5"
-        >
-          <path
-            d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-          />
-        </svg>
+        <XMarkSolid className="size-5" />
       </button>
     </div>
-    <hr class="border-gray-100 dark:border-gray-850" />
+    <hr class="border-line my-2" />
 
     <div class="flex flex-col w-full p-5 dark:text-gray-200">
       {#if sent}
@@ -105,7 +97,7 @@
         </div>
         <div class="flex justify-end pt-4">
           <button
-            class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+            class="btn-primary"
             type="button"
             on:click={() => {
               show = false;
@@ -120,7 +112,7 @@
           on:submit|preventDefault={submitHandler}
         >
           <div
-            class="text-xs text-gray-500 mb-3 flex flex-col gap-0.5 break-all"
+            class="text-xs text-muted mb-3 flex flex-col gap-0.5 break-all"
           >
             {#each details as line}
               <div>{line}</div>
@@ -128,11 +120,11 @@
           </div>
 
           <label class="flex flex-col w-full">
-            <span class=" mb-1 text-xs text-gray-500"
+            <span class="mb-1 text-xs text-muted"
               >{$i18n.t("Subject")}</span
             >
             <input
-              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition"
+              class="field border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 transition"
               type="text"
               maxlength={FEEDBACK_SUBJECT_MAX}
               bind:value={subject}
@@ -141,11 +133,11 @@
           </label>
 
           <label class="flex flex-col w-full mt-3">
-            <span class=" mb-1 text-xs text-gray-500"
+            <span class="mb-1 text-xs text-muted"
               >{$i18n.t("What happened?")}</span
             >
             <textarea
-              class="w-full rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 focus:border-gray-400 dark:focus:border-gray-500 outline-hidden transition resize-none"
+              class="field border border-line-strong focus:border-gray-400 dark:focus:border-gray-500 transition resize-none"
               rows="6"
               maxlength={FEEDBACK_DESCRIPTION_MAX}
               bind:value={description}
@@ -154,7 +146,7 @@
           </label>
 
           {#if emailOff}
-            <div class="text-xs text-gray-600 dark:text-gray-400 mt-3">
+            <div class="text-xs text-body mt-3">
               {$i18n.t(
                 "This server can't send email. Please open this message in your email app and send it to {{email}}.",
                 { email: helpEmail },
@@ -165,14 +157,14 @@
           <div class="flex justify-end pt-4">
             {#if emailOff}
               <a
-                class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+                class="btn-primary"
                 href={mailtoHref}
               >
                 {$i18n.t("Open in email app")}
               </a>
             {:else}
               <button
-                class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+                class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
                 type="submit"
                 disabled={loading}
               >

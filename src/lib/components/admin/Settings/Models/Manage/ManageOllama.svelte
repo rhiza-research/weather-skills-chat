@@ -582,7 +582,7 @@
 										xmlns="http://www.w3.org/2000/svg"
 										viewBox="0 0 16 16"
 										fill="currentColor"
-										class="w-4 h-4"
+										class="size-4"
 									>
 										<path
 											d="M7 1a.75.75 0 0 1 .75.75V6h-1.5V1.75A.75.75 0 0 1 7 1ZM6.25 6v2.94L5.03 7.72a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.06 0l2.5-2.5a.75.75 0 1 0-1.06-1.06L7.75 8.94V6H10a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.25Z"
@@ -598,7 +598,7 @@
 					<div class="flex w-full">
 						<div class="flex-1 mr-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Enter model tag (e.g. {{modelTag}})', {
 									modelTag: 'mistral:7b'
 								})}
@@ -606,7 +606,7 @@
 							/>
 						</div>
 						<button
-							class="px-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+							class="px-2.5 bg-gray-50 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 							on:click={() => {
 								pullModelHandler();
 							}}
@@ -615,7 +615,7 @@
 							{#if modelTransferring}
 								<div class="self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"
@@ -647,7 +647,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 16 16"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"
@@ -660,10 +660,10 @@
 						</button>
 					</div>
 
-					<div class="mt-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
+					<div class="mt-2 mb-1 text-xs text-subtle">
 						{$i18n.t('To access the available model names for downloading,')}
 						<a
-							class=" text-gray-500 dark:text-gray-300 font-medium underline"
+							class="text-body font-medium underline"
 							href="https://ollama.com/library"
 							target="_blank">{$i18n.t('click here.')}</a
 						>
@@ -696,13 +696,13 @@
 
 											<Tooltip content={$i18n.t('Cancel')}>
 												<button
-													class="text-gray-800 dark:text-gray-100"
+													class="text-strong"
 													on:click={() => {
 														cancelModelPullHandler(model);
 													}}
 												>
 													<svg
-														class="w-4 h-4 text-gray-800 dark:text-white"
+														class="size-4 text-gray-800 dark:text-white"
 														aria-hidden="true"
 														xmlns="http://www.w3.org/2000/svg"
 														width="24"
@@ -755,7 +755,7 @@
 							</select>
 						</div>
 						<button
-							class="px-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+							class="px-2.5 bg-gray-50 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 							on:click={() => {
 								showModelDeleteConfirm = true;
 							}}
@@ -764,7 +764,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-4 h-4"
+								class="size-4"
 							>
 								<path
 									fill-rule="evenodd"
@@ -781,7 +781,7 @@
 					<div class="flex w-full">
 						<div class="flex-1 mr-2 flex flex-col gap-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Enter model tag (e.g. {{modelTag}})', {
 									modelTag: 'my-modelfile'
 								})}
@@ -800,7 +800,7 @@
 
 						<div class="flex self-start">
 							<button
-								class="px-2.5 py-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition disabled:cursor-not-allowed"
+								class="px-2.5 py-2.5 bg-gray-50 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition disabled:cursor-not-allowed"
 								on:click={() => {
 									createModelHandler();
 								}}
@@ -851,7 +851,7 @@
 					<div class="flex justify-between items-center text-xs">
 						<div class=" text-sm font-medium">{$i18n.t('Experimental')}</div>
 						<button
-							class=" text-xs font-medium text-gray-500"
+							class="text-xs font-medium text-muted"
 							type="button"
 							on:click={() => {
 								showExperimentalOllama = !showExperimentalOllama;
@@ -937,14 +937,14 @@
 
 							{#if (modelUploadMode === 'file' && modelInputFile && modelInputFile.length > 0) || (modelUploadMode === 'url' && modelFileUrl !== '')}
 								<button
-									class="px-2.5 bg-gray-50 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg disabled:cursor-not-allowed transition"
+									class="px-2.5 bg-gray-50 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl disabled:cursor-not-allowed transition"
 									type="submit"
 									disabled={modelTransferring}
 								>
 									{#if modelTransferring}
 										<div class="self-center">
 											<svg
-												class=" w-4 h-4"
+												class=" size-4"
 												viewBox="0 0 24 24"
 												fill="currentColor"
 												xmlns="http://www.w3.org/2000/svg"
@@ -976,7 +976,7 @@
 											xmlns="http://www.w3.org/2000/svg"
 											viewBox="0 0 16 16"
 											fill="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z"
@@ -1004,10 +1004,10 @@
 								</div>
 							</div>
 						{/if}
-						<div class=" mt-1 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-1 text-xs text-subtle">
 							{$i18n.t('To access the GGUF models available for downloading,')}
 							<a
-								class=" text-gray-500 dark:text-gray-300 font-medium underline"
+								class="text-body font-medium underline"
 								href="https://huggingface.co/models?search=gguf"
 								target="_blank">{$i18n.t('click here.')}</a
 							>

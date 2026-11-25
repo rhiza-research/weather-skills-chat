@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Info from '$lib/components/icons/Info.svelte';
 	import { DropdownMenu } from 'bits-ui';
 	import { marked } from 'marked';
 	import Fuse from 'fuse.js';
@@ -339,22 +340,22 @@
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content
-		class=" z-40 {$mobile
+		class="z-40 {$mobile
 			? `w-full`
-			: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-xl  bg-white dark:bg-gray-850 dark:text-white shadow-lg  outline-hidden"
+			: `${className}`} max-w-[calc(100vw-1rem)] justify-start rounded-xl bg-panel dark:text-white shadow-lg outline-hidden"
 		transition={flyAndScale}
 		side={$mobile ? 'bottom' : 'bottom-start'}
 		sideOffset={3}
 	>
 		<slot>
 			{#if searchEnabled}
-				<div class="flex items-center gap-2.5 px-5 mt-3.5 mb-1.5">
+				<div class="flex items-center gap-2.5 px-5 mt-3 mb-1.5">
 					<Search className="size-4" strokeWidth="2.5" />
 
 					<input
 						id="model-search-input"
 						bind:value={searchValue}
-						class="w-full text-sm bg-transparent outline-hidden"
+						class="field-bare text-sm"
 						placeholder={searchPlaceholder}
 						autocomplete="off"
 						on:keydown={(e) => {
@@ -381,7 +382,7 @@
 			<div class="px-3 max-h-64 overflow-y-auto scrollbar-hidden group relative">
 				{#if tags && items.filter((item) => !(item.model?.info?.meta?.hidden ?? false)).length > 0}
 					<div
-						class=" flex w-full sticky top-0 z-10 bg-white dark:bg-gray-850 overflow-x-auto scrollbar-none"
+						class="flex w-full sticky top-0 z-10 bg-panel overflow-x-auto scrollbar-none"
 						on:wheel={(e) => {
 							if (e.deltaY !== 0) {
 								e.preventDefault();
@@ -395,10 +396,10 @@
 						>
 							{#if (items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')) || items.find((item) => item.model?.direct) || tags.length > 0}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedTag === '' &&
+									class="tab outline-none {selectedTag === '' &&
 									selectedConnectionType === ''
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = '';
@@ -410,9 +411,9 @@
 
 							{#if items.find((item) => item.model?.owned_by === 'ollama') && items.find((item) => item.model?.owned_by === 'openai')}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'ollama'
+									class="tab outline-none {selectedConnectionType === 'ollama'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'ollama';
@@ -421,9 +422,9 @@
 									{$i18n.t('Local')}
 								</button>
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'openai'
+									class="tab outline-none {selectedConnectionType === 'openai'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'openai';
@@ -435,9 +436,9 @@
 
 							{#if items.find((item) => item.model?.direct)}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedConnectionType === 'direct'
+									class="tab outline-none {selectedConnectionType === 'direct'
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedTag = '';
 										selectedConnectionType = 'direct';
@@ -449,9 +450,9 @@
 
 							{#each tags as tag}
 								<button
-									class="min-w-fit outline-none p-1.5 {selectedTag === tag
+									class="tab outline-none {selectedTag === tag
 										? ''
-										: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
+										: 'text-muted hover:text-strong'} capitalize"
 									on:click={() => {
 										selectedConnectionType = '';
 										selectedTag = tag;
@@ -467,7 +468,7 @@
 				{#each filteredItems as item, index}
 					<button
 						aria-label="model-item"
-						class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted {index ===
+						class="flex w-full text-left font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl cursor-pointer data-highlighted:bg-muted {index ===
 						selectedModelIdx
 							? 'bg-gray-100 dark:bg-gray-800 group-hover:bg-transparent'
 							: ''}"
@@ -485,7 +486,7 @@
 								<div class="flex gap-0.5 self-start h-full mb-1.5 -translate-x-1">
 									{#each item.model?.tags.sort((a, b) => a.name.localeCompare(b.name)) as tag}
 										<div
-											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+											class="text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-body"
 										>
 											{tag.name}
 										</div>
@@ -526,7 +527,7 @@
 																className="self-end"
 															>
 																<span
-																	class=" text-xs font-medium text-gray-600 dark:text-gray-400 line-clamp-1"
+																	class="text-xs font-medium text-body line-clamp-1"
 																	>{item.model.ollama?.details?.parameter_size ?? ''}</span
 																>
 															</Tooltip>
@@ -591,20 +592,7 @@
 										)}`}
 									>
 										<div class=" translate-y-[1px]">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												fill="none"
-												viewBox="0 0 24 24"
-												stroke-width="1.5"
-												stroke="currentColor"
-												class="w-4 h-4"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-												/>
-											</svg>
+											<Info className="size-4" />
 										</div>
 									</Tooltip>
 								{/if}
@@ -616,7 +604,7 @@
 										{#each item.model?.tags.sort((a, b) => a.name.localeCompare(b.name)) as tag}
 											<Tooltip content={tag.name} className="flex-shrink-0">
 												<div
-													class=" text-xs font-bold px-1 rounded-sm uppercase bg-gray-500/20 text-gray-700 dark:text-gray-200"
+													class="text-xs font-bold px-1 rounded-sm uppercase bg-gray-500/20 text-body"
 												>
 													{tag.name}
 												</div>
@@ -635,7 +623,7 @@
 					</button>
 				{:else}
 					<div class="">
-						<div class="block px-3 py-2 text-sm text-gray-700 dark:text-gray-100">
+						<div class="block px-3 py-2 text-sm text-strong">
 							{$i18n.t('No results found')}
 						</div>
 					</div>
@@ -649,7 +637,7 @@
 						placement="top-start"
 					>
 						<button
-							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted"
+							class="flex w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-tint rounded-xl cursor-pointer data-highlighted:bg-muted"
 							on:click={() => {
 								pullModelHandler();
 							}}
@@ -663,7 +651,7 @@
 
 				{#each Object.keys($MODEL_DOWNLOAD_POOL) as model}
 					<div
-						class="flex w-full justify-between font-medium select-none rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 rounded-lg cursor-pointer data-highlighted:bg-muted"
+						class="flex w-full justify-between font-medium select-none rounded-button py-2 pl-3 pr-1.5 text-sm text-strong outline-hidden transition-all duration-75 rounded-lg cursor-pointer data-highlighted:bg-muted"
 					>
 						<div class="flex">
 							<div class="-ml-2 mr-2.5 translate-y-0.5">
@@ -706,7 +694,7 @@
 								</div>
 
 								{#if 'digest' in $MODEL_DOWNLOAD_POOL[model] && $MODEL_DOWNLOAD_POOL[model].digest}
-									<div class="-mt-1 h-fit text-[0.7rem] dark:text-gray-500 line-clamp-1">
+									<div class="-mt-1 h-fit text-xs dark:text-gray-500 line-clamp-1">
 										{$MODEL_DOWNLOAD_POOL[model].digest}
 									</div>
 								{/if}
@@ -716,13 +704,13 @@
 						<div class="mr-2 ml-1 translate-y-0.5">
 							<Tooltip content={$i18n.t('Cancel')}>
 								<button
-									class="text-gray-800 dark:text-gray-100"
+									class="text-strong"
 									on:click={() => {
 										cancelModelPullHandler(model);
 									}}
 								>
 									<svg
-										class="w-4 h-4 text-gray-800 dark:text-white"
+										class="size-4 text-gray-800 dark:text-white"
 										aria-hidden="true"
 										xmlns="http://www.w3.org/2000/svg"
 										width="24"
@@ -748,7 +736,7 @@
 			{#if showTemporaryChatControl}
 				<div class="flex items-center mx-2 mb-2">
 					<button
-						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer data-highlighted:bg-muted"
+						class="flex justify-between w-full font-medium line-clamp-1 select-none items-center rounded-button py-2 px-3 text-sm text-strong outline-hidden transition-all duration-75 hover:bg-tint rounded-xl cursor-pointer data-highlighted:bg-muted"
 						on:click={async () => {
 							temporaryChatEnabled.set(!$temporaryChatEnabled);
 							await goto('/');

@@ -152,7 +152,7 @@
 						<textarea
 							id="text-completion-textarea"
 							bind:this={textCompletionAreaElement}
-							class="w-full h-full p-3 bg-transparent border border-gray-100 dark:border-gray-850 outline-hidden resize-none rounded-lg text-sm"
+							class="w-full h-full p-3 bg-transparent border border-line outline-hidden resize-none rounded-lg text-sm"
 							bind:value={text}
 							placeholder={$i18n.t("You're a helpful assistant.")}
 						/>
@@ -163,7 +163,7 @@
 			<div class="pb-3 flex justify-end">
 				{#if !loading}
 					<button
-						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+						class="btn-primary"
 						on:click={() => {
 							submitHandler();
 						}}

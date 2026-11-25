@@ -125,24 +125,24 @@
 		}}
 	/>
 
-	<div class="flex flex-col gap-1 my-1.5">
+	<div class="flex flex-col gap-1 mb-1.5">
 		<div class="flex justify-between items-center">
-			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
+			<div class="flex md:self-center text-xl font-medium items-center">
 				{$i18n.t('Knowledge')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+				<span class="text-lg font-medium text-body"
 					>{filteredItems.length}</span
 				>
 			</div>
 		</div>
 
 		<div class=" flex w-full space-x-2">
-			<div class="flex flex-1">
+			<div class="flex flex-1 rounded-xl">
 				<div class=" self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Knowledge')}
 				/>
@@ -151,7 +151,7 @@
 			{#if canCreate}
 				<div>
 					<button
-						class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+						class=" px-2 py-2 rounded-xl hover:bg-tint dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 						aria-label={$i18n.t('Create Knowledge')}
 						on:click={() => {
 							goto(`${basePath}/knowledge/create`);
@@ -165,16 +165,16 @@
 	</div>
 
 	{#if catalog === 'org'}
-		<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+		<div class="mt-4 mb-1 text-sm font-medium text-muted">
 			{$i18n.t('Knowledge from catalog')}
 		</div>
 		{#if publicItems.length === 0}
-			<div class="text-xs text-gray-500 py-3">{$i18n.t('No knowledge')}</div>
+			<div class="text-xs text-muted py-3">{$i18n.t('No knowledge')}</div>
 		{/if}
 		<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 			{#each publicItems as item}
 				<button
-					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl {isCatalogEnabled(
+					class=" flex space-x-4 text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl {isCatalogEnabled(
 						item
 					)
 						? 'cursor-pointer'
@@ -218,7 +218,7 @@
 											}}
 										/>
 									{:else}
-										<span class="text-xs text-gray-500"
+										<span class="text-xs text-muted"
 											>{item.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}</span
 										>
 									{/if}
@@ -238,11 +238,11 @@
 		</div>
 
 		{#if showOrgSection}
-			<div class="mt-4 mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+			<div class="mt-4 mb-1 text-sm font-medium text-muted">
 				{$i18n.t('{{name}} Knowledge', { name: orgName })}
 			</div>
 			{#if sectionItems.length === 0}
-				<div class="text-xs text-gray-500 py-3">{$i18n.t('No knowledge')}</div>
+				<div class="text-xs text-muted py-3">{$i18n.t('No knowledge')}</div>
 			{/if}
 		{/if}
 	{/if}
@@ -251,7 +251,7 @@
 	<div class="mb-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
 		{#each sectionItems as item}
 			<button
-				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl"
+				class=" flex space-x-4 cursor-pointer text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl"
 				on:click={() => {
 					if (item?.meta?.document) {
 						toast.error(
@@ -293,7 +293,7 @@
 
 						<div class="mt-3 flex {catalog === 'public' ? 'justify-between' : 'justify-end'}">
 							{#if catalog === 'public'}
-								<div class="text-xs text-gray-500">
+								<div class="text-xs text-muted">
 									<Tooltip
 										content={item?.user?.email ?? $i18n.t('Deleted User')}
 										className="flex shrink-0"
@@ -307,7 +307,7 @@
 									</Tooltip>
 								</div>
 							{/if}
-							<div class=" text-xs text-gray-500 line-clamp-1">
+							<div class="text-xs text-muted line-clamp-1">
 								{$i18n.t('Updated')}
 								{dayjs(item.updated_at * 1000).fromNow()}
 							</div>
@@ -319,7 +319,7 @@
 	</div>
 	{/if}
 
-	<div class=" text-gray-500 text-xs mt-1 mb-2">
+	<div class="text-muted text-xs mt-1 mb-2">
 		ⓘ {$i18n.t("Use '#' in the prompt input to load and include your knowledge.")}
 	</div>
 {:else}

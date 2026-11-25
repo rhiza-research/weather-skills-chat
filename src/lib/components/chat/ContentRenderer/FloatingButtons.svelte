@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ArrowUpSolid from '$lib/components/icons/ArrowUpSolid.svelte';
 	import { toast } from 'svelte-sonner';
 
 	import DOMPurify from 'dompurify';
@@ -227,10 +228,10 @@
 	{#if responseContent === null}
 		{#if !floatingInput}
 			<div
-				class="flex flex-row gap-0.5 shrink-0 p-1 bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-lg shadow-xl"
+				class="flex flex-row gap-0.5 shrink-0 p-1 bg-panel dark:text-gray-100 text-medium rounded-lg shadow-lg"
 			>
 				<button
-					class="px-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-sm flex items-center gap-1 min-w-fit"
+					class="px-1 hover:bg-tint rounded-xl flex items-center gap-1 min-w-fit"
 					on:click={async () => {
 						selectedText = window.getSelection().toString();
 						floatingInput = true;
@@ -249,7 +250,7 @@
 					<div class="shrink-0">{$i18n.t('Ask')}</div>
 				</button>
 				<button
-					class="px-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-sm flex items-center gap-1 min-w-fit"
+					class="px-1 hover:bg-tint rounded-xl flex items-center gap-1 min-w-fit"
 					on:click={() => {
 						selectedText = window.getSelection().toString();
 						explainHandler();
@@ -262,12 +263,12 @@
 			</div>
 		{:else}
 			<div
-				class="py-1 flex dark:text-gray-100 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-850 w-72 rounded-full shadow-xl"
+				class="py-1 flex dark:text-gray-100 bg-gray-50 dark:bg-gray-800 border border-line w-72 rounded-full shadow-lg"
 			>
 				<input
 					type="text"
 					id="floating-message-input"
-					class="ml-5 bg-transparent outline-hidden w-full flex-1 text-sm"
+					class="field-bare ml-5 flex-1 text-sm"
 					placeholder={$i18n.t('Ask a question')}
 					bind:value={floatingInputValue}
 					on:keydown={(e) => {
@@ -280,32 +281,21 @@
 				<div class="ml-1 mr-2">
 					<button
 						class="{floatingInputValue !== ''
-							? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
-							: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 m-0.5 self-center"
+							? 'bg-inverse text-on-inverse hover:bg-gray-900 dark:hover:bg-gray-100'
+							: 'text-on-inverse bg-gray-200 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 m-0.5 self-center"
 						on:click={() => {
 							askHandler();
 						}}
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 16 16"
-							fill="currentColor"
-							class="size-4"
-						>
-							<path
-								fill-rule="evenodd"
-								d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
+						<ArrowUpSolid className="size-4" />
 					</button>
 				</div>
 			</div>
 		{/if}
 	{:else}
-		<div class="bg-white dark:bg-gray-850 dark:text-gray-100 rounded-xl shadow-xl w-80 max-w-full">
+		<div class="bg-panel dark:text-gray-100 rounded-xl shadow-lg w-80 max-w-full">
 			<div
-				class="bg-gray-50/50 dark:bg-gray-800 dark:text-gray-100 text-medium rounded-xl px-3.5 py-3 w-full"
+				class="bg-gray-50/50 dark:bg-gray-800 dark:text-gray-100 text-medium rounded-xl px-4 py-3 w-full"
 			>
 				<div class="font-medium">
 					<Markdown id={`${id}-float-prompt`} content={prompt} />
@@ -313,15 +303,15 @@
 			</div>
 
 			<div
-				class="bg-white dark:bg-gray-850 dark:text-gray-100 text-medium rounded-xl px-3.5 py-3 w-full"
+				class="bg-panel dark:text-gray-100 text-medium rounded-xl px-4 py-3 w-full"
 			>
 				<div class=" max-h-80 overflow-y-auto w-full markdown-prose-xs" id="response-container">
 					<Markdown id={`${id}-float-response`} content={responseContent} />
 
 					{#if responseDone}
-						<div class="flex justify-end pt-3 text-sm font-medium">
+						<div class="modal-actions">
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+								class="btn-primary"
 								on:click={addHandler}
 							>
 								{$i18n.t('Add')}

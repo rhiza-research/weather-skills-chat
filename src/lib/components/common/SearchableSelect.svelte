@@ -69,7 +69,7 @@
 	</DropdownMenu.Trigger>
 
 	<DropdownMenu.Content
-		class="z-40 min-w-64 max-w-[calc(100vw-1rem)] rounded-xl bg-white dark:bg-gray-850 dark:text-white shadow-lg outline-hidden"
+		class="z-40 min-w-64 max-w-[calc(100vw-1rem)] rounded-xl bg-panel dark:text-white shadow-lg outline-hidden"
 		transition={flyAndScale}
 		side="bottom"
 		align="start"
@@ -80,7 +80,7 @@
 			<Search className="size-4" strokeWidth="2.5" />
 			<input
 				bind:value={searchValue}
-				class="w-full text-sm bg-transparent outline-hidden"
+				class="field-bare text-sm"
 				placeholder={searchPlaceholder}
 				autocomplete="off"
 				on:input={() => {
@@ -111,7 +111,7 @@
 			{#each filteredItems as item, index (item.value)}
 				<button
 					type="button"
-					class="flex w-full text-left items-center rounded-lg py-1.5 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 {index ===
+					class="flex w-full text-left items-center rounded-xl py-1.5 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 {index ===
 					highlighted
 						? 'bg-gray-100 dark:bg-gray-800'
 						: ''}"
@@ -127,7 +127,7 @@
 					{/if}
 				</button>
 			{:else}
-				<div class="px-3 py-2 text-sm text-gray-500">{noResults}</div>
+				<div class="px-3 py-2 text-sm text-muted">{noResults}</div>
 			{/each}
 		</div>
 	</DropdownMenu.Content>

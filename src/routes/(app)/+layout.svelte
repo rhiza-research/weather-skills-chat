@@ -306,7 +306,7 @@
 		     chat's artifacts pane cannot paint before sign-in. -->
 	{:else}
 	<div
-		class=" text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900 h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
+		class="text-strong bg-page h-screen max-h-[100dvh] overflow-auto flex flex-row justify-end"
 	>
 		{#if $user && !['user', 'admin'].includes($user.role)}
 			{#if AccountPending}
@@ -358,7 +358,7 @@
 								</button>
 
 								<button
-									class="text-xs text-center w-full mt-2 text-gray-400 underline"
+									class="text-xs text-center w-full mt-2 text-muted underline"
 									on:click={async () => {
 										localDBChats = [];
 									}}>{$i18n.t('Close')}</button

@@ -7,6 +7,8 @@
 
 	import Switch from '$lib/components/common/Switch.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import SettingToggle from '$lib/components/common/SettingToggle.svelte';
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 	const dispatch = createEventDispatcher();
 
 	const i18n = getContext('i18n');
@@ -171,128 +173,78 @@
 		dispatch('save');
 	}}
 >
-	<div class=" space-y-3 overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane space-y-3">
 		<div>
-			<div class=" mb-1 text-sm font-medium">{$i18n.t('STT Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('STT Settings')}</h3>
 
 			{#if $config.audio.stt.engine !== 'web'}
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Speech-to-Text Engine')}</div>
-					<div class="flex items-center relative">
-						<select
-							class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
-							bind:value={STTEngine}
-							placeholder={$i18n.t('Select an engine')}
-						>
-							<option value="">{$i18n.t('Default')}</option>
-							<option value="web">{$i18n.t('Web API')}</option>
-						</select>
-					</div>
-				</div>
+				<SettingRow label={$i18n.t('Speech-to-Text Engine')}>
+					<select class="field-select" bind:value={STTEngine} placeholder={$i18n.t('Select an engine')}>
+						<option value="">{$i18n.t('Default')}</option>
+						<option value="web">{$i18n.t('Web API')}</option>
+					</select>
+				</SettingRow>
 			{/if}
 
-			<div class=" py-0.5 flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">
-					{$i18n.t('Instant Auto-Send After Voice Transcription')}
-				</div>
-
-				<button
-					class="p-1 px-3 text-xs flex rounded-sm transition"
-					on:click={() => {
-						toggleSpeechAutoSend();
-					}}
-					type="button"
-				>
-					{#if speechAutoSend === true}
-						<span class="ml-2 self-center">{$i18n.t('On')}</span>
-					{:else}
-						<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-					{/if}
-				</button>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Instant Auto-Send After Voice Transcription')}
+				checked={speechAutoSend === true}
+				on:click={toggleSpeechAutoSend}
+			/>
 		</div>
 
 		<div>
-			<div class=" mb-1 text-sm font-medium">{$i18n.t('TTS Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('TTS Settings')}</h3>
 
-			<div class=" py-0.5 flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">{$i18n.t('Text-to-Speech Engine')}</div>
-				<div class="flex items-center relative">
-					<select
-						class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
-						bind:value={TTSEngine}
-						placeholder={$i18n.t('Select an engine')}
-					>
-						<option value="">{$i18n.t('Default')}</option>
-						<option value="browser-kokoro">{$i18n.t('Kokoro.js (Browser)')}</option>
-					</select>
-				</div>
-			</div>
+			<SettingRow label={$i18n.t('Text-to-Speech Engine')}>
+				<select class="field-select" bind:value={TTSEngine} placeholder={$i18n.t('Select an engine')}>
+					<option value="">{$i18n.t('Default')}</option>
+					<option value="browser-kokoro">{$i18n.t('Kokoro.js (Browser)')}</option>
+				</select>
+			</SettingRow>
 
 			{#if TTSEngine === 'browser-kokoro'}
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Kokoro.js Dtype')}</div>
-					<div class="flex items-center relative">
-						<select
-							class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
-							bind:value={TTSEngineConfig.dtype}
-							placeholder={$i18n.t('Select dtype')}
-						>
-							<option value="" disabled selected>{$i18n.t('Select dtype')}</option>
-							<option value="fp32">fp32</option>
-							<option value="fp16">fp16</option>
-							<option value="q8">q8</option>
-							<option value="q4">q4</option>
-						</select>
-					</div>
-				</div>
+				<SettingRow label={$i18n.t('Kokoro.js Dtype')}>
+					<select
+						class="field-select"
+						bind:value={TTSEngineConfig.dtype}
+						placeholder={$i18n.t('Select dtype')}
+					>
+						<option value="" disabled selected>{$i18n.t('Select dtype')}</option>
+						<option value="fp32">fp32</option>
+						<option value="fp16">fp16</option>
+						<option value="q8">q8</option>
+						<option value="q4">q4</option>
+					</select>
+				</SettingRow>
 			{/if}
 
-			<div class=" py-0.5 flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">{$i18n.t('Auto-playback response')}</div>
+			<SettingToggle
+				label={$i18n.t('Auto-playback response')}
+				checked={responseAutoPlayback === true}
+				on:click={toggleResponseAutoPlayback}
+			/>
 
-				<button
-					class="p-1 px-3 text-xs flex rounded-sm transition"
-					on:click={() => {
-						toggleResponseAutoPlayback();
-					}}
-					type="button"
-				>
-					{#if responseAutoPlayback === true}
-						<span class="ml-2 self-center">{$i18n.t('On')}</span>
-					{:else}
-						<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-					{/if}
-				</button>
-			</div>
-
-			<div class=" py-0.5 flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">{$i18n.t('Speech Playback Speed')}</div>
-
-				<div class="flex items-center relative">
-					<select
-						class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 p-1 text-xs bg-transparent outline-hidden text-right"
-						bind:value={playbackRate}
-					>
-						{#each speedOptions as option}
-							<option value={option} selected={playbackRate === option}>{option}x</option>
-						{/each}
-					</select>
-				</div>
-			</div>
+			<SettingRow label={$i18n.t('Speech Playback Speed')}>
+				<select class="field-select" bind:value={playbackRate}>
+					{#each speedOptions as option}
+						<option value={option} selected={playbackRate === option}>{option}x</option>
+					{/each}
+				</select>
+			</SettingRow>
 		</div>
 
-		<hr class=" border-gray-100 dark:border-gray-850" />
+		<hr class="border-line my-2" />
 
 		{#if TTSEngine === 'browser-kokoro'}
 			{#if TTSModel}
 				<div>
-					<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
+					<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 					<div class="flex w-full">
 						<div class="flex-1">
 							<input
 								list="voice-list"
-								class="w-full text-sm bg-white dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								bind:value={voice}
 								placeholder={$i18n.t('Select a voice')}
 							/>
@@ -307,7 +259,7 @@
 				</div>
 			{:else}
 				<div>
-					<div class=" mb-2.5 text-sm font-medium flex gap-2 items-center">
+					<div class="sub-title flex gap-2 items-center">
 						<Spinner className="size-4" />
 
 						<div class=" text-sm font-medium shimmer">
@@ -318,20 +270,17 @@
 						</div>
 					</div>
 
-					<div class="text-xs text-gray-500">
+					<div class="text-xs text-muted">
 						{$i18n.t('Please do not close the settings page while loading the model.')}
 					</div>
 				</div>
 			{/if}
 		{:else if $config.audio.tts.engine === ''}
 			<div>
-				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
+				<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 				<div class="flex w-full">
 					<div class="flex-1">
-						<select
-							class="w-full text-sm bg-white dark:text-gray-300 dark:bg-gray-850 outline-hidden"
-							bind:value={voice}
-						>
+						<select class="field" aria-label={$i18n.t('Set Voice')} bind:value={voice}>
 							<option value="" selected={voice !== ''}>{$i18n.t('Default')}</option>
 							{#each voices.filter((v) => nonLocalVoices || v.localService === true) as _voice}
 								<option
@@ -355,12 +304,12 @@
 			</div>
 		{:else if $config.audio.tts.engine !== ''}
 			<div>
-				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
+				<div class="my-1.5 text-sm font-medium">{$i18n.t('Set Voice')}</div>
 				<div class="flex w-full">
 					<div class="flex-1">
 						<input
 							list="voice-list"
-							class="w-full text-sm bg-white dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={voice}
 							placeholder={$i18n.t('Select a voice')}
 						/>
@@ -376,11 +325,8 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end text-sm font-medium">
-		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
-			type="submit"
-		>
+	<div class="modal-actions">
+		<button class="btn-primary" type="submit">
 			{$i18n.t('Save')}
 		</button>
 	</div>

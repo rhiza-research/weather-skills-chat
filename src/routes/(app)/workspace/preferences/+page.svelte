@@ -126,27 +126,27 @@
 />
 
 {#if loaded}
-	<div class="flex flex-col gap-1 my-1.5">
+	<div class="flex flex-col gap-1 mb-1.5">
 		<div class="flex justify-between items-center">
-			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
+			<div class="flex md:self-center text-xl font-medium items-center">
 				{$i18n.t('Preferences')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{items.length}</span>
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
-		<div class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+		<div class="text-sm text-muted mb-2">
 			{$i18n.t(
 				'Enabled preferences are added to your chats. Organization preferences apply to every member.'
 			)}
 		</div>
 
 		<div class="flex w-full space-x-2">
-			<div class="flex flex-1">
+			<div class="flex flex-1 rounded-xl">
 				<div class="self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Preferences')}
 				/>
@@ -157,17 +157,17 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800"
+			class="flex flex-col gap-2 mb-4 mt-2 p-3 rounded-xl bg-surface border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
-				class="w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden"
+				class="field-bare text-sm rounded-lg py-2 px-3"
 				placeholder={$i18n.t('Title')}
 				bind:value={title}
 				required
 			/>
 			<textarea
-				class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+				class="field-outline min-h-28"
 				placeholder={$i18n.t('Preference text')}
 				bind:value={content}
 				required
@@ -175,7 +175,7 @@
 			<div class="flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
 				{#if !isPersonal && isOrgAdmin}
 					<select
-						class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+						class="field-outline md:w-40"
 						bind:value={visibility}
 					>
 						<option value="private">{$i18n.t('Private')}</option>
@@ -185,7 +185,7 @@
 					<div></div>
 				{/if}
 				<button
-					class="px-3.5 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+					class="btn-primary rounded-lg py-2"
 					type="submit"
 				>
 					{$i18n.t('Save')}
@@ -196,7 +196,7 @@
 
 	<div class="my-2 mb-5 flex flex-col gap-2">
 		{#each items as preference (preference.id)}
-			<div class="px-3 py-3 rounded-xl border border-gray-100 dark:border-gray-800">
+			<div class="px-3 py-3 rounded-xl border border-line">
 				<div class="flex items-start justify-between gap-3">
 					<div class="min-w-0">
 						<div class="flex items-center gap-2">
@@ -215,7 +215,7 @@
 								on:change={(e) => setEnabled(preference, !!e.detail)}
 							/>
 						{:else}
-							<span class="text-xs text-gray-500">
+							<span class="text-xs text-muted">
 								{preference.enabled ? $i18n.t('Enabled') : $i18n.t('Disabled')}
 							</span>
 						{/if}
@@ -225,22 +225,22 @@
 				{#if editing === preference.id}
 					<div class="mt-3 flex flex-col gap-2">
 						<input
-							class="w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+							class="field-outline"
 							bind:value={editTitle}
 						/>
 						<textarea
-							class="w-full min-h-28 text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+							class="field-outline min-h-28"
 							bind:value={editContent}
 						></textarea>
 						<div class="flex gap-2">
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+								class="btn-primary rounded-lg text-xs px-2"
 								on:click={() => saveEdit(preference)}
 							>
 								{$i18n.t('Save')}
 							</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 								on:click={() => (editing = null)}
 							>
 								{$i18n.t('Cancel')}
@@ -248,13 +248,13 @@
 						</div>
 					</div>
 				{:else}
-					<div class="mt-2 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+					<div class="mt-2 text-sm text-body whitespace-pre-wrap">
 						{preference.content}
 					</div>
 					{#if preference.can_manage}
 						<div class="mt-2 flex gap-1">
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+								class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 								on:click={() => {
 									editing = preference.id;
 									editTitle = preference.title;
@@ -264,7 +264,7 @@
 								{$i18n.t('Edit')}
 							</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+								class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
 								on:click={() => {
 									selectedPreference = preference;
 									showDeleteConfirm = true;
@@ -277,7 +277,7 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+			<div class="text-sm text-muted py-6 text-center">
 				{$i18n.t('No preferences yet.')}
 			</div>
 		{/each}

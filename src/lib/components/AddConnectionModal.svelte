@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ArrowPathSolid from '$lib/components/icons/ArrowPathSolid.svelte';
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
 	import { toast } from 'svelte-sonner';
 	import { getContext, onMount } from 'svelte';
 	const i18n = getContext('i18n');
@@ -145,29 +147,21 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
-			<div class=" text-lg font-medium self-center font-primary">
+			<h2 class="modal-title">
 				{#if edit}
 					{$i18n.t('Edit Connection')}
 				{:else}
 					{$i18n.t('Add Connection')}
 				{/if}
-			</div>
+			</h2>
 			<button
 				class="self-center"
+					aria-label={$i18n.t('Close')}
 				on:click={() => {
 					show = false;
 				}}
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-5 h-5"
-				>
-					<path
-						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-					/>
-				</svg>
+				<XMarkSolid className="size-5" />
 			</button>
 		</div>
 
@@ -183,11 +177,11 @@
 					<div class="px-1">
 						<div class="flex gap-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('URL')}</div>
+								<div class="mb-0.5 text-xs text-muted">{$i18n.t('URL')}</div>
 
 								<div class="flex-1">
 									<input
-										class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										class="field-bare text-sm"
 										type="text"
 										bind:value={url}
 										placeholder={$i18n.t('API Base URL')}
@@ -199,24 +193,13 @@
 
 							<Tooltip content={$i18n.t('Verify Connection')} className="self-end -mb-1">
 								<button
-									class="self-center p-1 bg-transparent hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-850 rounded-lg transition"
+									class="btn-ghost p-1"
 									on:click={() => {
 										verifyHandler();
 									}}
 									type="button"
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											fill-rule="evenodd"
-											d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-											clip-rule="evenodd"
-										/>
-									</svg>
+									<ArrowPathSolid className="size-4" />
 								</button>
 							</Tooltip>
 
@@ -229,11 +212,11 @@
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Key')}</div>
+								<div class="mb-0.5 text-xs text-muted">{$i18n.t('Key')}</div>
 
 								<div class="flex-1">
 									<SensitiveInput
-										className="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+										className="w-full text-sm bg-transparent outline-hidden"
 										bind:value={key}
 										placeholder={$i18n.t('API Key')}
 										required={false}
@@ -242,7 +225,7 @@
 							</div>
 
 							<div class="flex flex-col w-full">
-								<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Prefix ID')}</div>
+								<div class="mb-1 text-xs text-muted">{$i18n.t('Prefix ID')}</div>
 
 								<div class="flex-1">
 									<Tooltip
@@ -251,7 +234,7 @@
 										)}
 									>
 										<input
-											class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+											class="field-bare text-sm"
 											type="text"
 											bind:value={prefixId}
 											placeholder={$i18n.t('Prefix ID')}
@@ -265,7 +248,7 @@
 						{#if !ollama && !direct}
 							<div class="flex gap-2 mt-2">
 								<div class="flex flex-col w-full">
-									<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
+									<div class="mb-0.5 text-xs text-muted">{$i18n.t('Name')}</div>
 
 									<div class="flex-1">
 										<Tooltip
@@ -274,7 +257,7 @@
 											)}
 										>
 											<input
-												class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+												class="field-bare text-sm"
 												type="text"
 												bind:value={name}
 												placeholder={$i18n.t('e.g. openrouter')}
@@ -288,7 +271,7 @@
 
 						<div class="flex gap-2 mt-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-1.5 text-xs text-gray-500">{$i18n.t('Tags')}</div>
+								<div class="mb-1.5 text-xs text-muted">{$i18n.t('Tags')}</div>
 
 								<div class="flex-1">
 									<Tags
@@ -312,13 +295,13 @@
 						{#if !ollama && !direct}
 							<div class="flex gap-2 mt-2">
 								<div class="flex flex-col w-full">
-									<div class=" mb-1 text-xs text-gray-500">
+									<div class="mb-1 text-xs text-muted">
 										{$i18n.t('Model-call tracing')}
 									</div>
 
 									<div class="flex-1">
 										<select
-											class="w-full text-sm bg-transparent outline-hidden"
+											class="field-bare text-sm"
 											bind:value={modelCallTracing}
 										>
 											<!-- A new provider style is also added to _PROVIDER_TRACE_FIELD_BUILDERS in backend/open_webui/utils/langfuse_tracing.py. -->
@@ -327,7 +310,7 @@
 										</select>
 									</div>
 
-									<div class="mt-1 text-xs text-gray-500">
+									<div class="mt-1 text-xs text-muted">
 										{$i18n.t(
 											'OpenRouter records model calls only if Broadcast to this Langfuse project is enabled in OpenRouter. Otherwise leave this on App.'
 										)}
@@ -336,11 +319,11 @@
 							</div>
 						{/if}
 
-						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div class="flex flex-col w-full">
 							<div class="mb-1 flex justify-between">
-								<div class="text-xs text-gray-500">{$i18n.t('Model IDs')}</div>
+								<div class="text-xs text-muted">{$i18n.t('Model IDs')}</div>
 							</div>
 
 							{#if modelIds.length > 0}
@@ -364,7 +347,7 @@
 									{/each}
 								</div>
 							{:else}
-								<div class="text-gray-500 text-xs text-center py-2 px-10">
+								<div class="text-muted text-xs text-center py-2 px-10">
 									{#if ollama}
 										{$i18n.t('Leave empty to include all models from "{{url}}/api/tags" endpoint', {
 											url: url
@@ -378,13 +361,13 @@
 							{/if}
 						</div>
 
-						<hr class=" border-gray-100 dark:border-gray-700/10 my-2.5 w-full" />
+						<hr class="border-line my-2.5 w-full" />
 
 						<div class="flex items-center">
 							<input
 								class="w-full py-1 text-sm rounded-lg bg-transparent {modelId
 									? ''
-									: 'text-gray-500'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+									: 'text-muted'} outline-hidden"
 								bind:value={modelId}
 								placeholder={$i18n.t('Add a model ID')}
 							/>
@@ -402,10 +385,10 @@
 						</div>
 					</div>
 
-					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
+					<div class="modal-actions gap-1.5">
 						{#if edit}
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="px-4 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-900 bg-white text-strong hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
 								type="button"
 								on:click={() => {
 									onDelete();
@@ -417,7 +400,7 @@
 						{/if}
 
 						<button
-							class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
+							class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
 								? ' cursor-not-allowed'
 								: ''}"
 							type="submit"
@@ -428,7 +411,7 @@
 							{#if loading}
 								<div class="ml-2 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

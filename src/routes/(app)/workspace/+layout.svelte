@@ -35,12 +35,12 @@
 			? 'md:max-w-[calc(100%-260px)]'
 			: ''} max-w-full"
 	>
-		<nav class="   px-2.5 pt-1 backdrop-blur-xl drag-region">
+		<nav class="page-nav drag-region">
 			<div class=" flex items-center gap-1">
 				<div class="{$showSidebar ? 'md:hidden' : ''} self-center flex flex-none items-center">
 					<button
 						id="sidebar-toggle-button"
-						class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+						class="btn-ghost"
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}
@@ -54,41 +54,41 @@
 
 				<div class="">
 					<div
-						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent py-1 touch-auto pointer-events-auto"
+						class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent touch-auto pointer-events-auto"
 					>
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/workspace/models'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/models">{$i18n.t('Models')}</a
 						>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/workspace/skills')
+							class="tab {$page.url.pathname.includes('/workspace/skills')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/skills"
 						>
 							{$i18n.t('Skills')}
 						</a>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/workspace/secrets')
+							class="tab {$page.url.pathname.includes('/workspace/secrets')
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/secrets"
 						>
 							{$i18n.t('Secrets')}
 						</a>
 
 						<a
-							class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes(
+							class="tab {$page.url.pathname.includes(
 								'/workspace/preferences'
 							)
 								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+								: 'text-muted hover:text-strong'}"
 							href="/workspace/preferences"
 						>
 							{$i18n.t('Preferences')}
@@ -100,7 +100,7 @@
 			</div>
 		</nav>
 
-		<div class="  pb-1 px-[18px] flex-1 max-h-full overflow-y-auto" id="workspace-container">
+		<div class="page-body" id="workspace-container">
 			<slot />
 		</div>
 	</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EllipsisHorizontalSolid from '$lib/components/icons/EllipsisHorizontalSolid.svelte';
 	import { getContext, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -101,7 +102,7 @@
 			<Dropdown bind:show={showSort}>
 				<Tooltip content={$i18n.t('Sort')}>
 					<button
-						class="p-0.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-850"
+						class="p-0.5 rounded-xl hover:bg-tint"
 						aria-label={$i18n.t('Sort scheduled tasks')}
 					>
 						<BarsArrowUp className="size-3.5" strokeWidth="2" />
@@ -109,7 +110,7 @@
 				</Tooltip>
 				<div slot="content">
 					<DropdownMenu.Content
-						class="w-full max-w-[180px] rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+						class="menu-panel max-w-[180px]"
 						sideOffset={-2}
 						side="bottom"
 						align="end"
@@ -117,7 +118,7 @@
 					>
 						{#each sortOptions as option (option.value)}
 							<DropdownMenu.Item
-								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+								class="flex gap-2 items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-tint rounded-xl"
 								on:click={() => {
 									sortBy = option.value;
 									saveSetting('scheduledTaskSort', sortBy);
@@ -135,13 +136,13 @@
 		</div>
 
 		<div
-			class="ml-3 pl-1 mt-[1px] flex flex-col max-h-48 overflow-y-auto border-s border-gray-100 dark:border-gray-900"
+			class="ml-3 pl-1 mt-px flex flex-col max-h-48 overflow-y-auto border-s border-line"
 		>
 			{#each pinned as task (task.id)}
 				{@const dot = taskDot(task, now)}
 				{@const current = task.last_run?.chat_id && task.last_run.chat_id === $chatId}
 				<div
-					class="group flex items-center gap-1 rounded-lg px-2 py-[5px] text-sm {current
+					class="group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm {current
 						? 'bg-gray-100 dark:bg-gray-900'
 						: 'hover:bg-gray-100 dark:hover:bg-gray-900'}"
 				>
@@ -149,7 +150,7 @@
 						class="flex-1 min-w-0 flex items-center gap-2 text-left"
 						on:click={() => openTask(task)}
 					>
-						<TaskImage {task} className="size-5 rounded text-[10px]" />
+						<TaskImage {task} className="size-5 rounded text-xs" />
 						<Tooltip
 							content={task.name}
 							className="min-w-0"
@@ -174,16 +175,7 @@
 								aria-label={$i18n.t('Scheduled task menu')}
 								class="self-center dark:hover:text-white transition"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									viewBox="0 0 16 16"
-									fill="currentColor"
-									class="w-4 h-4"
-								>
-									<path
-										d="M2 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM6.5 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM12.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
-									/>
-								</svg>
+								<EllipsisHorizontalSolid className="size-4" />
 							</button>
 						</TaskMenu>
 					</div>

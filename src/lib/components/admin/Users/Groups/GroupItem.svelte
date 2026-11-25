@@ -77,7 +77,7 @@
 	</div>
 
 	<div class="w-full flex justify-end">
-		<div class=" rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-gray-850 transition">
+		<div class=" rounded-lg p-1 hover:bg-black/5 dark:hover:bg-white/5 transition">
 			<Pencil className="size-3.5" />
 		</div>
 	</div>

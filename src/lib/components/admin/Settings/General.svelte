@@ -119,6 +119,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 		const ldapConfig = await getLdapConfig(localStorage.token);
 		ENABLE_LDAP = ldapConfig.ENABLE_LDAP;
 	});
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 </script>
 
 <form
@@ -130,19 +131,19 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 	<div class="mt-0.5 space-y-3 overflow-y-scroll scrollbar-hidden h-full">
 		{#if adminConfig !== null}
 			<div class="">
-				<div class="mb-3.5">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('General')}</div>
+				<div class="mb-3">
+					<h3 class="section-title">{$i18n.t('General')}</h3>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class="border-line my-2" />
 
 					<div class="mb-2.5">
-						<div class=" mb-1 text-xs font-medium flex space-x-2 items-center">
+						<div class="field-label flex space-x-2 items-center">
 							<div>
 								{$i18n.t('Version')}
 							</div>
 						</div>
 						<div class="flex w-full justify-between items-center">
-							<div class="flex flex-col text-xs text-gray-700 dark:text-gray-200">
+							<div class="flex flex-col text-xs text-body">
 								<Tooltip content={$config?.build_hash}>
 									{runningReleaseLabel($config?.image_tag)}
 								</Tooltip>
@@ -156,7 +157,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								<div class="">
 									{$i18n.t('Help')}
 								</div>
-								<div class=" text-xs text-gray-500">
+								<div class="text-xs text-muted">
 									{$i18n.t('Shown to users on error screens and failed responses.')}
 								</div>
 							</div>
@@ -178,17 +179,17 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 										{$i18n.t('License')}
 									</div>
 
-									<div class="text-gray-500 mt-0.5">
-										<span class=" capitalize text-black dark:text-white"
+									<div class="text-muted mt-0.5">
+										<span class="capitalize text-strong"
 											>{$config?.license_metadata?.type}
 											license</span
 										>
 										{$i18n.t('registered to')}
-										<span class=" capitalize text-black dark:text-white"
+										<span class="capitalize strong"
 											>{$config?.license_metadata?.organization_name}</span
 										>
-										{$i18n.t('for')}
-										<span class=" font-medium text-black dark:text-white"
+										for
+										<span class="font-medium strong"
 											>{$config?.license_metadata?.seats ?? 'Unlimited'} users.</span
 										>
 									</div>
@@ -204,15 +205,14 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Authentication')}</div>
+					<h3 class="section-title">{$i18n.t('Authentication')}</h3>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class="border-line my-2" />
 
-					<div class="  mb-2.5 flex w-full justify-between">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Default User Role')}</div>
+					<SettingRow label={$i18n.t('Default User Role')}>
 						<div class="flex items-center relative">
 							<select
-								class="dark:bg-gray-900 w-fit pr-8 rounded-sm px-2 text-xs bg-transparent outline-hidden text-right"
+								class="field-select"
 								bind:value={adminConfig.DEFAULT_USER_ROLE}
 								placeholder={$i18n.t('Select a role')}
 							>
@@ -220,43 +220,27 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								<option value="user">{$i18n.t('user')}</option>
 							</select>
 						</div>
-					</div>
+					</SettingRow>
 
-					<div class=" mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Enable New Sign Ups')}</div>
-
+					<SettingRow label={$i18n.t('Enable New Sign Ups')}>
 						<Switch bind:state={adminConfig.ENABLE_SIGNUP} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs pr-2">
-							<div class="font-medium">{$i18n.t('Enable OAuth Sign Ups')}</div>
-							<div class="text-xs text-gray-500">
-								{$i18n.t('Allow new accounts to be created on first OAuth login.')}
-							</div>
-						</div>
-
+					<SettingRow label={$i18n.t('Enable OAuth Sign Ups')} description={$i18n.t('Allow new accounts to be created on first OAuth login.')}>
 						<Switch bind:state={adminConfig.ENABLE_OAUTH_SIGNUP} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs pr-2">
-							<div class="font-medium">{$i18n.t('Merge Accounts by Email')}</div>
-							<div class="text-xs text-gray-500">
-								{$i18n.t('Link OAuth logins to existing users with the same email.')}
-							</div>
-						</div>
-
+					<SettingRow label={$i18n.t('Merge Accounts by Email')} description={$i18n.t('Link OAuth logins to existing users with the same email.')}>
 						<Switch bind:state={adminConfig.OAUTH_MERGE_ACCOUNTS_BY_EMAIL} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full flex-col pr-2">
+					<div class="flex w-full flex-col py-1.5">
 						<div class="text-xs font-medium">
 							{$i18n.t('Allowed OAuth Email Domains')}
 						</div>
 
 						<input
-							class="w-full mt-1 rounded-lg text-sm dark:text-gray-300 bg-transparent outline-hidden"
+							class="field mt-1"
 							type="text"
 							placeholder={$i18n.t(
 								'Enter domains separated by commas (e.g., example.com,site.org)'
@@ -264,48 +248,38 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 							bind:value={adminConfig.OAUTH_ALLOWED_DOMAINS}
 						/>
 
-						<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-1 text-xs text-muted">
 							{$i18n.t('Use * to allow any domain.')}
 						</div>
 					</div>
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center text-xs font-medium">
-							{$i18n.t('Show Admin Details in Account Pending Overlay')}
-						</div>
-
+					<SettingRow label={$i18n.t('Show Admin Details in Account Pending Overlay')}>
 						<Switch bind:state={adminConfig.SHOW_ADMIN_DETAILS} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full justify-between pr-2">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Enable API Key')}</div>
-
+					<SettingRow label={$i18n.t('Enable API Key')}>
 						<Switch bind:state={adminConfig.ENABLE_API_KEY} />
-					</div>
+					</SettingRow>
 
 					{#if adminConfig?.ENABLE_API_KEY}
-						<div class="mb-2.5 flex w-full justify-between pr-2">
-							<div class=" self-center text-xs font-medium">
-								{$i18n.t('API Key Endpoint Restrictions')}
-							</div>
-
+						<SettingRow label={$i18n.t('API Key Endpoint Restrictions')}>
 							<Switch bind:state={adminConfig.ENABLE_API_KEY_ENDPOINT_RESTRICTIONS} />
-						</div>
+						</SettingRow>
 
 						{#if adminConfig?.ENABLE_API_KEY_ENDPOINT_RESTRICTIONS}
-							<div class=" flex w-full flex-col pr-2">
+							<div class="flex w-full flex-col py-1.5">
 								<div class=" text-xs font-medium">
 									{$i18n.t('Allowed Endpoints')}
 								</div>
 
 								<input
-									class="w-full mt-1 rounded-lg text-sm dark:text-gray-300 bg-transparent outline-hidden"
+									class="field mt-1"
 									type="text"
 									placeholder={`e.g.) /api/v1/chats`}
 									bind:value={adminConfig.API_KEY_ALLOWED_ENDPOINTS}
 								/>
 
-								<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+								<div class="mt-2 text-xs text-muted">
 									{$i18n.t(
 										'Comma-separated list of endpoint paths API keys may call. Leave empty to allow all.'
 									)}
@@ -321,23 +295,23 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex mt-2 space-x-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								type="text"
 								placeholder={`e.g.) "30m","1h", "10d". `}
 								bind:value={adminConfig.JWT_EXPIRES_IN}
 							/>
 						</div>
 
-						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Valid time units:')}
-							<span class=" text-gray-300 font-medium"
+							<span class="text-muted font-medium"
 								>{$i18n.t("'s', 'm', 'h', 'd', 'w' or '-1' for no expiration.")}</span
 							>
 						</div>
 					</div>
 
 					<div class=" space-y-3">
-						<div class="mt-2 space-y-2 pr-1.5">
+						<div class="mt-2 space-y-2">
 							<div class="flex justify-between items-center text-sm">
 								<div class="  font-medium">{$i18n.t('LDAP')}</div>
 
@@ -355,11 +329,11 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 								<div class="flex flex-col gap-1">
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Label')}
 											</div>
 											<input
-												class="w-full bg-transparent outline-hidden py-0.5"
+												class="field"
 												required
 												placeholder={$i18n.t('Enter server label')}
 												bind:value={LDAP_SERVER.label}
@@ -369,18 +343,18 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Host')}
 											</div>
 											<input
-												class="w-full bg-transparent outline-hidden py-0.5"
+												class="field"
 												required
 												placeholder={$i18n.t('Enter server host')}
 												bind:value={LDAP_SERVER.host}
 											/>
 										</div>
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Port')}
 											</div>
 											<Tooltip
@@ -389,7 +363,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												className="w-full"
 											>
 												<input
-													class="w-full bg-transparent outline-hidden py-0.5"
+													class="field"
 													type="number"
 													placeholder={$i18n.t('Enter server port')}
 													bind:value={LDAP_SERVER.port}
@@ -399,7 +373,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Application DN')}
 											</div>
 											<Tooltip
@@ -407,7 +381,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="w-full bg-transparent outline-hidden py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Enter Application DN')}
 													bind:value={LDAP_SERVER.app_dn}
@@ -415,7 +389,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 											</Tooltip>
 										</div>
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Application DN Password')}
 											</div>
 											<SensitiveInput
@@ -426,7 +400,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Attribute for Mail')}
 											</div>
 											<Tooltip
@@ -436,7 +410,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="w-full bg-transparent outline-hidden py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Example: mail')}
 													bind:value={LDAP_SERVER.attribute_for_mail}
@@ -446,7 +420,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Attribute for Username')}
 											</div>
 											<Tooltip
@@ -456,7 +430,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="w-full bg-transparent outline-hidden py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t(
 														'Example: sAMAccountName or uid or userPrincipalName'
@@ -468,7 +442,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Search Base')}
 											</div>
 											<Tooltip
@@ -476,7 +450,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 												placement="top-start"
 											>
 												<input
-													class="w-full bg-transparent outline-hidden py-0.5"
+													class="field"
 													required
 													placeholder={$i18n.t('Example: ou=users,dc=foo,dc=example')}
 													bind:value={LDAP_SERVER.search_base}
@@ -486,19 +460,19 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 									</div>
 									<div class="flex w-full gap-2">
 										<div class="w-full">
-											<div class=" self-center text-xs font-medium min-w-fit mb-1">
+											<div class="self-center field-label min-w-fit">
 												{$i18n.t('Search Filters')}
 											</div>
 											<input
-												class="w-full bg-transparent outline-hidden py-0.5"
+												class="field"
 												placeholder={$i18n.t('Example: (&(objectClass=inetOrgPerson)(uid=%s))')}
 												bind:value={LDAP_SERVER.search_filters}
 											/>
 										</div>
 									</div>
-									<div class="text-xs text-gray-400 dark:text-gray-500">
+									<div class="text-xs text-muted">
 										<a
-											class=" text-gray-300 font-medium underline"
+											class="text-muted font-medium underline"
 											href="https://ldap.com/ldap-filters/"
 											target="_blank"
 										>
@@ -516,11 +490,11 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 										{#if LDAP_SERVER.use_tls}
 											<div class="flex w-full gap-2">
 												<div class="w-full">
-													<div class=" self-center text-xs font-medium min-w-fit mb-1 mt-1">
+													<div class="self-center field-label min-w-fit mt-1">
 														{$i18n.t('Certificate Path')}
 													</div>
 													<input
-														class="w-full bg-transparent outline-hidden py-0.5"
+														class="field"
 														placeholder={$i18n.t('Enter certificate path')}
 														bind:value={LDAP_SERVER.certificate_path}
 													/>
@@ -528,12 +502,12 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 											</div>
 											<div class="flex w-full gap-2">
 												<div class="w-full">
-													<div class=" self-center text-xs font-medium min-w-fit mb-1">
+													<div class="self-center field-label min-w-fit">
 														{$i18n.t('Ciphers')}
 													</div>
 													<Tooltip content={$i18n.t('Default to ALL')} placement="top-start">
 														<input
-															class="w-full bg-transparent outline-hidden py-0.5"
+															class="field"
 															placeholder={$i18n.t('Example: ALL')}
 															bind:value={LDAP_SERVER.ciphers}
 														/>
@@ -550,12 +524,12 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Email Tool')}</div>
+					<h3 class="section-title">{$i18n.t('Email Tool')}</h3>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class="border-line my-2" />
 
 					<div class="space-y-2.5">
-						<div class="text-xs text-gray-500">
+						<div class="text-xs text-muted">
 							{$i18n.t(
 								'Configure SMTP for built-in email sending. Environment variables still take precedence when set.'
 							)}
@@ -563,18 +537,18 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex w-full gap-2">
 							<div class="w-full">
-								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Host')}</div>
+								<div class="field-label">{$i18n.t('SMTP Host')}</div>
 								<input
-									class="w-full bg-transparent outline-hidden py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('smtp.example.com')}
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_HOST}
 								/>
 							</div>
 							<div class="w-full">
-								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Port')}</div>
+								<div class="field-label">{$i18n.t('SMTP Port')}</div>
 								<input
-									class="w-full bg-transparent outline-hidden py-0.5"
+									class="field"
 									type="number"
 									placeholder="465"
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_PORT}
@@ -584,16 +558,16 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex w-full gap-2">
 							<div class="w-full">
-								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Username')}</div>
+								<div class="field-label">{$i18n.t('SMTP Username')}</div>
 								<input
-									class="w-full bg-transparent outline-hidden py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('Enter SMTP username')}
 									bind:value={emailToolConfig.EMAIL_TOOL_SMTP_USERNAME}
 								/>
 							</div>
 							<div class="w-full">
-								<div class="text-xs font-medium mb-1">{$i18n.t('SMTP Password')}</div>
+								<div class="field-label">{$i18n.t('SMTP Password')}</div>
 								<SensitiveInput
 									type="text"
 									placeholder={$i18n.t('Enter SMTP password')}
@@ -604,9 +578,9 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex w-full gap-2">
 							<div class="w-full">
-								<div class="text-xs font-medium mb-1">{$i18n.t('From Email')}</div>
+								<div class="field-label">{$i18n.t('From Email')}</div>
 								<input
-									class="w-full bg-transparent outline-hidden py-0.5"
+									class="field"
 									type="text"
 									placeholder={$i18n.t('no-reply@example.com')}
 									bind:value={emailToolConfig.EMAIL_TOOL_FROM_EMAIL}
@@ -621,27 +595,21 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 				</div>
 
 				<div class="mb-3">
-					<div class=" mb-2.5 text-base font-medium">{$i18n.t('Features')}</div>
+					<h3 class="section-title">{$i18n.t('Features')}</h3>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class="border-line my-2" />
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center text-xs font-medium">
-							{$i18n.t('Enable Community Sharing')}
-						</div>
-
+					<SettingRow label={$i18n.t('Enable Community Sharing')}>
 						<Switch bind:state={adminConfig.ENABLE_COMMUNITY_SHARING} />
-					</div>
+					</SettingRow>
 
-					<div class="mb-2.5 flex w-full items-center justify-between pr-2">
-						<div class=" self-center text-xs font-medium">{$i18n.t('Enable Message Rating')}</div>
-
+					<SettingRow label={$i18n.t('Enable Message Rating')}>
 						<Switch bind:state={adminConfig.ENABLE_MESSAGE_RATING} />
-					</div>
+					</SettingRow>
 
 					<div class="mb-2.5 w-full justify-between">
-						<div class="mb-1 text-xs font-medium">{$i18n.t('Rendering Prompt')}</div>
-						<div class="text-xs text-gray-500 mb-2">
+						<div class="field-label">{$i18n.t('Rendering Prompt')}</div>
+						<div class="text-xs text-muted mb-2">
 							{$i18n.t(
 								'Injected into every chat so the model knows responses are rendered as GitHub-flavored Markdown. Leave empty to disable.'
 							)}
@@ -661,14 +629,14 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex mt-2 space-x-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								type="text"
 								placeholder={`e.g.) "http://localhost:3000"`}
 								bind:value={adminConfig.WEBUI_URL}
 							/>
 						</div>
 
-						<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t(
 								'Enter the public URL of your WebUI. This URL will be used to generate links in the notifications.'
 							)}
@@ -682,7 +650,7 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 
 						<div class="flex mt-2 space-x-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								type="text"
 								placeholder={`https://example.com/webhook`}
 								bind:value={webhookUrl}
@@ -694,9 +662,9 @@ import { getEmailToolConfig, setEmailToolConfig, getRenderingConfig, setRenderin
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="modal-actions">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			type="submit"
 		>
 			{$i18n.t('Save')}

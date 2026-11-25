@@ -64,7 +64,7 @@
 	}
 </script>
 
-<div class="mb-1 flex gap-1 text-xs font-medium items-center text-gray-400 dark:text-gray-600">
+<div class="mt-3 mb-1 flex gap-1 px-4 text-xs font-medium items-center text-muted">
 	{#if filteredPrompts.length > 0}
 		<Bolt />
 		{$i18n.t('Suggested')}
@@ -72,7 +72,7 @@
 		<!-- Keine Vorschläge -->
 
 		<div
-			class="flex w-full text-center items-center justify-center self-start text-gray-400 dark:text-gray-600"
+			class="flex w-full text-center items-center justify-center self-start text-muted"
 		>
 			{$WEBUI_NAME} ‧ {runningReleaseLabel($config?.image_tag)}
 		</div>
@@ -84,8 +84,8 @@
 		{#each filteredPrompts as prompt, idx (prompt.id || prompt.content)}
 			<button
 				class="waterfall flex flex-col flex-1 shrink-0 w-full justify-between
-				       px-3 py-2 rounded-xl bg-transparent hover:bg-black/5
-				       dark:hover:bg-white/5 transition group"
+				       px-4 py-2 rounded-xl bg-transparent hover:bg-tint
+				        transition group"
 				style="animation-delay: {idx * 60}ms"
 				on:click={() => dispatch('select', prompt.content)}
 			>
@@ -96,7 +96,7 @@
 						>
 							{prompt.title[0]}
 						</div>
-						<div class="text-xs text-gray-500 font-normal line-clamp-1">
+						<div class="text-xs text-muted font-normal line-clamp-1">
 							{prompt.title[1]}
 						</div>
 					{:else}
@@ -105,7 +105,7 @@
 						>
 							{prompt.content}
 						</div>
-						<div class="text-xs text-gray-500 font-normal line-clamp-1">{$i18n.t('Prompt')}</div>
+						<div class="text-xs text-muted font-normal line-clamp-1">{$i18n.t('Prompt')}</div>
 					{/if}
 				</div>
 			</button>

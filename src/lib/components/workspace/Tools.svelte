@@ -150,7 +150,7 @@
 			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
 				{$i18n.t('Tools')}
 				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+				<span class="text-lg font-medium text-body"
 					>{filteredItems.length}</span
 				>
 			</div>
@@ -193,7 +193,7 @@
 										</div>
 									{:else}
 										<div
-											class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+											class="text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-body"
 										>
 											{$i18n.t('Tool')}
 										</div>
@@ -201,7 +201,7 @@
 
 									{#if tool?.meta?.manifest?.version}
 										<div
-											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-body"
 										>
 											v{tool?.meta?.manifest?.version ?? ''}
 										</div>
@@ -209,7 +209,7 @@
 
 									{#if tool?.meta?.manifest?.git_ref}
 										<div
-											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200 font-mono"
+											class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-body font-mono"
 										>
 											@{tool.meta.manifest.git_ref}
 										</div>
@@ -218,7 +218,7 @@
 									<div class="line-clamp-1">
 										{tool.name}
 
-										<span class=" text-gray-500 text-xs font-medium shrink-0">{tool.id}</span>
+										<span class="text-muted text-xs font-medium shrink-0">{tool.id}</span>
 									</div>
 								</div>
 							</Tooltip>
@@ -230,7 +230,7 @@
 									</div>
 								</div>
 
-								<div class="text-xs text-gray-500 shrink-0">
+								<div class="text-xs text-muted shrink-0">
 									<Tooltip
 										content={tool?.user?.email ?? $i18n.t('Deleted User')}
 										className="flex shrink-0"
@@ -251,7 +251,7 @@
 					{#if shiftKey}
 						<Tooltip content={$i18n.t('Delete')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								type="button"
 								on:click={() => {
 									deleteHandler(tool);
@@ -264,7 +264,7 @@
 						{#if tool?.meta?.manifest?.funding_url ?? false}
 							<Tooltip content="Support">
 								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									on:click={() => {
 										selectedTool = tool;
@@ -278,7 +278,7 @@
 
 						<Tooltip content={$i18n.t('Valves')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								type="button"
 								on:click={() => {
 									selectedTool = tool;
@@ -324,7 +324,7 @@
 							onClose={() => {}}
 						>
 							<button
-								class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost btn-ghost-sm"
 								type="button"
 							>
 								<EllipsisHorizontal className="size-5" />
@@ -353,7 +353,7 @@
 				/>
 
 				<button
-					class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+					class="btn-secondary"
 					on:click={() => {
 						toolsImportInputElement.click();
 					}}
@@ -365,7 +365,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"
@@ -378,7 +378,7 @@
 
 				{#if tools.length}
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={async () => {
 							const _tools = await exportTools(localStorage.token).catch((error) => {
 								toast.error(`${error}`);
@@ -400,7 +400,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-4 h-4"
+								class="size-4"
 							>
 								<path
 									fill-rule="evenodd"
@@ -422,7 +422,7 @@
 			deleteHandler(selectedTool);
 		}}
 	>
-		<div class=" text-sm text-gray-500">
+		<div class="text-sm text-muted">
 			{$i18n.t('This will delete')} <span class="  font-semibold">{selectedTool.name}</span>.
 		</div>
 	</DeleteConfirmDialog>
@@ -452,7 +452,7 @@
 			reader.readAsText(importFiles[0]);
 		}}
 	>
-		<div class="text-sm text-gray-500">
+		<div class="text-sm text-muted">
 			<div class=" bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 rounded-lg px-4 py-3">
 				<div>{$i18n.t('Please carefully review the following warnings:')}</div>
 

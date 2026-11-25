@@ -26,11 +26,11 @@
 </script>
 
 <div
-	class="relative flex min-w-[var(--width)] w-full dark:bg-gray-850 dark:text-white bg-white text-black border border-gray-100 dark:border-gray-850 rounded-xl"
+	class="relative flex min-w-[var(--width)] w-full bg-panel text-strong border border-line rounded-xl"
 >
 	<button
 		type="button"
-		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+		class="absolute top-1.5 right-1.5 z-10 rounded-md p-0.5 text-muted hover:text-gray-700 dark:hover:text-gray-200"
 		aria-label={$i18n.t('Close')}
 		on:click|stopPropagation={() => dispatch('closeToast')}
 	>
@@ -39,7 +39,7 @@
 
 	<button
 		type="button"
-		class="flex gap-2.5 text-left w-full px-3.5 py-3.5 pr-7"
+		class="flex gap-2.5 text-left w-full px-4 py-4 pr-8"
 		on:click={() => {
 			onClick();
 			dispatch('closeToast');
@@ -51,7 +51,7 @@
 
 		<div>
 			{#if title}
-				<div class=" text-[13px] font-medium mb-0.5 line-clamp-1 capitalize">{title}</div>
+				<div class=" text-sm font-medium mb-0.5 line-clamp-1 capitalize">{title}</div>
 			{/if}
 
 			<div class=" line-clamp-2 text-xs self-center dark:text-gray-300 font-normal">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMark from '$lib/components/icons/XMark.svelte';
 	import { toast } from 'svelte-sonner';
 	import { createEventDispatcher, tick, getContext, onMount, onDestroy } from 'svelte';
 	import { config, settings } from '$lib/stores';
@@ -324,7 +325,7 @@
 	bind:clientWidth={containerWidth}
 	class="{loading
 		? ' bg-gray-100/50 dark:bg-gray-850/50'
-		: 'bg-indigo-300/10 dark:bg-indigo-500/10 '} rounded-full flex justify-between {className}"
+		: 'bg-blue-300/10 dark:bg-blue-500/10 '} rounded-full flex justify-between {className}"
 >
 	<div class="flex items-center mr-1">
 		<button
@@ -333,7 +334,7 @@
 
             {loading
 				? ' bg-gray-200 dark:bg-gray-700/50'
-				: 'bg-indigo-400/20 text-indigo-600 dark:text-indigo-300 '} 
+				: 'bg-blue-400/20 text-blue-600 dark:text-blue-300 '} 
 
 
              rounded-full"
@@ -342,16 +343,7 @@
 				dispatch('cancel');
 			}}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke-width="3"
-				stroke="currentColor"
-				class="size-4"
-			>
-				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-			</svg>
+			<XMark className="size-4" strokeWidth="3" />
 		</button>
 	</div>
 
@@ -369,7 +361,7 @@
                     
                     {loading
 							? ' bg-gray-500 dark:bg-gray-400   '
-							: 'bg-indigo-500 dark:bg-indigo-400  '} 
+							: 'bg-blue-500 dark:bg-blue-400  '} 
                     
                     inline-block h-full"
 						style="height: {Math.min(100, Math.max(14, rms * 100))}%;"
@@ -385,7 +377,7 @@
 				class="text-sm
         
         
-        {loading ? ' text-gray-500  dark:text-gray-400  ' : ' text-indigo-400 '} 
+        {loading ? ' text-muted dark:text-gray-400' : ' text-blue-400 '} 
        font-medium flex-1 mx-auto text-center"
 			>
 				{formatSeconds(durationSeconds)}
@@ -394,7 +386,7 @@
 
 		<div class="flex items-center">
 			{#if loading}
-				<div class=" text-gray-500 rounded-full cursor-not-allowed">
+				<div class="text-muted rounded-full cursor-not-allowed">
 					<svg
 						width="24"
 						height="24"
@@ -487,7 +479,7 @@
 			{:else}
 				<button
 					type="button"
-					class="p-1.5 bg-indigo-500 text-white dark:bg-indigo-500 dark:text-blue-950 rounded-full"
+					class="p-1.5 bg-blue-500 text-white dark:bg-blue-500 dark:text-blue-950 rounded-full"
 					on:click={async () => {
 						await confirmRecording();
 					}}

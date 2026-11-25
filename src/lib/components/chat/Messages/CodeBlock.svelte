@@ -439,11 +439,11 @@
 			</div>
 
 			<div
-				class="sticky {stickyButtonsClassName} mb-1 py-1 pr-2.5 flex items-center justify-end z-10 text-xs text-black dark:text-white"
+				class="sticky {stickyButtonsClassName} mb-1 py-1 pr-2.5 flex items-center justify-end z-10 text-xs text-strong"
 			>
 				<div class="flex items-center gap-0.5 translate-y-[1px]">
 					<button
-						class="flex gap-1 items-center bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+						class="flex gap-1 items-center bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 						on:click={collapseCodeBlock}
 					>
 						<div>
@@ -462,7 +462,7 @@
 							</div>
 						{:else if run}
 							<button
-								class="flex gap-1 items-center run-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+								class="flex gap-1 items-center run-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 								on:click={async () => {
 									code = _code;
 									await tick();
@@ -482,7 +482,7 @@
 
 					{#if save}
 						<button
-							class="save-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+							class="save-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 							on:click={saveCode}
 						>
 							{saved ? $i18n.t('Saved') : $i18n.t('Save')}
@@ -490,7 +490,7 @@
 					{/if}
 
 					<button
-						class="copy-code-button bg-none border-none bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+						class="copy-code-button bg-none border-none bg-surface hover:bg-gray-100 dark:hover:bg-gray-800 transition rounded-xl px-1.5 py-0.5"
 						on:click={copyCode}>{copied ? $i18n.t('Copied') : $i18n.t('Copy')}</button
 					>
 				</div>
@@ -503,7 +503,7 @@
 						? ''
 						: 'rounded-b-lg'} overflow-hidden"
 			>
-				<div class=" pt-7 bg-gray-50 dark:bg-gray-850"></div>
+				<div class=" pt-8 bg-surface"></div>
 
 				{#if !collapsed}
 					{#if CodeEditorComponent}
@@ -524,7 +524,7 @@
 					<div
 						class="bg-gray-50 dark:bg-black dark:text-white rounded-b-lg! pt-2 pb-2 px-4 flex flex-col gap-2 text-xs"
 					>
-						<span class="text-gray-500 italic">
+						<span class="text-muted italic">
 							{$i18n.t('{{COUNT}} hidden lines', {
 								COUNT: code.split('\n').length
 							})}
@@ -545,13 +545,13 @@
 					>
 						{#if executing}
 							<div class=" ">
-								<div class=" text-gray-500 text-xs mb-1">STDOUT/STDERR</div>
+								<div class="text-muted text-xs mb-1">STDOUT/STDERR</div>
 								<div class="text-sm">{$i18n.t('Running...')}</div>
 							</div>
 						{:else}
 							{#if stdout || stderr}
 								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">STDOUT/STDERR</div>
+									<div class="text-muted text-xs mb-1">STDOUT/STDERR</div>
 									<div
 										class="text-sm {stdout?.split('\n')?.length > 100
 											? `max-h-96`
@@ -563,7 +563,7 @@
 							{/if}
 							{#if result || files}
 								<div class=" ">
-									<div class=" text-gray-500 text-xs mb-1">RESULT</div>
+									<div class="text-muted text-xs mb-1">RESULT</div>
 									{#if result}
 										<div class="text-sm">{`${JSON.stringify(result)}`}</div>
 									{/if}

@@ -132,7 +132,7 @@
 
 	<slot name="content">
 		<DropdownMenu.Content
-			class="w-full {className} text-sm rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg font-primary overflow-y-auto"
+			class="menu-panel {className} text-sm font-primary overflow-y-auto"
 			fitViewport
 			sideOffset={8}
 			side="bottom"
@@ -140,7 +140,7 @@
 			transition={(e) => fade(e, { duration: 100 })}
 		>
 			<button
-				class="flex items-center rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex items-center rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={(e) => {
 					e.preventDefault();
 					e.stopPropagation();
@@ -154,7 +154,7 @@
 					{#if showOrgPicker}
 						<div class="truncate font-medium">{$i18n.t('Organizations')}</div>
 					{:else}
-						<div class="text-[11px] uppercase tracking-wide text-gray-400">
+						<div class="text-xs uppercase tracking-wide text-muted">
 							{$i18n.t('Organization')}
 						</div>
 						<div class="flex items-center gap-2 min-w-0">
@@ -181,7 +181,7 @@
 					<div bind:this={orgListElement} class="max-h-64 overflow-y-auto overscroll-contain">
 						{#each $organizations ?? [] as org}
 							<button
-								class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
+								class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition {org.id ===
 								$activeOrganizationId
 									? 'bg-gray-50 dark:bg-gray-800 font-medium'
 									: 'text-gray-600 dark:text-gray-300'}"
@@ -199,7 +199,7 @@
 						{/each}
 					</div>
 					<button
-						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300"
+						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left hover:bg-tint transition text-body"
 						on:click={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -216,19 +216,19 @@
 							on:click|stopPropagation
 						>
 							<input
-								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Organization name')}
 								bind:value={requestName}
 								required
 							/>
 							<textarea
-								class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 px-2.5 py-1.5 text-sm outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Description')}
 								rows="2"
 								bind:value={requestDescription}
 							/>
 							<button
-								class="self-start rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2.5 py-1 text-xs"
+								class="btn-primary rounded-lg self-start px-2.5 py-1 text-xs"
 								type="submit"
 								disabled={requesting}
 							>
@@ -240,9 +240,9 @@
 			{/if}
 
 			{#if usage}
-				<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+				<hr class="border-line my-1 p-0" />
 				<div class="px-3 py-2">
-					<div class="text-[11px] uppercase tracking-wide text-gray-400 truncate">
+					<div class="text-xs uppercase tracking-wide text-muted truncate">
 						{#if currentOrg.kind === 'personal'}
 							{$i18n.t('Personal usage')}
 						{:else}
@@ -253,7 +253,7 @@
 					</div>
 					{#each usageMeters(usage) as meter (meter.scope)}
 						{#if meter.scope === 'member'}
-							<div class="mt-2 text-[11px] uppercase tracking-wide text-gray-400">
+							<div class="mt-2 text-xs uppercase tracking-wide text-muted">
 								{$i18n.t('Your usage')}
 							</div>
 						{/if}
@@ -266,25 +266,26 @@
 								<div
 									class="h-full rounded-full {meter.over
 										? 'bg-red-500'
-										: 'bg-gray-900 dark:bg-white'}"
+										: 'bg-inverse'}"
 									style="width: {usageBarPercent(meter.spend, meter.limit, meter.over)}%"
 								></div>
 							</div>
 						{/if}
 					{/each}
 					{#if usage.over_limit && usage.message}
-						<div class="mt-1 text-[11px] text-red-600 leading-snug">{usage.message}</div>
+						<div class="mt-1 text-xs text-red-600 leading-snug">{usage.message}</div>
 					{/if}
 				</div>
 			{/if}
 
-			<hr class="border-gray-100 dark:border-gray-850 my-1 p-0" />
+			<hr class="border-line my-1 p-0" />
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={async () => {
-					await showSettings.set(true);
 					closeMenu();
+					await tick();
+					await showSettings.set(true);
 				}}
 			>
 					<div class=" self-center mr-3">
@@ -294,7 +295,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -313,7 +314,7 @@
 
 			{#if isOrgManager}
 				<a
-					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 					href="/organization"
 					on:click={closeMenu}
 				>
@@ -325,7 +326,7 @@
 			{/if}
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={() => {
 					dispatch('show', 'archived-chat');
 					closeMenu();
@@ -339,7 +340,7 @@
 
 			{#if role === 'admin'}
 				<a
-					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+					class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 					href="/admin"
 					on:click={closeMenu}
 				>
@@ -350,7 +351,7 @@
 							viewBox="0 0 24 24"
 							stroke-width="1.5"
 							stroke="currentColor"
-							class="w-5 h-5"
+							class="size-5"
 						>
 							<path
 								stroke-linecap="round"
@@ -363,10 +364,10 @@
 				</a>
 			{/if}
 
-			<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
+			<hr class="border-line my-1 p-0" />
 
 			<button
-				class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+				class="flex rounded-xl py-2 px-3 w-full hover:bg-tint transition"
 				on:click={async () => {
 					try {
 						await userSignOut();
@@ -387,7 +388,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 20 20"
 						fill="currentColor"
-						class="w-5 h-5"
+						class="size-5"
 					>
 						<path
 							fill-rule="evenodd"
@@ -405,7 +406,7 @@
 			</button>
 
 			{#if $activeUserIds?.length > 0}
-				<hr class=" border-gray-100 dark:border-gray-850 my-1 p-0" />
+				<hr class="border-line my-1 p-0" />
 
 				<Tooltip
 					content={$USAGE_POOL && $USAGE_POOL.length > 0
@@ -435,7 +436,7 @@
 			{/if}
 
 			{#if $config?.image_tag}
-				<div class="px-3 py-1.5 text-[10px] leading-none text-gray-400 dark:text-gray-500 select-all">
+				<div class="px-3 py-1.5 text-xs leading-none text-muted select-all">
 					version {$config.image_tag}
 				</div>
 			{/if}

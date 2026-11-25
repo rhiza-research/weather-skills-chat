@@ -35,7 +35,7 @@
 	>
 		<Tooltip content={$i18n.t('Help')} placement="left">
 			<button
-				class="text-gray-600 dark:text-gray-300 bg-gray-300/20 hover:bg-gray-300/40 size-7 flex items-center justify-center text-sm font-medium rounded-full transition"
+				class="text-body bg-gray-300/20 hover:bg-gray-300/40 size-7 flex items-center justify-center text-sm font-medium rounded-full transition"
 			>
 				?
 			</button>

@@ -57,7 +57,7 @@
 					<div class="shrink-0 w-full flex justify-between items-center">
 						<div class="w-full">
 							<input
-								class="w-full text-3xl font-semibold bg-transparent outline-hidden"
+								class="field-bare text-3xl font-semibold"
 								type="text"
 								bind:value={name}
 								placeholder={$i18n.t('Title')}
@@ -134,7 +134,7 @@
 				<div class=" shrink-0">
 					<Tooltip content={$i18n.t('Save')}>
 						<button
-							class=" px-3.5 py-2 bg-black text-white dark:bg-white dark:text-black transition rounded-full"
+							class="px-4 py-2 bg-inverse text-on-inverse transition rounded-full"
 							type="submit"
 						>
 							{$i18n.t('Save')}

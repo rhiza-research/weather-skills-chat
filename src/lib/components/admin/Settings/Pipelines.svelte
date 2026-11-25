@@ -234,7 +234,7 @@
 					<div class="flex gap-2">
 						<div class="flex-1">
 							<select
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								bind:value={selectedPipelinesUrlIdx}
 								placeholder={$i18n.t('Select a pipeline url')}
 								on:change={async () => {
@@ -271,7 +271,7 @@
 							/>
 
 							<button
-								class="w-full text-sm font-medium py-2 bg-transparent hover:bg-gray-100 border border-dashed dark:border-gray-850 dark:hover:bg-gray-850 text-center rounded-xl"
+								class="w-full text-sm font-medium py-2 bg-transparent hover:bg-black/5 border border-dashed dark:border-gray-850 dark:hover:bg-white/5 text-center rounded-xl"
 								type="button"
 								on:click={() => {
 									document.getElementById('pipelines-upload-input')?.click();
@@ -285,7 +285,7 @@
 							</button>
 						</div>
 						<button
-							class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+							class="px-2.5 bg-gray-100 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 							on:click={() => {
 								uploadPipelineHandler();
 							}}
@@ -295,7 +295,7 @@
 							{#if uploading}
 								<div class="self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"
@@ -348,13 +348,13 @@
 					<div class="flex w-full">
 						<div class="flex-1 mr-2">
 							<input
-								class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+								class="field"
 								placeholder={$i18n.t('Enter Github Raw URL')}
 								bind:value={pipelineDownloadUrl}
 							/>
 						</div>
 						<button
-							class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+							class="px-2.5 bg-gray-100 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 							on:click={() => {
 								addPipelineHandler();
 							}}
@@ -364,7 +364,7 @@
 							{#if downloading}
 								<div class="self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"
@@ -396,7 +396,7 @@
 									xmlns="http://www.w3.org/2000/svg"
 									viewBox="0 0 16 16"
 									fill="currentColor"
-									class="w-4 h-4"
+									class="size-4"
 								>
 									<path
 										d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"
@@ -409,7 +409,7 @@
 						</button>
 					</div>
 
-					<div class="mt-2 text-xs text-gray-500">
+					<div class="mt-2 text-xs text-muted">
 						<span class=" font-semibold dark:text-gray-200">{$i18n.t('Warning:')}</span>
 						{$i18n.t('Pipelines are a plugin system with arbitrary code execution —')}
 						<span class=" font-medium dark:text-gray-400"
@@ -418,7 +418,7 @@
 					</div>
 				</div>
 
-				<hr class="border-gray-100 dark:border-gray-850 my-3 w-full" />
+				<hr class="border-line my-3 w-full" />
 
 				{#if pipelines !== null}
 					{#if pipelines.length > 0}
@@ -432,7 +432,7 @@
 								<div class="flex gap-2">
 									<div class="flex-1">
 										<select
-											class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+											class="field"
 											bind:value={selectedPipelineIdx}
 											placeholder={$i18n.t('Select a pipeline')}
 											on:change={async () => {
@@ -449,7 +449,7 @@
 									</div>
 
 									<button
-										class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+										class="px-2.5 bg-gray-100 hover:bg-gray-200 text-strong dark:bg-gray-850 dark:hover:bg-gray-800 rounded-xl transition"
 										on:click={() => {
 											deletePipelineHandler();
 										}}
@@ -459,7 +459,7 @@
 											xmlns="http://www.w3.org/2000/svg"
 											viewBox="0 0 16 16"
 											fill="currentColor"
-											class="w-4 h-4"
+											class="size-4"
 										>
 											<path
 												fill-rule="evenodd"
@@ -502,7 +502,7 @@
 														<div class=" flex-1">
 															{#if valves_spec.properties[property]?.enum ?? null}
 																<select
-																	class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+																	class="field"
 																	bind:value={valves[property]}
 																>
 																	{#each valves_spec.properties[property].enum as option}
@@ -513,7 +513,7 @@
 																</select>
 															{:else if (valves_spec.properties[property]?.type ?? null) === 'boolean'}
 																<div class="flex justify-between items-center">
-																	<div class="text-xs text-gray-500">
+																	<div class="text-xs text-muted">
 																		{valves[property] ? 'Enabled' : 'Disabled'}
 																	</div>
 
@@ -523,7 +523,7 @@
 																</div>
 															{:else}
 																<input
-																	class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-hidden"
+																	class="field"
 																	type="text"
 																	placeholder={valves_spec.properties[property].title}
 																	bind:value={valves[property]}
@@ -569,7 +569,7 @@
 	{#if PIPELINES_LIST !== null && PIPELINES_LIST.length > 0}
 		<div class="flex justify-end pt-3 text-sm font-medium">
 			<button
-				class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+				class="btn-primary"
 				type="submit"
 			>
 				{$i18n.t('Save')}

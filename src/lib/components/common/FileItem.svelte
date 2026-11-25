@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
 	import { createEventDispatcher, getContext } from 'svelte';
 	import { formatFileSize, safeLinkUrl } from '$lib/utils';
 
@@ -90,7 +91,7 @@
 				{decodeString(name)}
 			</div>
 
-			<div class=" flex justify-between text-gray-500 text-xs line-clamp-1">
+			<div class="flex justify-between text-muted text-xs line-clamp-1">
 				{#if type === 'file'}
 					{$i18n.t('File')}
 				{:else if type === 'doc'}
@@ -115,7 +116,7 @@
 						</div>
 					{/if}
 					<div class="font-medium line-clamp-1 flex-1">{decodeString(name)}</div>
-					<div class="text-gray-500 text-xs capitalize shrink-0">{formatFileSize(size)}</div>
+					<div class="text-muted text-xs capitalize shrink-0">{formatFileSize(size)}</div>
 				</div>
 			</div>
 		</Tooltip>
@@ -130,20 +131,11 @@
 					dispatch('dismiss');
 				}}
 			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-					/>
-				</svg>
+				<XMarkSolid className="size-4" />
 			</button>
 
 			<!-- <button
-				class=" p-1 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-full group-hover:visible invisible transition"
+				class=" p-1 dark:text-gray-300 dark:hover:text-white hover:bg-tint rounded-full group-hover:visible invisible transition"
 				type="button"
 				on:click={() => {
 				}}

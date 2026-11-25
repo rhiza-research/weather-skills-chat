@@ -81,7 +81,7 @@
 				<div class=" space-y-1.5">
 					<div class="flex flex-col w-full">
 						<div class="mb-1 flex justify-between">
-							<div class="text-xs text-gray-500">{$i18n.t('Model IDs')}</div>
+							<div class="text-xs text-muted">{$i18n.t('Model IDs')}</div>
 						</div>
 
 						{#if model_ids.length > 0}
@@ -105,19 +105,19 @@
 								{/each}
 							</div>
 						{:else}
-							<div class="text-gray-500 text-xs text-center py-2 px-10">
+							<div class="text-muted text-xs text-center py-2 px-10">
 								{$i18n.t('No model IDs')}
 							</div>
 						{/if}
 					</div>
 				</div>
-				<hr class=" border-gray-100 dark:border-gray-700/10 mt-2.5 mb-1 w-full" />
+				<hr class="border-line my-2 mt-2.5 mb-1 w-full" />
 
 				<div class="flex items-center">
 					<select
 						class="w-full py-1 text-sm rounded-lg bg-transparent {selectedModelId
 							? ''
-							: 'text-gray-500'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
+							: 'text-muted'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 						bind:value={selectedModelId}
 					>
 						<option value="">{$i18n.t('Select a model')}</option>
@@ -165,7 +165,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-gray-100 dark:border-gray-850 my-2" /> -->
+	<hr class="border-line my-2" /> -->
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Workspace Permissions')}</div>
@@ -222,7 +222,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+	<hr class="border-line my-2" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Sharing Permissions')}</div>
@@ -263,7 +263,7 @@
 		</div>
 	</div>
 
-	<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+	<hr class="border-line my-2" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Chat Permissions')}</div>
@@ -350,7 +350,7 @@
 		{/if}
 	</div>
 
-	<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+	<hr class="border-line my-2" />
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>

@@ -21,6 +21,8 @@
 	export let modelId;
 
 	export let pane;
+	let controlsPaneEl: HTMLElement;
+	$: if (controlsPaneEl) controlsPaneEl.id = 'chat-controls-pane';
 
 	let mediaQuery;
 	let largeScreen =
@@ -191,18 +193,18 @@
 					: {
 							width: 'min(400px, 85vw)',
 							className:
-								'bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800'
+								'bg-surface border-l border-gray-100 dark:border-gray-800'
 						}}
 				on:close={closePanel}
 			>
 				<div
 					class=" {$showCallOverlay || $showOverview || $showArtifacts
-						? ' h-screen  w-full'
+						? ' h-screen w-full'
 						: 'px-6 py-4'} h-full"
 				>
 					{#if $showCallOverlay}
 						<div
-							class=" h-full max-h-[100dvh] bg-white text-gray-700 dark:bg-black dark:text-gray-300 flex justify-center"
+							class="h-full max-h-[100dvh] bg-white text-body dark:bg-black flex justify-center"
 						>
 							<svelte:component
 								this={CallOverlay}
@@ -251,6 +253,8 @@
 		{/if}
 
 		<Pane
+			id="chat-controls-pane"
+			bind:el={controlsPaneEl}
 			bind:pane
 			defaultSize={$showControls && panelOpen ? DEFAULT_SIZE : 0}
 			minSize={minSize}
@@ -281,14 +285,14 @@
 				showArtifacts.set(false);
 			}}
 			collapsible={true}
-			class="z-10 h-full min-h-0 bg-gray-50 dark:bg-gray-850 border-l border-gray-100 dark:border-gray-800"
+			class="z-10 h-full min-h-0 bg-surface border-l border-line"
 		>
 			{#if $showControls && panelOpen}
 				<div class="flex h-full max-h-full min-h-0 w-full overflow-hidden">
 					<div
 						class="w-full h-full min-h-0 {($showOverview || $showArtifacts) && !$showCallOverlay
 							? 'overflow-hidden'
-							: 'px-4 py-4 bg-white dark:shadow-lg dark:bg-gray-850 border border-gray-100 dark:border-gray-850 overflow-y-auto scrollbar-hidden'} z-40 pointer-events-auto"
+							: 'px-4 py-4 bg-panel dark:shadow-lg border border-line overflow-y-auto scrollbar-hidden'} z-40 pointer-events-auto"
 					>
 						{#if $showCallOverlay}
 							<div class="w-full h-full flex justify-center">

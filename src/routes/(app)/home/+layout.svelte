@@ -25,7 +25,7 @@
 			<div class="{$showSidebar ? 'md:hidden' : ''} flex flex-none items-center self-end">
 				<button
 					id="sidebar-toggle-button"
-					class="cursor-pointer p-1.5 flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition"
+					class="btn-ghost btn-ghost-sm"
 					on:click={() => {
 						showSidebar.set(!$showSidebar);
 					}}
@@ -42,16 +42,16 @@
 					class="flex gap-1 scrollbar-none overflow-x-auto w-fit text-center text-sm font-medium rounded-full bg-transparent pt-1"
 				>
 					<a
-						class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/home/notes')
+						class="tab {$page.url.pathname.includes('/home/notes')
 							? ''
-							: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							: 'tab-idle'}"
 						href="/playground/notes">{$i18n.t('Notes')}</a
 					>
 
 					<a
-						class="min-w-fit rounded-full p-1.5 {$page.url.pathname.includes('/playground/calendar')
+						class="tab {$page.url.pathname.includes('/playground/calendar')
 							? ''
-							: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
+							: 'tab-idle'}"
 						href="/playground/completions">{$i18n.t('Calendar')}</a
 					>
 				</div>

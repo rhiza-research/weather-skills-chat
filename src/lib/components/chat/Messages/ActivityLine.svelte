@@ -162,14 +162,14 @@
 		<!-- svelte-ignore a11y-no-static-element-interactions -->
 		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div
-			class="w-fit text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer"
+			class="w-fit text-muted hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer"
 			on:pointerup={toggleOpen}
 		>
 			<div class="w-full font-medium flex items-center gap-2 {live ? 'shimmer' : ''}">
 				{#if live}
 					<Spinner className="size-4" />
 				{/if}
-				<div class="text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap">
+				<div class="text-muted text-base line-clamp-1 text-wrap">
 					{headline}
 				</div>
 				<div class="flex self-center translate-y-[1px]">

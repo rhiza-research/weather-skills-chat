@@ -40,7 +40,7 @@
 					</div>
 
 					<div class="flex items-center gap-1">
-						<div class=" text-xs w-full text-gray-500 bg-transparent line-clamp-1">
+						<div class="text-xs w-full text-muted bg-transparent line-clamp-1">
 							{model?.meta?.description ?? model.id}
 						</div>
 					</div>
@@ -50,7 +50,7 @@
 
 		<div class="flex items-center">
 			<button
-				class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+				class="btn-ghost btn-ghost-sm"
 				type="button"
 				on:click={() => {
 					showModel = true;

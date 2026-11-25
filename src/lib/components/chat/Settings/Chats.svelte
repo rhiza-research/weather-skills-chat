@@ -1,4 +1,7 @@
 <script lang="ts">
+	import ArchiveBoxSolid from '$lib/components/icons/ArchiveBoxSolid.svelte';
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import CheckSolid from '$lib/components/icons/CheckSolid.svelte';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
@@ -100,7 +103,7 @@
 <ArchivedChatsModal bind:show={showArchivedChatsModal} on:change={handleArchivedChatsChange} />
 
 <div class="flex flex-col h-full justify-between space-y-3 text-sm">
-	<div class=" space-y-2 overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane space-y-2">
 		<div class="flex flex-col">
 			<input
 				id="chat-import-input"
@@ -111,7 +114,7 @@
 				hidden
 			/>
 			<button
-				class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					chatImportInputElement.click();
 				}}
@@ -121,7 +124,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path
 							fill-rule="evenodd"
@@ -133,7 +136,7 @@
 				<div class=" self-center text-sm font-medium">{$i18n.t('Import Chats')}</div>
 			</button>
 			<button
-				class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					exportChats();
 				}}
@@ -143,7 +146,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path
 							fill-rule="evenodd"
@@ -156,11 +159,11 @@
 			</button>
 		</div>
 
-		<hr class=" border-gray-100 dark:border-gray-850" />
+		<hr class="border-line my-2" />
 
 		<div class="flex flex-col">
 			<button
-				class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class="menu-item w-full"
 				on:click={() => {
 					showArchivedChatsModal = true;
 				}}
@@ -186,21 +189,9 @@
 			</button>
 
 			{#if showArchiveConfirm}
-				<div class="flex justify-between rounded-md items-center py-2 px-3.5 w-full transition">
+				<div class="flex justify-between rounded-md items-center py-2 px-4 w-full transition">
 					<div class="flex items-center space-x-3">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 16 16"
-							fill="currentColor"
-							class="w-4 h-4"
-						>
-							<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
-							<path
-								fill-rule="evenodd"
-								d="M13 6H3v6a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6ZM5.72 7.47a.75.75 0 0 1 1.06 0L8 8.69l1.22-1.22a.75.75 0 1 1 1.06 1.06L9.06 9.75l1.22 1.22a.75.75 0 1 1-1.06 1.06L8 10.81l-1.22 1.22a.75.75 0 0 1-1.06-1.06l1.22-1.22-1.22-1.22a.75.75 0 0 1 0-1.06Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
+						<ArchiveBoxSolid className="size-4" />
 						<span>{$i18n.t('Are you sure?')}</span>
 					</div>
 
@@ -212,18 +203,7 @@
 								showArchiveConfirm = false;
 							}}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-									clip-rule="evenodd"
-								/>
-							</svg>
+							<CheckSolid className="size-4" />
 						</button>
 						<button
 							class="hover:text-white transition"
@@ -231,22 +211,13 @@
 								showArchiveConfirm = false;
 							}}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-								/>
-							</svg>
+							<XMarkSolid className="size-4" />
 						</button>
 					</div>
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+					class="menu-item w-full"
 					on:click={() => {
 						showArchiveConfirm = true;
 					}}
@@ -273,21 +244,9 @@
 			{/if}
 
 			{#if showDeleteConfirm}
-				<div class="flex justify-between rounded-md items-center py-2 px-3.5 w-full transition">
+				<div class="flex justify-between rounded-md items-center py-2 px-4 w-full transition">
 					<div class="flex items-center space-x-3">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							viewBox="0 0 16 16"
-							fill="currentColor"
-							class="w-4 h-4"
-						>
-							<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
-							<path
-								fill-rule="evenodd"
-								d="M13 6H3v6a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6ZM5.72 7.47a.75.75 0 0 1 1.06 0L8 8.69l1.22-1.22a.75.75 0 1 1 1.06 1.06L9.06 9.75l1.22 1.22a.75.75 0 1 1-1.06 1.06L8 10.81l-1.22 1.22a.75.75 0 0 1-1.06-1.06l1.22-1.22-1.22-1.22a.75.75 0 0 1 0-1.06Z"
-								clip-rule="evenodd"
-							/>
-						</svg>
+						<ArchiveBoxSolid className="size-4" />
 						<span>{$i18n.t('Are you sure?')}</span>
 					</div>
 
@@ -299,18 +258,7 @@
 								showDeleteConfirm = false;
 							}}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-									clip-rule="evenodd"
-								/>
-							</svg>
+							<CheckSolid className="size-4" />
 						</button>
 						<button
 							class="hover:text-white transition"
@@ -318,22 +266,13 @@
 								showDeleteConfirm = false;
 							}}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-								/>
-							</svg>
+							<XMarkSolid className="size-4" />
 						</button>
 					</div>
 				</div>
 			{:else}
 				<button
-					class=" flex rounded-md py-2 px-3.5 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+					class="menu-item w-full text-red-600 dark:text-red-400"
 					on:click={() => {
 						showDeleteConfirm = true;
 					}}
@@ -343,7 +282,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path
 								fill-rule="evenodd"

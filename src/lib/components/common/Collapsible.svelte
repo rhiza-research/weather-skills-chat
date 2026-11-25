@@ -51,7 +51,7 @@
 
 	export let className = '';
 	export let buttonClassName =
-		'w-fit text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition';
+		'w-fit text-muted hover:text-gray-700 dark:hover:text-gray-300 transition';
 
 	export let id = '';
 	export let title = null;
@@ -487,7 +487,7 @@
 							{$i18n.t('Analyzing...')}
 						{/if}
 					{:else if attributes?.type === 'tool_calls'}
-						<span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+						<span class="text-sm font-medium text-body">
 							{#if toolLabelIsCustom}
 								{toolCallLabel}{toolElapsedLabel ? ` (${toolElapsedLabel})` : ''}{attributes?.done ===
 								'true'
@@ -561,7 +561,7 @@
 		{#if !grow}
 			{#if localOpen && !hide}
 				<div
-					class="mt-1.5 ml-1 border-l border-gray-200 pl-3 dark:border-gray-700"
+					class="mt-1.5 ml-1 border-l border-line-strong pl-3"
 					transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
 					on:pointerup={(e) => e.stopPropagation()}
 				>
@@ -606,7 +606,7 @@
 					<div class="w-full mt-1 mb-4">
 						<button
 							type="button"
-							class="w-fit max-w-full flex items-center gap-2 font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+							class="w-fit max-w-full flex items-center gap-2 font-medium text-muted hover:text-gray-700 dark:hover:text-gray-300 transition"
 							aria-expanded={displayProvenanceOpen}
 							on:click={() => (displayProvenanceOpen = !displayProvenanceOpen)}
 						>
@@ -637,7 +637,7 @@
 						</button>
 						{#if displayProvenanceOpen}
 							<div
-								class="mt-1.5 rounded-lg border border-gray-100 dark:border-gray-850 bg-gray-50 dark:bg-gray-900 px-3 py-2"
+								class="mt-1.5 rounded-lg border border-line bg-gray-50 dark:bg-gray-900 px-3 py-2"
 								transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}
 							>
 								<ProvenanceView

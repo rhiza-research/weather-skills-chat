@@ -43,7 +43,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class="text-lg font-medium self-center">
+			<div class="modal-title">
 				{$i18n.t('Clone chat to another organization')}
 			</div>
 			<button
@@ -56,16 +56,16 @@
 				<XMark className="size-5" />
 			</button>
 		</div>
-		<hr class="border-gray-100 dark:border-gray-850" />
+		<hr class="border-line" />
 
 		<div class="px-5 py-4 dark:text-gray-200">
-			<div class="mb-2 text-sm text-gray-500">
+			<div class="mb-2 text-sm muted">
 				{$i18n.t('The copy is private to you. You will be switched to that organization.')}
 			</div>
 			<div class="flex flex-col gap-1 max-h-64 overflow-y-auto" aria-busy={cloning}>
 				{#each targets as org (org.id)}
 					<button
-						class="flex items-center gap-2 rounded-md py-1.5 px-3 w-full text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
+						class="flex items-center gap-2 rounded-xl py-1.5 px-3 w-full text-left text-sm hover:bg-tint transition disabled:opacity-50"
 						disabled={cloning}
 						on:click={() => cloneTo(org.id)}
 					>
@@ -77,7 +77,7 @@
 							<span class="size-5 shrink-0" />
 						{/if}
 						<span class="truncate flex-1">{org.name}</span>
-						<ChevronRight className="size-4 shrink-0 text-gray-400" strokeWidth="2" />
+						<ChevronRight className="size-4 shrink-0 muted" strokeWidth="2" />
 					</button>
 				{/each}
 			</div>

@@ -194,7 +194,7 @@
 	<div class=" overflow-y-scroll scrollbar-hidden h-full">
 		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null}
 			<div class="my-2">
-				<div class="mt-2 space-y-2 pr-1.5">
+				<div class="mt-2 space-y-2">
 					<div class="flex justify-between items-center text-sm">
 						<div class="  font-medium">{$i18n.t('OpenAI API')}</div>
 
@@ -211,7 +211,7 @@
 					</div>
 
 					{#if ENABLE_OPENAI_API}
-						<hr class=" border-gray-100 dark:border-gray-850" />
+						<hr class="border-line my-2" />
 
 						<div class="">
 							<div class="flex justify-between items-center">
@@ -261,9 +261,9 @@
 				</div>
 			</div>
 
-			<hr class=" border-gray-100 dark:border-gray-850" />
+			<hr class="border-line my-2" />
 
-			<div class="pr-1.5 my-2">
+			<div class="my-2">
 				<div class="flex justify-between items-center text-sm mb-2">
 					<div class="  font-medium">{$i18n.t('Ollama API')}</div>
 
@@ -278,7 +278,7 @@
 				</div>
 
 				{#if ENABLE_OLLAMA_API}
-					<hr class=" border-gray-100 dark:border-gray-850 my-2" />
+					<hr class="border-line my-2" />
 
 					<div class="">
 						<div class="flex justify-between items-center">
@@ -321,7 +321,7 @@
 							</div>
 						</div>
 
-						<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+						<div class="mt-1 text-xs text-muted">
 							{$i18n.t('Trouble accessing Ollama?')}
 						</div>
 					</div>
@@ -337,9 +337,9 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="modal-actions">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			type="submit"
 		>
 			{$i18n.t('Save')}

@@ -138,22 +138,22 @@
 />
 
 {#if loaded}
-	<div class="flex flex-col gap-1 my-1.5">
+	<div class="flex flex-col gap-1 mb-1.5">
 		<div class="flex justify-between items-center">
-			<div class="flex md:self-center text-xl font-medium px-0.5 items-center">
+			<div class="flex md:self-center text-xl font-medium items-center">
 				{$i18n.t('Secrets')}
-				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-				<span class="text-lg font-medium text-gray-500 dark:text-gray-300">{items.length}</span>
+				<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+				<span class="text-lg font-medium text-body">{items.length}</span>
 			</div>
 		</div>
 
 		<div class="flex w-full space-x-2">
-			<div class="flex flex-1">
+			<div class="flex flex-1 rounded-xl">
 				<div class="self-center ml-1 mr-3">
 					<Search className="size-3.5" />
 				</div>
 				<input
-					class="w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+					class="field-bare text-sm py-1 rounded-r-xl"
 					bind:value={query}
 					placeholder={$i18n.t('Search Secrets')}
 				/>
@@ -164,12 +164,12 @@
 
 	{#if showAdd}
 		<form
-			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-100 dark:border-gray-800"
+			class="flex flex-col md:flex-row gap-2 mb-4 mt-2 p-3 rounded-xl bg-surface border border-line"
 			on:submit|preventDefault={submit}
 		>
 			<input
 				bind:this={nameInput}
-				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden"
+				class="flex-1 field-bare text-sm rounded-lg py-2 px-3"
 				placeholder={$i18n.t('Name (e.g. ECMWF_API_KEY)')}
 				bind:value={name}
 				autocomplete="off"
@@ -177,7 +177,7 @@
 			/>
 			<input
 				bind:this={valueInput}
-				class="flex-1 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+				class="field-outline flex-1"
 				type="password"
 				placeholder={$i18n.t('Value')}
 				bind:value
@@ -186,7 +186,7 @@
 			/>
 			{#if !isPersonal && isOrgAdmin}
 				<select
-					class="md:w-40 w-full text-sm rounded-lg py-2 px-3 bg-transparent outline-hidden border border-gray-200 dark:border-gray-700"
+					class="field-outline md:w-40"
 					bind:value={visibility}
 				>
 					<option value="private">{$i18n.t('Private')}</option>
@@ -194,7 +194,7 @@
 				</select>
 			{/if}
 			<button
-				class="px-3.5 py-2 text-sm rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+				class="btn-primary rounded-lg py-2"
 				type="submit"
 			>
 				{$i18n.t('Save')}
@@ -205,7 +205,7 @@
 	<div class="my-2 mb-5 gap-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
 		{#each items as secret (secret.id)}
 			<div
-				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-850 transition rounded-xl"
+				class="flex space-x-4 cursor-default text-left w-full px-3 py-2 hover:bg-tint transition rounded-xl"
 			>
 				<div class="w-full">
 					<div class="flex items-center justify-between -mt-1">
@@ -218,7 +218,7 @@
 						{#if secret.visibility !== 'organization' || secret.can_manage}
 							<div class="flex self-center gap-0.5 -mr-1 translate-y-1">
 								<button
-									class="text-xs px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+									class="text-xs px-2 py-1.5 rounded-xl hover:bg-tint"
 									on:click={() => {
 										replacing = replacing === secret.id ? null : secret.id;
 										replaceValue = '';
@@ -227,7 +227,7 @@
 									{$i18n.t('Replace')}
 								</button>
 								<button
-									class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+									class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
 									on:click={() => {
 										selectedSecret = secret;
 										showDeleteConfirm = true;
@@ -241,12 +241,12 @@
 
 					<div class="px-1 mb-1">
 						<div class="font-semibold line-clamp-1 h-fit">{secret.name}</div>
-						<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 font-mono text-gray-500">
+						<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 font-mono text-muted">
 							{'{{secret:' + secret.name + '}}'}
 						</div>
 
 					{#if secret.visibility !== 'organization' && sharedNames.has(secret.name)}
-						<div class="mt-2 text-xs text-gray-500">
+						<div class="mt-2 text-xs text-muted">
 							{$i18n.t('Overrides the organization secret with this name')}
 						</div>
 					{/if}
@@ -259,7 +259,7 @@
 					{#if replacing === secret.id}
 						<form class="mt-3 flex gap-2" on:submit|preventDefault={() => replace(secret)}>
 							<input
-								class="flex-1 w-full text-sm rounded-lg py-1.5 px-2.5 bg-gray-50 dark:bg-gray-850 outline-hidden"
+								class="field flex-1"
 								type="password"
 								placeholder={$i18n.t('New value')}
 								bind:value={replaceValue}
@@ -267,7 +267,7 @@
 							/>
 							<button class="text-xs px-2 py-1.5 rounded-lg" type="submit">{$i18n.t('Save')}</button>
 							<button
-								class="text-xs px-2 py-1.5 rounded-lg text-gray-500"
+								class="text-xs px-2 py-1.5 rounded-lg text-muted"
 								type="button"
 								on:click={() => {
 									replacing = null;
@@ -280,13 +280,13 @@
 				</div>
 			</div>
 		{:else}
-			<div class="col-span-full text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+			<div class="col-span-full text-sm text-muted py-6 text-center">
 				{$i18n.t('No secrets yet.')}
 			</div>
 		{/each}
 	</div>
 
-	<div class="text-gray-500 text-xs mt-1 mb-2">
+	<div class="text-muted text-xs mt-1 mb-2">
 		ⓘ {$i18n.t(
 			'Values are encrypted at rest and never shown again. In a tool call, use a secret placeholder — the server fills the value in before the tool runs. A private secret overrides an organization secret with the same name.'
 		)}

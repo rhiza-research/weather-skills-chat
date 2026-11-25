@@ -17,18 +17,18 @@
 
 	const alertStyles: Record<AlertType, AlertTheme> = {
 		NOTE: {
-			border: 'border-sky-500',
-			text: 'text-sky-500',
+			border: 'border-blue-500',
+			text: 'text-blue-500',
 			icon: Info
 		},
 		TIP: {
-			border: 'border-emerald-500',
-			text: 'text-emerald-500',
+			border: 'border-green-500',
+			text: 'text-green-500',
 			icon: LightBlub
 		},
 		IMPORTANT: {
-			border: 'border-purple-500',
-			text: 'text-purple-500',
+			border: 'border-blue-500',
+			text: 'text-blue-500',
 			icon: Star
 		},
 		WARNING: {
@@ -37,8 +37,8 @@
 			icon: ArrowRightCircle
 		},
 		CAUTION: {
-			border: 'border-rose-500',
-			text: 'text-rose-500',
+			border: 'border-red-500',
+			text: 'text-red-500',
 			icon: Bolt
 		}
 	};

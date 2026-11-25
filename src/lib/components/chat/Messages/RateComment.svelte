@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMark from '$lib/components/icons/XMark.svelte';
 	import { toast } from 'svelte-sonner';
 
 	import { createEventDispatcher, onMount, getContext } from 'svelte';
@@ -110,7 +111,7 @@
 {/if}
 
 <div
-	class=" my-2.5 rounded-xl px-4 py-3 border border-gray-100 dark:border-gray-850"
+	class=" my-2.5 rounded-xl px-4 py-3 border border-line"
 	id="message-feedback-{message.id}"
 >
 	<div class="flex justify-between items-center">
@@ -123,16 +124,7 @@
 				show = false;
 			}}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke-width="1.5"
-				stroke="currentColor"
-				class="size-4"
-			>
-				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-			</svg>
+			<XMark className="size-4" strokeWidth="1.5" />
 		</button>
 	</div>
 
@@ -142,7 +134,7 @@
 				<!-- 1-10 scale -->
 				{#each Array.from({ length: 10 }).map((_, i) => i + 1) as rating}
 					<button
-						class="size-7 text-sm border border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-850 {detailedRating ===
+						class="size-7 text-sm border border-line hover:bg-gray-50 dark:hover:bg-gray-850 {detailedRating ===
 						rating
 							? 'bg-gray-100 dark:bg-gray-800'
 							: ''} transition rounded-full disabled:cursor-not-allowed disabled:text-gray-500 disabled:bg-white dark:disabled:bg-gray-900"
@@ -175,7 +167,7 @@
 			<div class="flex flex-wrap gap-1.5 text-sm mt-1.5">
 				{#each reasons as reason}
 					<button
-						class="px-3 py-0.5 border border-gray-100 dark:border-gray-850 hover:bg-gray-50 dark:hover:bg-gray-850 {selectedReason ===
+						class="px-3 py-0.5 border border-line hover:bg-gray-50 dark:hover:bg-gray-850 {selectedReason ===
 						reason
 							? 'bg-gray-100 dark:bg-gray-800'
 							: ''} transition rounded-xl"
@@ -223,7 +215,7 @@
 	<div class="mt-2">
 		<textarea
 			bind:value={comment}
-			class="w-full text-sm px-1 py-2 bg-transparent outline-hidden resize-none rounded-xl"
+			class="field-bare text-sm px-1 py-2 resize-none rounded-xl"
 			placeholder={$i18n.t('Feel free to add specific details')}
 			rows="3"
 		/>
@@ -247,7 +239,7 @@
 		</div>
 
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			on:click={() => {
 				saveHandler();
 			}}

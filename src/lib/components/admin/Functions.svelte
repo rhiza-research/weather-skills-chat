@@ -173,7 +173,7 @@
 		<div class="flex md:self-center text-xl items-center font-medium px-0.5">
 			{$i18n.t('Functions')}
 			<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-			<span class="text-base font-lg text-gray-500 dark:text-gray-300">{filteredItems.length}</span>
+			<span class="text-base font-lg text-body">{filteredItems.length}</span>
 		</div>
 	</div>
 
@@ -191,7 +191,7 @@
 
 		<div>
 			<a
-				class=" px-2 py-2 rounded-xl hover:bg-gray-700/10 dark:hover:bg-gray-100/10 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
+				class=" px-2 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 dark:text-gray-300 dark:hover:text-white transition font-medium text-sm flex items-center space-x-1"
 				href="/admin/functions/create"
 			>
 				<Plus className="size-3.5" />
@@ -213,14 +213,14 @@
 					<div class=" flex-1 self-center pl-1">
 						<div class=" font-semibold flex items-center gap-1.5">
 							<div
-								class=" text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+								class="text-xs font-bold px-1 rounded-sm uppercase line-clamp-1 bg-gray-500/20 text-body"
 							>
 								{func.type}
 							</div>
 
 							{#if func?.meta?.manifest?.version}
 								<div
-									class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-gray-700 dark:text-gray-200"
+									class="text-xs font-bold px-1 rounded-sm line-clamp-1 bg-gray-500/20 text-body"
 								>
 									v{func?.meta?.manifest?.version ?? ''}
 								</div>
@@ -232,7 +232,7 @@
 						</div>
 
 						<div class="flex gap-1.5 px-1">
-							<div class=" text-gray-500 text-xs font-medium shrink-0">{func.id}</div>
+							<div class="text-muted text-xs font-medium shrink-0">{func.id}</div>
 
 							<div class=" text-xs overflow-hidden text-ellipsis line-clamp-1">
 								{func.meta.description}
@@ -245,7 +245,7 @@
 				{#if shiftKey}
 					<Tooltip content={$i18n.t('Delete')}>
 						<button
-							class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost"
 							type="button"
 							on:click={() => {
 								deleteHandler(func);
@@ -258,7 +258,7 @@
 					{#if func?.meta?.manifest?.funding_url ?? false}
 						<Tooltip content={$i18n.t('Support')}>
 							<button
-								class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+								class="btn-ghost"
 								type="button"
 								on:click={() => {
 									selectedFunction = func;
@@ -272,7 +272,7 @@
 
 					<Tooltip content={$i18n.t('Valves')}>
 						<button
-							class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost"
 							type="button"
 							on:click={() => {
 								selectedFunction = func;
@@ -324,7 +324,7 @@
 						onClose={() => {}}
 					>
 						<button
-							class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost btn-ghost-sm"
 							type="button"
 						>
 							<EllipsisHorizontal className="size-5" />
@@ -354,7 +354,7 @@
 	{/each}
 </div>
 
-<!-- <div class=" text-gray-500 text-xs mt-1 mb-2">
+<!-- <div class="text-muted text-xs mt-1 mb-2">
 	ⓘ {$i18n.t(
 		'Admins have access to all tools at all times; users need tools assigned per model in the workspace.'
 	)}
@@ -376,7 +376,7 @@
 		/>
 
 		<button
-			class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+			class="btn-secondary"
 			on:click={() => {
 				functionsImportInputElement.click();
 			}}
@@ -388,7 +388,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 16 16"
 					fill="currentColor"
-					class="w-4 h-4"
+					class="size-4"
 				>
 					<path
 						fill-rule="evenodd"
@@ -401,7 +401,7 @@
 
 		{#if $functions.length}
 			<button
-				class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+				class="btn-secondary"
 				on:click={async () => {
 					const _functions = await exportFunctions(localStorage.token).catch((error) => {
 						toast.error(`${error}`);
@@ -423,7 +423,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path
 							fill-rule="evenodd"
@@ -444,7 +444,7 @@
 		deleteHandler(selectedFunction);
 	}}
 >
-	<div class=" text-sm text-gray-500">
+	<div class="text-sm text-muted">
 		{$i18n.t('This will delete')} <span class="  font-semibold">{selectedFunction.name}</span>.
 	</div>
 </DeleteConfirmDialog>
@@ -493,7 +493,7 @@
 		reader.readAsText(importFiles[0]);
 	}}
 >
-	<div class="text-sm text-gray-500">
+	<div class="text-sm text-muted">
 		<div class=" bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 rounded-lg px-4 py-3">
 			<div>{$i18n.t('Please carefully review the following warnings:')}</div>
 

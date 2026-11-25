@@ -45,6 +45,29 @@ html {
 	word-break: break-word;
 }
 
+:root {
+	--focus-ring: #171717;
+}
+
+.dark {
+	--focus-ring: #ececec;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}
+
+/* stylelint-disable-next-line a11y/no-outline-none -- editors sit in a field that shows focus; menu items show a highlight; a bare input's row shows it */
+:is(.ProseMirror, .cm-content, [role='menuitem'], .field-bare):focus-visible {
+	outline: none;
+}
+
+:has(> .field-bare:focus-visible) {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: -2px;
+}
+
 code {
 	/* white-space-collapse: preserve !important; */
 	overflow-x: auto;
@@ -85,6 +108,95 @@ textarea::placeholder {
 
 .markdown-prose-xs {
 	@apply text-xs prose dark:prose-invert prose-blockquote:border-s-gray-100 prose-blockquote:dark:border-gray-800 prose-blockquote:border-s-2 prose-blockquote:not-italic prose-blockquote:font-normal  prose-headings:font-semibold prose-hr:my-0  prose-hr:border-gray-100 prose-hr:dark:border-gray-800 prose-p:my-0 prose-img:my-1 prose-headings:my-1 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-ul:-my-0 prose-ol:-my-0 prose-li:-my-0 whitespace-pre-line;
+}
+
+/* Components: only patterns with several parts or states. Everything else is plain Tailwind,
+   using the semantic colours from tailwind.css. */
+@layer components {
+	.btn-primary {
+		@apply rounded-full bg-black px-4 py-1.5 text-sm font-medium text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100;
+	}
+
+	.btn-secondary {
+		@apply flex items-center gap-1.5 rounded-xl bg-gray-100 px-3 py-1.5 text-xs transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700;
+	}
+
+	.btn-ghost {
+		@apply flex items-center gap-1.5 rounded-xl p-2 text-sm text-body transition hover:bg-tint hover:text-strong;
+	}
+
+	.btn-tonal {
+		@apply w-full rounded-full bg-tint py-2.5 text-sm font-medium text-body transition hover:bg-black/10 dark:hover:bg-white/10;
+	}
+
+	.menu-item {
+		@apply flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-tint;
+	}
+
+	.nav-row {
+		@apply flex items-center gap-3 rounded-xl p-2 transition hover:bg-tint;
+	}
+
+	.tab {
+		@apply min-w-fit rounded-full p-1.5 transition;
+	}
+
+	.field {
+		@apply w-full rounded-lg bg-surface px-3 py-2 text-sm outline-hidden dark:text-gray-300;
+	}
+
+	.field-outline {
+		@apply w-full rounded-lg border border-line-strong bg-transparent px-3 py-2 text-sm outline-hidden;
+	}
+
+	.field-select {
+		@apply w-40 cursor-pointer rounded-lg bg-gray-100 py-1 pr-8 pl-2 text-left text-xs outline-hidden transition hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700;
+	}
+
+	.settings-pane {
+		@apply max-h-[28rem] overflow-y-auto pr-3 lg:max-h-full;
+		scrollbar-gutter: stable;
+	}
+
+	.setting-group {
+		@apply mt-4 mb-1 border-t border-line pt-4 text-sm font-medium first:mt-0 first:border-t-0 first:pt-0;
+	}
+
+	.menu-panel {
+		@apply z-50 w-full rounded-xl border border-line bg-panel px-1 py-1.5 shadow-lg dark:text-white;
+	}
+
+	.modal-title {
+		@apply self-center text-lg font-medium;
+	}
+
+	.section-title {
+		@apply mb-2.5 text-base font-medium;
+	}
+
+	.field-label {
+		@apply mb-1 text-xs font-medium;
+	}
+
+	.sub-title {
+		@apply mb-2 text-sm font-medium;
+	}
+
+	.field-bare {
+		@apply w-full bg-transparent outline-hidden;
+	}
+
+	.modal-actions {
+		@apply flex justify-end pt-3 text-sm font-medium;
+	}
+
+	.page-nav {
+		@apply flex h-13 shrink-0 items-center gap-1 px-2.5 backdrop-blur-xl;
+	}
+
+	.page-body {
+		@apply max-h-full min-w-0 flex-1 overflow-y-auto px-4 pt-4 pb-2;
+	}
 }
 
 .markdown a {
@@ -147,6 +259,7 @@ li p {
 	border: 3px solid transparent;
 }
 
+/* stylelint-disable-next-line a11y/selector-pseudo-class-focus -- scrollbar thumb, not focusable */
 #messages-container::-webkit-scrollbar-thumb:hover {
 	background-color: rgba(0, 0, 0, 0.45);
 }
@@ -156,6 +269,7 @@ li p {
 	border-color: transparent;
 }
 
+/* stylelint-disable-next-line a11y/selector-pseudo-class-focus -- scrollbar thumb, not focusable */
 .dark #messages-container::-webkit-scrollbar-thumb:hover {
 	background-color: rgba(255, 255, 255, 0.45);
 }
@@ -193,7 +307,7 @@ select {
 	color: #818286; /* Fallback color */
 }
 
-:global(.dark) .shimmer {
+.dark .shimmer {
 	background: linear-gradient(90deg, #818286 25%, #eae5e5 50%, #818286 75%);
 	background-size: 200% 100%;
 	background-clip: text;
@@ -218,8 +332,28 @@ select {
 	animation: smoothFadeIn 0.2s forwards;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	.shimmer {
+		animation: none;
+	}
+
+	.dark .shimmer {
+		animation: none;
+	}
+
+	.status-description {
+		animation: none;
+	}
+}
+
 .katex-mathml {
-	display: none;
+	position: absolute;
+	clip: rect(1px, 1px, 1px, 1px);
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	padding: 0;
+	border: 0;
 }
 
 .scrollbar-hidden:active::-webkit-scrollbar-thumb,
@@ -231,14 +365,17 @@ select {
 	visibility: hidden;
 }
 
+/* stylelint-disable-next-line a11y/no-display-none -- scrollbar pseudo-element */
 .scrollbar-hidden::-webkit-scrollbar-corner {
 	display: none;
 }
 
+/* stylelint-disable-next-line a11y/no-display-none -- scrollbar pseudo-element */
 .scrollbar-none::-webkit-scrollbar {
 	display: none; /* for Chrome, Safari and Opera */
 }
 
+/* stylelint-disable-next-line a11y/no-display-none -- scrollbar pseudo-element */
 .scrollbar-none::-webkit-scrollbar-corner {
 	display: none;
 }
@@ -277,6 +414,7 @@ input[type='number'] {
 	visibility: hidden;
 }
 
+/* stylelint-disable-next-line a11y/no-display-none -- scrollbar pseudo-element */
 .katex-display::-webkit-scrollbar-corner {
 	display: none;
 }
@@ -296,6 +434,7 @@ input[type='number'] {
 	visibility: hidden;
 }
 
+/* stylelint-disable-next-line a11y/no-display-none -- scrollbar pseudo-element */
 .cm-scroller::-webkit-scrollbar-corner {
 	display: none;
 }
@@ -342,19 +481,27 @@ input[type='number'] {
 	@apply h-full min-h-fit max-h-full whitespace-pre-wrap;
 }
 
+/* stylelint-disable-next-line a11y/no-outline-none -- the surrounding field shows focus */
 .ProseMirror:focus {
 	outline: none;
 }
 
+/* stylelint-disable-next-line a11y/content-property-no-static-value -- decorative, the editor has an aria-label */
 .ProseMirror p.is-editor-empty:first-child::before {
 	content: attr(data-placeholder);
 	float: left;
-	color: #adb5bd;
+	color: #767676;
 	pointer-events: none;
 
 	@apply line-clamp-1 absolute;
 }
 
+
+.dark .ProseMirror p.is-editor-empty:first-child::before {
+	color: #adb5bd;
+}
+
+/* stylelint-disable-next-line a11y/content-property-no-static-value -- decorative, the editor has an aria-label */
 .ai-autocompletion::after {
 	color: #a0a0a0;
 

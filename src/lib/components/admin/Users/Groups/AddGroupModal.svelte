@@ -40,7 +40,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 mb-1.5">
-			<div class=" text-lg font-medium self-center font-primary">
+			<div class="modal-title">
 				{$i18n.t('Add User Group')}
 			</div>
 			<button
@@ -53,7 +53,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-5 h-5"
+					class="size-5"
 				>
 					<path
 						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
@@ -74,7 +74,7 @@
 					<div class="px-1 flex flex-col w-full">
 						<div class="flex gap-2">
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('Name')}</div>
+								<div class="mb-0.5 text-xs text-muted">{$i18n.t('Name')}</div>
 
 								<div class="flex-1">
 									<input
@@ -90,7 +90,7 @@
 						</div>
 
 						<div class="flex flex-col w-full mt-2">
-							<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Description')}</div>
+							<div class="mb-1 text-xs text-muted">{$i18n.t('Description')}</div>
 
 							<div class="flex-1">
 								<Textarea
@@ -116,7 +116,7 @@
 							{#if loading}
 								<div class="ml-2 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

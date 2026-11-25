@@ -148,16 +148,16 @@
 		id="commands-container"
 		class="px-2 mb-2 text-left w-full absolute bottom-0 left-0 right-0 z-10"
 	>
-		<div class="flex w-full rounded-xl border border-gray-100 dark:border-gray-850">
+		<div class="flex w-full rounded-xl border border-line">
 			<div
-				class="max-h-60 flex flex-col w-full rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100"
+				class="max-h-60 flex flex-col w-full rounded-xl bg-page dark:text-gray-100"
 			>
 				<div class="m-1 overflow-y-auto p-1 rounded-r-xl space-y-0.5 scrollbar-hidden">
 					{#each filteredItems as item, idx}
 						<button
 							class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center {idx ===
 							selectedIdx
-								? ' bg-gray-50 dark:bg-gray-850 dark:text-gray-100 selected-command-option-button'
+								? ' bg-surface dark:text-gray-100 selected-command-option-button'
 								: ''}"
 							type="button"
 							on:click={() => {
@@ -172,19 +172,19 @@
 								<div class=" font-medium text-black dark:text-gray-100 flex items-center gap-1">
 									{#if item.legacy}
 										<div
-											class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1 shrink-0"
+											class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1 shrink-0"
 										>
 											{$i18n.t('Legacy')}
 										</div>
 									{:else if item?.meta?.document}
 										<div
-											class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1 shrink-0"
+											class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1 shrink-0"
 										>
 											{$i18n.t('Document')}
 										</div>
 									{:else if item?.type === 'file'}
 										<div
-											class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1 shrink-0"
+											class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1 shrink-0"
 										>
 											{$i18n.t('File')}
 										</div>
@@ -201,7 +201,7 @@
 									</div>
 								</div>
 
-								<div class=" text-xs text-gray-600 dark:text-gray-100 line-clamp-1">
+								<div class="text-xs text-strong line-clamp-1">
 									{item?.description}
 								</div>
 							</div>
@@ -211,7 +211,7 @@
 								{#if !item.legacy && (item?.files ?? []).length > 0}
 									{#each item?.files ?? [] as file, fileIdx}
 										<button
-											class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-850 dark:hover:text-gray-100 selected-command-option-button"
+											class=" px-3 py-1.5 rounded-xl w-full text-left flex justify-between items-center hover:bg-tint dark:hover:text-gray-100 selected-command-option-button"
 											type="button"
 											on:click={() => {
 												console.log(file);
@@ -225,7 +225,7 @@
 													class=" font-medium text-black dark:text-gray-100 flex items-center gap-1"
 												>
 													<div
-														class="bg-gray-500/20 text-gray-700 dark:text-gray-200 rounded-sm uppercase text-xs font-bold px-1 shrink-0"
+														class="bg-gray-500/20 text-body rounded-sm uppercase text-xs font-bold px-1 shrink-0"
 													>
 														{$i18n.t('File')}
 													</div>
@@ -235,7 +235,7 @@
 													</div>
 												</div>
 
-												<div class=" text-xs text-gray-600 dark:text-gray-100 line-clamp-1">
+												<div class="text-xs text-strong line-clamp-1">
 													{$i18n.t('Updated')}
 													{dayjs(file.updated_at * 1000).fromNow()}
 												</div>
@@ -243,7 +243,7 @@
 										</button>
 									{/each}
 								{:else}
-									<div class=" text-gray-500 text-xs mt-1 mb-2">
+									<div class="text-muted text-xs mt-1 mb-2">
 										{$i18n.t('No files found.')}
 									</div>
 								{/if}

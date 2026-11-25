@@ -63,7 +63,7 @@
 
 			<button
 				type="button"
-				class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					document.getElementById('config-json-input').click();
 				}}
@@ -73,7 +73,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
 						<path
@@ -90,7 +90,7 @@
 
 			<button
 				type="button"
-				class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+				class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 				on:click={async () => {
 					const config = await exportConfig(localStorage.token);
 					const blob = new Blob([JSON.stringify(config)], {
@@ -104,7 +104,7 @@
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 16 16"
 						fill="currentColor"
-						class="w-4 h-4"
+						class="size-4"
 					>
 						<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
 						<path
@@ -119,14 +119,14 @@
 				</div>
 			</button>
 
-			<hr class="border-gray-100 dark:border-gray-850 my-1" />
+			<hr class="border-line my-1" />
 
 			{#if $config?.features.enable_admin_export ?? true}
 				<div class="  flex w-full justify-between">
 					<!-- <div class=" self-center text-xs font-medium">{$i18n.t('Allow Chat Deletion')}</div> -->
 
 					<button
-						class=" flex rounded-md py-1.5 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+						class=" flex rounded-xl py-1.5 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 						type="button"
 						on:click={() => {
 							// exportAllUserChats();
@@ -141,7 +141,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-4 h-4"
+								class="size-4"
 							>
 								<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
 								<path
@@ -156,7 +156,7 @@
 				</div>
 
 				<button
-					class=" flex rounded-md py-2 px-3 w-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+					class=" flex rounded-xl py-2 px-3 w-full hover:bg-black/5 dark:hover:bg-white/5 transition"
 					on:click={() => {
 						exportAllUserChats();
 					}}
@@ -166,7 +166,7 @@
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 16 16"
 							fill="currentColor"
-							class="w-4 h-4"
+							class="size-4"
 						>
 							<path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Z" />
 							<path
@@ -186,7 +186,7 @@
 
 	<!-- <div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg"
+			class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-xl"
 			type="submit"
 		>
 			{$i18n.t('Save')}

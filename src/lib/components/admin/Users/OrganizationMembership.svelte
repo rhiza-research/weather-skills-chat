@@ -1,4 +1,7 @@
 <script lang="ts">
+	import PlusSolid from '$lib/components/icons/PlusSolid.svelte';
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import PencilLine from '$lib/components/icons/PencilLine.svelte';
 	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { organizations, activeOrganizationId, user } from '$lib/stores';
@@ -225,33 +228,24 @@
 <div class="mt-0.5 mb-2 gap-1 flex flex-col md:flex-row justify-between">
 	<div class="flex md:self-center text-lg font-medium px-0.5">
 		{title || $i18n.t('Organization membership')}
-		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-		<span class="text-lg font-medium text-gray-500 dark:text-gray-300">
+		<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+		<span class="text-lg font-medium text-body">
 			{org?.name ?? current?.name ?? $i18n.t('Personal')}
 		</span>
 	</div>
 
 	{#if isAtLeastAdmin && !isPersonal}
 		<input
-			class="text-sm py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden md:w-64"
+			class="field md:w-64"
 			placeholder={$i18n.t('Search')}
 			bind:value={search}
 		/>
 		<button
-			class="px-3 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 transition font-medium text-sm flex items-center gap-1.5"
+			class="btn-primary px-3 flex items-center gap-1.5"
 			type="button"
 			on:click={openInvite}
 		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 20 20"
-				fill="currentColor"
-				class="size-4"
-			>
-				<path
-					d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"
-				/>
-			</svg>
+			<PlusSolid className="size-4" />
 			{$i18n.t('Invite a user')}
 		</button>
 	{/if}
@@ -262,7 +256,7 @@
 		<Spinner />
 	</div>
 {:else if isPersonal}
-	<div class="text-sm text-gray-500 dark:text-gray-400 px-0.5 py-4">
+	<div class="text-sm text-muted px-0.5 py-4">
 		{$i18n.t('This is your personal workspace. It cannot have members or be shared.')}
 	</div>
 	{#if org}
@@ -275,14 +269,14 @@
 				{:else}
 					/ {usageAmount(org.monthly_limit_usd)}
 					{#if credits}{' '}{$i18n.t('credits')}{/if}
-					<span class="text-gray-500 font-normal">
+					<span class="text-muted font-normal">
 						({usageAmount(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
 						{$i18n.t(credits ? 'remaining credits' : 'remaining')})
 					</span>
 				{/if}
 			</div>
 			<Tooltip content={tokenUsageTooltip(org.usage)} className="inline-flex mt-2">
-				<div class="text-xs text-gray-500">
+				<div class="text-xs text-muted">
 					{$i18n.t('Tokens')}: {tokenLine(org.usage)}
 				</div>
 			</Tooltip>
@@ -292,7 +286,7 @@
 	<Modal bind:show={showInvite} size="sm">
 		<div>
 			<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-				<div class="text-lg font-medium self-center">{$i18n.t('Invite a user')}</div>
+				<h2 class="modal-title">{$i18n.t('Invite a user')}</h2>
 				<button
 					class="self-center"
 					type="button"
@@ -300,24 +294,20 @@
 						showInvite = false;
 					}}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
-						<path
-							d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-						/>
-					</svg>
+					<XMarkSolid className="size-5" />
 				</button>
 			</div>
-			<hr class="border-gray-100 dark:border-gray-850" />
+			<hr class="border-line my-2" />
 			<form class="flex flex-col gap-3 p-5" on:submit|preventDefault={sendInvite}>
 				<input
-					class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+					class="field"
 					type="email"
 					required
 					placeholder={$i18n.t('Email')}
 					bind:value={inviteEmail}
 				/>
 				<div>
-					<div class="mb-1 text-xs text-gray-500">{$i18n.t('Monthly usage limit')}</div>
+					<div class="mb-1 text-xs text-muted">{$i18n.t('Monthly usage limit')}</div>
 					<label class="flex items-center gap-2 text-sm">
 						<input type="checkbox" bind:checked={inviteUnlimited} />
 						{$i18n.t('No limit')}
@@ -325,22 +315,22 @@
 					{#if !inviteUnlimited}
 						<div class="flex items-center gap-1.5 mt-2">
 							{#if !credits}
-								<span class="text-sm text-gray-500">$</span>
+								<span class="text-sm text-muted">$</span>
 							{/if}
 							<input
-								class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+								class="field"
 								type="number"
 								min="0"
 								step="0.01"
 								bind:value={inviteLimit}
 							/>
 							{#if credits}
-								<span class="text-sm text-gray-500">{$i18n.t('credits')}</span>
+								<span class="text-sm text-muted">{$i18n.t('credits')}</span>
 							{/if}
 						</div>
 					{/if}
 					{#if org?.monthly_limit_usd != null}
-						<div class="text-xs text-gray-500 mt-2">
+						<div class="text-xs text-muted mt-2">
 							{$i18n.t('Cannot exceed the organization monthly usage limit of {{limit}}.', {
 								limit: credits
 									? `${usageAmount(org.monthly_limit_usd)} ${$i18n.t('credits')}`
@@ -351,9 +341,9 @@
 				</div>
 				{#if !isPlatform}
 					<label class="block">
-						<div class="mb-1 text-xs text-gray-500">{$i18n.t('Role')}</div>
+						<div class="mb-1 text-xs text-muted">{$i18n.t('Role')}</div>
 						<select
-							class="w-full text-sm py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-850 outline-hidden"
+							class="field"
 							bind:value={inviteRole}
 						>
 							<option value="user">{$i18n.t('User')}</option>
@@ -361,11 +351,11 @@
 						</select>
 					</label>
 				{:else}
-					<div class="text-xs text-gray-500">{$i18n.t('Platform organization members are admins.')}</div>
+					<div class="text-xs text-muted">{$i18n.t('Platform organization members are admins.')}</div>
 				{/if}
 				<div class="flex justify-end">
 					<button
-						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
+						class="px-4 py-1.5 text-sm font-medium bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100 transition rounded-full disabled:opacity-50"
 						type="submit"
 						disabled={inviting}
 					>
@@ -389,14 +379,14 @@
 				{/if}
 			</span>
 			{#if org.monthly_limit_usd != null}
-				<span class="text-gray-500">
+				<span class="text-muted">
 					· {usageAmount(remainingUsd(org.monthly_limit_usd, org.usage?.cost_usd ?? 0))}
 					{$i18n.t(credits ? 'remaining credits' : 'remaining')}
 				</span>
 			{/if}
 		</div>
 		<Tooltip content={tokenUsageTooltip(org.usage)} className="inline-flex">
-			<span class="text-xs text-gray-500">
+			<span class="text-xs text-muted">
 				{$i18n.t('Tokens')}: {tokenLine(org.usage)}
 			</span>
 		</Tooltip>
@@ -404,7 +394,9 @@
 
 	<div class="overflow-x-auto">
 	<div class="min-w-[56rem]">
-	<div class="member-table-row grid items-end gap-x-3 px-1 text-xs uppercase font-bold">
+	<div
+		class="member-table-row grid items-end gap-x-3 px-1 text-xs font-semibold text-muted"
+	>
 		<div>{$i18n.t('Member')}</div>
 		<div>{$i18n.t('Role')}</div>
 		<div class="text-right">{$i18n.t('Used')}</div>
@@ -417,20 +409,20 @@
 		</div>
 		<div></div>
 	</div>
-	<hr class="mt-1.5 border-gray-100 dark:border-gray-850" />
+	<hr class="border-line my-2 mt-1.5" />
 
 	{#each tableRows as row (row.id)}
 		<div class="member-table-row grid items-center gap-x-3 px-1 py-2 text-sm">
 			{#if row.kind === 'invite'}
 			<div class="flex items-center gap-2.5 min-w-0">
 				<div
-					class="rounded-full w-6 h-6 shrink-0 bg-gray-100 dark:bg-gray-850 flex items-center justify-center text-xs text-gray-500"
+					class="rounded-full size-6 shrink-0 bg-surface flex items-center justify-center text-xs text-muted"
 				>
 					+
 				</div>
 				<div class="min-w-0">
 					<div class="font-medium truncate">{row.invite.email}</div>
-					<div class="text-xs text-gray-500 truncate">
+					<div class="text-xs text-muted truncate">
 						{$i18n.t('Sent')} {new Date(row.invite.created_at * 1000).toLocaleDateString()}
 						· {row.invite.expired
 							? $i18n.t('Expired')
@@ -441,22 +433,22 @@
 			<div>
 				{$i18n.t('Invited')} · {row.invite.role === 'admin' ? $i18n.t('Admin') : $i18n.t('User')}
 			</div>
-			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
+			<div class="text-right text-muted">—</div>
 			<div class="text-right tabular-nums">
 				{usageAmount(row.invite.monthly_limit_usd, $i18n.t('No limit'))}{#if credits && row.invite.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
-			<div class="text-right text-gray-300 dark:text-gray-600">—</div>
-			<div class="text-gray-300 dark:text-gray-600">—</div>
+			<div class="text-right text-muted">—</div>
+			<div class="text-muted">—</div>
 			<div class="flex justify-end items-center gap-1 flex-wrap">
 				<button
-					class="text-xs px-2 py-1.5 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 whitespace-nowrap"
+					class="btn-primary rounded-lg text-xs px-2 whitespace-nowrap"
 					type="button"
 					on:click={() => resendInvite(row.invite.id)}
 				>
 					{$i18n.t('Resend')}
 				</button>
 				<button
-					class="text-xs px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
+					class="text-xs px-2 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950 whitespace-nowrap"
 					type="button"
 					on:click={() => cancelInvite(row.invite.id)}
 				>
@@ -466,7 +458,7 @@
 			{:else}
 			<div class="flex items-center gap-2.5 min-w-0">
 				<img
-					class="rounded-full w-6 h-6 object-cover shrink-0"
+					class="rounded-full size-6 object-cover shrink-0"
 					src={row.member.profile_image_url?.startsWith(WEBUI_BASE_URL) ||
 					row.member.profile_image_url?.startsWith('https://www.gravatar.com/avatar/') ||
 					row.member.profile_image_url?.startsWith('data:')
@@ -476,7 +468,7 @@
 				/>
 				<div class="min-w-0">
 					<div class="font-medium truncate">{row.member.name ?? row.member.user_id}</div>
-					<div class="text-xs text-gray-500 truncate">{row.member.email ?? ''}</div>
+					<div class="text-xs text-muted truncate">{row.member.email ?? ''}</div>
 				</div>
 			</div>
 			<div class="min-w-0">
@@ -504,13 +496,13 @@
 			<div class="text-right tabular-nums">
 				{usageAmount(row.member.monthly_limit_usd, $i18n.t('Unlimited'))}{#if credits && row.member.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
-			<div class="text-right text-sm tabular-nums text-gray-500">
+			<div class="text-right text-sm tabular-nums text-muted">
 				{row.member.monthly_limit_usd == null
 					? '—'
 					: usageAmount(remainingUsd(row.member.monthly_limit_usd, row.member.usage?.cost_usd ?? 0))}{#if credits && row.member.monthly_limit_usd != null}{' '}{$i18n.t('credits')}{/if}
 			</div>
 			<Tooltip content={tokenUsageTooltip(row.member.usage)} className="min-w-0 block">
-				<div class="text-[11px] text-gray-500 tabular-nums truncate">
+				<div class="text-xs text-muted tabular-nums truncate">
 					{tokenLine(row.member.usage)}
 				</div>
 			</Tooltip>
@@ -518,27 +510,14 @@
 				{#if isAtLeastAdmin}
 					<Tooltip content={$i18n.t('Edit monthly usage limit')}>
 						<button
-							class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+							class="btn-ghost"
 							on:click={() => openLimitEditor(row.member)}
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke-width="1.5"
-								stroke="currentColor"
-								class="w-4 h-4"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-								/>
-							</svg>
+							<PencilLine className="size-4" />
 						</button>
 					</Tooltip>
 					<button
-						class="text-xs text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950"
+						class="text-xs text-red-600 px-2 py-1 rounded-xl hover:bg-red-50 dark:hover:bg-red-950"
 						on:click={() => askRemove(row.member)}
 					>
 						{$i18n.t('Remove')}
@@ -548,7 +527,7 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="text-sm text-gray-500 py-6 text-center">{$i18n.t('No members yet.')}</div>
+		<div class="text-sm text-muted py-6 text-center">{$i18n.t('No members yet.')}</div>
 	{/each}
 	</div>
 	</div>

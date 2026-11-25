@@ -4,6 +4,8 @@
 	import { getLanguages, changeLanguage } from '$lib/i18n';
 
 	import { settings, theme } from '$lib/stores';
+	import SettingToggle from '$lib/components/common/SettingToggle.svelte';
+	import SettingRow from '$lib/components/common/SettingRow.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -111,65 +113,45 @@
 </script>
 
 <div class="flex flex-col h-full justify-between text-sm">
-	<div class="  overflow-y-scroll max-h-[28rem] lg:max-h-full">
+	<div class="settings-pane">
 		<div class="">
-			<div class=" mb-1 text-sm font-medium">{$i18n.t('WebUI Settings')}</div>
+			<h3 class="setting-group">{$i18n.t('WebUI Settings')}</h3>
 
-			<div class="flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">{$i18n.t('Theme')}</div>
-				<div class="flex items-center relative">
-					<select
-						class=" dark:bg-gray-900 w-fit pr-8 rounded-sm py-2 px-2 text-xs bg-transparent outline-hidden text-right"
-						bind:value={selectedTheme}
-						placeholder={$i18n.t('Select a theme')}
-						on:change={() => themeChangeHandler(selectedTheme)}
-					>
-						<option value="system">⚙️ {$i18n.t('System')}</option>
-						<option value="dark">🌑 {$i18n.t('Dark')}</option>
-						<option value="oled-dark">🌃 {$i18n.t('OLED Dark')}</option>
-						<option value="light">☀️ {$i18n.t('Light')}</option>
-						<option value="her">🌷 Her</option>
-					</select>
-				</div>
-			</div>
+			<SettingRow label={$i18n.t('Theme')}>
+				<select
+					class="field-select"
+					bind:value={selectedTheme}
+					placeholder={$i18n.t('Select a theme')}
+					on:change={() => themeChangeHandler(selectedTheme)}
+				>
+					<option value="system">⚙️ {$i18n.t('System')}</option>
+					<option value="dark">🌑 {$i18n.t('Dark')}</option>
+					<option value="oled-dark">🌃 {$i18n.t('OLED Dark')}</option>
+					<option value="light">☀️ {$i18n.t('Light')}</option>
+					<option value="her">🌷 Her</option>
+				</select>
+			</SettingRow>
 
-			<div class=" flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">{$i18n.t('Language')}</div>
-				<div class="flex items-center relative">
-					<select
-						class=" dark:bg-gray-900 w-fit pr-8 rounded-sm py-2 px-2 text-xs bg-transparent outline-hidden text-right"
-						bind:value={lang}
-						placeholder={$i18n.t('Select a language')}
-						on:change={() => {
-							changeLanguage(lang);
-						}}
-					>
-						{#each languages as language}
-							<option value={language['code']}>{language['title']}</option>
-						{/each}
-					</select>
-				</div>
-			</div>
+			<SettingRow label={$i18n.t('Language')}>
+				<select
+					class="field-select"
+					bind:value={lang}
+					placeholder={$i18n.t('Select a language')}
+					on:change={() => {
+						changeLanguage(lang);
+					}}
+				>
+					{#each languages as language}
+						<option value={language['code']}>{language['title']}</option>
+					{/each}
+				</select>
+			</SettingRow>
 
-			<div>
-				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">{$i18n.t('Notifications')}</div>
-
-					<button
-						class="p-1 px-3 text-xs flex rounded-sm transition"
-						on:click={() => {
-							toggleNotification();
-						}}
-						type="button"
-					>
-						{#if notificationEnabled === true}
-							<span class="ml-2 self-center">{$i18n.t('On')}</span>
-						{:else}
-							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
-						{/if}
-					</button>
-				</div>
-			</div>
+			<SettingToggle
+				label={$i18n.t('Notifications')}
+				checked={notificationEnabled === true}
+				on:click={toggleNotification}
+			/>
 		</div>
 	</div>
 </div>

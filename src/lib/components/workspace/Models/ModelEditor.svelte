@@ -1,4 +1,7 @@
 <script lang="ts">
+	import XMarkSolid from '$lib/components/icons/XMarkSolid.svelte';
+	import PlusSolid20 from '$lib/components/icons/PlusSolid20.svelte';
+	import PhotoMini from '$lib/components/icons/PhotoMini.svelte';
 	import { onMount, onDestroy, getContext, tick } from 'svelte';
 	import { models, knowledge as knowledgeCollections } from '$lib/stores';
 
@@ -442,20 +445,9 @@
 							<div class="absolute bottom-0 right-0 z-10">
 								<div class="m-1.5">
 									<div
-										class="shadow-xl p-1 rounded-full border-2 border-white bg-gray-800 text-white group-hover:bg-gray-600 transition dark:border-black dark:bg-white dark:group-hover:bg-gray-200 dark:text-black"
+										class="shadow-xl p-1 rounded-full border-2 border-white bg-gray-800 text-on-inverse group-hover:bg-gray-600 transition dark:border-black dark:bg-white dark:group-hover:bg-gray-200"
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											viewBox="0 0 16 16"
-											fill="currentColor"
-											class="size-5"
-										>
-											<path
-												fill-rule="evenodd"
-												d="M2 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4Zm10.5 5.707a.5.5 0 0 0-.146-.353l-1-1a.5.5 0 0 0-.708 0L9.354 9.646a.5.5 0 0 1-.708 0L6.354 7.354a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0-.146.353V12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V9.707ZM12 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-												clip-rule="evenodd"
-											/>
-										</svg>
+										<PhotoMini className="size-5" />
 									</div>
 								</div>
 							</div>
@@ -467,7 +459,7 @@
 
 						<div class="flex w-full mt-1 justify-end">
 							<button
-								class="px-2 py-1 text-gray-500 rounded-lg text-xs"
+								class="px-2 py-1 text-muted rounded-lg text-xs"
 								on:click={() => {
 									info.meta.profile_image_url = '/static/favicon.png';
 								}}
@@ -484,7 +476,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="text-3xl font-semibold w-full bg-transparent outline-hidden"
+									class="field-bare text-3xl font-semibold"
 									placeholder={$i18n.t('Model Name')}
 									bind:value={name}
 									required
@@ -495,7 +487,7 @@
 						<div class="flex-1">
 							<div>
 								<input
-									class="text-xs w-full bg-transparent text-gray-500 outline-hidden"
+									class="field-bare text-xs text-muted"
 									placeholder={$i18n.t('Model ID')}
 									bind:value={id}
 									disabled={edit}
@@ -548,7 +540,7 @@
 								/>
 							</div>
 
-							<div class="text-xs text-gray-500 mt-1">
+							<div class="text-xs text-muted mt-1">
 								{#if fallbackNote === 'suggested'}
 									{$i18n.t(
 										'Suggested because the model name matches. Check it is the right model before saving.'
@@ -621,7 +613,7 @@
 						</div>
 					{/if}
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
+					<hr class="border-line my-1.5" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between">
@@ -647,7 +639,7 @@
 								</div>
 
 								<button
-									class="p-1 px-3 text-xs flex rounded-sm transition"
+									class="btn-secondary"
 									type="button"
 									on:click={() => {
 										showAdvanced = !showAdvanced;
@@ -675,7 +667,7 @@
 						</div>
 					</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1" />
+					<hr class="border-line my-1" />
 
 					<div class="my-2">
 						<div class="flex w-full justify-between items-center">
@@ -719,16 +711,7 @@
 										}
 									}}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
-										/>
-									</svg>
+									<PlusSolid20 className="size-4" />
 								</button>
 							{/if}
 						</div>
@@ -739,7 +722,7 @@
 									{#each info.meta.suggestion_prompts as prompt, promptIdx}
 										<div class=" flex rounded-lg">
 											<input
-												class=" text-sm w-full bg-transparent outline-hidden border-r border-gray-100 dark:border-gray-850"
+												class="text-sm field-bare border-r border-line"
 												placeholder={$i18n.t('Write a prompt suggestion (e.g. Who are you?)')}
 												bind:value={prompt.content}
 											/>
@@ -752,16 +735,7 @@
 													info.meta.suggestion_prompts = info.meta.suggestion_prompts;
 												}}
 											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 20 20"
-													fill="currentColor"
-													class="w-4 h-4"
-												>
-													<path
-														d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
-													/>
-												</svg>
+												<XMarkSolid className="size-4" />
 											</button>
 										</div>
 									{/each}
@@ -772,7 +746,7 @@
 						{/if}
 					</div>
 
-					<hr class=" border-gray-100 dark:border-gray-850 my-1.5" />
+					<hr class="border-line my-1.5" />
 
 					<div class="my-2">
 						<Knowledge
@@ -781,7 +755,7 @@
 						/>
 					</div>
 
-					<div class="my-2 text-xs text-gray-500 dark:text-gray-400">
+					<div class="my-2 text-xs text-muted">
 						{$i18n.t(
 							'Skills and tools available to you are enabled by default in chat (highest skill version). Use the chat tools menu to change that per conversation.'
 						)}
@@ -791,12 +765,12 @@
 						<Capabilities bind:capabilities />
 					</div>
 
-					<div class="my-2 text-gray-300 dark:text-gray-700">
+					<div class="my-2 text-muted dark:text-gray-700">
 						<div class="flex w-full justify-between mb-2">
 							<div class=" self-center text-sm font-semibold">{$i18n.t('JSON Preview')}</div>
 
 							<button
-								class="p-1 px-3 text-xs flex rounded-sm transition"
+								class="btn-secondary"
 								type="button"
 								on:click={() => {
 									showPreview = !showPreview;
@@ -813,7 +787,7 @@
 						{#if showPreview}
 							<div>
 								<textarea
-									class="text-sm w-full bg-transparent outline-hidden resize-none"
+									class="field-bare text-sm resize-none"
 									rows="10"
 									value={JSON.stringify(info, null, 2)}
 									disabled
@@ -825,9 +799,9 @@
 
 					<div class="my-2 flex justify-end pb-20">
 						<button
-							class=" text-sm px-3 py-2 transition rounded-lg {loading
-								? ' cursor-not-allowed bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'
-								: 'bg-black hover:bg-gray-900 text-white dark:bg-white dark:hover:bg-gray-100 dark:text-black'} flex w-full justify-center"
+							class=" text-sm px-3 py-2 transition rounded-xl {loading
+								? ' cursor-not-allowed bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100'
+								: 'bg-inverse hover:bg-gray-900 text-on-inverse dark:hover:bg-gray-100'} flex w-full justify-center"
 							type="submit"
 							disabled={loading}
 						>
@@ -842,7 +816,7 @@
 							{#if loading}
 								<div class="ml-1.5 self-center">
 									<svg
-										class=" w-4 h-4"
+										class=" size-4"
 										viewBox="0 0 24 24"
 										fill="currentColor"
 										xmlns="http://www.w3.org/2000/svg"

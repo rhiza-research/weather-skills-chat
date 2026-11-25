@@ -129,12 +129,12 @@
 		>
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<div
-				class="w-full group rounded-md relative flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition {emphasis ===
+				class="w-full group rounded-md relative flex items-center justify-between hover:bg-tint transition {emphasis ===
 				'strong'
 					? 'text-gray-800 dark:text-gray-100'
 					: emphasis === 'medium'
 						? 'text-gray-700 dark:text-gray-200'
-						: 'text-gray-500 dark:text-gray-500'}"
+						: 'text-muted dark:text-gray-500'}"
 			>
 				<button
 					class="w-full py-1.5 pl-2 flex items-center gap-1.5 {emphasis === 'strong'
@@ -165,7 +165,7 @@
 				{#if $$slots.actions}
 					<!-- svelte-ignore a11y-click-events-have-key-events -->
 					<div
-						class="absolute z-10 right-2 self-center flex items-center text-gray-500 dark:text-gray-400"
+						class="absolute z-10 right-2 self-center flex items-center text-muted"
 						on:pointerup|stopPropagation
 						on:click|stopPropagation
 					>
@@ -186,7 +186,7 @@
 					>
 						<Tooltip content={onAddLabel}>
 							<button
-								class="p-0.5 dark:hover:bg-gray-850 rounded-lg touch-auto"
+								class="p-0.5 dark:hover:bg-white/5 rounded-lg touch-auto"
 								on:click={(e) => {}}
 							>
 								<Plus className=" size-3" strokeWidth="2.5" />

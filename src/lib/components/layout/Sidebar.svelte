@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MenuLines from '$lib/components/icons/MenuLines.svelte';
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 
@@ -599,7 +600,7 @@
 {#if $showSidebar}
 	<div
 		class=" {$isApp
-			? ' ml-[4.5rem] md:ml-0'
+			? ' ml-18 md:ml-0'
 			: ''} fixed md:hidden z-40 top-0 right-0 left-0 bottom-0 bg-black/60 w-full min-h-screen h-screen flex justify-center overflow-hidden overscroll-contain"
 		on:mousedown={() => {
 			showSidebar.set(!$showSidebar);
@@ -613,7 +614,7 @@
 	class="h-screen max-h-[100dvh] min-h-screen select-none {$showSidebar
 		? 'md:relative w-[260px] max-w-[260px]'
 		: '-translate-x-[260px] w-[0px]'} {$isApp
-		? `ml-[4.5rem] md:ml-0 `
+		? `ml-18 md:ml-0 `
 		: 'transition-width duration-200 ease-in-out'}  shrink-0 bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-200 text-sm fixed z-50 top-0 left-0 overflow-x-hidden
         "
 	data-state={$showSidebar}
@@ -623,34 +624,21 @@
 			? ''
 			: 'invisible'}"
 	>
-		<div class="px-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400">
+		<div class="px-1.5 flex justify-between space-x-1 text-body">
 			<button
-				class=" cursor-pointer p-[7px] flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class=" cursor-pointer p-2 flex rounded-xl hover:bg-tint transition"
 				on:click={() => {
 					showSidebar.set(!$showSidebar);
 				}}
 			>
 				<div class=" m-auto self-center">
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="2"
-						stroke="currentColor"
-						class="size-5"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"
-						/>
-					</svg>
+					<MenuLines className="size-5" />
 				</div>
 			</button>
 
 			<a
 				id="sidebar-new-chat-button"
-				class="flex justify-between items-center flex-1 rounded-lg px-2 py-1 h-full text-right hover:bg-gray-100 dark:hover:bg-gray-900 transition no-drag-region"
+				class="flex justify-between items-center flex-1 rounded-xl px-2 py-1 h-full text-right hover:bg-tint transition no-drag-region"
 				href="/"
 				draggable="false"
 				on:click={async (event) => {
@@ -699,9 +687,9 @@
 		</div>
 
 		<!-- {#if $user?.role === 'admin'}
-			<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+			<div class="px-1.5 flex justify-center text-strong">
 				<a
-					class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+					class="nav-row grow"
 					href="/home"
 					on:click={() => {
 						selectedChatId = null;
@@ -724,9 +712,9 @@
 			</div>
 		{/if} -->
 
-		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+		<div class="px-1.5 flex justify-center text-strong">
 			<a
-				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class="nav-row grow"
 				href="/workspace"
 				on:click={() => {
 					selectedChatId = null;
@@ -761,9 +749,9 @@
 			</a>
 		</div>
 
-		<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+		<div class="px-1.5 flex justify-center text-strong">
 			<a
-				class="grow flex items-center space-x-3 rounded-lg px-2 py-[7px] hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+				class="nav-row grow"
 				href="/scheduled-tasks"
 				on:click={() => {
 					selectedChatId = null;
@@ -800,7 +788,7 @@
 		<OrganizationRow on:switch-org={(e) => onSwitchOrganization(e.detail)} />
 
 		<!-- Separates the settings rows above from search and the chats and tasks below. -->
-		<hr class="mx-5 my-2.5 border-gray-100 dark:border-gray-850" />
+		<hr class="border-line mx-5 my-2.5" />
 
 		<div class="relative {$temporaryChatEnabled ? 'opacity-20' : ''}">
 			{#if $temporaryChatEnabled}
@@ -893,7 +881,7 @@
 				{/if}
 
 				<div
-					class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+					class="ml-3 pl-1 mt-px flex flex-col flex-1 min-h-0 border-s border-line"
 				>
 				{#if !search && privatePinned.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
@@ -1112,7 +1100,7 @@
 					}}
 				>
 					<div
-						class="ml-3 pl-1 mt-[1px] flex flex-col flex-1 min-h-0 border-s border-gray-100 dark:border-gray-900"
+						class="ml-3 pl-1 mt-px flex flex-col flex-1 min-h-0 border-s border-line"
 					>
 						{#if !search && teamPinned.length > 0}
 							<div class="flex flex-col space-y-1 rounded-xl">
@@ -1268,7 +1256,7 @@
 					>
 						<button
 							id="sidebar-user-menu-button"
-							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+							class=" flex items-center rounded-xl py-2.5 px-2.5 w-full hover:bg-tint transition"
 						>
 							<div class=" self-center mr-3">
 								<img
@@ -1279,7 +1267,7 @@
 							</div>
 							<div class="self-center font-medium min-w-0 flex-1 text-left">
 								<div class="truncate">{$user?.name}</div>
-								<div class="truncate text-xs font-normal text-gray-500 dark:text-gray-400 flex items-center gap-1">
+								<div class="truncate text-xs font-normal text-muted flex items-center gap-1">
 									{#if currentOrg?.logo}
 										<img
 											src={currentOrg.logo}
@@ -1294,7 +1282,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 20 20"
 								fill="currentColor"
-								class="size-4 text-gray-400 shrink-0 ml-1 {showDropdown ? 'rotate-180' : ''}"
+								class="size-4 text-muted shrink-0 ml-1 {showDropdown ? 'rotate-180' : ''}"
 							>
 								<path
 									fill-rule="evenodd"

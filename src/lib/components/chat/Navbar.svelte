@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EllipsisHorizontal from '$lib/components/icons/EllipsisHorizontal.svelte';
 	import { getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -95,7 +96,7 @@
 				>
 					<button
 						id="sidebar-toggle-button"
-						class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+						class="cursor-pointer px-2 py-2 flex rounded-xl hover:bg-tint transition"
 						on:click={() => {
 							showSidebar.set(!$showSidebar);
 						}}
@@ -117,14 +118,14 @@
 					{/if}
 				</div>
 
-				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
+				<div class="self-start flex flex-none items-center gap-1 text-body">
 					<div class="self-center flex">
 						<ContextRing {history} {compacting} {onCompact} />
 					</div>
 					<div class="self-center">
 						<ToolRunnerBand />
 					</div>
-					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
+					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-gray-700" /> -->
 					{#if shareEnabled && chat && (chat.id || $temporaryChatEnabled)}
 						<Menu
 							{chat}
@@ -141,24 +142,12 @@
 							}}
 						>
 							<button
-								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-tint transition"
 								id="chat-context-menu-button"
+								aria-label={$i18n.t('Chat Menu')}
 							>
 								<div class=" m-auto self-center">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="size-5"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"
-										/>
-									</svg>
+									<EllipsisHorizontal className="size-5" />
 								</div>
 							</button>
 						</Menu>
@@ -166,9 +155,9 @@
 
 					<Tooltip content={artifactsPanelOpen ? $i18n.t('Hide artifacts') : $i18n.t('Show artifacts')}>
 						<button
-							class="flex cursor-pointer items-center gap-1.5 rounded-xl transition {artifactsPanelOpen
-								? 'px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850'
-								: 'px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm hover:bg-gray-50 dark:hover:bg-gray-750 font-medium'}"
+							class="btn-ghost {artifactsPanelOpen
+							? ''
+							: 'border border-line-strong bg-panel px-2.5 py-1.5 font-medium text-strong shadow-lg hover:bg-tint'}"
 							on:click={toggleArtifactsPanel}
 							aria-label={$i18n.t('Artifacts')}
 							aria-pressed={artifactsPanelOpen}
@@ -186,7 +175,7 @@
 							id="new-chat-button"
 							class=" flex {$showSidebar
 								? 'md:hidden'
-								: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+								: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-tint transition"
 							on:click={() => {
 								initNewChat();
 							}}
@@ -209,7 +198,7 @@
 							}}
 						>
 							<button
-								class="select-none flex rounded-xl p-1.5 w-full hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+								class="select-none flex rounded-xl p-1.5 w-full hover:bg-tint transition"
 								aria-label={$i18n.t('User Menu')}
 							>
 								<div class=" self-center">

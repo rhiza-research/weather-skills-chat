@@ -160,7 +160,7 @@
 </script>
 
 <div class="w-full h-full relative">
-	<div class=" absolute z-50 w-full flex justify-between dark:text-gray-100 px-4 py-3.5">
+	<div class=" absolute z-50 w-full flex justify-between dark:text-gray-100 px-4 py-4">
 		<div class="flex items-center gap-2.5">
 			<button
 				class="self-center p-0.5"
@@ -170,7 +170,7 @@
 			>
 				<ArrowLeft className="size-3.5" />
 			</button>
-			<div class=" text-lg font-medium self-center font-primary">{$i18n.t('Chat Overview')}</div>
+			<h2 class="modal-title">{$i18n.t('Chat Overview')}</h2>
 		</div>
 		<button
 			class="self-center p-0.5"

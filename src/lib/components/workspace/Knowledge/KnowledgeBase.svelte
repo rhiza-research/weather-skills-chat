@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MagnifyingGlassSolid from '$lib/components/icons/MagnifyingGlassSolid.svelte';
 	import Fuse from 'fuse.js';
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
@@ -652,7 +653,7 @@
 						<div class="w-full">
 							<input
 								type="text"
-								class="text-left w-full font-semibold text-2xl font-primary bg-transparent outline-hidden"
+								class="field-bare text-left font-semibold text-2xl font-primary"
 								bind:value={knowledge.name}
 								placeholder={$i18n.t('Knowledge Name')}
 								disabled={!canWrite}
@@ -664,7 +665,7 @@
 
 						{#if catalog === 'public' && canWrite}
 							<div class="self-center shrink-0 flex items-center gap-2">
-								<span class="text-xs text-gray-500">{$i18n.t('Enabled by default')}</span>
+								<span class="text-xs text-muted">{$i18n.t('Enabled by default')}</span>
 								<Switch
 									bind:state={knowledge.enabled_by_default}
 									on:change={() => {
@@ -678,7 +679,7 @@
 					<div class="flex w-full px-1">
 						<input
 							type="text"
-							class="text-left text-xs w-full text-gray-500 bg-transparent outline-hidden"
+							class="field-bare text-left text-xs text-muted"
 							bind:value={knowledge.description}
 							placeholder={$i18n.t('Knowledge Description')}
 							disabled={!canWrite}
@@ -700,7 +701,7 @@
 								{#if !showSidepanel}
 									<div class="-translate-x-2">
 										<button
-											class="w-full text-left text-sm p-1.5 rounded-lg dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-gray-850"
+											class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-tint"
 											on:click={() => {
 												pane.expand();
 											}}
@@ -722,7 +723,7 @@
 
 								<div>
 									<button
-										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-lg"
+										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-tint rounded-xl"
 										on:click={() => {
 											updateFileContentHandler();
 										}}
@@ -766,7 +767,7 @@
 							<div class="shrink-0 mt-1 mb-2 flex items-center">
 								<div class="mr-2">
 									<button
-										class="w-full text-left text-sm p-1.5 rounded-lg dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-gray-850"
+										class="w-full text-left text-sm p-1.5 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-tint"
 										on:click={() => {
 											selectedFileId = null;
 										}}
@@ -780,7 +781,7 @@
 
 								<div>
 									<button
-										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-lg"
+										class="self-center w-fit text-sm py-1 px-2.5 dark:text-gray-300 dark:hover:text-white hover:bg-tint rounded-xl"
 										on:click={() => {
 											updateFileContentHandler();
 										}}
@@ -791,7 +792,7 @@
 							</div>
 
 							<div
-								class=" flex-1 w-full h-full max-h-full py-2.5 px-3.5 rounded-lg text-sm bg-transparent overflow-y-auto scrollbar-hidden"
+								class=" flex-1 w-full h-full max-h-full py-2.5 px-4 rounded-lg text-sm bg-transparent overflow-y-auto scrollbar-hidden"
 							>
 								{#key selectedFile.id}
 									<RichTextInput
@@ -820,23 +821,12 @@
 				<div class=" flex flex-col w-full space-x-2 rounded-lg h-full">
 					<div class="w-full h-full flex flex-col">
 						<div class=" px-3">
-							<div class="flex mb-0.5">
+							<div class="flex mb-0.5 rounded-xl">
 								<div class=" self-center ml-1 mr-3">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											fill-rule="evenodd"
-											d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-											clip-rule="evenodd"
-										/>
-									</svg>
+									<MagnifyingGlassSolid className="size-4" />
 								</div>
 								<input
-									class=" w-full text-sm pr-4 py-1 rounded-r-xl outline-hidden bg-transparent"
+									class="field-bare text-sm pr-4 py-1 rounded-r-xl"
 									bind:value={query}
 									placeholder={$i18n.t('Search Collection')}
 									on:focus={() => {
@@ -883,7 +873,7 @@
 								/>
 							</div>
 						{:else}
-							<div class="my-3 flex flex-col justify-center text-center text-gray-500 text-xs">
+							<div class="my-3 flex flex-col justify-center text-center text-muted text-xs">
 								<div>
 									{$i18n.t('No content found')}
 								</div>

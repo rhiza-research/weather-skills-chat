@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PencilLine from '$lib/components/icons/PencilLine.svelte';
 	import { marked } from 'marked';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
@@ -228,8 +229,8 @@
 			<div class="flex justify-between items-center">
 				<div class="flex items-center md:self-center text-xl font-medium px-0.5">
 					{$i18n.t('Models')}
-					<div class="flex self-center w-[1px] h-6 mx-2.5 bg-gray-50 dark:bg-gray-850" />
-					<span class="text-lg font-medium text-gray-500 dark:text-gray-300"
+					<div class="flex self-center w-[1px] h-6 mx-2.5 bg-surface" />
+					<span class="text-lg font-medium text-body"
 						>{filteredModels.length}</span
 					>
 				</div>
@@ -267,7 +268,7 @@
 						<Search className="size-3.5" />
 					</div>
 					<input
-						class=" w-full text-sm py-1 rounded-r-xl outline-hidden bg-transparent"
+						class="w-full bg-transparent outline-hidden text-sm py-1 rounded-r-xl"
 						bind:value={searchValue}
 						placeholder={$i18n.t('Search Models')}
 					/>
@@ -279,14 +280,14 @@
 			{#if models.length > 0}
 				{#each filteredModels as model, modelIdx (model.id)}
 					<div
-						class=" flex space-x-4 cursor-pointer w-full px-3 py-2 dark:hover:bg-white/5 hover:bg-black/5 rounded-lg transition {model
+						class=" flex space-x-4 cursor-pointer w-full px-3 py-2 hover:bg-tint rounded-lg transition {model
 							?.meta?.hidden
 							? 'opacity-50 dark:opacity-50'
 							: ''}"
 						id="model-item-{model.id}"
 					>
 						<button
-							class=" flex flex-1 text-left space-x-3.5 cursor-pointer w-full"
+							class=" flex flex-1 text-left space-x-3 cursor-pointer w-full"
 							type="button"
 							on:click={() => {
 								selectedModelId = model.id;
@@ -306,7 +307,7 @@
 								</div>
 							</div>
 
-							<div class=" flex-1 self-center {(model?.is_active ?? true) ? '' : 'text-gray-500'}">
+							<div class=" flex-1 self-center {(model?.is_active ?? true) ? '' : 'text-muted'}">
 								<Tooltip
 									content={marked.parse(
 										!!model?.meta?.description
@@ -320,7 +321,7 @@
 								>
 									<div class="  font-semibold line-clamp-1">{model.name}</div>
 								</Tooltip>
-								<div class=" text-xs overflow-hidden text-ellipsis line-clamp-1 text-gray-500">
+								<div class="text-xs overflow-hidden text-ellipsis line-clamp-1 text-muted">
 									<span class=" line-clamp-1">
 										{!!model?.meta?.description
 											? model?.meta?.description
@@ -335,7 +336,7 @@
 							{#if shiftKey}
 								<Tooltip content={model?.meta?.hidden ? $i18n.t('Show') : $i18n.t('Hide')}>
 									<button
-										class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost"
 										type="button"
 										on:click={() => {
 											hideModelHandler(model);
@@ -350,26 +351,13 @@
 								</Tooltip>
 							{:else}
 								<button
-									class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+									class="btn-ghost"
 									type="button"
 									on:click={() => {
 										selectedModelId = model.id;
 									}}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="w-4 h-4"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-										/>
-									</svg>
+									<PencilLine className="size-4" />
 								</button>
 
 								<ModelMenu
@@ -384,7 +372,7 @@
 									onClose={() => {}}
 								>
 									<button
-										class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
+										class="btn-ghost p-1.5"
 										type="button"
 									>
 										<EllipsisHorizontal className="size-5" />
@@ -409,7 +397,7 @@
 				{/each}
 			{:else}
 				<div class="flex flex-col items-center justify-center w-full h-20">
-					<div class="text-gray-500 dark:text-gray-400 text-xs">
+					<div class="text-muted text-xs">
 						{$i18n.t('No models found')}
 					</div>
 				</div>
@@ -463,7 +451,7 @@
 					/>
 
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={() => {
 							modelsImportInputElement.click();
 						}}
@@ -477,7 +465,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-3.5 h-3.5"
+								class="size-3.5"
 							>
 								<path
 									fill-rule="evenodd"
@@ -489,7 +477,7 @@
 					</button>
 
 					<button
-						class="flex text-xs items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition"
+						class="btn-secondary"
 						on:click={async () => {
 							downloadModels(models);
 						}}
@@ -503,7 +491,7 @@
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 16 16"
 								fill="currentColor"
-								class="w-3.5 h-3.5"
+								class="size-3.5"
 							>
 								<path
 									fill-rule="evenodd"

@@ -89,7 +89,7 @@
 					</div>
 
 					<div class="my-1.5">
-						<div class="text-xs text-gray-500">
+						<div class="text-xs text-muted">
 							{$i18n.t('Connect to your own OpenAPI compatible external tool servers.')}
 							<br />
 							{$i18n.t(
@@ -99,7 +99,7 @@
 						</div>
 					</div>
 
-					<div class=" text-xs text-gray-600 dark:text-gray-300 mb-2">
+					<div class="text-xs text-body mb-2">
 						{$i18n.t('{{WEBUI_NAME}} can use tools provided by any OpenAPI server.', { WEBUI_NAME: $WEBUI_NAME })}
 					</div>
 				</div>
@@ -113,9 +113,9 @@
 		{/if}
 	</div>
 
-	<div class="flex justify-end pt-3 text-sm font-medium">
+	<div class="modal-actions">
 		<button
-			class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="btn-primary"
 			type="submit"
 		>
 			{$i18n.t('Save')}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MagnifyingGlassSolid from '$lib/components/icons/MagnifyingGlassSolid.svelte';
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
@@ -50,18 +51,7 @@
 	<div class="flex w-full">
 		<div class="flex flex-1">
 			<div class=" self-center mr-3">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						fill-rule="evenodd"
-						d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-						clip-rule="evenodd"
-					/>
-				</svg>
+				<MagnifyingGlassSolid className="size-4" />
 			</div>
 			<input
 				class=" w-full text-sm pr-4 rounded-r-xl outline-hidden bg-transparent"
@@ -113,7 +103,7 @@
 					</div>
 				{/each}
 			{:else}
-				<div class="text-gray-500 text-xs text-center py-2 px-10">
+				<div class="text-muted text-xs text-center py-2 px-10">
 					{$i18n.t('No users were found.')}
 				</div>
 			{/if}

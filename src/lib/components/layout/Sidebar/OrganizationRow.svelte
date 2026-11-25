@@ -41,10 +41,10 @@
 <!-- Which organization the sidebar shows, and a switcher, so it is easy to find.
      Styled like the Workspace and Scheduled tasks rows above it; the user menu
      keeps its own switcher too. -->
-<div class="px-1.5 flex justify-center text-gray-800 dark:text-gray-200">
+<div class="px-1.5 flex justify-center text-strong">
 	<DropdownMenu.Root bind:open closeFocus={false} typeahead={false}>
 		<DropdownMenu.Trigger
-			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-[7px] text-left hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+			class="grow min-w-0 flex items-center space-x-3 rounded-lg px-2 py-2 text-left hover:bg-tint transition"
 			aria-label={$i18n.t('Switch organization')}
 		>
 			<div class="self-center shrink-0">
@@ -74,8 +74,8 @@
 				<span class="shrink-0 font-medium text-sm font-primary">{$i18n.t('Organization')}</span>
 				<div bind:this={nameBox} class="relative flex flex-1 min-w-0 h-5 items-center">
 					<span
-						class="min-w-0 text-gray-500 dark:text-gray-400 {twoLines
-							? 'line-clamp-2 break-words text-[11px] leading-[13px]'
+						class="min-w-0 text-muted dark:text-gray-400 {twoLines
+							? 'line-clamp-2 break-words text-xs leading-[13px]'
 							: 'truncate text-sm'}">{current.name}</span
 					>
 					<span
@@ -94,7 +94,7 @@
 		</DropdownMenu.Trigger>
 
 		<DropdownMenu.Content
-			class="w-60 max-h-72 overflow-y-auto rounded-xl px-1 py-1.5 z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="menu-panel w-60 max-h-72 overflow-y-auto"
 			sideOffset={4}
 			side="bottom"
 			align="start"
@@ -102,7 +102,7 @@
 		>
 			{#each $organizations ?? [] as org (org.id)}
 				<DropdownMenu.Item
-					class="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 {org.id ===
+					class="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm cursor-pointer hover:bg-tint {org.id ===
 					$activeOrganizationId
 						? 'font-medium'
 						: 'text-gray-600 dark:text-gray-300'}"

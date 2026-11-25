@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	import { flyAndScale } from '$lib/utils/transitions';
@@ -10,7 +10,43 @@
 	export let className = 'bg-white dark:bg-gray-900 rounded-2xl';
 
 	let modalElement = null;
+	let panel: HTMLElement;
 	let mounted = false;
+	let opener: HTMLElement | null = null;
+	let opened = false;
+
+	const FOCUSABLE =
+		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+	const focusables = () =>
+		[...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((e) => e.offsetParent !== null);
+
+	// Remember what opened the modal; a dropdown item is gone by close time, so use its menu's trigger.
+	const rememberOpener = () => {
+		const active = document.activeElement as HTMLElement | null;
+		const menu = active?.closest('[role="menu"]');
+		opener = (menu?.id && document.querySelector<HTMLElement>(`[aria-controls="${menu.id}"]`)) || active;
+	};
+
+	// Keep focus in the top modal, e.g. when a closing menu hands focus back to its trigger.
+	// Menus and listboxes the dialog itself opens live outside it and are allowed.
+	const keepFocus = (event: FocusEvent) => {
+		const target = event.target as HTMLElement;
+		if (!isTopModal() || panel?.contains(target)) return;
+		if (target.closest('[role="tooltip"], [data-tippy-root], .modal')) return;
+		const popup = target.closest('[role="menu"], [role="listbox"]');
+		if (popup?.id && panel?.querySelector(`[aria-controls="${popup.id}"]`)) return;
+		requestAnimationFrame(() => (focusables()[0] ?? panel)?.focus());
+	};
+
+	const open = async () => {
+		await tick();
+		const title = panel?.querySelector('h1, h2, h3');
+		if (title) {
+			title.id ||= `modal-title-${Math.random().toString(36).slice(2, 8)}`;
+			panel.setAttribute('aria-labelledby', title.id);
+		}
+		if (panel && !panel.contains(document.activeElement)) (focusables()[0] ?? panel).focus();
+	};
 
 	const sizeToWidth = (size) => {
 		if (size === 'full') {
@@ -28,9 +64,20 @@
 	};
 
 	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === 'Escape' && isTopModal()) {
-			console.log('Escape');
+		if (!isTopModal()) return;
+		if (event.key === 'Escape') {
 			show = false;
+		} else if (event.key === 'Tab') {
+			const items = focusables();
+			if (!items.length) return event.preventDefault();
+			const [first, last] = [items[0], items[items.length - 1]];
+			if (event.shiftKey && document.activeElement === first) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+				event.preventDefault();
+				first.focus();
+			}
 		}
 	};
 
@@ -44,17 +91,28 @@
 	});
 
 	$: if (show && modalElement) {
+		if (!opened) {
+			opened = true;
+			rememberOpener();
+			open();
+		}
 		document.body.appendChild(modalElement);
 		window.addEventListener('keydown', handleKeyDown);
+		document.addEventListener('focusin', keepFocus, true);
 		document.body.style.overflow = 'hidden';
 	} else if (modalElement) {
 		window.removeEventListener('keydown', handleKeyDown);
+		document.removeEventListener('focusin', keepFocus, true);
 		document.body.removeChild(modalElement);
 		document.body.style.overflow = 'unset';
+		if (opener?.isConnected) opener.focus();
+		opener = null;
+		opened = false;
 	}
 
 	onDestroy(() => {
 		show = false;
+		document.removeEventListener('focusin', keepFocus, true);
 		if (modalElement) {
 			document.body.removeChild(modalElement);
 		}
@@ -73,7 +131,11 @@
 		}}
 	>
 		<div
-			class="m-auto max-w-full {sizeToWidth(size)} {size !== 'full'
+			bind:this={panel}
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			class="m-auto max-w-full text-strong outline-none {sizeToWidth(size)} {size !== 'full'
 				? 'mx-2'
 				: ''} shadow-3xl min-h-fit scrollbar-hidden {className}"
 			in:flyAndScale
@@ -86,19 +148,3 @@
 	</div>
 {/if}
 
-<style>
-	.modal-content {
-		animation: scaleUp 0.1s ease-out forwards;
-	}
-
-	@keyframes scaleUp {
-		from {
-			transform: scale(0.985);
-			opacity: 0;
-		}
-		to {
-			transform: scale(1);
-			opacity: 1;
-		}
-	}
-</style>

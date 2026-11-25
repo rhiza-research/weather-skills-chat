@@ -29,14 +29,14 @@
 
 	<div slot="content">
 		<DropdownMenu.Content
-			class="w-full max-w-[160px] rounded-lg px-1 py-1.5  z-50 bg-white dark:bg-gray-850 dark:text-white shadow-lg"
+			class="w-full max-w-[160px] rounded-lg px-1 py-1.5 z-50 bg-panel dark:text-white shadow-lg"
 			sideOffset={-2}
 			side="bottom"
 			align="start"
 			transition={flyAndScale}
 		>
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					dispatch('rename');
 				}}
@@ -46,7 +46,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex gap-2 items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					dispatch('export');
 				}}
@@ -57,7 +57,7 @@
 			</DropdownMenu.Item>
 
 			<DropdownMenu.Item
-				class="flex  gap-2  items-center px-3 py-1.5 text-sm  cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md"
+				class="menu-item"
 				on:click={() => {
 					dispatch('delete');
 				}}

@@ -302,7 +302,7 @@ class Pipe:
 						<div class=" shrink-0 mr-2">
 							<Tooltip content={$i18n.t('Back')}>
 								<button
-									class="w-full text-left text-sm py-1.5 px-1 rounded-lg dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-gray-850"
+									class="w-full text-left text-sm py-1.5 px-1 rounded-xl dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
 									on:click={() => {
 										goto('/admin/functions');
 									}}
@@ -332,7 +332,7 @@ class Pipe:
 
 					<div class=" flex gap-2 px-1 items-center">
 						{#if edit}
-							<div class="text-sm text-gray-500 shrink-0">
+							<div class="text-sm text-muted shrink-0">
 								{id}
 							</div>
 						{:else}
@@ -383,7 +383,7 @@ class Pipe:
 
 				<div class="pb-3 flex justify-between">
 					<div class="flex-1 pr-3">
-						<div class="text-xs text-gray-500 line-clamp-2">
+						<div class="text-xs text-muted line-clamp-2">
 							<span class=" font-semibold dark:text-gray-200">{$i18n.t('Warning:')}</span>
 							{$i18n.t('Functions allow arbitrary code execution')} <br />—
 							<span class=" font-medium dark:text-gray-400"
@@ -393,7 +393,7 @@ class Pipe:
 					</div>
 
 					<button
-						class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+						class="btn-primary"
 						type="submit"
 					>
 						{$i18n.t('Save')}
@@ -410,7 +410,7 @@ class Pipe:
 		submitHandler();
 	}}
 >
-	<div class="text-sm text-gray-500">
+	<div class="text-sm text-muted">
 		<div class=" bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 rounded-lg px-4 py-3">
 			<div>{$i18n.t('Please carefully review the following warnings:')}</div>
 
