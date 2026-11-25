@@ -63,6 +63,10 @@ The tool runner image, `ghcr.io/rhiza-research/weather-skills-sandbox-runner`, i
 
 Production and staging run on Kubernetes with [`charts/weather-skills-chat`](charts/weather-skills-chat).
 
+## Configs
+
+[rhiza-research/weather-skills-configs](https://github.com/rhiza-research/weather-skills-configs) holds the models, skill packs, connections, and settings that [rhiza-research/weather-skills-eval](https://github.com/rhiza-research/weather-skills-eval) runs the app with.
+
 ## License
 
 This project includes Open WebUI, licensed under the [BSD-3-Clause License](LICENSE).
