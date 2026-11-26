@@ -22,7 +22,7 @@
 	import { shouldLoadArtifactList } from '$lib/chat/artifactsList';
 	import { ensureArtifacts, refreshArtifacts } from '$lib/chat/cache';
 	import XMark from '../icons/XMark.svelte';
-	import { copyToClipboard, createMessagesList } from '$lib/utils';
+	import { copyToClipboard, createMessagesList, isUnsupportedArchive } from '$lib/utils';
 	import ArrowsPointingOut from '../icons/ArrowsPointingOut.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import SvgPanZoom from '../common/SVGPanZoom.svelte';
@@ -274,6 +274,15 @@
 		const input = e.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
+		if (isUnsupportedArchive(file.name)) {
+			toast.error(
+				$i18n.t('{{name}} is an archive the agent cannot open. Unzip it and upload the files inside.', {
+					name: file.name
+				})
+			);
+			input.value = '';
+			return;
+		}
 		if (!$chatId || $chatId === 'local') {
 			toast.error($i18n.t('Save the chat before uploading artifacts.'));
 			input.value = '';

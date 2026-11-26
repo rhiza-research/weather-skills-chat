@@ -8,6 +8,10 @@ import { TTS_RESPONSE_SPLIT } from '$lib/types';
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Archives no skill can open. Zipped Zarr stores (.zarr.zip) are read directly.
+export const isUnsupportedArchive = (name: string) =>
+	/\.(zip|7z|rar|tar|tgz|tar\.gz)$/i.test(name) && !/\.zarr\.zip$/i.test(name);
+
 function escapeRegExp(string: string): string {
 	return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

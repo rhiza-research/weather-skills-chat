@@ -29,7 +29,8 @@
 		blobToFile,
 		compressImage,
 		createMessagesList,
-		extractCurlyBraceWords
+		extractCurlyBraceWords,
+		isUnsupportedArchive
 	} from '$lib/utils';
 	import { transcribeAudio } from '$lib/apis/audio';
 	import { generateAutoCompletion } from '$lib/apis';
@@ -285,6 +286,15 @@
 				toast.error(
 					$i18n.t(`File size should not exceed {{maxSize}} MB.`, {
 						maxSize: $config?.file?.max_size
+					})
+				);
+				return;
+			}
+
+			if (isUnsupportedArchive(file.name)) {
+				toast.error(
+					$i18n.t('{{name}} is an archive the agent cannot open. Unzip it and upload the files inside.', {
+						name: file.name
 					})
 				);
 				return;
